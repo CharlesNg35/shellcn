@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             (unknown)
-// source: shellcn/plugin/v1/plugin.proto
+// source: pluginv1/plugin.proto
 
 package pluginv1
 
@@ -19,14 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Plugin_GetManifest_FullMethodName    = "/shellcn.plugin.v1.Plugin/GetManifest"
-	Plugin_Connect_FullMethodName        = "/shellcn.plugin.v1.Plugin/Connect"
-	Plugin_HealthCheck_FullMethodName    = "/shellcn.plugin.v1.Plugin/HealthCheck"
-	Plugin_Close_FullMethodName          = "/shellcn.plugin.v1.Plugin/Close"
-	Plugin_Invoke_FullMethodName         = "/shellcn.plugin.v1.Plugin/Invoke"
-	Plugin_OpenStream_FullMethodName     = "/shellcn.plugin.v1.Plugin/OpenStream"
-	Plugin_OpenChannel_FullMethodName    = "/shellcn.plugin.v1.Plugin/OpenChannel"
-	Plugin_ServeHTTPProxy_FullMethodName = "/shellcn.plugin.v1.Plugin/ServeHTTPProxy"
+	Plugin_GetManifest_FullMethodName    = "/pluginv1.Plugin/GetManifest"
+	Plugin_Connect_FullMethodName        = "/pluginv1.Plugin/Connect"
+	Plugin_HealthCheck_FullMethodName    = "/pluginv1.Plugin/HealthCheck"
+	Plugin_Close_FullMethodName          = "/pluginv1.Plugin/Close"
+	Plugin_Invoke_FullMethodName         = "/pluginv1.Plugin/Invoke"
+	Plugin_OpenStream_FullMethodName     = "/pluginv1.Plugin/OpenStream"
+	Plugin_OpenChannel_FullMethodName    = "/pluginv1.Plugin/OpenChannel"
+	Plugin_ServeHTTPProxy_FullMethodName = "/pluginv1.Plugin/ServeHTTPProxy"
 )
 
 // PluginClient is the client API for Plugin service.
@@ -368,7 +368,7 @@ func _Plugin_ServeHTTPProxy_Handler(srv interface{}, ctx context.Context, dec fu
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Plugin_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "shellcn.plugin.v1.Plugin",
+	ServiceName: "pluginv1.Plugin",
 	HandlerType: (*PluginServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -405,11 +405,11 @@ var Plugin_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "shellcn/plugin/v1/plugin.proto",
+	Metadata: "pluginv1/plugin.proto",
 }
 
 const (
-	Conn_Pipe_FullMethodName = "/shellcn.plugin.v1.Conn/Pipe"
+	Conn_Pipe_FullMethodName = "/pluginv1.Conn/Pipe"
 )
 
 // ConnClient is the client API for Conn service.
@@ -496,7 +496,7 @@ type Conn_PipeServer = grpc.BidiStreamingServer[Chunk, Chunk]
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Conn_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "shellcn.plugin.v1.Conn",
+	ServiceName: "pluginv1.Conn",
 	HandlerType: (*ConnServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
@@ -507,14 +507,14 @@ var Conn_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "shellcn/plugin/v1/plugin.proto",
+	Metadata: "pluginv1/plugin.proto",
 }
 
 const (
-	Host_DialTarget_FullMethodName        = "/shellcn.plugin.v1.Host/DialTarget"
-	Host_HTTPProxyEndpoint_FullMethodName = "/shellcn.plugin.v1.Host/HTTPProxyEndpoint"
-	Host_OpenHTTPConn_FullMethodName      = "/shellcn.plugin.v1.Host/OpenHTTPConn"
-	Host_Audit_FullMethodName             = "/shellcn.plugin.v1.Host/Audit"
+	Host_DialTarget_FullMethodName        = "/pluginv1.Host/DialTarget"
+	Host_HTTPProxyEndpoint_FullMethodName = "/pluginv1.Host/HTTPProxyEndpoint"
+	Host_OpenHTTPConn_FullMethodName      = "/pluginv1.Host/OpenHTTPConn"
+	Host_Audit_FullMethodName             = "/pluginv1.Host/Audit"
 )
 
 // HostClient is the client API for Host service.
@@ -722,7 +722,7 @@ func _Host_Audit_Handler(srv interface{}, ctx context.Context, dec func(interfac
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Host_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "shellcn.plugin.v1.Host",
+	ServiceName: "pluginv1.Host",
 	HandlerType: (*HostServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -743,5 +743,5 @@ var Host_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "shellcn/plugin/v1/plugin.proto",
+	Metadata: "pluginv1/plugin.proto",
 }

@@ -54,18 +54,19 @@ faithful template.
 
 ## Step 1 — Wire contract (`.proto` for `Plugin` + `Host`) + stubs — §3.4 — **Done**
 
-- [x] `sdk/proto/shellcn/plugin/v1/plugin.proto` with **both** services: `Plugin`
-      (served by plugin) and `Host` (served by core: `DialTarget`/
-      `HTTPProxyEndpoint`/`OpenHTTPConn`/`Audit`). Self-contained (local `Empty`, no
-      well-known-type imports → fully reproducible offline). The whole wire
-      contract lives **inside the SDK module** (source + config + gen) so it travels
-      with `go get` (cross-language authors can regenerate).
+- [x] `sdk/proto/pluginv1/plugin.proto` (package `pluginv1` — flat, version-suffixed;
+      the redundant org/area nesting was dropped since the module path already says
+      `shellcn`) with **both** services: `Plugin` (served by plugin) and `Host`
+      (served by core: `DialTarget`/`HTTPProxyEndpoint`/`OpenHTTPConn`/`Audit`).
+      Self-contained (local `Empty`, no well-known-type imports → reproducible
+      offline). The whole wire contract lives **inside the SDK module** (source +
+      config + gen) so it travels with `go get`.
 - [x] `Plugin` service: `GetManifest`, `Connect`, `HealthCheck`, `Close`,
       `Invoke`, `OpenStream`, `OpenChannel`, `ServeHTTPProxy`.
       Byte-streams ride raw brokered conns named by `BrokerRef.broker_id`.
 - [x] **buf** generation: `sdk/buf.yaml` (BASIC lint) + `sdk/buf.gen.yaml` (managed
-      mode, `go_package_prefix`) → stubs at `sdk/gen/shellcn/plugin/v1` (package
-      `pluginv1`), checked in. `make proto` (`cd sdk && buf generate`) + `make tools`.
+      mode, `go_package_prefix`) → stubs at `sdk/gen/pluginv1` (package `pluginv1`,
+      imported directly), checked in. `make proto` (`cd sdk && buf generate`).
 - [x] Handshake (`sdk/grpcplugin`): `Handshake` (magic cookie) + `ProtocolVersion`
       + `PluginName` dispense key.
 - [x] Manifest crosses as JSON bytes (`Manifest.json`); contract owned by Go types

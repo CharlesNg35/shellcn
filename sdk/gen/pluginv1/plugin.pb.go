@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: shellcn/plugin/v1/plugin.proto
+// source: pluginv1/plugin.proto
 
 package pluginv1
 
@@ -30,7 +30,7 @@ type Chunk struct {
 
 func (x *Chunk) Reset() {
 	*x = Chunk{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[0]
+	mi := &file_pluginv1_plugin_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -42,7 +42,7 @@ func (x *Chunk) String() string {
 func (*Chunk) ProtoMessage() {}
 
 func (x *Chunk) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[0]
+	mi := &file_pluginv1_plugin_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55,7 +55,7 @@ func (x *Chunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Chunk.ProtoReflect.Descriptor instead.
 func (*Chunk) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{0}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Chunk) GetData() []byte {
@@ -73,7 +73,7 @@ type Empty struct {
 
 func (x *Empty) Reset() {
 	*x = Empty{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[1]
+	mi := &file_pluginv1_plugin_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -85,7 +85,7 @@ func (x *Empty) String() string {
 func (*Empty) ProtoMessage() {}
 
 func (x *Empty) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[1]
+	mi := &file_pluginv1_plugin_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -98,7 +98,7 @@ func (x *Empty) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Empty.ProtoReflect.Descriptor instead.
 func (*Empty) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{1}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{1}
 }
 
 // Manifest carries the JSON-encoded sdk/plugin manifest plus route metadata. The
@@ -112,7 +112,7 @@ type Manifest struct {
 
 func (x *Manifest) Reset() {
 	*x = Manifest{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[2]
+	mi := &file_pluginv1_plugin_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -124,7 +124,7 @@ func (x *Manifest) String() string {
 func (*Manifest) ProtoMessage() {}
 
 func (x *Manifest) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[2]
+	mi := &file_pluginv1_plugin_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -137,7 +137,7 @@ func (x *Manifest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Manifest.ProtoReflect.Descriptor instead.
 func (*Manifest) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{2}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Manifest) GetJson() []byte {
@@ -159,7 +159,7 @@ type ConnectRequest struct {
 
 func (x *ConnectRequest) Reset() {
 	*x = ConnectRequest{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[3]
+	mi := &file_pluginv1_plugin_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -171,7 +171,7 @@ func (x *ConnectRequest) String() string {
 func (*ConnectRequest) ProtoMessage() {}
 
 func (x *ConnectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[3]
+	mi := &file_pluginv1_plugin_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -184,7 +184,7 @@ func (x *ConnectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConnectRequest.ProtoReflect.Descriptor instead.
 func (*ConnectRequest) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{3}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ConnectRequest) GetConnectionId() string {
@@ -224,7 +224,7 @@ type SessionHandle struct {
 
 func (x *SessionHandle) Reset() {
 	*x = SessionHandle{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[4]
+	mi := &file_pluginv1_plugin_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -236,7 +236,7 @@ func (x *SessionHandle) String() string {
 func (*SessionHandle) ProtoMessage() {}
 
 func (x *SessionHandle) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[4]
+	mi := &file_pluginv1_plugin_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -249,7 +249,7 @@ func (x *SessionHandle) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionHandle.ProtoReflect.Descriptor instead.
 func (*SessionHandle) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{4}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *SessionHandle) GetSessionId() string {
@@ -273,7 +273,7 @@ type ActingUser struct {
 
 func (x *ActingUser) Reset() {
 	*x = ActingUser{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[5]
+	mi := &file_pluginv1_plugin_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -285,7 +285,7 @@ func (x *ActingUser) String() string {
 func (*ActingUser) ProtoMessage() {}
 
 func (x *ActingUser) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[5]
+	mi := &file_pluginv1_plugin_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -298,7 +298,7 @@ func (x *ActingUser) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActingUser.ProtoReflect.Descriptor instead.
 func (*ActingUser) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{5}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ActingUser) GetId() string {
@@ -343,7 +343,7 @@ type InvokeRequest struct {
 
 func (x *InvokeRequest) Reset() {
 	*x = InvokeRequest{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[6]
+	mi := &file_pluginv1_plugin_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -355,7 +355,7 @@ func (x *InvokeRequest) String() string {
 func (*InvokeRequest) ProtoMessage() {}
 
 func (x *InvokeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[6]
+	mi := &file_pluginv1_plugin_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -368,7 +368,7 @@ func (x *InvokeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvokeRequest.ProtoReflect.Descriptor instead.
 func (*InvokeRequest) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{6}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *InvokeRequest) GetSessionId() string {
@@ -422,7 +422,7 @@ type InvokeResponse struct {
 
 func (x *InvokeResponse) Reset() {
 	*x = InvokeResponse{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[7]
+	mi := &file_pluginv1_plugin_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -434,7 +434,7 @@ func (x *InvokeResponse) String() string {
 func (*InvokeResponse) ProtoMessage() {}
 
 func (x *InvokeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[7]
+	mi := &file_pluginv1_plugin_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -447,7 +447,7 @@ func (x *InvokeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvokeResponse.ProtoReflect.Descriptor instead.
 func (*InvokeResponse) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{7}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *InvokeResponse) GetResultJson() []byte {
@@ -469,7 +469,7 @@ type StreamStart struct {
 
 func (x *StreamStart) Reset() {
 	*x = StreamStart{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[8]
+	mi := &file_pluginv1_plugin_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -481,7 +481,7 @@ func (x *StreamStart) String() string {
 func (*StreamStart) ProtoMessage() {}
 
 func (x *StreamStart) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[8]
+	mi := &file_pluginv1_plugin_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -494,7 +494,7 @@ func (x *StreamStart) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamStart.ProtoReflect.Descriptor instead.
 func (*StreamStart) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{8}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *StreamStart) GetSessionId() string {
@@ -536,7 +536,7 @@ type ChannelRequest struct {
 
 func (x *ChannelRequest) Reset() {
 	*x = ChannelRequest{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[9]
+	mi := &file_pluginv1_plugin_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -548,7 +548,7 @@ func (x *ChannelRequest) String() string {
 func (*ChannelRequest) ProtoMessage() {}
 
 func (x *ChannelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[9]
+	mi := &file_pluginv1_plugin_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -561,7 +561,7 @@ func (x *ChannelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChannelRequest.ProtoReflect.Descriptor instead.
 func (*ChannelRequest) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{9}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ChannelRequest) GetSessionId() string {
@@ -595,7 +595,7 @@ type ProxyRequest struct {
 
 func (x *ProxyRequest) Reset() {
 	*x = ProxyRequest{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[10]
+	mi := &file_pluginv1_plugin_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -607,7 +607,7 @@ func (x *ProxyRequest) String() string {
 func (*ProxyRequest) ProtoMessage() {}
 
 func (x *ProxyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[10]
+	mi := &file_pluginv1_plugin_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -620,7 +620,7 @@ func (x *ProxyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProxyRequest.ProtoReflect.Descriptor instead.
 func (*ProxyRequest) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{10}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ProxyRequest) GetSessionId() string {
@@ -647,7 +647,7 @@ type BrokerRef struct {
 
 func (x *BrokerRef) Reset() {
 	*x = BrokerRef{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[11]
+	mi := &file_pluginv1_plugin_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -659,7 +659,7 @@ func (x *BrokerRef) String() string {
 func (*BrokerRef) ProtoMessage() {}
 
 func (x *BrokerRef) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[11]
+	mi := &file_pluginv1_plugin_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -672,7 +672,7 @@ func (x *BrokerRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BrokerRef.ProtoReflect.Descriptor instead.
 func (*BrokerRef) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{11}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *BrokerRef) GetBrokerId() uint32 {
@@ -693,7 +693,7 @@ type DialRequest struct {
 
 func (x *DialRequest) Reset() {
 	*x = DialRequest{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[12]
+	mi := &file_pluginv1_plugin_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -705,7 +705,7 @@ func (x *DialRequest) String() string {
 func (*DialRequest) ProtoMessage() {}
 
 func (x *DialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[12]
+	mi := &file_pluginv1_plugin_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -718,7 +718,7 @@ func (x *DialRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DialRequest.ProtoReflect.Descriptor instead.
 func (*DialRequest) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{12}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *DialRequest) GetSessionId() string {
@@ -752,7 +752,7 @@ type ProxyEndpoint struct {
 
 func (x *ProxyEndpoint) Reset() {
 	*x = ProxyEndpoint{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[13]
+	mi := &file_pluginv1_plugin_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -764,7 +764,7 @@ func (x *ProxyEndpoint) String() string {
 func (*ProxyEndpoint) ProtoMessage() {}
 
 func (x *ProxyEndpoint) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[13]
+	mi := &file_pluginv1_plugin_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -777,7 +777,7 @@ func (x *ProxyEndpoint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProxyEndpoint.ProtoReflect.Descriptor instead.
 func (*ProxyEndpoint) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{13}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ProxyEndpoint) GetAddress() string {
@@ -806,7 +806,7 @@ type AuditRecord struct {
 
 func (x *AuditRecord) Reset() {
 	*x = AuditRecord{}
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[14]
+	mi := &file_pluginv1_plugin_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -818,7 +818,7 @@ func (x *AuditRecord) String() string {
 func (*AuditRecord) ProtoMessage() {}
 
 func (x *AuditRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_shellcn_plugin_v1_plugin_proto_msgTypes[14]
+	mi := &file_pluginv1_plugin_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -831,7 +831,7 @@ func (x *AuditRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditRecord.ProtoReflect.Descriptor instead.
 func (*AuditRecord) Descriptor() ([]byte, []int) {
-	return file_shellcn_plugin_v1_plugin_proto_rawDescGZIP(), []int{14}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *AuditRecord) GetSessionId() string {
@@ -862,11 +862,11 @@ func (x *AuditRecord) GetError() string {
 	return ""
 }
 
-var File_shellcn_plugin_v1_plugin_proto protoreflect.FileDescriptor
+var File_pluginv1_plugin_proto protoreflect.FileDescriptor
 
-const file_shellcn_plugin_v1_plugin_proto_rawDesc = "" +
+const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\n" +
-	"\x1eshellcn/plugin/v1/plugin.proto\x12\x11shellcn.plugin.v1\"\x1b\n" +
+	"\x15pluginv1/plugin.proto\x12\bpluginv1\"\x1b\n" +
 	"\x05Chunk\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data\"\a\n" +
 	"\x05Empty\"\x1e\n" +
@@ -886,15 +886,15 @@ const file_shellcn_plugin_v1_plugin_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12!\n" +
 	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12\x14\n" +
-	"\x05roles\x18\x04 \x03(\tR\x05roles\"\x8e\x03\n" +
+	"\x05roles\x18\x04 \x03(\tR\x05roles\"\xf3\x02\n" +
 	"\rInvokeRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x19\n" +
-	"\broute_id\x18\x02 \x01(\tR\arouteId\x12D\n" +
-	"\x06params\x18\x03 \x03(\v2,.shellcn.plugin.v1.InvokeRequest.ParamsEntryR\x06params\x12A\n" +
-	"\x05query\x18\x04 \x03(\v2+.shellcn.plugin.v1.InvokeRequest.QueryEntryR\x05query\x12\x12\n" +
-	"\x04body\x18\x05 \x01(\fR\x04body\x121\n" +
-	"\x04user\x18\x06 \x01(\v2\x1d.shellcn.plugin.v1.ActingUserR\x04user\x1a9\n" +
+	"\broute_id\x18\x02 \x01(\tR\arouteId\x12;\n" +
+	"\x06params\x18\x03 \x03(\v2#.pluginv1.InvokeRequest.ParamsEntryR\x06params\x128\n" +
+	"\x05query\x18\x04 \x03(\v2\".pluginv1.InvokeRequest.QueryEntryR\x05query\x12\x12\n" +
+	"\x04body\x18\x05 \x01(\fR\x04body\x12(\n" +
+	"\x04user\x18\x06 \x01(\v2\x14.pluginv1.ActingUserR\x04user\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a8\n" +
@@ -904,21 +904,21 @@ const file_shellcn_plugin_v1_plugin_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"1\n" +
 	"\x0eInvokeResponse\x12\x1f\n" +
 	"\vresult_json\x18\x01 \x01(\fR\n" +
-	"resultJson\"\xf9\x01\n" +
+	"resultJson\"\xe7\x01\n" +
 	"\vStreamStart\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x19\n" +
-	"\broute_id\x18\x02 \x01(\tR\arouteId\x12B\n" +
-	"\x06params\x18\x03 \x03(\v2*.shellcn.plugin.v1.StreamStart.ParamsEntryR\x06params\x121\n" +
-	"\x04user\x18\x04 \x01(\v2\x1d.shellcn.plugin.v1.ActingUserR\x04user\x1a9\n" +
+	"\broute_id\x18\x02 \x01(\tR\arouteId\x129\n" +
+	"\x06params\x18\x03 \x03(\v2!.pluginv1.StreamStart.ParamsEntryR\x06params\x12(\n" +
+	"\x04user\x18\x04 \x01(\v2\x14.pluginv1.ActingUserR\x04user\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc5\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xbc\x01\n" +
 	"\x0eChannelRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x12\n" +
-	"\x04kind\x18\x02 \x01(\tR\x04kind\x12E\n" +
-	"\x06params\x18\x03 \x03(\v2-.shellcn.plugin.v1.ChannelRequest.ParamsEntryR\x06params\x1a9\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12<\n" +
+	"\x06params\x18\x03 \x03(\v2$.pluginv1.ChannelRequest.ParamsEntryR\x06params\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"A\n" +
@@ -935,105 +935,105 @@ const file_shellcn_plugin_v1_plugin_proto_rawDesc = "" +
 	"\aaddress\x18\x03 \x01(\tR\aaddress\"D\n" +
 	"\rProxyEndpoint\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12\x19\n" +
-	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\"\xd9\x01\n" +
+	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\"\xd0\x01\n" +
 	"\vAuditRecord\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x16\n" +
-	"\x06result\x18\x02 \x01(\tR\x06result\x12B\n" +
-	"\x06params\x18\x03 \x03(\v2*.shellcn.plugin.v1.AuditRecord.ParamsEntryR\x06params\x12\x14\n" +
+	"\x06result\x18\x02 \x01(\tR\x06result\x129\n" +
+	"\x06params\x18\x03 \x03(\v2!.pluginv1.AuditRecord.ParamsEntryR\x06params\x12\x14\n" +
 	"\x05error\x18\x04 \x01(\tR\x05error\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xea\x04\n" +
-	"\x06Plugin\x12D\n" +
-	"\vGetManifest\x12\x18.shellcn.plugin.v1.Empty\x1a\x1b.shellcn.plugin.v1.Manifest\x12N\n" +
-	"\aConnect\x12!.shellcn.plugin.v1.ConnectRequest\x1a .shellcn.plugin.v1.SessionHandle\x12I\n" +
-	"\vHealthCheck\x12 .shellcn.plugin.v1.SessionHandle\x1a\x18.shellcn.plugin.v1.Empty\x12C\n" +
-	"\x05Close\x12 .shellcn.plugin.v1.SessionHandle\x1a\x18.shellcn.plugin.v1.Empty\x12M\n" +
-	"\x06Invoke\x12 .shellcn.plugin.v1.InvokeRequest\x1a!.shellcn.plugin.v1.InvokeResponse\x12J\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xda\x03\n" +
+	"\x06Plugin\x122\n" +
+	"\vGetManifest\x12\x0f.pluginv1.Empty\x1a\x12.pluginv1.Manifest\x12<\n" +
+	"\aConnect\x12\x18.pluginv1.ConnectRequest\x1a\x17.pluginv1.SessionHandle\x127\n" +
+	"\vHealthCheck\x12\x17.pluginv1.SessionHandle\x1a\x0f.pluginv1.Empty\x121\n" +
+	"\x05Close\x12\x17.pluginv1.SessionHandle\x1a\x0f.pluginv1.Empty\x12;\n" +
+	"\x06Invoke\x12\x17.pluginv1.InvokeRequest\x1a\x18.pluginv1.InvokeResponse\x128\n" +
 	"\n" +
-	"OpenStream\x12\x1e.shellcn.plugin.v1.StreamStart\x1a\x1c.shellcn.plugin.v1.BrokerRef\x12N\n" +
-	"\vOpenChannel\x12!.shellcn.plugin.v1.ChannelRequest\x1a\x1c.shellcn.plugin.v1.BrokerRef\x12O\n" +
-	"\x0eServeHTTPProxy\x12\x1f.shellcn.plugin.v1.ProxyRequest\x1a\x1c.shellcn.plugin.v1.BrokerRef2F\n" +
-	"\x04Conn\x12>\n" +
-	"\x04Pipe\x12\x18.shellcn.plugin.v1.Chunk\x1a\x18.shellcn.plugin.v1.Chunk(\x010\x012\xbe\x02\n" +
-	"\x04Host\x12J\n" +
+	"OpenStream\x12\x15.pluginv1.StreamStart\x1a\x13.pluginv1.BrokerRef\x12<\n" +
+	"\vOpenChannel\x12\x18.pluginv1.ChannelRequest\x1a\x13.pluginv1.BrokerRef\x12=\n" +
+	"\x0eServeHTTPProxy\x12\x16.pluginv1.ProxyRequest\x1a\x13.pluginv1.BrokerRef24\n" +
+	"\x04Conn\x12,\n" +
+	"\x04Pipe\x12\x0f.pluginv1.Chunk\x1a\x0f.pluginv1.Chunk(\x010\x012\xf6\x01\n" +
+	"\x04Host\x128\n" +
 	"\n" +
-	"DialTarget\x12\x1e.shellcn.plugin.v1.DialRequest\x1a\x1c.shellcn.plugin.v1.BrokerRef\x12W\n" +
-	"\x11HTTPProxyEndpoint\x12 .shellcn.plugin.v1.SessionHandle\x1a .shellcn.plugin.v1.ProxyEndpoint\x12N\n" +
-	"\fOpenHTTPConn\x12 .shellcn.plugin.v1.SessionHandle\x1a\x1c.shellcn.plugin.v1.BrokerRef\x12A\n" +
-	"\x05Audit\x12\x1e.shellcn.plugin.v1.AuditRecord\x1a\x18.shellcn.plugin.v1.EmptyB\xcd\x01\n" +
-	"\x15com.shellcn.plugin.v1B\vPluginProtoP\x01ZAgithub.com/charlesng35/shellcn/sdk/gen/shellcn/plugin/v1;pluginv1\xa2\x02\x03SPX\xaa\x02\x11Shellcn.Plugin.V1\xca\x02\x11Shellcn\\Plugin\\V1\xe2\x02\x1dShellcn\\Plugin\\V1\\GPBMetadata\xea\x02\x13Shellcn::Plugin::V1b\x06proto3"
+	"DialTarget\x12\x15.pluginv1.DialRequest\x1a\x13.pluginv1.BrokerRef\x12E\n" +
+	"\x11HTTPProxyEndpoint\x12\x17.pluginv1.SessionHandle\x1a\x17.pluginv1.ProxyEndpoint\x12<\n" +
+	"\fOpenHTTPConn\x12\x17.pluginv1.SessionHandle\x1a\x13.pluginv1.BrokerRef\x12/\n" +
+	"\x05Audit\x12\x15.pluginv1.AuditRecord\x1a\x0f.pluginv1.EmptyB\x8c\x01\n" +
+	"\fcom.pluginv1B\vPluginProtoP\x01Z/github.com/charlesng35/shellcn/sdk/gen/pluginv1\xa2\x02\x03PXX\xaa\x02\bPluginv1\xca\x02\bPluginv1\xe2\x02\x14Pluginv1\\GPBMetadata\xea\x02\bPluginv1b\x06proto3"
 
 var (
-	file_shellcn_plugin_v1_plugin_proto_rawDescOnce sync.Once
-	file_shellcn_plugin_v1_plugin_proto_rawDescData []byte
+	file_pluginv1_plugin_proto_rawDescOnce sync.Once
+	file_pluginv1_plugin_proto_rawDescData []byte
 )
 
-func file_shellcn_plugin_v1_plugin_proto_rawDescGZIP() []byte {
-	file_shellcn_plugin_v1_plugin_proto_rawDescOnce.Do(func() {
-		file_shellcn_plugin_v1_plugin_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_shellcn_plugin_v1_plugin_proto_rawDesc), len(file_shellcn_plugin_v1_plugin_proto_rawDesc)))
+func file_pluginv1_plugin_proto_rawDescGZIP() []byte {
+	file_pluginv1_plugin_proto_rawDescOnce.Do(func() {
+		file_pluginv1_plugin_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pluginv1_plugin_proto_rawDesc), len(file_pluginv1_plugin_proto_rawDesc)))
 	})
-	return file_shellcn_plugin_v1_plugin_proto_rawDescData
+	return file_pluginv1_plugin_proto_rawDescData
 }
 
-var file_shellcn_plugin_v1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
-var file_shellcn_plugin_v1_plugin_proto_goTypes = []any{
-	(*Chunk)(nil),          // 0: shellcn.plugin.v1.Chunk
-	(*Empty)(nil),          // 1: shellcn.plugin.v1.Empty
-	(*Manifest)(nil),       // 2: shellcn.plugin.v1.Manifest
-	(*ConnectRequest)(nil), // 3: shellcn.plugin.v1.ConnectRequest
-	(*SessionHandle)(nil),  // 4: shellcn.plugin.v1.SessionHandle
-	(*ActingUser)(nil),     // 5: shellcn.plugin.v1.ActingUser
-	(*InvokeRequest)(nil),  // 6: shellcn.plugin.v1.InvokeRequest
-	(*InvokeResponse)(nil), // 7: shellcn.plugin.v1.InvokeResponse
-	(*StreamStart)(nil),    // 8: shellcn.plugin.v1.StreamStart
-	(*ChannelRequest)(nil), // 9: shellcn.plugin.v1.ChannelRequest
-	(*ProxyRequest)(nil),   // 10: shellcn.plugin.v1.ProxyRequest
-	(*BrokerRef)(nil),      // 11: shellcn.plugin.v1.BrokerRef
-	(*DialRequest)(nil),    // 12: shellcn.plugin.v1.DialRequest
-	(*ProxyEndpoint)(nil),  // 13: shellcn.plugin.v1.ProxyEndpoint
-	(*AuditRecord)(nil),    // 14: shellcn.plugin.v1.AuditRecord
-	nil,                    // 15: shellcn.plugin.v1.InvokeRequest.ParamsEntry
-	nil,                    // 16: shellcn.plugin.v1.InvokeRequest.QueryEntry
-	nil,                    // 17: shellcn.plugin.v1.StreamStart.ParamsEntry
-	nil,                    // 18: shellcn.plugin.v1.ChannelRequest.ParamsEntry
-	nil,                    // 19: shellcn.plugin.v1.AuditRecord.ParamsEntry
+var file_pluginv1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_pluginv1_plugin_proto_goTypes = []any{
+	(*Chunk)(nil),          // 0: pluginv1.Chunk
+	(*Empty)(nil),          // 1: pluginv1.Empty
+	(*Manifest)(nil),       // 2: pluginv1.Manifest
+	(*ConnectRequest)(nil), // 3: pluginv1.ConnectRequest
+	(*SessionHandle)(nil),  // 4: pluginv1.SessionHandle
+	(*ActingUser)(nil),     // 5: pluginv1.ActingUser
+	(*InvokeRequest)(nil),  // 6: pluginv1.InvokeRequest
+	(*InvokeResponse)(nil), // 7: pluginv1.InvokeResponse
+	(*StreamStart)(nil),    // 8: pluginv1.StreamStart
+	(*ChannelRequest)(nil), // 9: pluginv1.ChannelRequest
+	(*ProxyRequest)(nil),   // 10: pluginv1.ProxyRequest
+	(*BrokerRef)(nil),      // 11: pluginv1.BrokerRef
+	(*DialRequest)(nil),    // 12: pluginv1.DialRequest
+	(*ProxyEndpoint)(nil),  // 13: pluginv1.ProxyEndpoint
+	(*AuditRecord)(nil),    // 14: pluginv1.AuditRecord
+	nil,                    // 15: pluginv1.InvokeRequest.ParamsEntry
+	nil,                    // 16: pluginv1.InvokeRequest.QueryEntry
+	nil,                    // 17: pluginv1.StreamStart.ParamsEntry
+	nil,                    // 18: pluginv1.ChannelRequest.ParamsEntry
+	nil,                    // 19: pluginv1.AuditRecord.ParamsEntry
 }
-var file_shellcn_plugin_v1_plugin_proto_depIdxs = []int32{
-	15, // 0: shellcn.plugin.v1.InvokeRequest.params:type_name -> shellcn.plugin.v1.InvokeRequest.ParamsEntry
-	16, // 1: shellcn.plugin.v1.InvokeRequest.query:type_name -> shellcn.plugin.v1.InvokeRequest.QueryEntry
-	5,  // 2: shellcn.plugin.v1.InvokeRequest.user:type_name -> shellcn.plugin.v1.ActingUser
-	17, // 3: shellcn.plugin.v1.StreamStart.params:type_name -> shellcn.plugin.v1.StreamStart.ParamsEntry
-	5,  // 4: shellcn.plugin.v1.StreamStart.user:type_name -> shellcn.plugin.v1.ActingUser
-	18, // 5: shellcn.plugin.v1.ChannelRequest.params:type_name -> shellcn.plugin.v1.ChannelRequest.ParamsEntry
-	19, // 6: shellcn.plugin.v1.AuditRecord.params:type_name -> shellcn.plugin.v1.AuditRecord.ParamsEntry
-	1,  // 7: shellcn.plugin.v1.Plugin.GetManifest:input_type -> shellcn.plugin.v1.Empty
-	3,  // 8: shellcn.plugin.v1.Plugin.Connect:input_type -> shellcn.plugin.v1.ConnectRequest
-	4,  // 9: shellcn.plugin.v1.Plugin.HealthCheck:input_type -> shellcn.plugin.v1.SessionHandle
-	4,  // 10: shellcn.plugin.v1.Plugin.Close:input_type -> shellcn.plugin.v1.SessionHandle
-	6,  // 11: shellcn.plugin.v1.Plugin.Invoke:input_type -> shellcn.plugin.v1.InvokeRequest
-	8,  // 12: shellcn.plugin.v1.Plugin.OpenStream:input_type -> shellcn.plugin.v1.StreamStart
-	9,  // 13: shellcn.plugin.v1.Plugin.OpenChannel:input_type -> shellcn.plugin.v1.ChannelRequest
-	10, // 14: shellcn.plugin.v1.Plugin.ServeHTTPProxy:input_type -> shellcn.plugin.v1.ProxyRequest
-	0,  // 15: shellcn.plugin.v1.Conn.Pipe:input_type -> shellcn.plugin.v1.Chunk
-	12, // 16: shellcn.plugin.v1.Host.DialTarget:input_type -> shellcn.plugin.v1.DialRequest
-	4,  // 17: shellcn.plugin.v1.Host.HTTPProxyEndpoint:input_type -> shellcn.plugin.v1.SessionHandle
-	4,  // 18: shellcn.plugin.v1.Host.OpenHTTPConn:input_type -> shellcn.plugin.v1.SessionHandle
-	14, // 19: shellcn.plugin.v1.Host.Audit:input_type -> shellcn.plugin.v1.AuditRecord
-	2,  // 20: shellcn.plugin.v1.Plugin.GetManifest:output_type -> shellcn.plugin.v1.Manifest
-	4,  // 21: shellcn.plugin.v1.Plugin.Connect:output_type -> shellcn.plugin.v1.SessionHandle
-	1,  // 22: shellcn.plugin.v1.Plugin.HealthCheck:output_type -> shellcn.plugin.v1.Empty
-	1,  // 23: shellcn.plugin.v1.Plugin.Close:output_type -> shellcn.plugin.v1.Empty
-	7,  // 24: shellcn.plugin.v1.Plugin.Invoke:output_type -> shellcn.plugin.v1.InvokeResponse
-	11, // 25: shellcn.plugin.v1.Plugin.OpenStream:output_type -> shellcn.plugin.v1.BrokerRef
-	11, // 26: shellcn.plugin.v1.Plugin.OpenChannel:output_type -> shellcn.plugin.v1.BrokerRef
-	11, // 27: shellcn.plugin.v1.Plugin.ServeHTTPProxy:output_type -> shellcn.plugin.v1.BrokerRef
-	0,  // 28: shellcn.plugin.v1.Conn.Pipe:output_type -> shellcn.plugin.v1.Chunk
-	11, // 29: shellcn.plugin.v1.Host.DialTarget:output_type -> shellcn.plugin.v1.BrokerRef
-	13, // 30: shellcn.plugin.v1.Host.HTTPProxyEndpoint:output_type -> shellcn.plugin.v1.ProxyEndpoint
-	11, // 31: shellcn.plugin.v1.Host.OpenHTTPConn:output_type -> shellcn.plugin.v1.BrokerRef
-	1,  // 32: shellcn.plugin.v1.Host.Audit:output_type -> shellcn.plugin.v1.Empty
+var file_pluginv1_plugin_proto_depIdxs = []int32{
+	15, // 0: pluginv1.InvokeRequest.params:type_name -> pluginv1.InvokeRequest.ParamsEntry
+	16, // 1: pluginv1.InvokeRequest.query:type_name -> pluginv1.InvokeRequest.QueryEntry
+	5,  // 2: pluginv1.InvokeRequest.user:type_name -> pluginv1.ActingUser
+	17, // 3: pluginv1.StreamStart.params:type_name -> pluginv1.StreamStart.ParamsEntry
+	5,  // 4: pluginv1.StreamStart.user:type_name -> pluginv1.ActingUser
+	18, // 5: pluginv1.ChannelRequest.params:type_name -> pluginv1.ChannelRequest.ParamsEntry
+	19, // 6: pluginv1.AuditRecord.params:type_name -> pluginv1.AuditRecord.ParamsEntry
+	1,  // 7: pluginv1.Plugin.GetManifest:input_type -> pluginv1.Empty
+	3,  // 8: pluginv1.Plugin.Connect:input_type -> pluginv1.ConnectRequest
+	4,  // 9: pluginv1.Plugin.HealthCheck:input_type -> pluginv1.SessionHandle
+	4,  // 10: pluginv1.Plugin.Close:input_type -> pluginv1.SessionHandle
+	6,  // 11: pluginv1.Plugin.Invoke:input_type -> pluginv1.InvokeRequest
+	8,  // 12: pluginv1.Plugin.OpenStream:input_type -> pluginv1.StreamStart
+	9,  // 13: pluginv1.Plugin.OpenChannel:input_type -> pluginv1.ChannelRequest
+	10, // 14: pluginv1.Plugin.ServeHTTPProxy:input_type -> pluginv1.ProxyRequest
+	0,  // 15: pluginv1.Conn.Pipe:input_type -> pluginv1.Chunk
+	12, // 16: pluginv1.Host.DialTarget:input_type -> pluginv1.DialRequest
+	4,  // 17: pluginv1.Host.HTTPProxyEndpoint:input_type -> pluginv1.SessionHandle
+	4,  // 18: pluginv1.Host.OpenHTTPConn:input_type -> pluginv1.SessionHandle
+	14, // 19: pluginv1.Host.Audit:input_type -> pluginv1.AuditRecord
+	2,  // 20: pluginv1.Plugin.GetManifest:output_type -> pluginv1.Manifest
+	4,  // 21: pluginv1.Plugin.Connect:output_type -> pluginv1.SessionHandle
+	1,  // 22: pluginv1.Plugin.HealthCheck:output_type -> pluginv1.Empty
+	1,  // 23: pluginv1.Plugin.Close:output_type -> pluginv1.Empty
+	7,  // 24: pluginv1.Plugin.Invoke:output_type -> pluginv1.InvokeResponse
+	11, // 25: pluginv1.Plugin.OpenStream:output_type -> pluginv1.BrokerRef
+	11, // 26: pluginv1.Plugin.OpenChannel:output_type -> pluginv1.BrokerRef
+	11, // 27: pluginv1.Plugin.ServeHTTPProxy:output_type -> pluginv1.BrokerRef
+	0,  // 28: pluginv1.Conn.Pipe:output_type -> pluginv1.Chunk
+	11, // 29: pluginv1.Host.DialTarget:output_type -> pluginv1.BrokerRef
+	13, // 30: pluginv1.Host.HTTPProxyEndpoint:output_type -> pluginv1.ProxyEndpoint
+	11, // 31: pluginv1.Host.OpenHTTPConn:output_type -> pluginv1.BrokerRef
+	1,  // 32: pluginv1.Host.Audit:output_type -> pluginv1.Empty
 	20, // [20:33] is the sub-list for method output_type
 	7,  // [7:20] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
@@ -1041,26 +1041,26 @@ var file_shellcn_plugin_v1_plugin_proto_depIdxs = []int32{
 	0,  // [0:7] is the sub-list for field type_name
 }
 
-func init() { file_shellcn_plugin_v1_plugin_proto_init() }
-func file_shellcn_plugin_v1_plugin_proto_init() {
-	if File_shellcn_plugin_v1_plugin_proto != nil {
+func init() { file_pluginv1_plugin_proto_init() }
+func file_pluginv1_plugin_proto_init() {
+	if File_pluginv1_plugin_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_shellcn_plugin_v1_plugin_proto_rawDesc), len(file_shellcn_plugin_v1_plugin_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pluginv1_plugin_proto_rawDesc), len(file_pluginv1_plugin_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   3,
 		},
-		GoTypes:           file_shellcn_plugin_v1_plugin_proto_goTypes,
-		DependencyIndexes: file_shellcn_plugin_v1_plugin_proto_depIdxs,
-		MessageInfos:      file_shellcn_plugin_v1_plugin_proto_msgTypes,
+		GoTypes:           file_pluginv1_plugin_proto_goTypes,
+		DependencyIndexes: file_pluginv1_plugin_proto_depIdxs,
+		MessageInfos:      file_pluginv1_plugin_proto_msgTypes,
 	}.Build()
-	File_shellcn_plugin_v1_plugin_proto = out.File
-	file_shellcn_plugin_v1_plugin_proto_goTypes = nil
-	file_shellcn_plugin_v1_plugin_proto_depIdxs = nil
+	File_pluginv1_plugin_proto = out.File
+	file_pluginv1_plugin_proto_goTypes = nil
+	file_pluginv1_plugin_proto_depIdxs = nil
 }

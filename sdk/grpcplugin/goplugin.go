@@ -6,7 +6,7 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
 
-	pluginv1 "github.com/charlesng35/shellcn/sdk/gen/shellcn/plugin/v1"
+	"github.com/charlesng35/shellcn/sdk/gen/pluginv1"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 

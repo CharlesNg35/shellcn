@@ -277,8 +277,8 @@ sdk/                         # module github.com/charlesng35/shellcn/sdk — own
                              #   whole wire contract (source + config + generated code)
   go.mod
   buf.yaml  buf.gen.yaml     # codegen config (run via `cd sdk && buf generate`)
-  proto/shellcn/plugin/v1/plugin.proto   # the .proto source (travels with go get)
-  gen/shellcn/plugin/v1/                 # generated stubs (package pluginv1), checked in
+  proto/pluginv1/plugin.proto   # the .proto source (flat; travels with go get)
+  gen/pluginv1/                 # generated stubs (package pluginv1), checked in
   plugin/                    # package plugin — the whole contract + machinery, zero internal/* deps:
                              #   manifest, schema, ui, route, session interfaces, category,
                              #   recording, credentials, errors, sort/filter, RequestContext,

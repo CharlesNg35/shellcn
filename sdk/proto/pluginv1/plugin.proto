@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package shellcn.plugin.v1;
+package pluginv1;
 
 // Plugin is served by the out-of-process plugin subprocess; the core calls it.
 // Byte-stream capabilities (terminals, channels, the HTTP proxy, target dials)

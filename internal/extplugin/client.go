@@ -5,7 +5,7 @@ import (
 
 	goplugin "github.com/hashicorp/go-plugin"
 
-	pluginv1 "github.com/charlesng35/shellcn/sdk/gen/shellcn/plugin/v1"
+	"github.com/charlesng35/shellcn/sdk/gen/pluginv1"
 )
 
 // clientRef holds the live gRPC client and broker for a plugin so the supervisor

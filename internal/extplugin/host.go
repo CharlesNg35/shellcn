@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pluginv1 "github.com/charlesng35/shellcn/sdk/gen/shellcn/plugin/v1"
+	"github.com/charlesng35/shellcn/sdk/gen/pluginv1"
 	"github.com/charlesng35/shellcn/sdk/grpcplugin"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )

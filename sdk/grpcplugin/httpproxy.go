@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"sync"
 
-	pluginv1 "github.com/charlesng35/shellcn/sdk/gen/shellcn/plugin/v1"
+	"github.com/charlesng35/shellcn/sdk/gen/pluginv1"
 )
 
 // NewHTTPProxyBridge serves the core's L7 transport over a brokered conn: each
