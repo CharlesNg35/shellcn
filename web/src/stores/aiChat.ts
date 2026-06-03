@@ -359,11 +359,16 @@ export const useAiChatStore = defineStore("aiChat", () => {
   function stop(connId: string): void {
     const st = state(connId);
     if (st.runState === "idle") return;
+
     st.runState = "stopping";
+
     if (st.turnId) {
       void aiApi.turnControl(connId, st.turnId, { type: "stop" });
     }
+
     st.abort?.abort();
+    st.abort = null;
+    finalize(connId, false);
   }
 
   function resolveConfirm(connId: string, approve: boolean): void {
@@ -445,7 +450,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     }
   }
 
-  function finalize(connId: string): void {
+  function finalize(connId: string, flushQueue = true): void {
     const st = state(connId);
     if (
       st.current &&
@@ -459,6 +464,8 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.runState = "idle";
     st.pendingConfirm = null;
     st.turnId = "";
+    if (!flushQueue) return;
+
     const next = st.queue.shift();
     if (next) send(connId, next);
   }

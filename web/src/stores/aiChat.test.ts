@@ -282,19 +282,26 @@ describe("aiChat store", () => {
     expect(streamCalls[1].body.content).toBe("second");
   });
 
-  it("sends a stop control and exposes stopping state", () => {
+  it("sends a stop control and returns to idle", () => {
     const store = useAiChatStore();
 
     store.send(CONN, "first");
     const st = store.state(CONN);
     store.apply(CONN, { type: "text_delta", text: "partial" });
+    const controller = st.abort;
+
     store.stop(CONN);
 
-    expect(st.runState).toBe("stopping");
+    expect(st.runState).toBe("idle");
     expect(turnControl).toHaveBeenCalledWith(CONN, "turn-1", {
       type: "stop",
     });
-    expect(st.abort?.signal.aborted).toBe(true);
+    expect(controller?.signal.aborted).toBe(true);
+    expect(st.abort).toBeNull();
+    expect(st.messages[1]).toMatchObject({
+      role: "assistant",
+      content: "partial",
+    });
   });
 
   it("can stop before the server turn id arrives", () => {
@@ -302,12 +309,27 @@ describe("aiChat store", () => {
     const st = store.state(CONN);
     st.runState = "streaming";
     st.abort = new AbortController();
+    const controller = st.abort;
 
     store.stop(CONN);
 
-    expect(st.runState).toBe("stopping");
+    expect(st.runState).toBe("idle");
     expect(turnControl).not.toHaveBeenCalled();
-    expect(st.abort.signal.aborted).toBe(true);
+    expect(controller.signal.aborted).toBe(true);
+    expect(st.abort).toBeNull();
+  });
+
+  it("does not flush queued messages when stopping", () => {
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+
+    store.send(CONN, "first");
+    store.send(CONN, "second");
+    store.stop(CONN);
+
+    expect(st.runState).toBe("idle");
+    expect(st.queue).toEqual(["second"]);
+    expect(streamCalls).toHaveLength(1);
   });
 
   it("sends only the selected provider", () => {
