@@ -182,6 +182,12 @@ type InvitationStore interface {
 	Delete(ctx context.Context, id string) error
 }
 
+// ProtocolSettingStore persists per-protocol availability states (admin-managed).
+type ProtocolSettingStore interface {
+	List(ctx context.Context) ([]models.ProtocolSetting, error)
+	Set(ctx context.Context, s *models.ProtocolSetting) error
+}
+
 // AIProviderStore persists user-scoped AI provider configs (ciphertext keys).
 type AIProviderStore interface {
 	Create(ctx context.Context, c *models.AIProviderConfig) error
@@ -228,6 +234,7 @@ type Store struct {
 	Policies             PolicyStore
 	Invitations          InvitationStore
 	Recordings           RecordingStore
+	ProtocolSettings     ProtocolSettingStore
 	AIProviders          AIProviderStore
 	AIConversations      AIConversationStore
 	AIMessages           AIMessageStore

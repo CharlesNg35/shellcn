@@ -5,7 +5,7 @@ bin/
 *.dll
 *.so
 *.dylib
-shellcn
+/shellcn
 /server
 /agent
 /recordings
@@ -66,9 +66,16 @@ rust-modules/**/*.h
 rust-modules/**/Cargo.lock
 
 # Temporary files
+.plugin-demo/
 tmp/
 temp/
 *.tmp
+
+# Installed out-of-tree plugin binaries (operator drops them here at runtime)
+plugins.d/
+
+# example memo
+examples/memo/memo
 
 # OS
 Thumbs.db

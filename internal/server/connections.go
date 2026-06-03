@@ -107,6 +107,11 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
 		return
 	}
+	if err := s.checkProtocolAvailable(ctx, user, req.Protocol); err != nil {
+		s.auditConnEvent(ctx, user, "", connCreateEvent, plugin.RiskWrite, models.AuditDenied, err)
+		writeError(w, s.deps.Logger, err)
+		return
+	}
 	conn, err := s.deps.Connections.Create(ctx, user.ID, service.ConnectionInput{
 		Name: req.Name, Protocol: req.Protocol, Transport: req.Transport,
 		Config: req.Config, ActorID: user.ID, Recording: req.Recording,

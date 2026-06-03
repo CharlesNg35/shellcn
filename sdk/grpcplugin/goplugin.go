@@ -1,0 +1,39 @@
+package grpcplugin
+
+import (
+	"context"
+
+	goplugin "github.com/hashicorp/go-plugin"
+	"google.golang.org/grpc"
+
+	"github.com/charlesng35/shellcn/sdk/gen/pluginv1"
+	"github.com/charlesng35/shellcn/sdk/plugin"
+)
+
+// Client is what the host dispenses: the plugin client plus the broker used to
+// serve the per-connection Host service and bridge target conns.
+type Client struct {
+	Plugin pluginv1.PluginClient
+	Broker *goplugin.GRPCBroker
+}
+
+// GoPlugin bridges the ShellCN plugin contract to go-plugin's gRPC plugin. Impl
+// is set on the serve (plugin) side only; the host uses GRPCClient.
+type GoPlugin struct {
+	goplugin.NetRPCUnsupportedPlugin
+	Impl plugin.Plugin
+}
+
+func (g *GoPlugin) GRPCServer(broker *goplugin.GRPCBroker, s *grpc.Server) error {
+	pluginv1.RegisterPluginServer(s, newServer(g.Impl, broker))
+	return nil
+}
+
+func (g *GoPlugin) GRPCClient(_ context.Context, broker *goplugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
+	return &Client{Plugin: pluginv1.NewPluginClient(c), Broker: broker}, nil
+}
+
+// Plugins is the go-plugin set served and consumed under PluginName.
+func Plugins(impl plugin.Plugin) goplugin.PluginSet {
+	return goplugin.PluginSet{PluginName: &GoPlugin{Impl: impl}}
+}

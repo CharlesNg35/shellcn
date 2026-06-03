@@ -1,4 +1,4 @@
-.PHONY: help install build build-go build-web ensure-web-dist test test-web test-e2e test-cover lint lint-go lint-web fmt format fmt-go fmt-web tidy run dev dev-web dev-api dev-server clean tools
+.PHONY: help install build build-go build-web ensure-web-dist test test-web test-e2e test-cover lint lint-go lint-web fmt format fmt-go fmt-web tidy run dev dev-web dev-api dev-server clean tools proto
 
 BIN_DIR ?= bin
 APP_NAME ?= shellcn
@@ -23,7 +23,8 @@ help:
 	@echo "  dev-api     Run the Go API (--dev) with live reload"
 	@echo "  dev-web     Run the Vite dev server"
 	@echo "  install     Install Go + frontend dependencies"
-	@echo "  tools       Install dev tools (wgo, gofumpt)"
+	@echo "  proto       Generate plugin protobuf stubs (buf generate)"
+	@echo "  tools       Install dev tools (wgo, gofumpt, buf, protoc-gen-go*)"
 	@echo "  clean       Remove build artifacts"
 
 install:
@@ -107,3 +108,11 @@ clean:
 tools:
 	@go install github.com/bokwoon95/wgo@latest
 	@go install mvdan.cc/gofumpt@latest
+	@go install github.com/bufbuild/buf/cmd/buf@latest
+	@go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	@go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+proto:
+	@echo "Generating plugin protobuf stubs..."
+	@cd $(SDK_DIR) && buf generate
+	@echo "✓ stubs at sdk/gen"

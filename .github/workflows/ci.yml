@@ -25,12 +25,25 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.26"
+          go-version: "1.26.4"
           cache: true
       - run: pnpm -C web install --frozen-lockfile
       - run: pnpm -C web build
       - run: go build ./...
       - run: go test -race ./...
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: "1.26.4"
+          go-package: ./...
+          repo-checkout: false
+      - name: Run govulncheck for SDK
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: "1.26.4"
+          go-package: ./...
+          work-dir: sdk
+          repo-checkout: false
       - uses: golangci/golangci-lint-action@v8
         with:
           version: v2.12

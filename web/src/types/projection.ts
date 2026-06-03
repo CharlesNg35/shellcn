@@ -635,6 +635,29 @@ export interface UserConnectionSummary {
   createdAt: string;
 }
 
+export type ProtocolAvailability = "enabled" | "admin_only" | "disabled";
+
+export interface ProtocolAdminItem {
+  name: string;
+  title: string;
+  icon: Icon;
+  category: PluginCategoryInfo;
+  version: string;
+  transports: Transport[];
+  capabilities?: string[];
+  risks?: string[];
+  recording?: string[];
+  external: boolean;
+  healthy: boolean;
+  availability: ProtocolAvailability;
+}
+
+export interface ProtocolAdminList {
+  // dir is the server-configured external-plugin directory; empty when disabled.
+  dir: string;
+  protocols: ProtocolAdminItem[];
+}
+
 export interface AuditEntry {
   id: string;
   time: string;

@@ -26,7 +26,7 @@ const linkClass =
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-2xl flex-col gap-4 p-8">
+  <div class="mx-auto flex max-w-4xl flex-col gap-4 p-8">
     <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
       Settings
     </h1>
@@ -114,6 +114,24 @@ const linkClass =
           class="min-w-0 flex-1 font-medium text-surface-800 dark:text-surface-100"
         >
           Users &amp; access
+        </span>
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'chevron-right' }"
+          :size="16"
+          class="text-surface-300"
+        />
+      </RouterLink>
+
+      <RouterLink :to="{ name: 'protocols' }" :class="linkClass">
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'blocks' }"
+          :size="18"
+          class="text-surface-400"
+        />
+        <span
+          class="min-w-0 flex-1 font-medium text-surface-800 dark:text-surface-100"
+        >
+          Protocols
         </span>
         <AppIcon
           :icon="{ type: 'lucide', value: 'chevron-right' }"

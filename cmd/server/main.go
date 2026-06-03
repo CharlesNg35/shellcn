@@ -25,6 +25,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/email"
+	"github.com/charlesng35/shellcn/internal/extplugin"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/recording"
@@ -136,11 +137,33 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 
 	connections := service.NewConnectionService(st.Connections, reg, creds, vault)
 	enrollments := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
+	protocols := service.NewProtocolService(st.ProtocolSettings)
 
 	var auditWriter audit.Sink = audit.NewWriter(st.Audit)
 	if !cfg.Audit.Enabled {
 		auditWriter = audit.Noop{}
 		logger.Warn("audit is disabled by configuration")
+	}
+
+	// Out-of-tree plugins: register subprocesses from plugins.dir into the same
+	// registry as the built-ins, forwarding their audit to the core writer.
+	var extPlugins *extplugin.Manager
+	if cfg.Plugins.Dir != "" {
+		extPlugins = extplugin.NewManager(cfg.Plugins.Dir,
+			extplugin.WithAudit(func(result plugin.AuditResult, params map[string]string, errMsg string) {
+				var auditErr error
+				if errMsg != "" {
+					auditErr = errors.New(errMsg)
+				}
+				auditWriter.Record(context.Background(), audit.Event{
+					Event: "plugin.stream", RouteID: "plugin.stream", Risk: string(plugin.RiskPrivileged),
+					Result: models.AuditResult(result), Params: params, Err: auditErr,
+				})
+			}))
+		if err := extPlugins.LoadAll(context.Background(), reg); err != nil {
+			logger.Warn("load external plugins", "dir", cfg.Plugins.Dir, "err", err)
+		}
+		defer extPlugins.Close()
 	}
 	recBlobs, err := recording.NewLocalBlobStore(cfg.Recordings.Dir)
 	if err != nil {
@@ -269,6 +292,9 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		Connections:       connections,
 		Credentials:       creds,
 		Enrollments:       enrollments,
+		Protocols:         protocols,
+		ExtPlugins:        extPlugins,
+		PluginsDir:        cfg.Plugins.Dir,
 		Users:             users,
 		TwoFactor:         twoFactor,
 		Invitations:       invitations,

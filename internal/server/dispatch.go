@@ -187,7 +187,26 @@ func (s *Server) handleConnectionProxy(w http.ResponseWriter, r *http.Request) {
 	proxier.ServeHTTPProxy(w, rp)
 }
 
+// checkProtocolAvailable blocks opening a session for a protocol an admin has
+// disabled, or restricted to admins, for this user.
+func (s *Server) checkProtocolAvailable(ctx context.Context, user models.User, protocol string) error {
+	if s.deps.Protocols == nil {
+		return nil
+	}
+	ok, err := s.deps.Protocols.Allowed(ctx, protocol, user.HasRole(models.RoleAdmin))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("%w: this protocol is not available", plugin.ErrForbidden)
+	}
+	return nil
+}
+
 func (s *Server) acquireSession(ctx context.Context, res resolved) (*session.Handle, error) {
+	if err := s.checkProtocolAvailable(ctx, res.user, res.conn.Protocol); err != nil {
+		return nil, err
+	}
 	key := session.Key{ConnectionID: res.conn.ID, OwnerScope: res.user.ID}
 	return s.deps.Sessions.Acquire(ctx, key, res.user.ID, func(ctx context.Context) (plugin.Session, error) {
 		cfg, plg, err := s.deps.Connector.Build(ctx, res.user, res.conn)

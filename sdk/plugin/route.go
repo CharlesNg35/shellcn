@@ -34,18 +34,18 @@ type StreamHandler func(rc *RequestContext, client ClientStream) error
 // Route is a typed server endpoint with the metadata the core enforces. It is
 // the ONE behavior mechanism: no HandleAction, no plugin-owned HTTP.
 type Route struct {
-	ID         string // stable UI/audit/policy handle
-	Method     Method
-	Path       string // plugin-relative mount path
-	Permission string // required permission key (server-only)
-	Risk       RiskLevel
-	AuditEvent string
-	Input      *Schema // core validates the body against this before the handler
+	ID         string    `json:"id"`
+	Method     Method    `json:"method"`
+	Path       string    `json:"path"`
+	Permission string    `json:"permission"`
+	Risk       RiskLevel `json:"risk"`
+	AuditEvent string    `json:"auditEvent"`
+	Input      *Schema   `json:"input,omitempty"`
 
-	Timeout time.Duration // 0 = core default
+	Timeout time.Duration `json:"timeout,omitempty"`
 
-	Handle Handler       // for HTTP methods
-	Stream StreamHandler // for Method == WS
+	Handle Handler       `json:"-"`
+	Stream StreamHandler `json:"-"`
 }
 
 // IsStream reports whether the route is a WebSocket route.

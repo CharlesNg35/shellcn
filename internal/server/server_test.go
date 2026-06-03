@@ -289,7 +289,7 @@ func newHarness(t *testing.T) *harness {
 		Auth: auth.NewLocalAuthenticator(st.Users), SessionMgr: authMgr,
 		Tickets: auth.NewTicketStore(time.Minute), Policy: pol,
 		Connector: connector, Connections: connections, Credentials: creds, Audit: audit.NewWriter(st.Audit),
-		Enrollments: enrollments, Tunnels: tunnels,
+		Enrollments: enrollments, Tunnels: tunnels, Protocols: service.NewProtocolService(st.ProtocolSettings),
 		Users: users, TwoFactor: twoFactor, Invitations: invitations,
 		Recording: recEngine, Recordings: recordings,
 		AI: aiconfig.New(st.AIProviders, vault, config.AIConfig{
