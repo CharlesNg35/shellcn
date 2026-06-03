@@ -5,7 +5,7 @@ bin/
 *.dll
 *.so
 *.dylib
-shellcn
+/shellcn
 /server
 /agent
 /recordings
@@ -66,6 +66,7 @@ rust-modules/**/*.h
 rust-modules/**/Cargo.lock
 
 # Temporary files
+.plugin-demo/
 tmp/
 temp/
 *.tmp

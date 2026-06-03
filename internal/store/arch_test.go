@@ -20,11 +20,11 @@ func TestGormDoesNotLeak(t *testing.T) {
 	fset := token.NewFileSet()
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return fs.SkipDir // unreadable runtime dirs (e.g. container data) hold no source
 		}
 		if d.IsDir() {
 			base := d.Name()
-			if base == "node_modules" || base == "web" || base == ".git" || base == "bin" {
+			if base == "node_modules" || base == "web" || base == "bin" || strings.HasPrefix(base, ".") {
 				return fs.SkipDir
 			}
 			return nil

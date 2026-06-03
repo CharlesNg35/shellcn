@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package shellcn.plugin.v1;
+
+// Plugin is served by the out-of-process plugin subprocess; the core calls it.
+// Byte-stream capabilities (terminals, channels, the HTTP proxy, target dials)
+// ride raw brokered net.Conns referenced by broker_id, not per-frame RPCs.
+service Plugin {
+  rpc GetManifest(Empty) returns (Manifest);
+  rpc Connect(ConnectRequest) returns (SessionHandle);
+  rpc HealthCheck(SessionHandle) returns (Empty);
+  rpc Close(SessionHandle) returns (Empty);
+
+  // Invoke runs one non-streaming route; result_json is the handler's value.
+  rpc Invoke(InvokeRequest) returns (InvokeResponse);
+  // InvokeServerStream serves a server-streaming route (logs, query results).
+  rpc InvokeServerStream(InvokeRequest) returns (stream Frame);
+  // OpenStream is the control plane of a bidirectional route (terminal, exec);
+  // its data plane is a raw brokered conn named by the returned broker_id.
+  rpc OpenStream(StreamStart) returns (BrokerRef);
+  // OpenChannel opens a tracked upstream Channel as a raw brokered conn.
+  rpc OpenChannel(ChannelRequest) returns (BrokerRef);
+  // ServeHTTPProxy lets the plugin serve a reverse-proxied browser request over
+  // a raw brokered conn (redirects, assets, and WebSocket upgrades included).
+  rpc ServeHTTPProxy(ProxyRequest) returns (BrokerRef);
+}
+
+// Host is served by the core; the plugin SDK calls it. Network egress and audit
+// stay in the core so the gateway remains the single gatekeeper.
+service Host {
+  // DialTarget dials a target through the connection's transport (direct or the
+  // agent tunnel) and returns a raw brokered conn (L4 egress).
+  rpc DialTarget(DialRequest) returns (BrokerRef);
+  // HTTPProxyEndpoint returns a core-run per-session forward proxy the plugin
+  // points an http.Client at (L7 egress, direct or agent http_proxy).
+  rpc HTTPProxyEndpoint(SessionHandle) returns (ProxyEndpoint);
+  // Audit records one stream-internal operation against the core audit log.
+  rpc Audit(AuditRecord) returns (Empty);
+}
+
+message Empty {}
+
+// Manifest carries the JSON-encoded sdk/plugin manifest plus route metadata. The
+// contract is owned by the Go types in sdk/plugin and never duplicated here.
+message Manifest {
+  bytes json = 1;
+}
+
+message ConnectRequest {
+  string connection_id = 1;
+  string transport = 2;       // "direct" | "agent"
+  bytes config_json = 3;      // decrypted config map, JSON-encoded
+}
+
+message SessionHandle {
+  string session_id = 1;
+}
+
+// ActingUser is the lean identity for handler context; authorization is already
+// enforced by the core before any call reaches the plugin.
+message ActingUser {
+  string id = 1;
+  string username = 2;
+  string display_name = 3;
+  repeated string roles = 4;
+}
+
+message InvokeRequest {
+  string session_id = 1;
+  string route_id = 2;        // stable handle; the core owns permission/risk/audit
+  map<string, string> params = 3;
+  map<string, string> query = 4;
+  bytes body = 5;
+  ActingUser user = 6;
+}
+
+message InvokeResponse {
+  bytes result_json = 1;
+}
+
+// Frame is one chunk of a server stream.
+message Frame {
+  bytes data = 1;
+}
+
+message StreamStart {
+  string session_id = 1;
+  string route_id = 2;
+  map<string, string> params = 3;
+  ActingUser user = 4;
+}
+
+message ChannelRequest {
+  string session_id = 1;
+  string kind = 2;
+  map<string, string> params = 3;
+}
+
+message ProxyRequest {
+  string session_id = 1;
+  string path = 2;            // route-prefix-stripped target path
+}
+
+// BrokerRef names a raw net.Conn established over the go-plugin GRPCBroker.
+message BrokerRef {
+  uint32 broker_id = 1;
+}
+
+message DialRequest {
+  string session_id = 1;
+  string network = 2;         // "tcp" | "unix"
+  string address = 3;
+}
+
+message ProxyEndpoint {
+  string address = 1;         // core forward-proxy address the plugin dials
+  string base_url = 2;        // upstream base URL the plugin's client targets
+}
+
+message AuditRecord {
+  string session_id = 1;
+  string result = 2;          // "allowed" | "denied" | "error"
+  map<string, string> params = 3;
+  string error = 4;
+}

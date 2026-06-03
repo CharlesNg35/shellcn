@@ -19,7 +19,6 @@ require (
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/go-ldap/ldap/v3 v3.4.13
-	github.com/go-playground/validator/v10 v10.30.2
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/gocql/gocql v1.7.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
@@ -61,6 +60,8 @@ require (
 	sigs.k8s.io/yaml v1.6.0
 )
 
+require github.com/go-playground/validator/v10 v10.30.2 // indirect
+
 require (
 	cloud.google.com/go v0.116.0 // indirect
 	cloud.google.com/go/auth v0.9.3 // indirect
@@ -100,10 +101,10 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charlesng35/shellcn/sdk v0.0.0
 	github.com/cloudwego/base64x v0.1.6 // indirect
-	github.com/cloudwego/eino v0.9.2 // indirect
-	github.com/cloudwego/eino-ext/components/model/claude v0.1.18 // indirect
-	github.com/cloudwego/eino-ext/components/model/gemini v0.1.32 // indirect
-	github.com/cloudwego/eino-ext/components/model/openai v0.1.13 // indirect
+	github.com/cloudwego/eino v0.9.2
+	github.com/cloudwego/eino-ext/components/model/claude v0.1.18
+	github.com/cloudwego/eino-ext/components/model/gemini v0.1.32
+	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
 	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.17 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -116,7 +117,7 @@ require (
 	github.com/eapache/go-resiliency v1.7.0 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/ebitengine/purego v0.10.0 // indirect
-	github.com/eino-contrib/jsonschema v1.0.3 // indirect
+	github.com/eino-contrib/jsonschema v1.0.3
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/evanphx/json-patch v0.5.2 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
@@ -189,7 +190,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.26 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
-	github.com/pquerna/otp v1.5.0 // indirect
+	github.com/pquerna/otp v1.5.0
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
@@ -240,7 +241,7 @@ require (
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
 	google.golang.org/api v0.197.0 // indirect
-	google.golang.org/genai v1.36.0 // indirect
+	google.golang.org/genai v1.36.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
 	google.golang.org/grpc v1.67.0 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect

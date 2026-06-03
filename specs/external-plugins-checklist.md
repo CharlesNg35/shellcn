@@ -52,18 +52,25 @@ faithful template.
       fires on a planted import; lint clean on real code.
 - [x] Gate green: build/vet/lint/test pass on both modules.
 
-## Step 1 — Wire contract (`.proto` for `Plugin` + `Host`) + stubs — §3.4
+## Step 1 — Wire contract (`.proto` for `Plugin` + `Host`) + stubs — §3.4 — **Done**
 
-- [ ] `proto/plugin/v1/plugin.proto` with **both** services: `Plugin` (served by
-      plugin) and `Host` (served by core: `DialTarget`/`HTTPProxyEndpoint`/`Audit`).
-- [ ] `Plugin` service: `GetManifest`, `Connect`, `HealthCheck`, `Close`,
-      `Invoke`, `InvokeServerStream`, `OpenStream` (bidi control), `OpenChannel`,
-      `ServeHTTPProxy`.
-- [ ] Buf (or protoc) generation wired into the build; checked-in generated stubs.
-- [ ] Handshake config (magic cookie + `ProtocolVersion`) in a shared package.
-- [ ] Manifest crosses as the existing projection JSON (reuse, do **not** redefine).
-- [ ] **DoD:** stubs generate reproducibly; `make build` includes generation; no
-      schema duplicated between proto and `internal/plugin`.
+- [x] `proto/shellcn/plugin/v1/plugin.proto` with **both** services: `Plugin`
+      (served by plugin) and `Host` (served by core: `DialTarget`/
+      `HTTPProxyEndpoint`/`Audit`). Self-contained (local `Empty`, no
+      well-known-type imports → fully reproducible offline).
+- [x] `Plugin` service: `GetManifest`, `Connect`, `HealthCheck`, `Close`,
+      `Invoke`, `InvokeServerStream`, `OpenStream`, `OpenChannel`, `ServeHTTPProxy`.
+      Byte-streams ride raw brokered conns named by `BrokerRef.broker_id`.
+- [x] **buf** generation: `buf.yaml` (BASIC lint) + `buf.gen.yaml` (managed mode,
+      `go_package_prefix`) → stubs at `sdk/gen/shellcn/plugin/v1` (package
+      `pluginv1`), checked in. `make proto` + `make tools` (buf, protoc-gen-go*).
+- [x] Handshake (`sdk/grpcplugin`): `Handshake` (magic cookie) + `ProtocolVersion`
+      + `PluginName` dispense key.
+- [x] Manifest crosses as JSON bytes (`Manifest.json`); contract owned by Go types
+      in `sdk/plugin`, not duplicated in protobuf.
+- [x] sdk deps: grpc 1.67.0, protobuf 1.36.11, go-plugin 1.8.0.
+- [x] **DoD met:** `buf generate` reproducible (no diff on regen); build/lint/test
+      green both modules (root 72 ok/0 fail, sdk ok); `make proto` works.
 
 ## Step 2 — Host-side adapter (`grpcPlugin` implements `plugin.Plugin`) — §3.1
 
