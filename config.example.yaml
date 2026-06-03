@@ -36,6 +36,11 @@ email:
   password: ""
   use_tls: false
 
+audit:
+  enabled: true
+  retention_days: 0
+  cleanup_interval: 1h
+
 # Shared AI is optional. Supported kinds: openrouter, openai, anthropic, google,
 # openai_compatible. Users can also add personal providers in Settings.
 # ai:

@@ -96,6 +96,7 @@ type AuditStore interface {
 	List(ctx context.Context, f AuditFilter) ([]models.AuditEntry, error)
 	// Count returns the number of entries matching the filter (Limit/Offset ignored).
 	Count(ctx context.Context, f AuditFilter) (int64, error)
+	DeleteBefore(ctx context.Context, before time.Time) (int64, error)
 }
 
 // RecordingStore persists session-recording metadata (the blobs live elsewhere).

@@ -370,6 +370,11 @@ func (s *gormAuditStore) Count(ctx context.Context, f AuditFilter) (int64, error
 	return n, q.Count(&n).Error
 }
 
+func (s *gormAuditStore) DeleteBefore(ctx context.Context, before time.Time) (int64, error) {
+	res := s.db.WithContext(ctx).Where("time < ?", before).Delete(&models.AuditEntry{})
+	return res.RowsAffected, res.Error
+}
+
 type gormSnippetStore struct{ db *gorm.DB }
 
 type gormPolicyStore struct{ db *gorm.DB }

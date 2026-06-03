@@ -766,6 +766,22 @@ func (s *memAuditStore) Count(_ context.Context, f AuditFilter) (int64, error) {
 	return n, nil
 }
 
+func (s *memAuditStore) DeleteBefore(_ context.Context, before time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var kept []models.AuditEntry
+	var removed int64
+	for _, e := range s.entries {
+		if e.Time.Before(before) {
+			removed++
+			continue
+		}
+		kept = append(kept, e)
+	}
+	s.entries = kept
+	return removed, nil
+}
+
 type memSnippetStore struct {
 	mu sync.RWMutex
 	m  map[string]models.Snippet

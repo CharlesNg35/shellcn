@@ -29,6 +29,12 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Bootstrap.AdminUsername != "admin" || cfg.Bootstrap.AdminPassword != "" {
 		t.Errorf("bootstrap defaults: got %+v", cfg.Bootstrap)
 	}
+	if !cfg.Audit.Enabled || cfg.Audit.RetentionEnabled() {
+		t.Errorf("audit defaults: got %+v", cfg.Audit)
+	}
+	if cfg.Audit.CleanupEvery().String() != "1h0m0s" {
+		t.Errorf("audit cleanup interval default: got %s", cfg.Audit.CleanupEvery())
+	}
 }
 
 func TestEnvOverride(t *testing.T) {
@@ -41,6 +47,9 @@ func TestEnvOverride(t *testing.T) {
 	t.Setenv("SHELLCN_AI_KIND", "openrouter")
 	t.Setenv("SHELLCN_AI_API_KEY", "sk-or")
 	t.Setenv("SHELLCN_AI_MODEL", "openai/gpt-4o")
+	t.Setenv("SHELLCN_AUDIT_ENABLED", "false")
+	t.Setenv("SHELLCN_AUDIT_RETENTION_DAYS", "30")
+	t.Setenv("SHELLCN_AUDIT_CLEANUP_INTERVAL", "2h")
 
 	cfg, err := config.Load(t.TempDir())
 	if err != nil {
@@ -63,6 +72,9 @@ func TestEnvOverride(t *testing.T) {
 	}
 	if !cfg.AI.Configured() || cfg.AI.Model != "openai/gpt-4o" {
 		t.Errorf("ai env override: got %+v", cfg.AI)
+	}
+	if cfg.Audit.Enabled || cfg.Audit.RetentionDays != 30 || cfg.Audit.CleanupEvery().String() != "2h0m0s" {
+		t.Errorf("audit env override: got %+v", cfg.Audit)
 	}
 }
 

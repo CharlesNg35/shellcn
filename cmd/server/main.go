@@ -134,7 +134,11 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	connections := service.NewConnectionService(st.Connections, reg, creds, vault)
 	enrollments := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
 
-	auditWriter := audit.NewWriter(st.Audit)
+	var auditWriter audit.Sink = audit.NewWriter(st.Audit)
+	if !cfg.Audit.Enabled {
+		auditWriter = audit.Noop{}
+		logger.Warn("audit is disabled by configuration")
+	}
 	recBlobs, err := recording.NewLocalBlobStore(cfg.Recordings.Dir)
 	if err != nil {
 		return fmt.Errorf("recording storage: %w", err)
@@ -192,6 +196,27 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 			}
 		}
 	}()
+	if cfg.Audit.Enabled && cfg.Audit.RetentionEnabled() {
+		stopAuditCleanup := make(chan struct{})
+		defer close(stopAuditCleanup)
+		go func() {
+			t := time.NewTicker(cfg.Audit.CleanupEvery())
+			defer t.Stop()
+			for {
+				select {
+				case <-stopAuditCleanup:
+					return
+				case <-t.C:
+					before := time.Now().AddDate(0, 0, -cfg.Audit.RetentionDays)
+					if n, err := st.Audit.DeleteBefore(context.Background(), before); err != nil {
+						logger.Warn("audit cleanup failed", "err", err)
+					} else if n > 0 {
+						logger.Info("audit cleanup removed expired entries", "count", n)
+					}
+				}
+			}
+		}()
+	}
 
 	// Reflect live session/channel counts into the gauges.
 	stopMetrics := make(chan struct{})
