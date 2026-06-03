@@ -14,6 +14,11 @@ import (
 
 const protocolAvailabilityEvent = "protocol.availability"
 
+type protocolListDTO struct {
+	Dir       string             `json:"dir"`
+	Protocols []protocolAdminDTO `json:"protocols"`
+}
+
 type protocolAdminDTO struct {
 	Name         string                      `json:"name"`
 	Title        string                      `json:"title"`
@@ -91,7 +96,7 @@ func (s *Server) handleAdminListProtocols(w http.ResponseWriter, r *http.Request
 		}
 		out = append(out, dto)
 	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, protocolListDTO{Dir: s.deps.PluginsDir, Protocols: out})
 }
 
 func (s *Server) handleAdminSetProtocolAvailability(w http.ResponseWriter, r *http.Request) {

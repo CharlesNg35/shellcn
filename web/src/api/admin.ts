@@ -3,7 +3,7 @@ import type { Role } from "../constants/roles";
 import type {
   AdminUser,
   AuditPage,
-  ProtocolAdminItem,
+  ProtocolAdminList,
   ProtocolAvailability,
   UserConnectionSummary,
   UserSummary,
@@ -58,7 +58,7 @@ export const adminSettingsApi = {
 
 // adminProtocolsApi manages per-protocol availability (built-in and external).
 export const adminProtocolsApi = {
-  list: () => api.get<ProtocolAdminItem[]>("/admin/protocols"),
+  list: () => api.get<ProtocolAdminList>("/admin/protocols"),
   setAvailability: (name: string, availability: ProtocolAvailability) =>
     api.put<void>(`/admin/protocols/${name}`, { availability }),
 };

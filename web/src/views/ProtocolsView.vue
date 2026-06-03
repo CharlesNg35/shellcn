@@ -32,6 +32,7 @@ const availabilityChoices: { label: string; value: ProtocolAvailability }[] = [
 
 const tab = ref("builtin");
 const protocols = ref<ProtocolAdminItem[]>([]);
+const pluginsDir = ref("");
 const loading = ref(true);
 const saving = ref<Record<string, boolean>>({});
 
@@ -41,7 +42,9 @@ const external = computed(() => protocols.value.filter((p) => p.external));
 async function load(): Promise<void> {
   loading.value = true;
   try {
-    protocols.value = await adminProtocolsApi.list();
+    const res = await adminProtocolsApi.list();
+    protocols.value = res.protocols;
+    pluginsDir.value = res.dir;
   } finally {
     loading.value = false;
   }
@@ -206,13 +209,19 @@ async function setAvailability(
             <p class="font-medium text-surface-700 dark:text-surface-200">
               No external protocols loaded
             </p>
-            <p class="max-w-sm text-sm text-surface-500 dark:text-surface-400">
-              Drop a compiled plugin binary into the server's
+            <p
+              v-if="pluginsDir"
+              class="max-w-sm text-sm text-surface-500 dark:text-surface-400"
+            >
+              Drop a compiled plugin binary into
               <code
                 class="rounded bg-surface-100 px-1 py-0.5 dark:bg-surface-800"
-                >plugins.d/</code
+                >{{ pluginsDir }}</code
               >
-              directory and restart to load it.
+              on the server and restart to load it.
+            </p>
+            <p v-else class="max-w-sm text-sm text-surface-500 dark:text-surface-400">
+              External plugin loading is disabled on this server.
             </p>
           </div>
           <div v-else class="min-h-0 flex-1">

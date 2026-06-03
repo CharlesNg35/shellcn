@@ -19,12 +19,14 @@ type protocolItem struct {
 
 func protocolItems(t *testing.T, body []byte) map[string]protocolItem {
 	t.Helper()
-	var items []protocolItem
-	if err := json.Unmarshal(body, &items); err != nil {
+	var payload struct {
+		Protocols []protocolItem `json:"protocols"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
 		t.Fatalf("decode: %v (%s)", err, body)
 	}
 	out := map[string]protocolItem{}
-	for _, it := range items {
+	for _, it := range payload.Protocols {
 		out[it.Name] = it
 	}
 	return out

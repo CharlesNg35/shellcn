@@ -294,6 +294,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		Enrollments:       enrollments,
 		Protocols:         protocols,
 		ExtPlugins:        extPlugins,
+		PluginsDir:        cfg.Plugins.Dir,
 		Users:             users,
 		TwoFactor:         twoFactor,
 		Invitations:       invitations,

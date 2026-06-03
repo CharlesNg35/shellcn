@@ -652,6 +652,12 @@ export interface ProtocolAdminItem {
   availability: ProtocolAvailability;
 }
 
+export interface ProtocolAdminList {
+  // dir is the server-configured external-plugin directory; empty when disabled.
+  dir: string;
+  protocols: ProtocolAdminItem[];
+}
+
 export interface AuditEntry {
   id: string;
   time: string;

@@ -46,7 +46,10 @@ type Deps struct {
 	Enrollments     *service.EnrollmentService
 	Protocols       *service.ProtocolService
 	// ExtPlugins is the out-of-tree plugin manager; nil when none are configured.
-	ExtPlugins        *extplugin.Manager
+	ExtPlugins *extplugin.Manager
+	// PluginsDir is the configured external-plugin directory, surfaced read-only
+	// to the admin UI; empty when external loading is disabled.
+	PluginsDir        string
 	Users             *service.UserService
 	TwoFactor         *service.TwoFactorService
 	Invitations       *service.InvitationService
