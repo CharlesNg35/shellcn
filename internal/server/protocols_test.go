@@ -3,26 +3,29 @@ package server_test
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 )
 
 type protocolItem struct {
-	Name         string `json:"name"`
-	External     bool   `json:"external"`
-	Healthy      bool   `json:"healthy"`
-	Availability string `json:"availability"`
+	Name         string   `json:"name"`
+	External     bool     `json:"external"`
+	Healthy      bool     `json:"healthy"`
+	Availability string   `json:"availability"`
+	Risks        []string `json:"risks"`
+	Recording    []string `json:"recording"`
 }
 
-func protocolNames(t *testing.T, body []byte) map[string]string {
+func protocolItems(t *testing.T, body []byte) map[string]protocolItem {
 	t.Helper()
 	var items []protocolItem
 	if err := json.Unmarshal(body, &items); err != nil {
 		t.Fatalf("decode: %v (%s)", err, body)
 	}
-	out := map[string]string{}
+	out := map[string]protocolItem{}
 	for _, it := range items {
-		out[it.Name] = it.Availability
+		out[it.Name] = it
 	}
 	return out
 }
@@ -36,9 +39,20 @@ func TestAdminProtocolsRequiresAdmin(t *testing.T) {
 	if resp.Status != http.StatusOK {
 		t.Fatalf("admin list: status %d (%s)", resp.Status, resp.Body)
 	}
-	names := protocolNames(t, resp.Body)
-	if names["tester"] != "enabled" {
-		t.Fatalf("tester default availability = %q, want enabled", names["tester"])
+	items := protocolItems(t, resp.Body)
+	tester, ok := items["tester"]
+	if !ok {
+		t.Fatal("tester missing from admin list")
+	}
+	if tester.Availability != "enabled" {
+		t.Fatalf("tester default availability = %q, want enabled", tester.Availability)
+	}
+	// The capability surface is projected for review.
+	if len(tester.Risks) == 0 {
+		t.Error("expected tester to expose route risks")
+	}
+	if !slices.Contains(tester.Recording, "terminal") {
+		t.Errorf("expected tester recording to include terminal, got %v", tester.Recording)
 	}
 }
 

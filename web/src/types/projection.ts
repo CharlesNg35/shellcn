@@ -644,6 +644,9 @@ export interface ProtocolAdminItem {
   category: PluginCategoryInfo;
   version: string;
   transports: Transport[];
+  capabilities?: string[];
+  risks?: string[];
+  recording?: string[];
   external: boolean;
   healthy: boolean;
   availability: ProtocolAvailability;

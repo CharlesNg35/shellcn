@@ -142,6 +142,36 @@ async function setAvailability(
                   }}</span>
                 </template>
               </Column>
+              <Column header="Capabilities">
+                <template #body="{ data }">
+                  <div class="flex flex-wrap items-center gap-1">
+                    <span
+                      v-for="risk in (data as ProtocolAdminItem).risks"
+                      :key="risk"
+                      class="rounded bg-surface-100 px-1.5 py-0.5 text-xs text-surface-600 capitalize dark:bg-surface-800 dark:text-surface-300"
+                      >{{ risk }}</span
+                    >
+                    <span
+                      v-if="(data as ProtocolAdminItem).recording?.length"
+                      class="inline-flex items-center gap-1 text-xs text-surface-400"
+                    >
+                      <AppIcon
+                        :icon="{ type: 'lucide', value: 'video' }"
+                        :size="12"
+                      />
+                      {{ (data as ProtocolAdminItem).recording!.join(", ") }}
+                    </span>
+                    <span
+                      v-if="
+                        !(data as ProtocolAdminItem).risks?.length &&
+                        !(data as ProtocolAdminItem).recording?.length
+                      "
+                      class="text-sm text-surface-400"
+                      >—</span
+                    >
+                  </div>
+                </template>
+              </Column>
               <Column header="Availability" :pt="{ bodyCell: 'w-44' }">
                 <template #body="{ data }">
                   <Select
@@ -242,6 +272,36 @@ async function setAvailability(
                         : "Offline"
                     }}
                   </span>
+                </template>
+              </Column>
+              <Column header="Capabilities">
+                <template #body="{ data }">
+                  <div class="flex flex-wrap items-center gap-1">
+                    <span
+                      v-for="risk in (data as ProtocolAdminItem).risks"
+                      :key="risk"
+                      class="rounded bg-surface-100 px-1.5 py-0.5 text-xs text-surface-600 capitalize dark:bg-surface-800 dark:text-surface-300"
+                      >{{ risk }}</span
+                    >
+                    <span
+                      v-if="(data as ProtocolAdminItem).recording?.length"
+                      class="inline-flex items-center gap-1 text-xs text-surface-400"
+                    >
+                      <AppIcon
+                        :icon="{ type: 'lucide', value: 'video' }"
+                        :size="12"
+                      />
+                      {{ (data as ProtocolAdminItem).recording!.join(", ") }}
+                    </span>
+                    <span
+                      v-if="
+                        !(data as ProtocolAdminItem).risks?.length &&
+                        !(data as ProtocolAdminItem).recording?.length
+                      "
+                      class="text-sm text-surface-400"
+                      >—</span
+                    >
+                  </div>
                 </template>
               </Column>
               <Column header="Availability" :pt="{ bodyCell: 'w-44' }">

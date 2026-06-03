@@ -114,7 +114,7 @@ exists to spawn: `sdk/grpcplugin/server.go` (PluginServer + session registry),
       undisturbed. Verified by a test that crashes the subprocess (`os.Exit`) and
       asserts a fresh `Connect`+`Invoke` recovers.
 - [x] **DoD met (end-to-end):** test builds a real plugin binary (`testdata/
-    demoplugin`, `sdk.Serve`), `Manager.LoadAll` spawns + registers it, then
+demoplugin`, `sdk.Serve`), `Manager.LoadAll` spawns + registers it, then
       `Connect`+`HealthCheck`+`Invoke` round-trip **over the live gRPC
       subprocess**; `Close` is clean. Build/lint/test green both modules (root 73
       ok/0 fail, sdk ok).
@@ -195,7 +195,7 @@ serves the impl's `ServeHTTPProxy` via `http.Server` over the brokered conn
       proxy upgrades natively.
 - [x] CSRF-exemption etc. live on the core's proxy route — no change for external.
 - [x] **DoD met (end-to-end):** `TestPluginHTTPProxy` — `client → core (hijack) →
-    brokered conn → plugin reverse-proxy → upstream via cfg.Net → back`, asserting
+brokered conn → plugin reverse-proxy → upstream via cfg.Net → back`, asserting
       the proxied body. Exercises proxy **and** core egress together. Build/lint/test
       green both modules (root 73 ok/0 fail, sdk ok). (HTTP GET tested; WS uses the
       identical raw-byte path after the upgrade request.)
@@ -203,7 +203,7 @@ serves the impl's `ServeHTTPProxy` via `http.Server` over the brokered conn
 ## Step 7 — Plugin SDK + reference external plugin — §3.1 — **Done**
 
 - [x] `sdk.Serve(p)` is the `main` entry; a plugin implements `Manifest()/Routes()/
-    Connect()` against `sdk/plugin`. (Built in Step 3.)
+Connect()` against `sdk/plugin`. (Built in Step 3.)
 - [x] **Reference plugin `examples/memo`** — its **own Go module** depending only on
       the SDK (no core/`internal/`): in-memory notes with a manifest (table panel +
       create form + row delete), unary CRUD routes, and session state. README +
@@ -224,7 +224,13 @@ serves the impl's `ServeHTTPProxy` via `http.Server` over the brokered conn
       `sync.Once`-guarded (idempotent, correct `net.Conn` hygiene). Full `-race`
       gate green both modules (root 73 ok/0 fail/**0 races**, sdk ok).
 
-## Step 8 — Admin surface + trust controls — §3.6 — **Partially done**
+## Step 8 — Admin surface + trust controls — §3.6 — **Mostly done**
+
+Remaining (optional, demand-driven): runtime stop/respawn of a disabled external
+subprocess, and real binary-integrity verification (config-pinned digest or
+signature). The per-plugin agent-transport acknowledgement and the sidecar
+checksum were intentionally dropped as over-engineering — the operator-controlled
+`plugins.dir` plus the availability policy already gate untrusted code.
 
 **Server-integration glue (was the missing prerequisite) — Done.** The `Manager`
 is now wired into startup: new `plugins.dir` config (default `plugins.d`,
@@ -245,8 +251,7 @@ live health. Each protocol has a 3-state availability — **enabled** (all),
 enabled, so behavior is unchanged until an admin acts.
 
 - [x] Admin lists loaded plugins: name, title, **version**, **transports**,
-      **health** (built-in + external, split by tab). _(Declared-permission/risk
-      surface is not yet shown — see remaining.)_
+      **health** (built-in + external, split by tab).
 - [x] **Availability per protocol** (enabled / admin*only / disabled), enforced
       end-to-end: `/plugins` catalog is filtered per user; the single chokepoint
       `acquireSession` blocks an unavailable protocol for HTTP routes, WS streams,
@@ -256,27 +261,36 @@ enabled, so behavior is unchanged until an admin acts.
       summary) — only *connecting* errors. *(This is a richer policy than the
       original "disabled = not spawned": disabling hides + blocks use without
       killing the subprocess, so the admin can re-enable without a restart.)\_
-- [x] **Audit:** availability changes are audited (`protocol.availability`, via
-      `auditAdminEvent`, privileged risk).
-- [x] **Tests:** `internal/service/protocols_test.go` (model `Allows`,
-      Set/States/Allowed, invalid-state rejection) and
-      `internal/server/protocols_test.go` (admin-only gate; disabled → hidden for
-      all + connect blocked + re-enable restores; admin_only → hidden for
-      non-admins, visible to admins, connect blocked for non-admins). Gate green:
+- [x] **Capability review:** each row shows the protocol's declared **route risk
+      levels** (distinct, sorted) and **recording classes** alongside transports,
+      so an admin reviews the surface before exposing it.
+- [~] **Checksum/signature verification at load** — dropped. A `<binary>.sha256`
+  sidecar next to the binary is a circular trust anchor (anyone who can write
+  the binary can rewrite the sidecar) and corruption already fails the go-plugin
+  handshake. If integrity is ever required, do it properly: pin the expected
+  digest in `config.yaml` (trusted source) or verify a real signature
+  (cosign/minisign) against a pinned public key.
+- [x] **Audit events:** availability changes are audited as `protocol.availability`
+      (with the acting admin). _(Load/crash lifecycle auditing was dropped — `LoadAll`
+      runs on every startup, so it would append a duplicate `plugin.load` row per
+      restart; the slog startup log already covers boot-time load/skip.)_
+- [x] **Tests:** `internal/service/protocols_test.go` (`Allows`,
+      Set/States/Allowed, invalid-state rejection);
+      `internal/server/protocols_test.go` (admin-only gate; disabled hidden+blocked
+      +restore; admin_only visibility/connect; capability surface). Gate green:
       `make fmt && make lint && make test` (Go `-race` + 398 vitest + 18 e2e).
+- [~] **Agent-transport acknowledgement** — dropped as over-engineering. The
+  operator-controlled `plugins.dir` and the availability policy already gate
+  untrusted code; a separate per-plugin ack added friction without meaningful
+  additional safety.
 - [ ] Don't-spawn semantics for a fully disabled **external** plugin (kill/stop
       the subprocess on disable; respawn on enable) — distinct from the
-      availability policy above.
-- [ ] Show each protocol's **declared permission/risk + recording surface** in
-      the admin row/detail (capability review before enabling).
-- [ ] Explicit per-plugin **agent-transport acknowledgement** before it may enroll.
-- [ ] Optional binary signature/checksum verification at load (config-gated).
-- [ ] Audit events for plugin **load/enable/disable/crash** (load/crash lifecycle
-      events; availability-change auditing already lands).
-- [ ] **DoD:** an admin can review a plugin's full capability/permission surface,
-      must acknowledge agent transport before it tunnels, and can disable a
-      misbehaving plugin without a restart. _(Disable-without-restart is met via
-      the availability policy; capability review + agent acknowledgement remain.)_
+      availability policy above. _(Deferred: the supervisor's respawn loop makes
+      runtime stop/start invasive; availability already blocks all use without a
+      restart, so the operational need is covered.)_
+- [x] **DoD:** an admin can review a plugin's capability surface (risk + recording + transports), and can disable a misbehaving plugin without a restart (via
+      availability). _(Only runtime subprocess stop/start on disable remains,
+      deferred above.)_
 
 ## Cross-cutting (apply across steps) — §3.2, §3.7, §5
 

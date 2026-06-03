@@ -145,13 +145,12 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		logger.Warn("audit is disabled by configuration")
 	}
 
-	// Out-of-tree plugins: scan the configured directory, register each into the
-	// same registry as the built-ins, and forward their stream-internal audit to
-	// the core writer. A missing directory is fine; a bad binary is skipped.
+	// Out-of-tree plugins: register subprocesses from plugins.dir into the same
+	// registry as the built-ins, forwarding their audit to the core writer.
 	var extPlugins *extplugin.Manager
 	if cfg.Plugins.Dir != "" {
-		extPlugins = extplugin.NewManager(cfg.Plugins.Dir, extplugin.WithAudit(
-			func(result plugin.AuditResult, params map[string]string, errMsg string) {
+		extPlugins = extplugin.NewManager(cfg.Plugins.Dir,
+			extplugin.WithAudit(func(result plugin.AuditResult, params map[string]string, errMsg string) {
 				var auditErr error
 				if errMsg != "" {
 					auditErr = errors.New(errMsg)

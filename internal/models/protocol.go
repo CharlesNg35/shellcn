@@ -6,13 +6,9 @@ import "time"
 type ProtocolAvailability string
 
 const (
-	// ProtocolEnabled exposes the protocol to every user (the default).
-	ProtocolEnabled ProtocolAvailability = "enabled"
-	// ProtocolAdminOnly hides the protocol from non-admins and blocks them from
-	// connecting with it.
-	ProtocolAdminOnly ProtocolAvailability = "admin_only"
-	// ProtocolDisabled hides the protocol from everyone and blocks connecting.
-	ProtocolDisabled ProtocolAvailability = "disabled"
+	ProtocolEnabled   ProtocolAvailability = "enabled"    // usable by everyone (default)
+	ProtocolAdminOnly ProtocolAvailability = "admin_only" // usable by admins only
+	ProtocolDisabled  ProtocolAvailability = "disabled"   // usable by no one
 )
 
 // Valid reports whether a is a known availability state.
@@ -25,9 +21,8 @@ func (a ProtocolAvailability) Valid() bool {
 	}
 }
 
-// Allows reports whether a user (admin or not) may see and use the protocol. An
-// empty/unknown state is treated as enabled so a protocol with no stored setting
-// stays available.
+// Allows reports whether a user may see and use the protocol. An empty/unknown
+// state is treated as enabled, so a protocol with no stored row stays available.
 func (a ProtocolAvailability) Allows(isAdmin bool) bool {
 	switch a {
 	case ProtocolDisabled:

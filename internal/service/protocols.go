@@ -18,8 +18,7 @@ func NewProtocolService(settings store.ProtocolSettingStore) *ProtocolService {
 	return &ProtocolService{settings: settings}
 }
 
-// States returns the stored availability for every protocol that has one.
-// Protocols absent from the map default to enabled.
+// States returns stored availability keyed by protocol; absent ones default to enabled.
 func (s *ProtocolService) States(ctx context.Context) (map[string]models.ProtocolAvailability, error) {
 	rows, err := s.settings.List(ctx)
 	if err != nil {
@@ -32,7 +31,7 @@ func (s *ProtocolService) States(ctx context.Context) (map[string]models.Protoco
 	return out, nil
 }
 
-// Set validates and persists the availability for a protocol.
+// Set validates and persists a protocol's availability.
 func (s *ProtocolService) Set(ctx context.Context, protocol string, a models.ProtocolAvailability) error {
 	if protocol == "" {
 		return fmt.Errorf("%w: protocol is required", plugin.ErrInvalidInput)
