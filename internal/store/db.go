@@ -21,7 +21,7 @@ func allModels() []any {
 		&models.ConnectionFolder{}, &models.ConnectionPlacement{}, &models.CredentialGrant{},
 		&models.AuditEntry{}, &models.Snippet{}, &models.Preference{},
 		&models.AgentEnrollment{}, &models.PolicyRule{}, &models.Invitation{},
-		&models.Recording{}, &models.AIProviderConfig{},
+		&models.Recording{}, &models.ProtocolSetting{}, &models.AIProviderConfig{},
 		&models.AIConversation{}, &models.AIMessage{},
 	}
 }
@@ -105,6 +105,7 @@ func newGormStore(db *gorm.DB) *Store {
 		Policies:             &gormPolicyStore{db: db},
 		Invitations:          &gormInvitationStore{db: db},
 		Recordings:           &gormRecordingStore{db: db},
+		ProtocolSettings:     &gormProtocolSettingStore{db: db},
 		AIProviders:          &gormAIProviderStore{db: db},
 		AIConversations:      &gormAIConversationStore{db: db},
 		AIMessages:           &gormAIMessageStore{db: db},

@@ -18,6 +18,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/config"
+	"github.com/charlesng35/shellcn/internal/extplugin"
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/recording"
 	"github.com/charlesng35/shellcn/internal/service"
@@ -37,12 +38,15 @@ type Deps struct {
 	SessionMgr *auth.SessionManager
 	Tickets    *auth.TicketStore
 	// ArtifactTickets guards public install-artifact fetches.
-	ArtifactTickets   *auth.TicketStore
-	Policy            *policy.Enforcer
-	Connector         *service.Connector
-	Connections       *service.ConnectionService
-	Credentials       *service.CredentialService
-	Enrollments       *service.EnrollmentService
+	ArtifactTickets *auth.TicketStore
+	Policy          *policy.Enforcer
+	Connector       *service.Connector
+	Connections     *service.ConnectionService
+	Credentials     *service.CredentialService
+	Enrollments     *service.EnrollmentService
+	Protocols       *service.ProtocolService
+	// ExtPlugins is the out-of-tree plugin manager; nil when none are configured.
+	ExtPlugins        *extplugin.Manager
 	Users             *service.UserService
 	TwoFactor         *service.TwoFactorService
 	Invitations       *service.InvitationService
@@ -264,6 +268,10 @@ func (s *Server) routes() chi.Router {
 						ar.Get("/admin/invitations", s.handleAdminListInvitations)
 						ar.Post("/admin/invitations", s.handleAdminCreateInvitation)
 						ar.Delete("/admin/invitations/{id}", s.handleAdminRevokeInvitation)
+					}
+					if s.deps.Protocols != nil {
+						ar.Get("/admin/protocols", s.handleAdminListProtocols)
+						ar.Put("/admin/protocols/{name}", s.handleAdminSetProtocolAvailability)
 					}
 				})
 			}

@@ -28,6 +28,7 @@ type Config struct {
 	Email      EmailConfig      `mapstructure:"email"`
 	Audit      AuditConfig      `mapstructure:"audit"`
 	Recordings RecordingsConfig `mapstructure:"recordings"`
+	Plugins    PluginsConfig    `mapstructure:"plugins"`
 	AI         AIConfig         `mapstructure:"ai"`
 }
 
@@ -129,6 +130,12 @@ func (c RecordingsConfig) CleanupEvery() time.Duration {
 	return time.Hour
 }
 
+// PluginsConfig points at the directory scanned for out-of-tree plugin binaries.
+// Empty disables external-plugin loading; a missing directory is not an error.
+type PluginsConfig struct {
+	Dir string `mapstructure:"dir"`
+}
+
 // Load reads config.yaml from the current directory, ./config, or any extra
 // paths, then overlays SHELLCN_* environment variables. A missing file is fine.
 func Load(paths ...string) (*Config, error) {
@@ -190,6 +197,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("recordings.retention_days", 0) // disabled: keep recordings forever
 	v.SetDefault("recordings.cleanup_interval", "1h")
 	v.SetDefault("recordings.max_chunk_bytes", 8<<20)
+	v.SetDefault("plugins.dir", "plugins.d")
 }
 
 func (c *Config) SlogLevel() slog.Level {

@@ -44,6 +44,7 @@ func WithAudit(audit AuditFunc) Option {
 }
 
 type managed struct {
+	name string
 	path string
 	ref  *clientRef
 	stop chan struct{}
@@ -51,6 +52,28 @@ type managed struct {
 	mu      sync.Mutex
 	client  *goplugin.Client
 	stopped bool
+}
+
+// Loaded describes one currently-loaded external plugin for the admin surface.
+type Loaded struct {
+	Name    string
+	Path    string
+	Healthy bool
+}
+
+// Loaded returns a snapshot of every loaded external plugin and whether its
+// subprocess is currently running.
+func (m *Manager) Loaded() []Loaded {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]Loaded, 0, len(m.managed))
+	for _, mp := range m.managed {
+		mp.mu.Lock()
+		healthy := mp.client != nil && !mp.client.Exited()
+		mp.mu.Unlock()
+		out = append(out, Loaded{Name: mp.name, Path: mp.path, Healthy: healthy})
+	}
+	return out
 }
 
 func NewManager(dir string, opts ...Option) *Manager {
@@ -105,7 +128,7 @@ func (m *Manager) load(ctx context.Context, reg *plugin.Registry, path string) e
 		return err
 	}
 
-	mp := &managed{path: path, ref: ref, stop: make(chan struct{}), client: client}
+	mp := &managed{name: p.Manifest().Name, path: path, ref: ref, stop: make(chan struct{}), client: client}
 	m.mu.Lock()
 	m.managed = append(m.managed, mp)
 	m.mu.Unlock()

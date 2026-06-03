@@ -26,6 +26,7 @@ func NewMemory() *Store {
 		Policies:             &memPolicyStore{m: map[string]models.PolicyRule{}},
 		Invitations:          &memInvitationStore{m: map[string]models.Invitation{}},
 		Recordings:           &memRecordingStore{m: map[string]models.Recording{}},
+		ProtocolSettings:     &memProtocolSettingStore{m: map[string]models.ProtocolSetting{}},
 		AIProviders:          &memAIProviderStore{m: map[string]models.AIProviderConfig{}},
 		AIConversations:      &memAIConversationStore{m: map[string]models.AIConversation{}},
 		AIMessages:           &memAIMessageStore{m: map[string][]models.AIMessage{}},
@@ -904,6 +905,31 @@ func (s *memPreferenceStore) Delete(_ context.Context, userID, key string) error
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.m, prefKey(userID, key))
+	return nil
+}
+
+type memProtocolSettingStore struct {
+	mu sync.RWMutex
+	m  map[string]models.ProtocolSetting
+}
+
+func (s *memProtocolSettingStore) List(_ context.Context) ([]models.ProtocolSetting, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]models.ProtocolSetting, 0, len(s.m))
+	for _, p := range s.m {
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Protocol < out[j].Protocol })
+	return out, nil
+}
+
+func (s *memProtocolSettingStore) Set(_ context.Context, p *models.ProtocolSetting) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := *p
+	cp.UpdatedAt = time.Now()
+	s.m[p.Protocol] = cp
 	return nil
 }
 

@@ -48,6 +48,12 @@ const router = createRouter({
           meta: { admin: true },
         },
         {
+          path: "settings/protocols",
+          name: "protocols",
+          component: () => import("../views/ProtocolsView.vue"),
+          meta: { admin: true },
+        },
+        {
           path: "settings/profile",
           name: "profile",
           component: () => import("../views/ProfileView.vue"),

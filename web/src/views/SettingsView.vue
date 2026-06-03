@@ -122,6 +122,24 @@ const linkClass =
         />
       </RouterLink>
 
+      <RouterLink :to="{ name: 'protocols' }" :class="linkClass">
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'blocks' }"
+          :size="18"
+          class="text-surface-400"
+        />
+        <span
+          class="min-w-0 flex-1 font-medium text-surface-800 dark:text-surface-100"
+        >
+          Protocols
+        </span>
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'chevron-right' }"
+          :size="16"
+          class="text-surface-300"
+        />
+      </RouterLink>
+
       <div
         class="flex items-center gap-3 rounded-lg border border-surface-200 px-4 py-3 dark:border-surface-800"
       >

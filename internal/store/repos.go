@@ -448,6 +448,21 @@ func (s *gormPreferenceStore) Delete(ctx context.Context, userID, key string) er
 	return s.db.WithContext(ctx).Delete(&models.Preference{}, "user_id = ? AND pref_key = ?", userID, key).Error
 }
 
+type gormProtocolSettingStore struct{ db *gorm.DB }
+
+func (s *gormProtocolSettingStore) List(ctx context.Context) ([]models.ProtocolSetting, error) {
+	var out []models.ProtocolSetting
+	if err := s.db.WithContext(ctx).Find(&out).Error; err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *gormProtocolSettingStore) Set(ctx context.Context, p *models.ProtocolSetting) error {
+	p.UpdatedAt = time.Now()
+	return s.db.WithContext(ctx).Save(p).Error
+}
+
 type gormInvitationStore struct{ db *gorm.DB }
 
 func (s *gormInvitationStore) Create(ctx context.Context, i *models.Invitation) error {

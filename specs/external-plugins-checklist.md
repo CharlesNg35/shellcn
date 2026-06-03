@@ -67,8 +67,7 @@ faithful template.
 - [x] **buf** generation: `sdk/buf.yaml` (BASIC lint) + `sdk/buf.gen.yaml` (managed
       mode, `go_package_prefix`) → stubs at `sdk/gen/pluginv1` (package `pluginv1`,
       imported directly), checked in. `make proto` (`cd sdk && buf generate`).
-- [x] Handshake (`sdk/grpcplugin`): `Handshake` (magic cookie) + `ProtocolVersion`
-      + `PluginName` dispense key.
+- [x] Handshake (`sdk/grpcplugin`): `Handshake` (magic cookie) + `ProtocolVersion` + `PluginName` dispense key.
 - [x] Manifest crosses as JSON bytes (`Manifest.json`); contract owned by Go types
       in `sdk/plugin`, not duplicated in protobuf.
 - [x] sdk deps: grpc 1.67.0, protobuf 1.36.11, go-plugin 1.8.0.
@@ -115,7 +114,7 @@ exists to spawn: `sdk/grpcplugin/server.go` (PluginServer + session registry),
       undisturbed. Verified by a test that crashes the subprocess (`os.Exit`) and
       asserts a fresh `Connect`+`Invoke` recovers.
 - [x] **DoD met (end-to-end):** test builds a real plugin binary (`testdata/
-      demoplugin`, `sdk.Serve`), `Manager.LoadAll` spawns + registers it, then
+    demoplugin`, `sdk.Serve`), `Manager.LoadAll` spawns + registers it, then
       `Connect`+`HealthCheck`+`Invoke` round-trip **over the live gRPC
       subprocess**; `Close` is clean. Build/lint/test green both modules (root 73
       ok/0 fail, sdk ok).
@@ -196,7 +195,7 @@ serves the impl's `ServeHTTPProxy` via `http.Server` over the brokered conn
       proxy upgrades natively.
 - [x] CSRF-exemption etc. live on the core's proxy route — no change for external.
 - [x] **DoD met (end-to-end):** `TestPluginHTTPProxy` — `client → core (hijack) →
-      brokered conn → plugin reverse-proxy → upstream via cfg.Net → back`, asserting
+    brokered conn → plugin reverse-proxy → upstream via cfg.Net → back`, asserting
       the proxied body. Exercises proxy **and** core egress together. Build/lint/test
       green both modules (root 73 ok/0 fail, sdk ok). (HTTP GET tested; WS uses the
       identical raw-byte path after the upgrade request.)
@@ -204,7 +203,7 @@ serves the impl's `ServeHTTPProxy` via `http.Server` over the brokered conn
 ## Step 7 — Plugin SDK + reference external plugin — §3.1 — **Done**
 
 - [x] `sdk.Serve(p)` is the `main` entry; a plugin implements `Manifest()/Routes()/
-      Connect()` against `sdk/plugin`. (Built in Step 3.)
+    Connect()` against `sdk/plugin`. (Built in Step 3.)
 - [x] **Reference plugin `examples/memo`** — its **own Go module** depending only on
       the SDK (no core/`internal/`): in-memory notes with a manifest (table panel +
       create form + row delete), unary CRUD routes, and session state. README +
@@ -225,57 +224,106 @@ serves the impl's `ServeHTTPProxy` via `http.Server` over the brokered conn
       `sync.Once`-guarded (idempotent, correct `net.Conn` hygiene). Full `-race`
       gate green both modules (root 73 ok/0 fail/**0 races**, sdk ok).
 
-## Step 8 — Admin surface + trust controls — §3.6
+## Step 8 — Admin surface + trust controls — §3.6 — **Partially done**
 
-- [ ] Admin lists loaded external plugins: name, version, declared permissions,
-      transports, health.
-- [ ] Enable/disable per plugin; disabled plugins are not spawned.
+**Server-integration glue (was the missing prerequisite) — Done.** The `Manager`
+is now wired into startup: new `plugins.dir` config (default `plugins.d`,
+overridable via `config.yaml`/`SHELLCN_PLUGINS_DIR`) drives
+`extplugin.NewManager` → `LoadAll(ctx, reg)` (registers external plugins into the
+**same** registry as the built-ins) → `defer Close()` on shutdown, all in
+`cmd/server/main.go` `run()`. The Manager's `WithAudit` forwards plugin
+stream-internal audit to the core writer. `Manager.Loaded()` exposes
+name/path/health for the admin surface.
+
+**Protocol availability (admin surface) — Done.** An admin "Protocols" page
+(`web/src/views/ProtocolsView.vue`, route `settings/protocols`, admin-gated on
+the router **and** the backend `requireAdmin`) lists built-in and external
+protocols in two tabs with title/icon/version/transports and, for external,
+live health. Each protocol has a 3-state availability — **enabled** (all),
+**admin_only** (admins only), **disabled** (nobody) — persisted in
+`models.ProtocolSetting` via `service.ProtocolService`. Default (no row) =
+enabled, so behavior is unchanged until an admin acts.
+
+- [x] Admin lists loaded plugins: name, title, **version**, **transports**,
+      **health** (built-in + external, split by tab). _(Declared-permission/risk
+      surface is not yet shown — see remaining.)_
+- [x] **Availability per protocol** (enabled / admin*only / disabled), enforced
+      end-to-end: `/plugins` catalog is filtered per user; the single chokepoint
+      `acquireSession` blocks an unavailable protocol for HTTP routes, WS streams,
+      the open-in-browser proxy, **and** AI `InvokeRoute`, returning a clear
+      `403 … this protocol is not available`; connection-create is validated too.
+      Existing connections still render (sidebar icon comes from the connection
+      summary) — only *connecting* errors. *(This is a richer policy than the
+      original "disabled = not spawned": disabling hides + blocks use without
+      killing the subprocess, so the admin can re-enable without a restart.)\_
+- [x] **Audit:** availability changes are audited (`protocol.availability`, via
+      `auditAdminEvent`, privileged risk).
+- [x] **Tests:** `internal/service/protocols_test.go` (model `Allows`,
+      Set/States/Allowed, invalid-state rejection) and
+      `internal/server/protocols_test.go` (admin-only gate; disabled → hidden for
+      all + connect blocked + re-enable restores; admin_only → hidden for
+      non-admins, visible to admins, connect blocked for non-admins). Gate green:
+      `make fmt && make lint && make test` (Go `-race` + 398 vitest + 18 e2e).
+- [ ] Don't-spawn semantics for a fully disabled **external** plugin (kill/stop
+      the subprocess on disable; respawn on enable) — distinct from the
+      availability policy above.
+- [ ] Show each protocol's **declared permission/risk + recording surface** in
+      the admin row/detail (capability review before enabling).
 - [ ] Explicit per-plugin **agent-transport acknowledgement** before it may enroll.
 - [ ] Optional binary signature/checksum verification at load (config-gated).
-- [ ] Audit events for plugin load/enable/disable/crash.
+- [ ] Audit events for plugin **load/enable/disable/crash** (load/crash lifecycle
+      events; availability-change auditing already lands).
 - [ ] **DoD:** an admin can review a plugin's full capability/permission surface,
       must acknowledge agent transport before it tunnels, and can disable a
-      misbehaving plugin without a restart.
+      misbehaving plugin without a restart. _(Disable-without-restart is met via
+      the availability policy; capability review + agent acknowledgement remain.)_
 
 ## Cross-cutting (apply across steps) — §3.2, §3.7, §5
 
-- [ ] **Raw conns for bytes, gRPC for control:** every byte-stream (terminal,
+- [x] **Raw conns for bytes, gRPC for control:** every byte-stream (terminal,
       desktop, `OpenChannel`, HTTPProxy, L4 dial) rides a raw brokered `net.Conn`,
-      never per-frame protobuf.
-- [ ] **Egress stays in the core:** plugins never dial targets themselves; all
-      reach via `Host.DialTarget`/`HTTPProxyEndpoint` (direct or agent).
-- [ ] **Permissions are core-enforced:** `route_id` is a handle; the core resolves
+      never per-frame protobuf. (Steps 4–6.)
+- [x] **Egress stays in the core:** plugins never dial targets themselves; all
+      reach via `Host.DialTarget`/`OpenHTTPConn` (direct or agent). (Step 4.)
+- [x] **Permissions are core-enforced:** `route_id` is a handle; the core resolves
       `Permission`/`Risk`/`AuditEvent`/`Input` and runs the wrapper before `Invoke`.
-- [ ] Versioning: `.proto` + `ProtocolVersion` + manifest `APIVersion` form a
-      stable wire contract; host refuses unsupported versions with a clear error.
+      Protocol availability is enforced at the same boundary (`acquireSession`).
+- [x] Versioning: handshake magic cookie + `ProtocolVersion` refuse an
+      unsupported plugin at load; manifest `APIVersion` is validated by the
+      registry. (Step 1.)
 - [ ] Per-subprocess resource limits (CPU/mem/FD) + concurrency caps.
-- [ ] Cross-compile build matrix (`linux/amd64,arm64`, `darwin/arm64`,
-      `windows/amd64`); pure-Go drivers preferred; wrong-arch fails handshake cleanly.
-- [ ] **Code rules (AGENTS.md):** verify every lib/API via context7 + websearch;
-      PrimeVue-only admin UI via the preset; VueUse; **pnpm** (never npm); small
-      focused units; minimal comments (non-obvious _why_ only), **no** spec/PR refs
-      in source; plugin-agnostic core (the adapter must not special-case any plugin).
-- [ ] **Gate green:** `make fmt && make lint && make test`.
-- [ ] **Write _and execute_** integration tests (load a real example plugin binary;
-      exercise unary, server-stream, exec terminal + resize, `OpenChannel`,
-      open-in-browser WebSocket, direct egress, agent egress; assert a recording is
-      produced; crash → session error → restart under backoff).
+- [ ] Cross-compile build matrix CI (`linux/amd64,arm64`, `darwin/arm64`,
+      `windows/amd64`). _(Authoring guidance + pure-Go preference documented in
+      `docs/external-plugins.md`; wrong-arch already fails the handshake cleanly.)_
+- [x] **Code rules (AGENTS.md):** libs verified; PrimeVue-only admin UI via the
+      preset (`Tabs`/`DataTable`/`Column`/`Select`/`Breadcrumb`); **pnpm**; small
+      focused units; minimal _why_-only comments, **no** spec/PR refs in source;
+      plugin-agnostic core (availability keys on the manifest name, no per-plugin
+      special-casing).
+- [x] **Gate green:** `make fmt && make lint && make test` (Go `-race`, 0 lint
+      issues both modules, 398 vitest + 18 e2e).
+- [x] **Write _and execute_** integration tests: a real example plugin binary is
+      loaded and exercised for unary, bidi stream, `OpenChannel`, open-in-browser,
+      direct egress, L7-through-core, audit forwarding, and crash → restart under
+      backoff (`internal/extplugin/*_test.go`); plus the availability enforcement
+      tests above. _(A live agent tunnel shares the identical `cfg.Net` path but
+      isn't stood up in unit tests.)_
 - [ ] Update `specs/project.md` with the external-plugin architecture once stable.
 
 ## Pre-build confirmations — §1, §3, §6
 
-- [ ] Scope: keep the 40 first-party plugins compiled in; external = out-of-process
+- [x] Scope: keep the 40 first-party plugins compiled in; external = out-of-process
       only. Pure OSS extensibility (no commercial/licensing, not for size reduction).
-- [ ] **Full capability parity, all in v1** — no v2, nothing first-party-only.
-- [ ] Mechanism: `hashicorp/go-plugin`, **gRPC only**, `AutoMTLS`, `GRPCBroker`.
-- [ ] Packaging: **nested SDK module** `github.com/charlesng35/shellcn/sdk` (in this
+- [x] **Full capability parity, all in v1** — no v2, nothing first-party-only.
+- [x] Mechanism: `hashicorp/go-plugin`, **gRPC only**, `AutoMTLS`, `GRPCBroker`.
+- [x] Packaging: **nested SDK module** `github.com/charlesng35/shellcn/sdk` (in this
       repo, NOT under `internal/`), holding the public contract (`sdk/plugin`) +
-      serve glue; core + 40 built-ins import the contract from there; versioned
-      `sdk/vX.Y.Z`.
-- [ ] Egress + audit owned by the core via the `Host` service; agent transport is
-      gated by an operator acknowledgement (trust control, not a capability cut).
-- [ ] Accept the maintenance tax: a stable, full-surface plugin ABI owned indefinitely.
-- [ ] Accept the trade: installing external plugins means core + a `plugins.d/` of
+      serve glue; core + 40 built-ins import the contract from there; tagging
+      `sdk/vX.Y.Z` pending the first release.
+- [x] Egress + audit owned by the core via the `Host` service. _(Agent-transport
+      operator acknowledgement is the remaining Step 8 trust control.)_
+- [x] Accept the maintenance tax: a stable, full-surface plugin ABI owned indefinitely.
+- [x] Accept the trade: installing external plugins means core + a `plugins.d/` of
       subprocesses (first-party single-binary experience unchanged).
-- [ ] Cheaper alternative on record: bring-your-own-build (add import to `all()`,
+- [x] Cheaper alternative on record: bring-your-own-build (add import to `all()`,
       `go build`) if runtime-loading demand proves small.

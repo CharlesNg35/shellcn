@@ -12,8 +12,26 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-func (s *Server) handleListPlugins(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.deps.Plugins.Summaries())
+func (s *Server) handleListPlugins(w http.ResponseWriter, r *http.Request) {
+	summaries := s.deps.Plugins.Summaries()
+	if s.deps.Protocols != nil {
+		ctx := r.Context()
+		user, _ := userFrom(ctx)
+		states, err := s.deps.Protocols.States(ctx)
+		if err != nil {
+			writeError(w, s.deps.Logger, err)
+			return
+		}
+		isAdmin := user.HasRole(models.RoleAdmin)
+		visible := make([]plugin.Summary, 0, len(summaries))
+		for _, su := range summaries {
+			if states[su.Name].Allows(isAdmin) {
+				visible = append(visible, su)
+			}
+		}
+		summaries = visible
+	}
+	writeJSON(w, http.StatusOK, summaries)
 }
 
 func (s *Server) handleListCredentialKinds(w http.ResponseWriter, _ *http.Request) {
