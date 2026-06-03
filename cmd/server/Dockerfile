@@ -10,7 +10,10 @@ RUN pnpm build
 
 FROM golang:1.26.4-bookworm AS go-build
 WORKDIR /src
+# The root module replaces github.com/charlesng35/shellcn/sdk with the nested
+# ./sdk module, so its go.mod must be present before `go mod download`.
 COPY go.mod go.sum ./
+COPY sdk/go.mod sdk/go.sum ./sdk/
 RUN go mod download
 COPY . .
 COPY --from=web-build /src/web/dist ./web/dist
