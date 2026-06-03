@@ -26,7 +26,6 @@ import (
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/email"
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/recording"
 	"github.com/charlesng35/shellcn/internal/secrets"
@@ -37,6 +36,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/telemetry"
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 	"github.com/charlesng35/shellcn/web"
 )
 

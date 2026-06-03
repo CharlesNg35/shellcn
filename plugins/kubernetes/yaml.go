@@ -13,8 +13,7 @@ import (
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/yaml"
 
-	"github.com/charlesng35/shellcn/internal/app"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // GetYAML returns a resource as editable YAML (managedFields/status stripped).
@@ -170,7 +169,7 @@ func (s *Session) applyManifest(rc *plugin.RequestContext, o *unstructured.Unstr
 		return nil, err
 	}
 	force := true
-	opts := metav1.PatchOptions{FieldManager: app.DefaultClientName, Force: &force}
+	opts := metav1.PatchOptions{FieldManager: plugin.DefaultClientName, Force: &force}
 	if dryRun {
 		opts.DryRun = []string{metav1.DryRunAll}
 	}

@@ -14,7 +14,7 @@ import (
 	"github.com/moby/moby/api/types/registry"
 	dockerclient "github.com/moby/moby/client"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // killSignals is the allow-list of signals the kill action accepts. Constraining

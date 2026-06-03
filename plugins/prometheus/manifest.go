@@ -1,6 +1,6 @@
 package prometheus
 
-import "github.com/charlesng35/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/sdk/plugin"
 
 // Badge color maps: a lower-cased cell value to its severity.
 var (

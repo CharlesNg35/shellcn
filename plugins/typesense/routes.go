@@ -12,10 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/broker"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func Routes() []plugin.Route {
@@ -959,9 +958,9 @@ func mustJSON(v any) string {
 	return string(data)
 }
 
-func auditResult(err error) models.AuditResult {
+func auditResult(err error) plugin.AuditResult {
 	if err != nil {
-		return models.AuditError
+		return plugin.AuditError
 	}
-	return models.AuditAllowed
+	return plugin.AuditAllowed
 }

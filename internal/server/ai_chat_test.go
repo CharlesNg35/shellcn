@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/ai/tools"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestAITurnRegistryScopesControlsAndDeliversConfirmation(t *testing.T) {

@@ -5,8 +5,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type row map[string]any
@@ -17,14 +16,14 @@ func pageRC(t *testing.T, filter string) *plugin.RequestContext {
 	if filter != "" {
 		q.Set("filter", filter)
 	}
-	return plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, nil, nil, q, nil)
+	return plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, nil, nil, q, nil)
 }
 
 func sortRC(t *testing.T, sort string) *plugin.RequestContext {
 	t.Helper()
 	q := url.Values{}
 	q.Set("sort", sort)
-	return plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, nil, nil, q, nil)
+	return plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, nil, nil, q, nil)
 }
 
 func TestPageRowsSorts(t *testing.T) {

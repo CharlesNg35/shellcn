@@ -4,7 +4,7 @@ package telnet
 import (
 	"context"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // Plugin exposes Telnet as a terminal-only protocol.

@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestUserServiceCreateValidatesPassword(t *testing.T) {

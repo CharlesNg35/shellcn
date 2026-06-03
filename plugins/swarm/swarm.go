@@ -6,9 +6,8 @@ package swarm
 import (
 	"context"
 
-	"github.com/charlesng35/shellcn/internal/app"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type Plugin struct{}
@@ -54,7 +53,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				Label:      "Docker Swarm",
 				Kind:       "docker-run",
 				ConnectURL: plugin.ArtifactConnectURL{LocalhostHost: "host.docker.internal"},
-				Template: "docker run --rm --name " + app.AgentBinary + " " +
+				Template: "docker run --rm --name " + plugin.AgentBinary + " " +
 					"{{if .LocalhostHostRequired}}--add-host={{.LocalhostHost}}:host-gateway {{end}}" +
 					`--group-add "$(stat -c '%g' /var/run/docker.sock)" ` +
 					"-e SHELLCN_CONNECT_URL={{shellquote .ConnectURL}} " +

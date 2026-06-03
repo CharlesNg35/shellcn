@@ -14,9 +14,8 @@ import (
 	nfsclient "github.com/willscott/go-nfs-client/nfs"
 	"github.com/willscott/go-nfs-client/nfs/rpc"
 
-	"github.com/charlesng35/shellcn/internal/app"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/filesystem"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 const protocolName = "nfs"
@@ -77,7 +76,7 @@ func configSchema() plugin.Schema {
 			{Key: "root_path", Label: "Root path", Type: plugin.FieldText, Default: "/", Placeholder: "/"},
 		}},
 		{Name: "AUTH_SYS", Fields: []plugin.Field{
-			{Key: "machine_name", Label: "Machine name", Type: plugin.FieldText, Default: app.DefaultClientName},
+			{Key: "machine_name", Label: "Machine name", Type: plugin.FieldText, Default: plugin.DefaultClientName},
 			{Key: "uid", Label: "UID", Type: plugin.FieldNumber, Default: 0, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}}},
 			{Key: "gid", Label: "GID", Type: plugin.FieldNumber, Default: 0, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}}},
 		}},
@@ -117,7 +116,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		opts.RootPath = "/"
 	}
 	if opts.MachineName == "" {
-		opts.MachineName = app.DefaultClientName
+		opts.MachineName = plugin.DefaultClientName
 	}
 	return opts, nil
 }

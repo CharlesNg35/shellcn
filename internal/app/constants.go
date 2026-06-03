@@ -1,16 +1,19 @@
 // Package app centralizes ShellCN product identifiers and published artifact
-// names used across the backend.
+// names used across the backend. Plugin-facing identifiers are owned by the SDK
+// (sdk/plugin) and mirrored here for server-side use.
 package app
+
+import "github.com/charlesng35/shellcn/sdk/plugin"
 
 const (
 	Name         = "shellcn"
 	ServerBinary = Name
-	AgentBinary  = Name + "-agent"
+	AgentBinary  = plugin.AgentBinary
 
 	ServerImageRepository = "ghcr.io/charlesng35/" + ServerBinary
 	AgentImageRepository  = "ghcr.io/charlesng35/" + AgentBinary
 	ServerImageLatest     = ServerImageRepository + ":latest"
-	AgentImageLatest      = AgentImageRepository + ":latest"
+	AgentImageLatest      = plugin.AgentImageLatest
 
 	// Repository is the canonical GitHub repo; LatestReleaseURL points at the
 	// published server/agent binaries.
@@ -18,7 +21,7 @@ const (
 	LatestReleaseURL = "https://github.com/" + Repository + "/releases/latest"
 
 	DefaultDatabaseDSN = Name + ".db"
-	DefaultClientName  = Name
+	DefaultClientName  = plugin.DefaultClientName
 
 	// DisplayName is the human-facing product name (e.g. the 2FA issuer shown in
 	// authenticator apps), as opposed to the lowercase slug Name.
@@ -30,5 +33,5 @@ const (
 	AgentUsername        = AgentBinary
 	AgentSlugFallback    = AgentBinary
 	AgentInternalHost    = AgentBinary + ".internal"
-	AgentInternalAddress = AgentInternalHost + ":443"
+	AgentInternalAddress = plugin.AgentInternalAddress
 )

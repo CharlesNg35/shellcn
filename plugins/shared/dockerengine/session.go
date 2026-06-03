@@ -17,8 +17,8 @@ import (
 
 	dockerclient "github.com/moby/moby/client"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/loopback"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type endpoint struct {

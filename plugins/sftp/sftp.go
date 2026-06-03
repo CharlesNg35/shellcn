@@ -4,8 +4,8 @@ package sftp
 import (
 	"context"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/sshsftp"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // Plugin exposes file-only SFTP access over SSH.

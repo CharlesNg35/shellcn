@@ -8,8 +8,7 @@ package kubernetes
 import (
 	"context"
 
-	"github.com/charlesng35/shellcn/internal/app"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // In-cluster API + ServiceAccount mount paths. Kubernetes-specific, so they live
@@ -84,26 +83,26 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: ` + app.AgentBinary + `
+  name: ` + plugin.AgentBinary + `
   namespace: "{{.Slug}}"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: "` + app.AgentBinary + `-{{.Slug}}"
+  name: "` + plugin.AgentBinary + `-{{.Slug}}"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: cluster-admin
 subjects:
   - kind: ServiceAccount
-    name: ` + app.AgentBinary + `
+    name: ` + plugin.AgentBinary + `
     namespace: "{{.Slug}}"
 ---
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ` + app.AgentBinary + `
+  name: ` + plugin.AgentBinary + `
   namespace: "{{.Slug}}"
 type: Opaque
 stringData:
@@ -113,21 +112,21 @@ stringData:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ` + app.AgentBinary + `
+  name: ` + plugin.AgentBinary + `
   namespace: "{{.Slug}}"
   labels:
-    app: ` + app.AgentBinary + `
+    app: ` + plugin.AgentBinary + `
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: ` + app.AgentBinary + `
+      app: ` + plugin.AgentBinary + `
   template:
     metadata:
       labels:
-        app: ` + app.AgentBinary + `
+        app: ` + plugin.AgentBinary + `
     spec:
-      serviceAccountName: ` + app.AgentBinary + `
+      serviceAccountName: ` + plugin.AgentBinary + `
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -141,12 +140,12 @@ spec:
             - name: SHELLCN_CONNECT_URL
               valueFrom:
                 secretKeyRef:
-                  name: ` + app.AgentBinary + `
+                  name: ` + plugin.AgentBinary + `
                   key: connect-url
             - name: SHELLCN_ENROLL_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: ` + app.AgentBinary + `
+                  name: ` + plugin.AgentBinary + `
                   key: enroll-token
           resources:
             requests:

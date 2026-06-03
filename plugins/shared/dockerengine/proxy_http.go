@@ -15,8 +15,8 @@ import (
 	"github.com/moby/moby/api/types/network"
 	dockerclient "github.com/moby/moby/client"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/webproxy"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // ServeHTTPProxy reverse-proxies a browser to a container's or swarm service's

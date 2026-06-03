@@ -8,8 +8,8 @@ import (
 	gclient "github.com/x90skysn3k/grdp/client"
 	"github.com/x90skysn3k/grdp/glog"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/rfb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // Session holds the per-connection RDP dial parameters. grdp opens its own TCP

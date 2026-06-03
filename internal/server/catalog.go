@@ -9,7 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func (s *Server) handleListPlugins(w http.ResponseWriter, _ *http.Request) {

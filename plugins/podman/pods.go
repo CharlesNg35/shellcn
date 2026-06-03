@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // Pods are a Podman-native concept absent from the Docker-compatible API, so

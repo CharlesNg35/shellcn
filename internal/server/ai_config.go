@@ -11,7 +11,7 @@ import (
 
 	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type aiProviderRequest struct {

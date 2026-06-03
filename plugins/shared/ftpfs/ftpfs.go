@@ -19,8 +19,8 @@ import (
 
 	ftplib "github.com/jlaffaye/ftp"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/filesystem"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 const (

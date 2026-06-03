@@ -17,10 +17,9 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/sftp"
+	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 const (
@@ -50,7 +49,7 @@ func TestSFTPPluginIntegration(t *testing.T) {
 	p := sftp.New()
 	sess, err := p.Connect(ctx, plugin.ConnectConfig{
 		Config: cfg,
-		Net:    transport.NewDirectForConnection(models.Connection{Config: cfg}),
+		Net:    plugintest.DirectTransport(),
 	})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
@@ -185,7 +184,7 @@ func routeMapIT(routes []plugin.Route) map[string]plugin.Route {
 
 func callIT(ctx context.Context, t *testing.T, route plugin.Route, sess plugin.Session, params map[string]string, body []byte) any {
 	t.Helper()
-	out, err := route.Handle(plugin.NewRequestContext(ctx, models.User{}, sess, params, nil, body))
+	out, err := route.Handle(plugin.NewRequestContext(ctx, plugin.User{}, sess, params, nil, body))
 	if err != nil {
 		t.Fatalf("%s: %v", route.ID, err)
 	}
@@ -194,7 +193,7 @@ func callIT(ctx context.Context, t *testing.T, route plugin.Route, sess plugin.S
 
 func uploadFile(ctx context.Context, t *testing.T, route plugin.Route, sess plugin.Session, dir, name, content string) {
 	t.Helper()
-	rc := plugin.NewMultipartRequestContext(ctx, models.User{}, sess,
+	rc := plugin.NewMultipartRequestContext(ctx, plugin.User{}, sess,
 		map[string]string{"path": dir}, nil, nil,
 		map[string][]plugin.UploadedFile{"files": {makeUploadIT(t, name, []byte(content))}})
 	if _, err := route.Handle(rc); err != nil {

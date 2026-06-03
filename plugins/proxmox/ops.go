@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // PVE lifecycle endpoints (clone, destroy, restore, resize, node power) return a

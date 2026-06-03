@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestConnectPasswordSucceeds(t *testing.T) {

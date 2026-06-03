@@ -1,6 +1,6 @@
 package dynamodb
 
-import "github.com/charlesng35/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/sdk/plugin"
 
 // statusSeverities colors table/index/backup status badges by value.
 var statusSeverities = map[string]plugin.Severity{

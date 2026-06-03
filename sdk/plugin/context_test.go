@@ -6,11 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-func testUser() models.User { return models.User{ID: "u1", Username: "ops"} }
+func testUser() plugin.User { return plugin.User{ID: "u1", Username: "ops"} }
 
 func testSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Main", Fields: []plugin.Field{

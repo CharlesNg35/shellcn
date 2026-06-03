@@ -8,8 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // TestProxmoxPluginIntegration drives the new lifecycle handlers against a real
@@ -87,7 +86,7 @@ func TestProxmoxPluginIntegration(t *testing.T) {
 		if body != "" {
 			b = []byte(body)
 		}
-		rc := plugin.NewRequestContext(ctx, models.User{ID: "it"}, s, params, nil, b)
+		rc := plugin.NewRequestContext(ctx, plugin.User{ID: "it"}, s, params, nil, b)
 		res, err := handler(rc)
 		if err != nil {
 			t.Fatalf("handler: %v", err)

@@ -15,10 +15,9 @@ import (
 
 	dockerclient "github.com/moby/moby/client"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func trimName(names []string) string {
@@ -99,17 +98,10 @@ func TestDockerPluginIntegrationAgentTransport(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	reg := transport.NewRegistry()
-	release := reg.Register("docker-agent", func(ctx context.Context, _, _ string) (net.Conn, error) {
+	nt := plugintest.TransportFunc(func(ctx context.Context, _, _ string) (net.Conn, error) {
 		var d net.Dialer
 		return d.DialContext(ctx, "unix", "/var/run/docker.sock")
 	})
-	defer release()
-
-	nt, err := transport.Build(models.Connection{ID: "docker-agent", Transport: string(plugin.TransportAgent)}, reg, plugin.AgentUnix)
-	if err != nil {
-		t.Fatalf("agent transport build: %v", err)
-	}
 	sess, err := Connect(ctx, plugin.ConnectConfig{
 		ConnectionID: "docker-agent",
 		Transport:    plugin.TransportAgent,
@@ -151,7 +143,7 @@ func TestDockerEngineResourceCreateRoundTrip(t *testing.T) {
 
 	call := func(handler func(*plugin.RequestContext) (any, error), params map[string]string, body string) {
 		t.Helper()
-		rc := plugin.NewRequestContext(ctx, models.User{}, ds, params, nil, []byte(body))
+		rc := plugin.NewRequestContext(ctx, plugin.User{}, ds, params, nil, []byte(body))
 		res, err := handler(rc)
 		if err != nil {
 			t.Fatalf("handler: %v", err)
@@ -218,7 +210,7 @@ func TestDockerEngineOpsIntegrationRoundTrip(t *testing.T) {
 
 	call := func(handler func(*plugin.RequestContext) (any, error), params map[string]string, body string) any {
 		t.Helper()
-		rc := plugin.NewRequestContext(ctx, models.User{}, ds, params, nil, []byte(body))
+		rc := plugin.NewRequestContext(ctx, plugin.User{}, ds, params, nil, []byte(body))
 		res, err := handler(rc)
 		if err != nil {
 			t.Fatalf("handler: %v", err)
@@ -301,7 +293,7 @@ func TestDockerEngineOpsIntegrationRoundTrip(t *testing.T) {
 
 	// push: exercise the handler's validation path (empty reference must fail).
 	// A real registry push is not provisioned in this environment.
-	emptyRC := plugin.NewRequestContext(ctx, models.User{}, ds, nil, nil, []byte(`{"image":"  "}`))
+	emptyRC := plugin.NewRequestContext(ctx, plugin.User{}, ds, nil, nil, []byte(`{"image":"  "}`))
 	if _, err := dockerengine.PushImage(emptyRC); err == nil {
 		t.Fatal("PushImage with empty reference should fail validation")
 	}

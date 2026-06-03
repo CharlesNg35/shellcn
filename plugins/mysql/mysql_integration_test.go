@@ -12,10 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 	mysqldriver "github.com/go-sql-driver/mysql"
 )
 
@@ -34,7 +33,7 @@ func TestMySQLPluginIntegration(t *testing.T) {
 
 	sess, err := connect(ctx, plugin.ConnectConfig{
 		Config: cfg,
-		Net:    transport.NewDirectForConnection(models.Connection{Config: cfg}),
+		Net:    plugintest.DirectTransport(),
 	})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
@@ -51,7 +50,7 @@ func TestMySQLPluginIntegration(t *testing.T) {
 		defer cleanupCancel()
 		_, _ = s.db.ExecContext(cleanupCtx, "DROP DATABASE IF EXISTS "+quoteIdent(createdDatabase))
 	})
-	databases, err := listDatabases(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	databases, err := listDatabases(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, nil))
 	if err != nil {
 		t.Fatalf("list databases after create: %v", err)
 	}
@@ -63,7 +62,7 @@ func TestMySQLPluginIntegration(t *testing.T) {
 	if _, err := s.db.ExecContext(ctx, "CREATE VIEW "+qualified(createdDatabase, "shellcn_v")+" AS SELECT 1 AS x"); err != nil {
 		t.Fatalf("seed view: %v", err)
 	}
-	if _, err := dropView(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": createdDatabase, "view": "shellcn_v"}, nil, nil)); err != nil {
+	if _, err := dropView(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": createdDatabase, "view": "shellcn_v"}, nil, nil)); err != nil {
 		t.Fatalf("drop view: %v", err)
 	}
 	var vcount int
@@ -92,7 +91,7 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 		_, _ = s.db.ExecContext(cleanupCtx, `DROP TABLE IF EXISTS shellcn_people`)
 	})
 
-	rc := plugin.NewRequestContext(ctx, models.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
+	rc := plugin.NewRequestContext(ctx, plugin.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
 	list, err := listTables(rc)
 	if err != nil {
 		t.Fatalf("list tables: %v", err)
@@ -101,7 +100,7 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 		t.Fatalf("created table was not listed: %#v", list)
 	}
 
-	rows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": cfg["database"].(string), "table": "shellcn_people"}, nil, nil))
+	rows, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": cfg["database"].(string), "table": "shellcn_people"}, nil, nil))
 	if err != nil {
 		t.Fatalf("table rows: %v", err)
 	}
@@ -112,14 +111,14 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 
 	// Free-text search filters the data grid server-side (per-column).
 	people := map[string]string{"database": cfg["database"].(string), "table": "shellcn_people"}
-	matched, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, people, url.Values{"filter": {"alice"}}, nil))
+	matched, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, people, url.Values{"filter": {"alice"}}, nil))
 	if err != nil {
 		t.Fatalf("filtered rows: %v", err)
 	}
 	if len(matched.(plugin.Page[row]).Items) != 1 {
 		t.Fatalf("filter 'alice' should match 1 row, got %#v", matched.(plugin.Page[row]).Items)
 	}
-	missed, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, people, url.Values{"filter": {"zzz-nomatch"}}, nil))
+	missed, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, people, url.Values{"filter": {"zzz-nomatch"}}, nil))
 	if err != nil {
 		t.Fatalf("filtered rows (miss): %v", err)
 	}
@@ -168,7 +167,7 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	}
 
 	// Hierarchical tree: databases are expandable branches, drilling into tables.
-	dbTree, err := treeDatabases(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	dbTree, err := treeDatabases(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, nil))
 	if err != nil {
 		t.Fatalf("tree databases: %v", err)
 	}
@@ -181,7 +180,7 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	if branch == nil || branch.ChildrenSource == nil || branch.Leaf {
 		t.Fatalf("database node must be an expandable branch: %#v", branch)
 	}
-	relTree, err := treeRelations(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.database": {database}}, nil))
+	relTree, err := treeRelations(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, url.Values{"p.database": {database}}, nil))
 	if err != nil {
 		t.Fatalf("tree relations: %v", err)
 	}
@@ -280,7 +279,7 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	if _, err := s.db.ExecContext(ctx, "CREATE DATABASE "+quoteIdent(dropDB)); err != nil {
 		t.Fatalf("seed database to drop: %v", err)
 	}
-	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": dropDB}, nil, nil)); err != nil {
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": dropDB}, nil, nil)); err != nil {
 		t.Fatalf("drop database: %v", err)
 	}
 	var dbExists int
@@ -299,7 +298,7 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 		t.Fatalf("create user: %v", err)
 	}
 	userParams := map[string]string{"user": itUser, "host": "%"}
-	users, err := listUsers(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	users, err := listUsers(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, nil))
 	if err != nil {
 		t.Fatalf("list users: %v", err)
 	}
@@ -335,7 +334,7 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 		t.Fatalf("expected SELECT grant on %s for user", database)
 	}
 
-	if _, err := dropUser(plugin.NewRequestContext(ctx, models.User{}, s, userParams, nil, nil)); err != nil {
+	if _, err := dropUser(plugin.NewRequestContext(ctx, plugin.User{}, s, userParams, nil, nil)); err != nil {
 		t.Fatalf("drop user: %v", err)
 	}
 	var userCount int
@@ -350,7 +349,7 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	if _, err := s.db.ExecContext(ctx, `INSERT INTO shellcn_orders (person_id) VALUES (1)`); err != nil {
 		t.Fatalf("seed child row: %v", err)
 	}
-	orderRows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": database, "table": "shellcn_orders"}, nil, nil))
+	orderRows, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": database, "table": "shellcn_orders"}, nil, nil))
 	if err != nil {
 		t.Fatalf("child table rows: %v", err)
 	}
@@ -359,7 +358,7 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	}
 
 	// Foreign-key relationship graph (ERD) over the FK created above.
-	graph, err := relationGraph(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.database": {database}}, nil))
+	graph, err := relationGraph(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, url.Values{"p.database": {database}}, nil))
 	if err != nil {
 		t.Fatalf("relation graph: %v", err)
 	}
@@ -370,7 +369,7 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
 	raw, _ := json.Marshal(body)
-	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, raw)
+	return plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, params, nil, raw)
 }
 
 func integrationConfig(ctx context.Context, t *testing.T) map[string]any {
@@ -414,7 +413,7 @@ func integrationConfig(ctx context.Context, t *testing.T) map[string]any {
 	for {
 		sess, err := connect(ctx, plugin.ConnectConfig{
 			Config: cfg,
-			Net:    transport.NewDirectForConnection(models.Connection{Config: cfg}),
+			Net:    plugintest.DirectTransport(),
 		})
 		if err == nil {
 			_ = sess.Close()

@@ -11,8 +11,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // capFS extends memFS with the optional Move/Copy/Chmod capabilities.
@@ -59,7 +58,7 @@ func bulkRoutes(t *testing.T) map[string]plugin.Route {
 
 func handle(t *testing.T, route plugin.Route, sess plugin.Session, body []byte) (any, error) {
 	t.Helper()
-	return route.Handle(plugin.NewRequestContext(context.Background(), models.User{}, sess, nil, nil, body))
+	return route.Handle(plugin.NewRequestContext(context.Background(), plugin.User{}, sess, nil, nil, body))
 }
 
 func TestBulkMoveCopyChmodOnCapableBackend(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 
 	mysqldriver "github.com/go-sql-driver/mysql"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type Session struct {

@@ -16,7 +16,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/ai/tools"
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 const defaultMaxSteps = 12

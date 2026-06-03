@@ -7,8 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestGetYAML(t *testing.T) {
@@ -61,7 +60,7 @@ func TestApplyYAMLRejectsInvalid(t *testing.T) {
 	sess := connectTo(t, http.NewServeMux())
 	apply := func(content string) error {
 		body, _ := json.Marshal(map[string]any{"content": content})
-		rcx := plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, sess, nil, nil, body)
+		rcx := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, sess, nil, nil, body)
 		_, err := ApplyYAML(rcx)
 		return err
 	}

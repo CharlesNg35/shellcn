@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/recording"
 	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func newRecordingSvc(t *testing.T) (*service.RecordingService, *store.Store, recording.BlobStore) {

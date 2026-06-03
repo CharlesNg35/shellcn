@@ -9,8 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/service"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type connectionFolderRequest struct {

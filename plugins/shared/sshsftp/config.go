@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 const (

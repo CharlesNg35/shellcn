@@ -9,10 +9,9 @@ import (
 
 	clickhousedriver "github.com/ClickHouse/clickhouse-go/v2"
 
-	"github.com/charlesng35/shellcn/internal/app"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/dbcred"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 const (
@@ -161,7 +160,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		QueryTimeout:      sqldb.DurationValue(cfg.Config["query_timeout"], defaultTimeout),
 		RowLimit:          rowLimit,
 		MaxConns:          maxConns,
-		ApplicationName:   app.DefaultClientName + "-clickhouse",
+		ApplicationName:   plugin.DefaultClientName + "-clickhouse",
 		RedactPatterns:    sqldb.ParsePatterns(cfg.String("redact_columns"), sqldb.DefaultRedactColumnPatterns()),
 	}, nil
 }

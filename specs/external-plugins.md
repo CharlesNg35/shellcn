@@ -266,37 +266,39 @@ third-party plugin imports just `…/sdk` — not the core's heavy dependency tr
 and the SDK is versioned independently (`sdk/vX.Y.Z`) so the wire/ABI version
 travels with it.
 
+The **entire** `internal/plugin` package moved to `sdk/plugin` (it had a single
+`internal/*` coupling — `RequestContext` → `internal/models` — now decoupled).
+`internal/plugin` no longer exists, so plugins import **only** `sdk/plugin`. Moving
+the whole package (rather than splitting contract vs machinery) avoids a
+`package plugin` self-import collision and is purely mechanical.
+
 ```
-sdk/                         # module github.com/charlesng35/shellcn/sdk (minimal deps)
-  go.mod
-  plugin/                    # THE CONTRACT (public, dependency-light, no internal/* imports):
-                             #   manifest, schema, ui, route, session interfaces,
-                             #   category, recording, credentials, errors, sort/filter,
-                             #   RequestContext + a lean contract.User identity
-  serve.go                   # sdk.Serve(p): go-plugin glue, gRPC stubs, SDK-side
+sdk/                         # module github.com/charlesng35/shellcn/sdk
+  go.mod                     #   deps: go-playground/validator (grpc + go-plugin in Step 1)
+  plugin/                    # package plugin — the whole contract + machinery, zero internal/* deps:
+                             #   manifest, schema, ui, route, session interfaces, category,
+                             #   recording, credentials, errors, sort/filter, RequestContext,
+                             #   lean User/AuditResult/Snippet, AND registry/validate/projection
+  serve.go                   # (Step 1) sdk.Serve(p): go-plugin glue, gRPC stubs, SDK-side
                              #   RequestContext / NetTransport / ClientStream impls
 
-internal/plugin/             # CORE-ONLY machinery (stays internal; imports sdk/plugin):
-                             #   registry, validate, projection, the server's concrete
-                             #   RequestContext builder, credential resolution
+internal/server/plugin_bridge.go   # boundary mappers: models.User→plugin.User,
+                                    #   plugin.Snippet↔models.Snippet, plugin.AuditResult→models.AuditResult
 ```
 
-What's public vs internal:
+**The one real decoupling:** `RequestContext.User` was a `models.User` (a GORM
+model). The contract now exposes a **lean `plugin.User`** (id, username, displayName,
+roles) — authz is already enforced in the core, so a handler needs identity only.
+Likewise `plugin.AuditResult` and `plugin.Snippet` replace their `models` twins. The
+**server** maps at the boundary (`internal/server/plugin_bridge.go`): it keeps
+`models.User` internally and converts to `plugin.User` when building the request
+context, bridges the snippet store, and maps the stream audit hook back to
+`models.AuditResult`. Everything else in the contract moved verbatim.
 
-- **Public (`sdk/plugin`):** every declarative type a plugin declares plus the
-  `Plugin`/`Session`/`Channel`/`ClientStream`/`NetTransport`/`HTTPProxy` interfaces
-  and `RequestContext`. Must have **zero** `internal/*` dependencies.
-- **Internal (`internal/plugin`):** `Registry`, `Validate`, `BuildProjection`,
-  credential resolution, and the server adapter that builds the concrete
-  `RequestContext` — none of which a plugin author needs.
-
-**The one real decoupling:** today `RequestContext.User` is a `models.User` (a GORM
-model). The public contract exposes a **lean `contract.User`** (id, username, roles)
-instead — authz is already enforced in the core, so a handler needs identity only.
-The core maps `models.User → contract.User` when it builds the request context. The
-40 built-ins migrate to the lean type. Everything else in the contract
-(`manifest`, `schema`, `ui`, `route`, `session`, `category`, `recording`,
-`errors`) is already dependency-light and moves verbatim.
+Wiring: root `go.mod` `require` + `replace ./sdk`, a `go.work` (`use . ./sdk`), and
+Makefile `PKG`/`GO_SOURCE_DIRS` include `sdk` — so `go build`/`test`/`lint` cover
+both modules, with or without the workspace. The SDK will be tagged `sdk/vX.Y.Z`
+once the wire ABI (Step 1) lands.
 
 ---
 
@@ -310,6 +312,7 @@ make test`).
 **Goal:** Make the plugin contract importable by external modules, with a minimal
 dependency surface, without changing any behavior. **Prerequisite for Steps 1–8.**
 **Checklist:**
+
 - [ ] Create `sdk/` nested module (`go.mod` = `github.com/charlesng35/shellcn/sdk`).
 - [ ] Move the contract files (`manifest`, `schema`, `ui`, `route`, `session`,
       `category`, `recording`, `credentials`, `errors`, `sort`, `filter`,
@@ -321,8 +324,8 @@ dependency surface, without changing any behavior. **Prerequisite for Steps 1–
       (~329 files; mechanical `gofmt -r`/sed pass).
 - [ ] `sdk` module depends on nothing under `internal/`; core requires the `sdk`
       module (single module graph; tagged `sdk/vX.Y.Z`).
-**DoD:** `make fmt && make lint && make test` green with **zero behavior change**;
-the 40 built-ins compile against `sdk/plugin`; `sdk/plugin` has no `internal/*` import.
+      **DoD:** `make fmt && make lint && make test` green with **zero behavior change**;
+      the 40 built-ins compile against `sdk/plugin`; `sdk/plugin` has no `internal/*` import.
 
 ### Step 1 — Wire contract (`.proto` for `Plugin` + `Host`) + stubs
 

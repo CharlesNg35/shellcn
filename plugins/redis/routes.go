@@ -13,9 +13,8 @@ import (
 
 	redisclient "github.com/redis/go-redis/v9"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type keyEntry struct {
@@ -1135,18 +1134,18 @@ func isDestructiveCommand(args []string) bool {
 	return !isReadOnlyCommand(args)
 }
 
-func commandAuditResult(err error) models.AuditResult {
+func commandAuditResult(err error) plugin.AuditResult {
 	if err == nil {
-		return models.AuditAllowed
+		return plugin.AuditAllowed
 	}
 	var confirmErr confirmationError
 	if errors.As(err, &confirmErr) {
-		return models.AuditDenied
+		return plugin.AuditDenied
 	}
 	if errors.Is(err, plugin.ErrForbidden) {
-		return models.AuditDenied
+		return plugin.AuditDenied
 	}
-	return models.AuditError
+	return plugin.AuditError
 }
 
 func commandAuditParams(command string, result sqldb.QueryResult, err error) map[string]string {

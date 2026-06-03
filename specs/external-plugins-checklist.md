@@ -9,22 +9,48 @@ make lint && make test` are green. Section refs (§) point at the plan.
 
 ## Step 0 — Extract the public contract into the nested `sdk/` module — §3.8
 
-**Prerequisite for Steps 1–8.** One-time packaging refactor, no behavior change.
+**Prerequisite for Steps 1–8.** One-time packaging refactor, no behavior change. **Done.**
 
-- [ ] Create `sdk/` nested module (`go.mod` = `github.com/charlesng35/shellcn/sdk`,
-      minimal deps: grpc, go-plugin, contract types only).
-- [ ] Move contract files (`manifest`, `schema`, `ui`, `route`, `session`,
-      `category`, `recording`, `credentials`, `errors`, `sort`, `filter`,
-      `response`) into `sdk/plugin`; keep `registry`/`validate`/`projection`/
-      credential-resolution in `internal/plugin`.
-- [ ] Define lean `contract.User` (id, username, roles); decouple `RequestContext`
-      from `internal/models`; core maps `models.User → contract.User`.
-- [ ] Rewrite imports `…/internal/plugin` → `…/sdk/plugin` across core + 40 plugins
-      (~329 files; mechanical `gofmt -r`/sed pass).
-- [ ] `sdk/plugin` has **zero** `internal/*` imports; core requires the `sdk` module;
-      tagged `sdk/vX.Y.Z` so the wire/ABI version travels with it.
-- [ ] **DoD:** `make fmt && make lint && make test` green with **zero behavior
-      change**; the 40 built-ins compile against `sdk/plugin`.
+- [x] Create `sdk/` nested module (`go.mod` = `github.com/charlesng35/shellcn/sdk`).
+      Deps so far: `go-playground/validator/v10`; grpc + go-plugin added in Step 1.
+- [x] Move the **entire** `internal/plugin` package → `sdk/plugin` (contract +
+      `registry`/`validate`/`projection`/credential-resolution). `internal/plugin`
+      removed — plugins import **only** `sdk/plugin`, never `internal/*`. (Whole-package
+      move avoids a `package plugin` self-collision and is purely mechanical.)
+- [x] Define lean `plugin.User` (id, username, displayName, roles), `plugin.AuditResult`
+      (+constants), `plugin.Snippet`; decouple `RequestContext` from `internal/models`.
+      Server maps at the boundary: `toPluginUser`, `snippetBridge`, audit-hook
+      `plugin.AuditResult → models.AuditResult` (`internal/server/plugin_bridge.go`).
+- [x] Rewrite imports `…/internal/plugin` → `…/sdk/plugin` repo-wide (329 non-test +
+      tests); `models.Audit*`/`Snippet` → `plugin.*` in plugins; lean-type swap at
+      test `NewRequestContext` sites.
+- [x] `sdk/plugin` has **zero** `internal/*` imports (verified); root `go.mod`
+      require + `replace ./sdk`; `go.work` (`use . ./sdk`); Makefile `PKG` +
+      `GO_SOURCE_DIRS` include `sdk`. Tag `sdk/vX.Y.Z` deferred until the wire ABI lands.
+- [x] **DoD met:** `go build`/`go vet`/`golangci-lint`/`go test` green across both
+      modules — **73 pkgs pass, 0 fail**, incl. moved `sdk/plugin` contract tests;
+      builds with **and** without the workspace (`GOWORK=off`); zero behavior change.
+
+## Step 0.5 — Built-ins are SDK-only (no `internal/*`), enforced — **Done**
+
+Built-ins are the reference for out-of-tree plugins, which (being a separate
+module) cannot import `internal/*`. Enforce the same on built-ins so they stay a
+faithful template.
+
+- [x] Moved gateway-owned constants (`AgentBinary`, `AgentImageLatest`,
+      `AgentInternalAddress`, `DefaultClientName`) to `sdk/plugin`; `internal/app`
+      aliases them (single source of truth, core unchanged); 13 plugin prod files
+      use `plugin.*`, drop `internal/app`.
+- [x] Added `sdk/plugintest` (`DirectTransport`, `TransportFunc`); rewrote ~26
+      plugin test files off `internal/transport` + `internal/models.Connection`.
+- [x] Relocated `plugins/docker/enrollment_test.go` → `internal/service`
+      (`service_test`, imports `plugins/docker`) — it tests the enrollment service,
+      not the plugin contract.
+- [x] **`plugins/` is now 100% free of `internal/*` (prod AND test).**
+- [x] **depguard** rule `plugins-sdk-only` in `.golangci.yml` bans
+      `github.com/charlesng35/shellcn/internal` from `plugins/**` — verified it
+      fires on a planted import; lint clean on real code.
+- [x] Gate green: build/vet/lint/test pass on both modules.
 
 ## Step 1 — Wire contract (`.proto` for `Plugin` + `Host`) + stubs — §3.4
 

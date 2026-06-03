@@ -13,9 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func TestPrometheusPluginIntegration(t *testing.T) {
@@ -27,7 +26,7 @@ func TestPrometheusPluginIntegration(t *testing.T) {
 
 	cfg := prometheusIntegrationConfig(ctx, t)
 	p := New()
-	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -174,7 +173,7 @@ groups:
 	deadline := time.Now().Add(90 * time.Second)
 	for {
 		p := New()
-		sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+		sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 		if err == nil {
 			_ = sess.Close()
 			return endpoint
@@ -213,7 +212,7 @@ func routeMap(routes []plugin.Route) map[string]plugin.Route {
 
 func call(ctx context.Context, t *testing.T, route plugin.Route, sess plugin.Session, params map[string]string, query url.Values, body []byte) any {
 	t.Helper()
-	out, err := route.Handle(plugin.NewRequestContext(ctx, models.User{}, sess, params, query, body))
+	out, err := route.Handle(plugin.NewRequestContext(ctx, plugin.User{}, sess, params, query, body))
 	if err != nil {
 		t.Fatalf("%s: %v", route.ID, err)
 	}

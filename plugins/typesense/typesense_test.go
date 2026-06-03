@@ -3,7 +3,7 @@ package typesense
 import (
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestManifest(t *testing.T) {

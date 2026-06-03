@@ -22,8 +22,8 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // DefaultProxyImage is the container image install artifacts default to.

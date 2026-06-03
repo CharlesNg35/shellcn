@@ -16,9 +16,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type row map[string]any
@@ -1127,15 +1126,15 @@ func pipelineWrites(value any) bool {
 	return false
 }
 
-func commandAuditResult(err error) models.AuditResult {
+func commandAuditResult(err error) plugin.AuditResult {
 	if err == nil {
-		return models.AuditAllowed
+		return plugin.AuditAllowed
 	}
 	var confirmErr confirmationError
 	if errors.As(err, &confirmErr) || errors.Is(err, plugin.ErrForbidden) {
-		return models.AuditDenied
+		return plugin.AuditDenied
 	}
-	return models.AuditError
+	return plugin.AuditError
 }
 
 func commandAuditParams(command string, result sqldb.QueryResult, err error) map[string]string {

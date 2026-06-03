@@ -13,8 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // fakeNet is a NetTransport whose HTTP() points client-go at a test server,
@@ -80,7 +79,7 @@ users:
 
 func listNamespaces(t *testing.T, sess plugin.Session) []Row {
 	t.Helper()
-	rc := plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, sess, map[string]string{"kind": "namespace"}, url.Values{}, nil)
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, sess, map[string]string{"kind": "namespace"}, url.Values{}, nil)
 	out, err := ListResource(rc)
 	if err != nil {
 		t.Fatalf("ListResource: %v", err)

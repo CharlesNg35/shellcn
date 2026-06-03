@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // wrappedSession mimics the core's borrowed session.Handle: a plugin.Session

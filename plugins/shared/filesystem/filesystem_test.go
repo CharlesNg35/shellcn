@@ -13,8 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // memFS is an in-memory filesystem.Client used to exercise the shared file
@@ -154,7 +153,7 @@ func TestFilesystemHandlersRoundTrip(t *testing.T) {
 
 	run := func(id string, params map[string]string, body []byte) any {
 		t.Helper()
-		out, err := routes[id].Handle(plugin.NewRequestContext(context.Background(), models.User{}, fs, params, nil, body))
+		out, err := routes[id].Handle(plugin.NewRequestContext(context.Background(), plugin.User{}, fs, params, nil, body))
 		if err != nil {
 			t.Fatalf("%s: %v", id, err)
 		}
@@ -172,7 +171,7 @@ func TestFilesystemHandlersRoundTrip(t *testing.T) {
 		t.Fatalf("read returned %q", content.Content)
 	}
 
-	uploadRC := plugin.NewMultipartRequestContext(context.Background(), models.User{}, fs,
+	uploadRC := plugin.NewMultipartRequestContext(context.Background(), plugin.User{}, fs,
 		map[string]string{"path": "/docs"}, nil, nil, map[string][]plugin.UploadedFile{"files": {makeUpload(t, "data.bin", []byte("binary"))}})
 	if _, err := routes["test.files.upload"].Handle(uploadRC); err != nil {
 		t.Fatalf("upload: %v", err)

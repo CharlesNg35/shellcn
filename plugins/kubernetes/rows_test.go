@@ -5,12 +5,11 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func pageRC(query url.Values) *plugin.RequestContext {
-	return plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, nil, map[string]string{}, query, nil)
+	return plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, nil, map[string]string{}, query, nil)
 }
 
 func TestPageRowsSorts(t *testing.T) {

@@ -10,8 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestValidators(t *testing.T) {
@@ -354,5 +353,5 @@ func rcWithBody(sess *Session, params map[string]string, body string) *plugin.Re
 	if body != "" {
 		b = []byte(body)
 	}
-	return plugin.NewRequestContext(context.Background(), models.User{}, sess, params, url.Values{}, b)
+	return plugin.NewRequestContext(context.Background(), plugin.User{}, sess, params, url.Values{}, b)
 }

@@ -12,10 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func TestOraclePluginIntegration(t *testing.T) {
@@ -33,7 +32,7 @@ func TestOraclePluginIntegration(t *testing.T) {
 
 	sess, err := connect(ctx, plugin.ConnectConfig{
 		Config: cfg,
-		Net:    transport.NewDirectForConnection(models.Connection{Config: cfg}),
+		Net:    plugintest.DirectTransport(),
 	})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
@@ -48,7 +47,7 @@ func TestOraclePluginIntegration(t *testing.T) {
 		_, _ = s.db.ExecContext(cleanupCtx, `DROP USER SHELLCN_TEST CASCADE`)
 	})
 
-	list, err := listTables(plugin.NewRequestContext(ctx, models.User{ID: "u1", Username: "admin"}, s, nil, url.Values{"p.schema": {"SHELLCN_TEST"}}, nil))
+	list, err := listTables(plugin.NewRequestContext(ctx, plugin.User{ID: "u1", Username: "admin"}, s, nil, url.Values{"p.schema": {"SHELLCN_TEST"}}, nil))
 	if err != nil {
 		t.Fatalf("list tables: %v", err)
 	}
@@ -56,7 +55,7 @@ func TestOraclePluginIntegration(t *testing.T) {
 		t.Fatalf("created table was not listed: %#v", list)
 	}
 
-	rows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"id": objectID("SHELLCN_TEST", "PEOPLE")}, nil, nil))
+	rows, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"id": objectID("SHELLCN_TEST", "PEOPLE")}, nil, nil))
 	if err != nil {
 		t.Fatalf("table rows: %v", err)
 	}
@@ -69,14 +68,14 @@ func TestOraclePluginIntegration(t *testing.T) {
 
 	// Free-text search filters the data grid server-side (per-column).
 	orPeople := map[string]string{"id": objectID("SHELLCN_TEST", "PEOPLE")}
-	orMatch, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, orPeople, url.Values{"filter": {"alice"}}, nil))
+	orMatch, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, orPeople, url.Values{"filter": {"alice"}}, nil))
 	if err != nil {
 		t.Fatalf("filtered rows: %v", err)
 	}
 	if len(orMatch.(plugin.Page[row]).Items) != 1 {
 		t.Fatalf("filter 'alice' should match 1 row, got %#v", orMatch.(plugin.Page[row]).Items)
 	}
-	orMiss, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, orPeople, url.Values{"filter": {"zzz-nomatch"}}, nil))
+	orMiss, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, orPeople, url.Values{"filter": {"zzz-nomatch"}}, nil))
 	if err != nil {
 		t.Fatalf("filtered rows (miss): %v", err)
 	}
@@ -186,7 +185,7 @@ func TestOraclePluginIntegration(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM all_users WHERE username = 'SHELLCN_TEST2'`).Scan(&users); err != nil || users != 1 {
 		t.Fatalf("expected SHELLCN_TEST2 user created, got %d err=%v", users, err)
 	}
-	if _, err := dropSchema(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, map[string]string{"schema": "SHELLCN_TEST2"}, nil, nil)); err != nil {
+	if _, err := dropSchema(plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, map[string]string{"schema": "SHELLCN_TEST2"}, nil, nil)); err != nil {
 		t.Fatalf("drop schema: %v", err)
 	}
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM all_users WHERE username = 'SHELLCN_TEST2'`).Scan(&users); err != nil || users != 0 {
@@ -212,7 +211,7 @@ func TestOraclePluginIntegration(t *testing.T) {
 	if _, err := s.db.ExecContext(ctx, `INSERT INTO SHELLCN_TEST.ORDERS (PERSON_ID) VALUES (1)`); err != nil {
 		t.Fatalf("seed child row: %v", err)
 	}
-	orderRows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"id": objectID("SHELLCN_TEST", "ORDERS")}, nil, nil))
+	orderRows, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"id": objectID("SHELLCN_TEST", "ORDERS")}, nil, nil))
 	if err != nil {
 		t.Fatalf("child table rows: %v", err)
 	}
@@ -221,7 +220,7 @@ func TestOraclePluginIntegration(t *testing.T) {
 	}
 
 	// Foreign-key relationship graph (ERD), owner-scoped on Oracle.
-	graph, err := relationGraph(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.schema": {"SHELLCN_TEST"}}, nil))
+	graph, err := relationGraph(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, url.Values{"p.schema": {"SHELLCN_TEST"}}, nil))
 	if err != nil {
 		t.Fatalf("relation graph: %v", err)
 	}
@@ -241,13 +240,13 @@ func TestOraclePluginIntegration(t *testing.T) {
 		_, _ = s.db.ExecContext(cleanupCtx, `DROP USER SHELLCN_USER CASCADE`)
 	})
 
-	if _, err := lockUser(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, userParams, nil, nil)); err != nil {
+	if _, err := lockUser(plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, userParams, nil, nil)); err != nil {
 		t.Fatalf("lock user: %v", err)
 	}
 	if got := userAccountStatus(ctx, t, s, "SHELLCN_USER"); !strings.Contains(got, "LOCKED") {
 		t.Fatalf("expected locked account, got %q", got)
 	}
-	if _, err := unlockUser(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, userParams, nil, nil)); err != nil {
+	if _, err := unlockUser(plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, userParams, nil, nil)); err != nil {
 		t.Fatalf("unlock user: %v", err)
 	}
 	if got := userAccountStatus(ctx, t, s, "SHELLCN_USER"); strings.Contains(got, "LOCKED") {
@@ -262,7 +261,7 @@ func TestOraclePluginIntegration(t *testing.T) {
 		t.Fatalf("expected 2 system privileges granted, got %d err=%v", grants, err)
 	}
 
-	if _, err := dropUser(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, userParams, nil, nil)); err != nil {
+	if _, err := dropUser(plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, userParams, nil, nil)); err != nil {
 		t.Fatalf("drop user: %v", err)
 	}
 	var present int
@@ -273,7 +272,7 @@ func TestOraclePluginIntegration(t *testing.T) {
 	// Session kill: reject malformed ids, then best-effort kill the current
 	// session's own SID/SERIAL# (KILL marks it; the running connection may report
 	// ORA-00027 when killing itself, which is acceptable here).
-	if _, err := killSession(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, map[string]string{"id": "bad:id"}, nil, nil)); err == nil {
+	if _, err := killSession(plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, map[string]string{"id": "bad:id"}, nil, nil)); err == nil {
 		t.Fatal("kill session accepted a non-numeric id")
 	}
 	var sid, serial int64
@@ -281,7 +280,7 @@ func TestOraclePluginIntegration(t *testing.T) {
 		t.Skipf("v$session unavailable for session.kill exercise: %v", err)
 	}
 	killID := strconv.FormatInt(sid, 10) + ":" + strconv.FormatInt(serial, 10)
-	_, killErr := killSession(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, map[string]string{"id": killID}, nil, nil))
+	_, killErr := killSession(plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, map[string]string{"id": killID}, nil, nil))
 	if killErr != nil && !strings.Contains(killErr.Error(), "ORA-00027") {
 		t.Fatalf("kill session (self) unexpected error: %v", killErr)
 	}
@@ -298,7 +297,7 @@ func userAccountStatus(ctx context.Context, t *testing.T, s *Session, user strin
 
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
 	raw, _ := json.Marshal(body)
-	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, raw)
+	return plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, params, nil, raw)
 }
 
 func integrationConfig(ctx context.Context, t *testing.T) map[string]any {
@@ -342,7 +341,7 @@ func integrationConfig(ctx context.Context, t *testing.T) map[string]any {
 	for {
 		sess, err := connect(ctx, plugin.ConnectConfig{
 			Config: cfg,
-			Net:    transport.NewDirectForConnection(models.Connection{Config: cfg}),
+			Net:    plugintest.DirectTransport(),
 		})
 		if err == nil {
 			_ = sess.Close()

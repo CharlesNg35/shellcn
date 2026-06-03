@@ -9,7 +9,7 @@ import (
 
 	clickhousedriver "github.com/ClickHouse/clickhouse-go/v2"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type Session struct {

@@ -22,10 +22,10 @@ import (
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/recording"
 	"github.com/charlesng35/shellcn/internal/session"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 const (
@@ -317,7 +317,7 @@ func (s *Server) InvokeRoute(ctx context.Context, user models.User, connID, rout
 		s.auditEvent(ctx, res, models.AuditError, err)
 		return nil, err
 	}
-	rc := plugin.NewRequestContext(ctx, user, handle, res.params, nil, body).WithSnippets(s.snippetStore())
+	rc := plugin.NewRequestContext(ctx, toPluginUser(user), handle, res.params, nil, body).WithSnippets(s.snippetStore())
 	return s.invoke(ctx, res, rc)
 }
 
@@ -468,21 +468,21 @@ func (s *Server) bindRequest(w http.ResponseWriter, r *http.Request, res resolve
 				files[field] = append(files[field], plugin.NewUploadedFile(field, header))
 			}
 		}
-		return plugin.NewMultipartRequestContext(r.Context(), res.user, sess, res.params, r.URL.Query(), r.MultipartForm.Value, files).WithSnippets(s.snippetStore()), cleanup, nil
+		return plugin.NewMultipartRequestContext(r.Context(), toPluginUser(res.user), sess, res.params, r.URL.Query(), r.MultipartForm.Value, files).WithSnippets(s.snippetStore()), cleanup, nil
 	}
 
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxJSONBody))
 	if err != nil {
 		return nil, func() {}, plugin.ErrInvalidInput
 	}
-	return plugin.NewRequestContext(r.Context(), res.user, sess, res.params, r.URL.Query(), body).WithSnippets(s.snippetStore()), func() {}, nil
+	return plugin.NewRequestContext(r.Context(), toPluginUser(res.user), sess, res.params, r.URL.Query(), body).WithSnippets(s.snippetStore()), func() {}, nil
 }
 
 func (s *Server) snippetStore() plugin.SnippetStore {
 	if s.deps.Store == nil {
 		return nil
 	}
-	return s.deps.Store.Snippets
+	return snippetBridge{inner: s.deps.Store.Snippets}
 }
 
 func isMultipart(r *http.Request) bool {
@@ -516,7 +516,7 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 	}
 
 	// Reject malformed WS params before any upstream session or recording opens.
-	vc := plugin.NewRequestContext(ctx, res.user, nil, res.params, r.URL.Query(), nil)
+	vc := plugin.NewRequestContext(ctx, toPluginUser(res.user), nil, res.params, r.URL.Query(), nil)
 	if err := vc.ValidateSchema(res.route.Input); err != nil {
 		s.auditEvent(ctx, res, models.AuditError, err)
 		writeError(w, s.deps.Logger, err)
@@ -567,9 +567,9 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 	conn := websocket.NetConn(streamCtx, c, msgType)
 	client := pending.Attach(&wsClientStream{Conn: conn, ctx: streamCtx})
 
-	rc := plugin.NewRequestContext(streamCtx, res.user, handle, res.params, r.URL.Query(), nil).
-		WithAuditHook(func(ctx context.Context, result models.AuditResult, params map[string]string, err error) {
-			s.auditEventParams(ctx, res, result, params, err)
+	rc := plugin.NewRequestContext(streamCtx, toPluginUser(res.user), handle, res.params, r.URL.Query(), nil).
+		WithAuditHook(func(ctx context.Context, result plugin.AuditResult, params map[string]string, err error) {
+			s.auditEventParams(ctx, res, models.AuditResult(result), params, err)
 		})
 	if err := res.route.Stream(rc, client); err != nil {
 		_ = c.Close(websocket.StatusInternalError, streamCloseReason(err))

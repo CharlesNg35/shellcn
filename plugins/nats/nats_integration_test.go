@@ -11,9 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func TestNATSPluginIntegration(t *testing.T) {
@@ -24,7 +23,7 @@ func TestNATSPluginIntegration(t *testing.T) {
 	defer cancel()
 
 	cfg := natsIntegrationConfig(ctx, t)
-	sess, err := connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+	sess, err := connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -33,21 +32,21 @@ func TestNATSPluginIntegration(t *testing.T) {
 	stream := "SHELLCN_IT_" + time.Now().UTC().Format("20060102150405")
 	subject := "shellcn.it." + stream
 	create, _ := json.Marshal(map[string]any{"name": stream, "subjects": subject, "storage": "memory", "replicas": 1, "max_msgs": 100, "max_bytes": -1})
-	if _, err := createStream(plugin.NewRequestContext(ctx, models.User{}, sess, nil, nil, create)); err != nil {
+	if _, err := createStream(plugin.NewRequestContext(ctx, plugin.User{}, sess, nil, nil, create)); err != nil {
 		t.Fatalf("create stream: %v", err)
 	}
 	defer func() {
-		_, _ = deleteStream(plugin.NewRequestContext(context.Background(), models.User{}, sess, map[string]string{"stream": stream}, nil, nil))
+		_, _ = deleteStream(plugin.NewRequestContext(context.Background(), plugin.User{}, sess, map[string]string{"stream": stream}, nil, nil))
 	}()
-	if _, err := listStreams(plugin.NewRequestContext(ctx, models.User{}, sess, nil, nil, nil)); err != nil {
+	if _, err := listStreams(plugin.NewRequestContext(ctx, plugin.User{}, sess, nil, nil, nil)); err != nil {
 		t.Fatalf("list streams: %v", err)
 	}
-	if _, err := streamOverview(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"stream": stream}, nil, nil)); err != nil {
+	if _, err := streamOverview(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"stream": stream}, nil, nil)); err != nil {
 		t.Fatalf("stream overview: %v", err)
 	}
 
 	update, _ := json.Marshal(map[string]any{"max_msgs": 250})
-	if _, err := updateStream(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"stream": stream}, nil, update)); err != nil {
+	if _, err := updateStream(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"stream": stream}, nil, update)); err != nil {
 		t.Fatalf("update stream: %v", err)
 	}
 	updatedInfo, err := sess.(*Session).js.StreamInfo(stream)
@@ -59,10 +58,10 @@ func TestNATSPluginIntegration(t *testing.T) {
 	}
 
 	pub, _ := json.Marshal(map[string]any{"subject": subject, "data": "hello", "encoding": "string", "jetstream": true})
-	if _, err := publishMessage(plugin.NewRequestContext(ctx, models.User{}, sess, nil, nil, pub)); err != nil {
+	if _, err := publishMessage(plugin.NewRequestContext(ctx, plugin.User{}, sess, nil, nil, pub)); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	res, err := listMessages(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"stream": stream}, url.Values{"limit": []string{"10"}}, nil))
+	res, err := listMessages(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"stream": stream}, url.Values{"limit": []string{"10"}}, nil))
 	if err != nil {
 		t.Fatalf("list messages: %v", err)
 	}
@@ -71,22 +70,22 @@ func TestNATSPluginIntegration(t *testing.T) {
 		t.Fatalf("expected published message, got %#v", messages)
 	}
 	createConsumerBody, _ := json.Marshal(map[string]any{"name": "shellcn-it-consumer", "filter_subject": subject, "ack_policy": "explicit"})
-	if _, err := createConsumer(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"stream": stream}, nil, createConsumerBody)); err != nil {
+	if _, err := createConsumer(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"stream": stream}, nil, createConsumerBody)); err != nil {
 		t.Fatalf("create consumer: %v", err)
 	}
-	if _, err := listConsumers(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"stream": stream}, nil, nil)); err != nil {
+	if _, err := listConsumers(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"stream": stream}, nil, nil)); err != nil {
 		t.Fatalf("list consumers: %v", err)
 	}
-	if _, err := consumerOverview(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"stream": stream, "consumer": "shellcn-it-consumer"}, nil, nil)); err != nil {
+	if _, err := consumerOverview(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"stream": stream, "consumer": "shellcn-it-consumer"}, nil, nil)); err != nil {
 		t.Fatalf("consumer overview: %v", err)
 	}
-	if _, err := deleteConsumer(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"stream": stream, "consumer": "shellcn-it-consumer"}, nil, nil)); err != nil {
+	if _, err := deleteConsumer(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"stream": stream, "consumer": "shellcn-it-consumer"}, nil, nil)); err != nil {
 		t.Fatalf("delete consumer: %v", err)
 	}
-	if _, err := deleteMessage(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"stream": stream, "sequence": "1"}, nil, nil)); err != nil {
+	if _, err := deleteMessage(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"stream": stream, "sequence": "1"}, nil, nil)); err != nil {
 		t.Fatalf("delete message: %v", err)
 	}
-	if _, err := purgeStream(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"stream": stream}, nil, nil)); err != nil {
+	if _, err := purgeStream(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"stream": stream}, nil, nil)); err != nil {
 		t.Fatalf("purge stream: %v", err)
 	}
 }
@@ -134,7 +133,7 @@ func startNATSContainer(ctx context.Context, t *testing.T) string {
 	cfg := map[string]any{"urls": urls, "name": "shellcn-integration", "auth": "none", "tls_mode": "disable", "read_only": false, "message_limit": 100, "timeout": "5s"}
 	deadline := time.Now().Add(30 * time.Second)
 	for {
-		sess, err := connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+		sess, err := connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 		if err == nil {
 			_ = sess.Close()
 			return urls
