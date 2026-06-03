@@ -85,12 +85,18 @@ const quickStarts = [
         >
           {{ loadingOlder ? "Loading..." : "Load earlier messages" }}
         </Button>
-        <AiMessageItem
-          v-for="m in messages"
-          :key="m.id"
-          :message="m"
-          :streaming="streaming && m.id === currentId"
-        />
+        <TransitionGroup
+          name="ai-chat-message"
+          tag="div"
+          class="flex flex-col gap-3"
+        >
+          <AiMessageItem
+            v-for="m in messages"
+            :key="m.id"
+            :message="m"
+            :streaming="streaming && m.id === currentId"
+          />
+        </TransitionGroup>
       </div>
     </div>
 
@@ -112,3 +118,32 @@ const quickStarts = [
     </Button>
   </div>
 </template>
+
+<style scoped>
+.ai-chat-message-enter-active {
+  transition:
+    opacity 0.25s ease-out,
+    transform 0.25s ease-out;
+}
+
+.ai-chat-message-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.ai-chat-message-enter-to {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-message-enter-active {
+    transition: none;
+  }
+
+  .ai-chat-message-enter-from {
+    opacity: 1;
+    transform: none;
+  }
+}
+</style>
