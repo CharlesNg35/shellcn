@@ -26,7 +26,7 @@ const linkClass =
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-2xl flex-col gap-4 p-8">
+  <div class="mx-auto flex max-w-4xl flex-col gap-4 p-8">
     <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
       Settings
     </h1>

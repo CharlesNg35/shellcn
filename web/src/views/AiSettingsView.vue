@@ -107,7 +107,7 @@ onMounted(load);
       <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
         AI providers
       </h1>
-      <p class="mt-1 max-w-2xl text-sm text-surface-500 dark:text-surface-400">
+      <p class="mt-1 max-w-4xl text-sm text-surface-500 dark:text-surface-400">
         Configure personal providers and view the shared workspace provider.
       </p>
     </div>
