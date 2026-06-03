@@ -803,7 +803,8 @@ ORDER BY ordinal_position`, []any{schema, table})
 		if i < len(cols)-1 {
 			line += ","
 		}
-		b.WriteString(line + "\n")
+		b.WriteString(line)
+		b.WriteString("\n")
 	}
 	b.WriteString(");")
 	return row{"schema": schema, "name": table, "definition": b.String()}, nil

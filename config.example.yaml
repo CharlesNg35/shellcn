@@ -3,6 +3,8 @@
 server:
   addr: ":8081"
   log_level: info
+  # log_file: /var/log/shellcn.log  # default: stdout; rotated by size automatically
+  access_log: true # one log line per API request
 
 auth:
   session_ttl: 24h

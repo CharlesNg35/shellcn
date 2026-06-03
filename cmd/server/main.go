@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 
 	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
 	"github.com/charlesng35/shellcn/internal/ai/modelreg"
@@ -77,7 +79,18 @@ func main() {
 		cfg.Database.DSN = dbPath
 	}
 
-	logger := telemetry.NewLogger(cfg.SlogLevel(), !dev)
+	// Logs go to stdout, or to a size-rotated file when configured.
+	logOut := io.Writer(os.Stdout)
+	if path := cfg.Server.LogFile; path != "" {
+		rotator := &lumberjack.Logger{Filename: path, MaxSize: 100, MaxBackups: 7, MaxAge: 28, Compress: true}
+		defer func() { _ = rotator.Close() }()
+		logOut = rotator
+	}
+	format := "json"
+	if dev {
+		format = "text"
+	}
+	logger := telemetry.NewLogger(telemetry.LogConfig{Level: cfg.SlogLevel(), Format: format, Output: logOut})
 	slog.SetDefault(logger)
 
 	if err := run(logger, cfg, dev); err != nil {
@@ -150,6 +163,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	var extPlugins *extplugin.Manager
 	if cfg.Plugins.Dir != "" {
 		extPlugins = extplugin.NewManager(cfg.Plugins.Dir,
+			extplugin.WithLogger(logger),
 			extplugin.WithAudit(func(result plugin.AuditResult, params map[string]string, errMsg string) {
 				var auditErr error
 				if errMsg != "" {
@@ -311,6 +325,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		Logger:            logger,
 		StaticFS:          staticFS,
 		Dev:               dev,
+		AccessLog:         cfg.Server.AccessLog,
 	})
 
 	httpServer := &http.Server{

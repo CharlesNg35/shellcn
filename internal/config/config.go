@@ -35,6 +35,11 @@ type Config struct {
 type ServerConfig struct {
 	Addr     string `mapstructure:"addr"`
 	LogLevel string `mapstructure:"log_level"`
+	// LogFile writes logs to this path instead of stdout, rotated by size with a
+	// few compressed backups (100MB, 7 backups, 28 days).
+	LogFile string `mapstructure:"log_file"`
+	// AccessLog logs one line per API request. On by default.
+	AccessLog bool `mapstructure:"access_log"`
 }
 
 type AuthConfig struct {
@@ -181,6 +186,8 @@ func Load(paths ...string) (*Config, error) {
 func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.addr", ":8081")
 	v.SetDefault("server.log_level", "info")
+	v.SetDefault("server.log_file", "")
+	v.SetDefault("server.access_log", true)
 	v.SetDefault("auth.session_ttl", "24h")
 	v.SetDefault("auth.jwt_secret", "")
 	v.SetDefault("bootstrap.admin_username", "admin")

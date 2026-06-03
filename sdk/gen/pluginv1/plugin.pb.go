@@ -585,6 +585,144 @@ func (x *ChannelRequest) GetParams() map[string]string {
 	return nil
 }
 
+// ChannelInfo describes one opened channel: the brokered conn that carries its
+// bytes plus the optional capabilities the host-side wrapper re-exposes.
+type ChannelInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BrokerId      uint32                 `protobuf:"varint,1,opt,name=broker_id,json=brokerId,proto3" json:"broker_id,omitempty"`
+	ChannelId     string                 `protobuf:"bytes,2,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"` // handle for control RPCs (resize)
+	Resizable     bool                   `protobuf:"varint,3,opt,name=resizable,proto3" json:"resizable,omitempty"`
+	ServerInit    []byte                 `protobuf:"bytes,4,opt,name=server_init,json=serverInit,proto3" json:"server_init,omitempty"` // present iff the channel exposes a desktop init blob
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChannelInfo) Reset() {
+	*x = ChannelInfo{}
+	mi := &file_pluginv1_plugin_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChannelInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChannelInfo) ProtoMessage() {}
+
+func (x *ChannelInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginv1_plugin_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChannelInfo.ProtoReflect.Descriptor instead.
+func (*ChannelInfo) Descriptor() ([]byte, []int) {
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ChannelInfo) GetBrokerId() uint32 {
+	if x != nil {
+		return x.BrokerId
+	}
+	return 0
+}
+
+func (x *ChannelInfo) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *ChannelInfo) GetResizable() bool {
+	if x != nil {
+		return x.Resizable
+	}
+	return false
+}
+
+func (x *ChannelInfo) GetServerInit() []byte {
+	if x != nil {
+		return x.ServerInit
+	}
+	return nil
+}
+
+type ChannelResize struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ChannelId     string                 `protobuf:"bytes,2,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	Cols          int32                  `protobuf:"varint,3,opt,name=cols,proto3" json:"cols,omitempty"`
+	Rows          int32                  `protobuf:"varint,4,opt,name=rows,proto3" json:"rows,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChannelResize) Reset() {
+	*x = ChannelResize{}
+	mi := &file_pluginv1_plugin_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChannelResize) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChannelResize) ProtoMessage() {}
+
+func (x *ChannelResize) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginv1_plugin_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChannelResize.ProtoReflect.Descriptor instead.
+func (*ChannelResize) Descriptor() ([]byte, []int) {
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ChannelResize) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *ChannelResize) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *ChannelResize) GetCols() int32 {
+	if x != nil {
+		return x.Cols
+	}
+	return 0
+}
+
+func (x *ChannelResize) GetRows() int32 {
+	if x != nil {
+		return x.Rows
+	}
+	return 0
+}
+
 type ProxyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
@@ -595,7 +733,7 @@ type ProxyRequest struct {
 
 func (x *ProxyRequest) Reset() {
 	*x = ProxyRequest{}
-	mi := &file_pluginv1_plugin_proto_msgTypes[10]
+	mi := &file_pluginv1_plugin_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -607,7 +745,7 @@ func (x *ProxyRequest) String() string {
 func (*ProxyRequest) ProtoMessage() {}
 
 func (x *ProxyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginv1_plugin_proto_msgTypes[10]
+	mi := &file_pluginv1_plugin_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -620,7 +758,7 @@ func (x *ProxyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProxyRequest.ProtoReflect.Descriptor instead.
 func (*ProxyRequest) Descriptor() ([]byte, []int) {
-	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{10}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ProxyRequest) GetSessionId() string {
@@ -647,7 +785,7 @@ type BrokerRef struct {
 
 func (x *BrokerRef) Reset() {
 	*x = BrokerRef{}
-	mi := &file_pluginv1_plugin_proto_msgTypes[11]
+	mi := &file_pluginv1_plugin_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -659,7 +797,7 @@ func (x *BrokerRef) String() string {
 func (*BrokerRef) ProtoMessage() {}
 
 func (x *BrokerRef) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginv1_plugin_proto_msgTypes[11]
+	mi := &file_pluginv1_plugin_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -672,7 +810,7 @@ func (x *BrokerRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BrokerRef.ProtoReflect.Descriptor instead.
 func (*BrokerRef) Descriptor() ([]byte, []int) {
-	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{11}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *BrokerRef) GetBrokerId() uint32 {
@@ -693,7 +831,7 @@ type DialRequest struct {
 
 func (x *DialRequest) Reset() {
 	*x = DialRequest{}
-	mi := &file_pluginv1_plugin_proto_msgTypes[12]
+	mi := &file_pluginv1_plugin_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -705,7 +843,7 @@ func (x *DialRequest) String() string {
 func (*DialRequest) ProtoMessage() {}
 
 func (x *DialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginv1_plugin_proto_msgTypes[12]
+	mi := &file_pluginv1_plugin_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -718,7 +856,7 @@ func (x *DialRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DialRequest.ProtoReflect.Descriptor instead.
 func (*DialRequest) Descriptor() ([]byte, []int) {
-	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{12}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *DialRequest) GetSessionId() string {
@@ -752,7 +890,7 @@ type ProxyEndpoint struct {
 
 func (x *ProxyEndpoint) Reset() {
 	*x = ProxyEndpoint{}
-	mi := &file_pluginv1_plugin_proto_msgTypes[13]
+	mi := &file_pluginv1_plugin_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -764,7 +902,7 @@ func (x *ProxyEndpoint) String() string {
 func (*ProxyEndpoint) ProtoMessage() {}
 
 func (x *ProxyEndpoint) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginv1_plugin_proto_msgTypes[13]
+	mi := &file_pluginv1_plugin_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -777,7 +915,7 @@ func (x *ProxyEndpoint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProxyEndpoint.ProtoReflect.Descriptor instead.
 func (*ProxyEndpoint) Descriptor() ([]byte, []int) {
-	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{13}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ProxyEndpoint) GetAddress() string {
@@ -806,7 +944,7 @@ type AuditRecord struct {
 
 func (x *AuditRecord) Reset() {
 	*x = AuditRecord{}
-	mi := &file_pluginv1_plugin_proto_msgTypes[14]
+	mi := &file_pluginv1_plugin_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -818,7 +956,7 @@ func (x *AuditRecord) String() string {
 func (*AuditRecord) ProtoMessage() {}
 
 func (x *AuditRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginv1_plugin_proto_msgTypes[14]
+	mi := &file_pluginv1_plugin_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -831,7 +969,7 @@ func (x *AuditRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditRecord.ProtoReflect.Descriptor instead.
 func (*AuditRecord) Descriptor() ([]byte, []int) {
-	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{14}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *AuditRecord) GetSessionId() string {
@@ -921,7 +1059,21 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\x06params\x18\x03 \x03(\v2$.pluginv1.ChannelRequest.ParamsEntryR\x06params\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"A\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x88\x01\n" +
+	"\vChannelInfo\x12\x1b\n" +
+	"\tbroker_id\x18\x01 \x01(\rR\bbrokerId\x12\x1d\n" +
+	"\n" +
+	"channel_id\x18\x02 \x01(\tR\tchannelId\x12\x1c\n" +
+	"\tresizable\x18\x03 \x01(\bR\tresizable\x12\x1f\n" +
+	"\vserver_init\x18\x04 \x01(\fR\n" +
+	"serverInit\"u\n" +
+	"\rChannelResize\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
+	"\n" +
+	"channel_id\x18\x02 \x01(\tR\tchannelId\x12\x12\n" +
+	"\x04cols\x18\x03 \x01(\x05R\x04cols\x12\x12\n" +
+	"\x04rows\x18\x04 \x01(\x05R\x04rows\"A\n" +
 	"\fProxyRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x12\n" +
@@ -944,7 +1096,7 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\x05error\x18\x04 \x01(\tR\x05error\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xda\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\x97\x04\n" +
 	"\x06Plugin\x122\n" +
 	"\vGetManifest\x12\x0f.pluginv1.Empty\x1a\x12.pluginv1.Manifest\x12<\n" +
 	"\aConnect\x12\x18.pluginv1.ConnectRequest\x1a\x17.pluginv1.SessionHandle\x127\n" +
@@ -952,8 +1104,9 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\x05Close\x12\x17.pluginv1.SessionHandle\x1a\x0f.pluginv1.Empty\x12;\n" +
 	"\x06Invoke\x12\x17.pluginv1.InvokeRequest\x1a\x18.pluginv1.InvokeResponse\x128\n" +
 	"\n" +
-	"OpenStream\x12\x15.pluginv1.StreamStart\x1a\x13.pluginv1.BrokerRef\x12<\n" +
-	"\vOpenChannel\x12\x18.pluginv1.ChannelRequest\x1a\x13.pluginv1.BrokerRef\x12=\n" +
+	"OpenStream\x12\x15.pluginv1.StreamStart\x1a\x13.pluginv1.BrokerRef\x12>\n" +
+	"\vOpenChannel\x12\x18.pluginv1.ChannelRequest\x1a\x15.pluginv1.ChannelInfo\x129\n" +
+	"\rResizeChannel\x12\x17.pluginv1.ChannelResize\x1a\x0f.pluginv1.Empty\x12=\n" +
 	"\x0eServeHTTPProxy\x12\x16.pluginv1.ProxyRequest\x1a\x13.pluginv1.BrokerRef24\n" +
 	"\x04Conn\x12,\n" +
 	"\x04Pipe\x12\x0f.pluginv1.Chunk\x1a\x0f.pluginv1.Chunk(\x010\x012\xf6\x01\n" +
@@ -977,7 +1130,7 @@ func file_pluginv1_plugin_proto_rawDescGZIP() []byte {
 	return file_pluginv1_plugin_proto_rawDescData
 }
 
-var file_pluginv1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_pluginv1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_pluginv1_plugin_proto_goTypes = []any{
 	(*Chunk)(nil),          // 0: pluginv1.Chunk
 	(*Empty)(nil),          // 1: pluginv1.Empty
@@ -989,25 +1142,27 @@ var file_pluginv1_plugin_proto_goTypes = []any{
 	(*InvokeResponse)(nil), // 7: pluginv1.InvokeResponse
 	(*StreamStart)(nil),    // 8: pluginv1.StreamStart
 	(*ChannelRequest)(nil), // 9: pluginv1.ChannelRequest
-	(*ProxyRequest)(nil),   // 10: pluginv1.ProxyRequest
-	(*BrokerRef)(nil),      // 11: pluginv1.BrokerRef
-	(*DialRequest)(nil),    // 12: pluginv1.DialRequest
-	(*ProxyEndpoint)(nil),  // 13: pluginv1.ProxyEndpoint
-	(*AuditRecord)(nil),    // 14: pluginv1.AuditRecord
-	nil,                    // 15: pluginv1.InvokeRequest.ParamsEntry
-	nil,                    // 16: pluginv1.InvokeRequest.QueryEntry
-	nil,                    // 17: pluginv1.StreamStart.ParamsEntry
-	nil,                    // 18: pluginv1.ChannelRequest.ParamsEntry
-	nil,                    // 19: pluginv1.AuditRecord.ParamsEntry
+	(*ChannelInfo)(nil),    // 10: pluginv1.ChannelInfo
+	(*ChannelResize)(nil),  // 11: pluginv1.ChannelResize
+	(*ProxyRequest)(nil),   // 12: pluginv1.ProxyRequest
+	(*BrokerRef)(nil),      // 13: pluginv1.BrokerRef
+	(*DialRequest)(nil),    // 14: pluginv1.DialRequest
+	(*ProxyEndpoint)(nil),  // 15: pluginv1.ProxyEndpoint
+	(*AuditRecord)(nil),    // 16: pluginv1.AuditRecord
+	nil,                    // 17: pluginv1.InvokeRequest.ParamsEntry
+	nil,                    // 18: pluginv1.InvokeRequest.QueryEntry
+	nil,                    // 19: pluginv1.StreamStart.ParamsEntry
+	nil,                    // 20: pluginv1.ChannelRequest.ParamsEntry
+	nil,                    // 21: pluginv1.AuditRecord.ParamsEntry
 }
 var file_pluginv1_plugin_proto_depIdxs = []int32{
-	15, // 0: pluginv1.InvokeRequest.params:type_name -> pluginv1.InvokeRequest.ParamsEntry
-	16, // 1: pluginv1.InvokeRequest.query:type_name -> pluginv1.InvokeRequest.QueryEntry
+	17, // 0: pluginv1.InvokeRequest.params:type_name -> pluginv1.InvokeRequest.ParamsEntry
+	18, // 1: pluginv1.InvokeRequest.query:type_name -> pluginv1.InvokeRequest.QueryEntry
 	5,  // 2: pluginv1.InvokeRequest.user:type_name -> pluginv1.ActingUser
-	17, // 3: pluginv1.StreamStart.params:type_name -> pluginv1.StreamStart.ParamsEntry
+	19, // 3: pluginv1.StreamStart.params:type_name -> pluginv1.StreamStart.ParamsEntry
 	5,  // 4: pluginv1.StreamStart.user:type_name -> pluginv1.ActingUser
-	18, // 5: pluginv1.ChannelRequest.params:type_name -> pluginv1.ChannelRequest.ParamsEntry
-	19, // 6: pluginv1.AuditRecord.params:type_name -> pluginv1.AuditRecord.ParamsEntry
+	20, // 5: pluginv1.ChannelRequest.params:type_name -> pluginv1.ChannelRequest.ParamsEntry
+	21, // 6: pluginv1.AuditRecord.params:type_name -> pluginv1.AuditRecord.ParamsEntry
 	1,  // 7: pluginv1.Plugin.GetManifest:input_type -> pluginv1.Empty
 	3,  // 8: pluginv1.Plugin.Connect:input_type -> pluginv1.ConnectRequest
 	4,  // 9: pluginv1.Plugin.HealthCheck:input_type -> pluginv1.SessionHandle
@@ -1015,27 +1170,29 @@ var file_pluginv1_plugin_proto_depIdxs = []int32{
 	6,  // 11: pluginv1.Plugin.Invoke:input_type -> pluginv1.InvokeRequest
 	8,  // 12: pluginv1.Plugin.OpenStream:input_type -> pluginv1.StreamStart
 	9,  // 13: pluginv1.Plugin.OpenChannel:input_type -> pluginv1.ChannelRequest
-	10, // 14: pluginv1.Plugin.ServeHTTPProxy:input_type -> pluginv1.ProxyRequest
-	0,  // 15: pluginv1.Conn.Pipe:input_type -> pluginv1.Chunk
-	12, // 16: pluginv1.Host.DialTarget:input_type -> pluginv1.DialRequest
-	4,  // 17: pluginv1.Host.HTTPProxyEndpoint:input_type -> pluginv1.SessionHandle
-	4,  // 18: pluginv1.Host.OpenHTTPConn:input_type -> pluginv1.SessionHandle
-	14, // 19: pluginv1.Host.Audit:input_type -> pluginv1.AuditRecord
-	2,  // 20: pluginv1.Plugin.GetManifest:output_type -> pluginv1.Manifest
-	4,  // 21: pluginv1.Plugin.Connect:output_type -> pluginv1.SessionHandle
-	1,  // 22: pluginv1.Plugin.HealthCheck:output_type -> pluginv1.Empty
-	1,  // 23: pluginv1.Plugin.Close:output_type -> pluginv1.Empty
-	7,  // 24: pluginv1.Plugin.Invoke:output_type -> pluginv1.InvokeResponse
-	11, // 25: pluginv1.Plugin.OpenStream:output_type -> pluginv1.BrokerRef
-	11, // 26: pluginv1.Plugin.OpenChannel:output_type -> pluginv1.BrokerRef
-	11, // 27: pluginv1.Plugin.ServeHTTPProxy:output_type -> pluginv1.BrokerRef
-	0,  // 28: pluginv1.Conn.Pipe:output_type -> pluginv1.Chunk
-	11, // 29: pluginv1.Host.DialTarget:output_type -> pluginv1.BrokerRef
-	13, // 30: pluginv1.Host.HTTPProxyEndpoint:output_type -> pluginv1.ProxyEndpoint
-	11, // 31: pluginv1.Host.OpenHTTPConn:output_type -> pluginv1.BrokerRef
-	1,  // 32: pluginv1.Host.Audit:output_type -> pluginv1.Empty
-	20, // [20:33] is the sub-list for method output_type
-	7,  // [7:20] is the sub-list for method input_type
+	11, // 14: pluginv1.Plugin.ResizeChannel:input_type -> pluginv1.ChannelResize
+	12, // 15: pluginv1.Plugin.ServeHTTPProxy:input_type -> pluginv1.ProxyRequest
+	0,  // 16: pluginv1.Conn.Pipe:input_type -> pluginv1.Chunk
+	14, // 17: pluginv1.Host.DialTarget:input_type -> pluginv1.DialRequest
+	4,  // 18: pluginv1.Host.HTTPProxyEndpoint:input_type -> pluginv1.SessionHandle
+	4,  // 19: pluginv1.Host.OpenHTTPConn:input_type -> pluginv1.SessionHandle
+	16, // 20: pluginv1.Host.Audit:input_type -> pluginv1.AuditRecord
+	2,  // 21: pluginv1.Plugin.GetManifest:output_type -> pluginv1.Manifest
+	4,  // 22: pluginv1.Plugin.Connect:output_type -> pluginv1.SessionHandle
+	1,  // 23: pluginv1.Plugin.HealthCheck:output_type -> pluginv1.Empty
+	1,  // 24: pluginv1.Plugin.Close:output_type -> pluginv1.Empty
+	7,  // 25: pluginv1.Plugin.Invoke:output_type -> pluginv1.InvokeResponse
+	13, // 26: pluginv1.Plugin.OpenStream:output_type -> pluginv1.BrokerRef
+	10, // 27: pluginv1.Plugin.OpenChannel:output_type -> pluginv1.ChannelInfo
+	1,  // 28: pluginv1.Plugin.ResizeChannel:output_type -> pluginv1.Empty
+	13, // 29: pluginv1.Plugin.ServeHTTPProxy:output_type -> pluginv1.BrokerRef
+	0,  // 30: pluginv1.Conn.Pipe:output_type -> pluginv1.Chunk
+	13, // 31: pluginv1.Host.DialTarget:output_type -> pluginv1.BrokerRef
+	15, // 32: pluginv1.Host.HTTPProxyEndpoint:output_type -> pluginv1.ProxyEndpoint
+	13, // 33: pluginv1.Host.OpenHTTPConn:output_type -> pluginv1.BrokerRef
+	1,  // 34: pluginv1.Host.Audit:output_type -> pluginv1.Empty
+	21, // [21:35] is the sub-list for method output_type
+	7,  // [7:21] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name
@@ -1052,7 +1209,7 @@ func file_pluginv1_plugin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pluginv1_plugin_proto_rawDesc), len(file_pluginv1_plugin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   20,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   3,
 		},
