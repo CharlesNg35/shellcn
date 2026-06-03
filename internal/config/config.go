@@ -148,9 +148,11 @@ func Load(paths ...string) (*Config, error) {
 	v.SetEnvPrefix("SHELLCN")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
+
 	// Match the canonical variable names used by the secret loader.
 	_ = v.BindEnv("secrets.master_key", secrets.EnvMasterKey)
 	_ = v.BindEnv("secrets.master_key_file", secrets.EnvMasterKeyFile)
+
 	for _, k := range []string{"ai.kind", "ai.name", "ai.base_url", "ai.api_key", "ai.model"} {
 		_ = v.BindEnv(k)
 	}

@@ -769,16 +769,21 @@ func (s *memAuditStore) Count(_ context.Context, f AuditFilter) (int64, error) {
 func (s *memAuditStore) DeleteBefore(_ context.Context, before time.Time) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	var kept []models.AuditEntry
 	var removed int64
+
 	for _, e := range s.entries {
 		if e.Time.Before(before) {
 			removed++
 			continue
 		}
+
 		kept = append(kept, e)
 	}
+
 	s.entries = kept
+
 	return removed, nil
 }
 
