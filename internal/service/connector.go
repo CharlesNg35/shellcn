@@ -53,6 +53,9 @@ func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connec
 	} else {
 		maps.Copy(cfg, conn.Config)
 	}
+	// The transport's target allowlist derives from the connection's declared
+	// (non-secret) fields only — secret material must never seed dialable hosts.
+	transportCfg := maps.Clone(cfg)
 
 	// Decrypt inline secrets into the config.
 	inline, err := secrets.DecryptMap(ctx, c.vault, conn.Secrets)
@@ -109,7 +112,7 @@ func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connec
 	}
 
 	transportConn := conn
-	transportConn.Config = cfg
+	transportConn.Config = transportCfg
 	var agentMode plugin.AgentMode
 	if hasManifest && manifest.Agent != nil {
 		agentMode = manifest.Agent.Proxy.Mode

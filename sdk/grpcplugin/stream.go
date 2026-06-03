@@ -3,6 +3,7 @@ package grpcplugin
 import (
 	"context"
 	"net"
+	"strconv"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -30,8 +31,17 @@ func (s *server) OpenStream(_ context.Context, req *pluginv1.StreamStart) (*plug
 	return &pluginv1.BrokerRef{BrokerId: ServeConn(s.broker, srv)}, nil
 }
 
-// OpenChannel opens a tracked upstream channel and bridges it to a brokered conn.
-func (s *server) OpenChannel(ctx context.Context, req *pluginv1.ChannelRequest) (*pluginv1.BrokerRef, error) {
+// resizableChannel and serverInitChannel are the optional Channel capabilities
+// the wire re-exposes, mirroring the core's tracked-channel detection.
+type (
+	resizableChannel  interface{ Resize(cols, rows int) error }
+	serverInitChannel interface{ ServerInit() []byte }
+)
+
+// OpenChannel opens a tracked upstream channel and bridges it to a brokered
+// conn, declaring the channel's optional capabilities so the host-side wrapper
+// keeps parity with an in-process Channel.
+func (s *server) OpenChannel(ctx context.Context, req *pluginv1.ChannelRequest) (*pluginv1.ChannelInfo, error) {
 	cs := s.conn(req.GetSessionId())
 	if cs == nil {
 		return nil, status.Error(codes.NotFound, "unknown session")
@@ -43,11 +53,43 @@ func (s *server) OpenChannel(ctx context.Context, req *pluginv1.ChannelRequest) 
 	if err != nil {
 		return nil, StatusFromError(err)
 	}
+	info := &pluginv1.ChannelInfo{
+		ChannelId: strconv.FormatUint(s.chanSeq.Add(1), 10),
+	}
+	if _, ok := ch.(resizableChannel); ok {
+		info.Resizable = true
+	}
+	if si, ok := ch.(serverInitChannel); ok {
+		info.ServerInit = si.ServerInit()
+	}
+	cs.trackChannel(info.ChannelId, ch)
 	srv := NewPipeServer(func(_ context.Context, conn net.Conn) error {
+		defer cs.untrackChannel(info.ChannelId)
 		Bridge(ch, conn)
 		return nil
 	})
-	return &pluginv1.BrokerRef{BrokerId: ServeConn(s.broker, srv)}, nil
+	info.BrokerId = ServeConn(s.broker, srv)
+	return info, nil
+}
+
+// ResizeChannel forwards a terminal resize to an open, resizable channel.
+func (s *server) ResizeChannel(_ context.Context, req *pluginv1.ChannelResize) (*pluginv1.Empty, error) {
+	cs := s.conn(req.GetSessionId())
+	if cs == nil {
+		return nil, status.Error(codes.NotFound, "unknown session")
+	}
+	ch := cs.channel(req.GetChannelId())
+	if ch == nil {
+		return nil, status.Error(codes.NotFound, "unknown channel")
+	}
+	resizer, ok := ch.(resizableChannel)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "channel is not resizable")
+	}
+	if err := resizer.Resize(int(req.GetCols()), int(req.GetRows())); err != nil {
+		return nil, StatusFromError(err)
+	}
+	return &pluginv1.Empty{}, nil
 }
 
 // clientStream presents a brokered conn as a plugin.ClientStream.

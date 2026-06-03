@@ -17,8 +17,14 @@ service Plugin {
   // results); its data plane is a raw brokered conn named by the returned
   // broker_id. Every WS route is bidirectional in the contract.
   rpc OpenStream(StreamStart) returns (BrokerRef);
-  // OpenChannel opens a tracked upstream Channel as a raw brokered conn.
-  rpc OpenChannel(ChannelRequest) returns (BrokerRef);
+  // OpenChannel opens a tracked upstream Channel as a raw brokered conn. The
+  // returned info also declares the channel's optional capabilities (resize, a
+  // desktop server-init blob) so the host-side wrapper keeps parity with an
+  // in-process Channel.
+  rpc OpenChannel(ChannelRequest) returns (ChannelInfo);
+  // ResizeChannel forwards a terminal resize to an open channel that declared
+  // resizable.
+  rpc ResizeChannel(ChannelResize) returns (Empty);
   // ServeHTTPProxy lets the plugin serve a reverse-proxied browser request over
   // a raw brokered conn (redirects, assets, and WebSocket upgrades included).
   rpc ServeHTTPProxy(ProxyRequest) returns (BrokerRef);
@@ -102,6 +108,22 @@ message ChannelRequest {
   string session_id = 1;
   string kind = 2;
   map<string, string> params = 3;
+}
+
+// ChannelInfo describes one opened channel: the brokered conn that carries its
+// bytes plus the optional capabilities the host-side wrapper re-exposes.
+message ChannelInfo {
+  uint32 broker_id = 1;
+  string channel_id = 2;      // handle for control RPCs (resize)
+  bool resizable = 3;
+  bytes server_init = 4;      // present iff the channel exposes a desktop init blob
+}
+
+message ChannelResize {
+  string session_id = 1;
+  string channel_id = 2;
+  int32 cols = 3;
+  int32 rows = 4;
 }
 
 message ProxyRequest {

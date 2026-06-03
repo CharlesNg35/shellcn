@@ -155,3 +155,43 @@ func mustJSON(t *testing.T, v any) string {
 	}
 	return string(b)
 }
+
+// borrowedHandle mimics internal/session.Handle: it implements plugin.Session
+// and exposes the live session via Session(). The gateway dispatch always passes
+// this wrapper as rc.Session, so the route shims must unwrap it.
+type borrowedHandle struct{ inner plugin.Session }
+
+func (h *borrowedHandle) Session() plugin.Session               { return h.inner }
+func (h *borrowedHandle) HealthCheck(ctx context.Context) error { return h.inner.HealthCheck(ctx) }
+func (h *borrowedHandle) Close() error                          { return h.inner.Close() }
+func (h *borrowedHandle) OpenChannel(ctx context.Context, req plugin.ChannelRequest) (plugin.Channel, error) {
+	return h.inner.OpenChannel(ctx, req)
+}
+
+// TestInvokeThroughSessionHandle is the regression test for routes failing with
+// a bare "unavailable" when rc.Session is the core's borrowed handle rather
+// than the raw grpc session.
+func TestInvokeThroughSessionHandle(t *testing.T) {
+	ctx := context.Background()
+	manifest, routes := fixture()
+	bundle, _ := grpcplugin.EncodeManifest(manifest, routes)
+	p, err := extplugin.New(ctx, dialStub(t, &stubServer{manifest: bundle}))
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+
+	sess, err := p.Connect(ctx, plugin.ConnectConfig{ConnectionID: "c1", Transport: plugin.TransportDirect})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	route := p.Routes()[0]
+
+	rc := plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, &borrowedHandle{inner: sess}, map[string]string{"k": "v"}, nil, nil)
+	res, err := route.Handle(rc)
+	if err != nil {
+		t.Fatalf("handle through borrowed handle: %v", err)
+	}
+	if got := res.(map[string]any); got["route"] != "demo.list" {
+		t.Fatalf("unexpected result: %v", got)
+	}
+}

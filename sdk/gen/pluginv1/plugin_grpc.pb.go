@@ -26,6 +26,7 @@ const (
 	Plugin_Invoke_FullMethodName         = "/pluginv1.Plugin/Invoke"
 	Plugin_OpenStream_FullMethodName     = "/pluginv1.Plugin/OpenStream"
 	Plugin_OpenChannel_FullMethodName    = "/pluginv1.Plugin/OpenChannel"
+	Plugin_ResizeChannel_FullMethodName  = "/pluginv1.Plugin/ResizeChannel"
 	Plugin_ServeHTTPProxy_FullMethodName = "/pluginv1.Plugin/ServeHTTPProxy"
 )
 
@@ -47,8 +48,14 @@ type PluginClient interface {
 	// results); its data plane is a raw brokered conn named by the returned
 	// broker_id. Every WS route is bidirectional in the contract.
 	OpenStream(ctx context.Context, in *StreamStart, opts ...grpc.CallOption) (*BrokerRef, error)
-	// OpenChannel opens a tracked upstream Channel as a raw brokered conn.
-	OpenChannel(ctx context.Context, in *ChannelRequest, opts ...grpc.CallOption) (*BrokerRef, error)
+	// OpenChannel opens a tracked upstream Channel as a raw brokered conn. The
+	// returned info also declares the channel's optional capabilities (resize, a
+	// desktop server-init blob) so the host-side wrapper keeps parity with an
+	// in-process Channel.
+	OpenChannel(ctx context.Context, in *ChannelRequest, opts ...grpc.CallOption) (*ChannelInfo, error)
+	// ResizeChannel forwards a terminal resize to an open channel that declared
+	// resizable.
+	ResizeChannel(ctx context.Context, in *ChannelResize, opts ...grpc.CallOption) (*Empty, error)
 	// ServeHTTPProxy lets the plugin serve a reverse-proxied browser request over
 	// a raw brokered conn (redirects, assets, and WebSocket upgrades included).
 	ServeHTTPProxy(ctx context.Context, in *ProxyRequest, opts ...grpc.CallOption) (*BrokerRef, error)
@@ -122,10 +129,20 @@ func (c *pluginClient) OpenStream(ctx context.Context, in *StreamStart, opts ...
 	return out, nil
 }
 
-func (c *pluginClient) OpenChannel(ctx context.Context, in *ChannelRequest, opts ...grpc.CallOption) (*BrokerRef, error) {
+func (c *pluginClient) OpenChannel(ctx context.Context, in *ChannelRequest, opts ...grpc.CallOption) (*ChannelInfo, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(BrokerRef)
+	out := new(ChannelInfo)
 	err := c.cc.Invoke(ctx, Plugin_OpenChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *pluginClient) ResizeChannel(ctx context.Context, in *ChannelResize, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Plugin_ResizeChannel_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -160,8 +177,14 @@ type PluginServer interface {
 	// results); its data plane is a raw brokered conn named by the returned
 	// broker_id. Every WS route is bidirectional in the contract.
 	OpenStream(context.Context, *StreamStart) (*BrokerRef, error)
-	// OpenChannel opens a tracked upstream Channel as a raw brokered conn.
-	OpenChannel(context.Context, *ChannelRequest) (*BrokerRef, error)
+	// OpenChannel opens a tracked upstream Channel as a raw brokered conn. The
+	// returned info also declares the channel's optional capabilities (resize, a
+	// desktop server-init blob) so the host-side wrapper keeps parity with an
+	// in-process Channel.
+	OpenChannel(context.Context, *ChannelRequest) (*ChannelInfo, error)
+	// ResizeChannel forwards a terminal resize to an open channel that declared
+	// resizable.
+	ResizeChannel(context.Context, *ChannelResize) (*Empty, error)
 	// ServeHTTPProxy lets the plugin serve a reverse-proxied browser request over
 	// a raw brokered conn (redirects, assets, and WebSocket upgrades included).
 	ServeHTTPProxy(context.Context, *ProxyRequest) (*BrokerRef, error)
@@ -193,8 +216,11 @@ func (UnimplementedPluginServer) Invoke(context.Context, *InvokeRequest) (*Invok
 func (UnimplementedPluginServer) OpenStream(context.Context, *StreamStart) (*BrokerRef, error) {
 	return nil, status.Error(codes.Unimplemented, "method OpenStream not implemented")
 }
-func (UnimplementedPluginServer) OpenChannel(context.Context, *ChannelRequest) (*BrokerRef, error) {
+func (UnimplementedPluginServer) OpenChannel(context.Context, *ChannelRequest) (*ChannelInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method OpenChannel not implemented")
+}
+func (UnimplementedPluginServer) ResizeChannel(context.Context, *ChannelResize) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResizeChannel not implemented")
 }
 func (UnimplementedPluginServer) ServeHTTPProxy(context.Context, *ProxyRequest) (*BrokerRef, error) {
 	return nil, status.Error(codes.Unimplemented, "method ServeHTTPProxy not implemented")
@@ -346,6 +372,24 @@ func _Plugin_OpenChannel_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Plugin_ResizeChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChannelResize)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PluginServer).ResizeChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Plugin_ResizeChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PluginServer).ResizeChannel(ctx, req.(*ChannelResize))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Plugin_ServeHTTPProxy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ProxyRequest)
 	if err := dec(in); err != nil {
@@ -398,6 +442,10 @@ var Plugin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "OpenChannel",
 			Handler:    _Plugin_OpenChannel_Handler,
+		},
+		{
+			MethodName: "ResizeChannel",
+			Handler:    _Plugin_ResizeChannel_Handler,
 		},
 		{
 			MethodName: "ServeHTTPProxy",

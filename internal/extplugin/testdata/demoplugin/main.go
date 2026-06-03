@@ -145,11 +145,37 @@ func (s *demoSession) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
 func (demoSession) HealthCheck(context.Context) error { return nil }
 
 // OpenChannel returns an echo channel so the channel bridge can be exercised.
+// Terminal channels are resizable and desktop channels carry a server-init blob,
+// so the capability passthrough can be asserted end to end.
 func (demoSession) OpenChannel(_ context.Context, req plugin.ChannelRequest) (plugin.Channel, error) {
 	a, b := net.Pipe()
 	go func() { _, _ = io.Copy(b, b); _ = b.Close() }()
-	return &pipeChannel{conn: a, kind: req.Kind}, nil
+	base := &pipeChannel{conn: a, kind: req.Kind}
+	switch req.Kind {
+	case plugin.StreamTerminal:
+		return &resizablePipeChannel{pipeChannel: base}, nil
+	case plugin.StreamDesktop:
+		return &desktopPipeChannel{pipeChannel: base, init: []byte("demo-server-init")}, nil
+	default:
+		return base, nil
+	}
 }
+
+// resizablePipeChannel echoes resize calls into the stream so a test can observe
+// that Resize crossed the wire.
+type resizablePipeChannel struct{ *pipeChannel }
+
+func (c *resizablePipeChannel) Resize(cols, rows int) error {
+	_, err := c.conn.Write(fmt.Appendf(nil, "resize:%dx%d", cols, rows))
+	return err
+}
+
+type desktopPipeChannel struct {
+	*pipeChannel
+	init []byte
+}
+
+func (c *desktopPipeChannel) ServerInit() []byte { return c.init }
 
 func (demoSession) Close() error { return nil }
 

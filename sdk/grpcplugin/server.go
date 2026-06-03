@@ -17,10 +17,34 @@ import (
 )
 
 // connState is one live session plus the Host client used to reach the core for
-// egress and audit.
+// egress and audit, and the open channels addressable by control RPCs (resize).
 type connState struct {
 	session plugin.Session
 	host    pluginv1.HostClient
+
+	chanMu   sync.Mutex
+	channels map[string]plugin.Channel
+}
+
+func (cs *connState) trackChannel(id string, ch plugin.Channel) {
+	cs.chanMu.Lock()
+	if cs.channels == nil {
+		cs.channels = make(map[string]plugin.Channel)
+	}
+	cs.channels[id] = ch
+	cs.chanMu.Unlock()
+}
+
+func (cs *connState) untrackChannel(id string) {
+	cs.chanMu.Lock()
+	delete(cs.channels, id)
+	cs.chanMu.Unlock()
+}
+
+func (cs *connState) channel(id string) plugin.Channel {
+	cs.chanMu.Lock()
+	defer cs.chanMu.Unlock()
+	return cs.channels[id]
 }
 
 // server is the plugin-side implementation of the Plugin service. It holds the
@@ -34,6 +58,7 @@ type server struct {
 	mu       sync.Mutex
 	sessions map[string]*connState
 	seq      atomic.Uint64
+	chanSeq  atomic.Uint64
 }
 
 func newServer(impl plugin.Plugin, broker *goplugin.GRPCBroker) *server {

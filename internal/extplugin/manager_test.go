@@ -410,3 +410,66 @@ func TestExampleMemoLoads(t *testing.T) {
 		t.Fatalf("memo round-trip over subprocess: %v", res)
 	}
 }
+
+// TestPluginChannelCapabilities asserts Resize and ServerInit survive the wire:
+// the host-side channel wrapper re-exposes exactly what the plugin's channel
+// declared, matching in-process parity.
+func TestPluginChannelCapabilities(t *testing.T) {
+	reg := plugin.NewRegistry()
+	m := extplugin.NewManager(buildDemo(t))
+	t.Cleanup(m.Close)
+	if err := m.LoadAll(context.Background(), reg); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	p, _ := reg.Get("demo")
+	sess, err := p.Connect(context.Background(), plugin.ConnectConfig{
+		ConnectionID: "c1", Transport: plugin.TransportDirect, Net: plugintest.DirectTransport(),
+	})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+
+	term, err := sess.OpenChannel(context.Background(), plugin.ChannelRequest{Kind: plugin.StreamTerminal})
+	if err != nil {
+		t.Fatalf("open terminal channel: %v", err)
+	}
+	defer func() { _ = term.Close() }()
+	resizer, ok := term.(interface{ Resize(int, int) error })
+	if !ok {
+		t.Fatal("terminal channel lost Resize across the wire")
+	}
+	if err := resizer.Resize(80, 24); err != nil {
+		t.Fatalf("resize: %v", err)
+	}
+	want := "resize:80x24"
+	buf := make([]byte, len(want))
+	if _, err := io.ReadFull(term, buf); err != nil {
+		t.Fatalf("read resize marker: %v", err)
+	}
+	if string(buf) != want {
+		t.Fatalf("resize marker = %q, want %q", buf, want)
+	}
+
+	logs, err := sess.OpenChannel(context.Background(), plugin.ChannelRequest{Kind: plugin.StreamLogs})
+	if err != nil {
+		t.Fatalf("open logs channel: %v", err)
+	}
+	defer func() { _ = logs.Close() }()
+	if _, ok := logs.(interface{ Resize(int, int) error }); ok {
+		t.Fatal("non-resizable channel must not advertise Resize")
+	}
+
+	desktop, err := sess.OpenChannel(context.Background(), plugin.ChannelRequest{Kind: plugin.StreamDesktop})
+	if err != nil {
+		t.Fatalf("open desktop channel: %v", err)
+	}
+	defer func() { _ = desktop.Close() }()
+	si, ok := desktop.(interface{ ServerInit() []byte })
+	if !ok {
+		t.Fatal("desktop channel lost ServerInit across the wire")
+	}
+	if got := string(si.ServerInit()); got != "demo-server-init" {
+		t.Fatalf("server init = %q", got)
+	}
+}

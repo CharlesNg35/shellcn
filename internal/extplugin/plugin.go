@@ -5,6 +5,7 @@ package extplugin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 
 	"google.golang.org/grpc"
@@ -90,10 +91,25 @@ func (g *grpcPlugin) bind(r *plugin.Route) {
 	}
 }
 
+// sessionOf unwraps the request session to this plugin's grpcSession. rc.Session
+// is usually the core's borrowed session Handle, which exposes the live session
+// via Session() — the same unwrap convention built-in plugins use.
+func sessionOf(sess plugin.Session) (*grpcSession, bool) {
+	if s, ok := sess.(*grpcSession); ok {
+		return s, true
+	}
+	if h, ok := sess.(interface{ Session() plugin.Session }); ok {
+		if s, ok := h.Session().(*grpcSession); ok {
+			return s, true
+		}
+	}
+	return nil, false
+}
+
 func (g *grpcPlugin) invoke(rc *plugin.RequestContext, routeID string) (any, error) {
-	sess, ok := rc.Session.(*grpcSession)
+	sess, ok := sessionOf(rc.Session)
 	if !ok {
-		return nil, plugin.ErrUnavailable
+		return nil, fmt.Errorf("%w: request session does not belong to this external plugin", plugin.ErrUnavailable)
 	}
 	client, _ := g.ref.get()
 	resp, err := client.Invoke(rc.Ctx, &pluginv1.InvokeRequest{

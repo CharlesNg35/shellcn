@@ -24,7 +24,8 @@ func TestGormDoesNotLeak(t *testing.T) {
 		}
 		if d.IsDir() {
 			base := d.Name()
-			if base == "node_modules" || base == "web" || base == "bin" || strings.HasPrefix(base, ".") {
+			// tmp is gitignored scratch space (third-party checkouts live there).
+			if base == "node_modules" || base == "web" || base == "bin" || base == "tmp" || strings.HasPrefix(base, ".") {
 				return fs.SkipDir
 			}
 			return nil
