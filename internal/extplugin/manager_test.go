@@ -4,8 +4,11 @@ import (
 	"context"
 	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -168,5 +171,74 @@ func TestPluginEgressThroughCore(t *testing.T) {
 	rc2 := plugin.NewRequestContext(context.Background(), plugin.User{}, noNet, nil, nil, []byte("ping"))
 	if _, err := routeByID(p, "demo.echo").Handle(rc2); err == nil {
 		t.Fatal("expected egress to fail without a core transport")
+	}
+}
+
+func TestPluginL7ThroughCore(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "hello-world")
+	}))
+	t.Cleanup(srv.Close)
+
+	reg := plugin.NewRegistry()
+	m := extplugin.NewManager(buildDemo(t))
+	t.Cleanup(m.Close)
+	if err := m.LoadAll(context.Background(), reg); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	p, _ := reg.Get("demo")
+
+	sess, err := p.Connect(context.Background(), plugin.ConnectConfig{
+		ConnectionID: "c1", Transport: plugin.TransportDirect,
+		Net: plugintest.HTTPTransport(srv.URL, http.DefaultTransport),
+	})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{}, sess, nil, nil, nil)
+	res, err := routeByID(p, "demo.fetch").Handle(rc)
+	if err != nil {
+		t.Fatalf("fetch via core L7: %v", err)
+	}
+	if res.(map[string]any)["body"] != "hello-world" {
+		t.Fatalf("unexpected L7 body: %v", res)
+	}
+}
+
+func TestPluginAuditForwardsToCore(t *testing.T) {
+	var mu sync.Mutex
+	var got []string
+	hook := func(result plugin.AuditResult, params map[string]string, errMsg string) {
+		mu.Lock()
+		got = append(got, string(result)+"|"+params["op"]+"|"+errMsg)
+		mu.Unlock()
+	}
+
+	reg := plugin.NewRegistry()
+	m := extplugin.NewManager(buildDemo(t), extplugin.WithAudit(hook))
+	t.Cleanup(m.Close)
+	if err := m.LoadAll(context.Background(), reg); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	p, _ := reg.Get("demo")
+
+	sess, err := p.Connect(context.Background(), plugin.ConnectConfig{
+		ConnectionID: "c1", Transport: plugin.TransportDirect,
+		Net: plugintest.DirectTransport(),
+	})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{}, sess, nil, nil, nil)
+	if _, err := routeByID(p, "demo.audit").Handle(rc); err != nil {
+		t.Fatalf("audit route: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(got) != 1 || got[0] != "error|test|boom" {
+		t.Fatalf("audit not forwarded to core: %v", got)
 	}
 }

@@ -29,9 +29,18 @@ const (
 type Manager struct {
 	dir    string
 	logger hclog.Logger
+	audit  AuditFunc
 
 	mu      sync.Mutex
 	managed []*managed
+}
+
+// Option configures a Manager.
+type Option func(*Manager)
+
+// WithAudit records stream-internal operations plugins report via Host.Audit.
+func WithAudit(audit AuditFunc) Option {
+	return func(m *Manager) { m.audit = audit }
 }
 
 type managed struct {
@@ -44,8 +53,12 @@ type managed struct {
 	stopped bool
 }
 
-func NewManager(dir string) *Manager {
-	return &Manager{dir: dir, logger: hclog.NewNullLogger()}
+func NewManager(dir string, opts ...Option) *Manager {
+	m := &Manager{dir: dir, logger: hclog.NewNullLogger()}
+	for _, o := range opts {
+		o(m)
+	}
+	return m
 }
 
 // LoadAll spawns and registers every plugin binary in the directory. A binary
@@ -82,7 +95,7 @@ func (m *Manager) load(ctx context.Context, reg *plugin.Registry, path string) e
 		return err
 	}
 	ref := &clientRef{client: dispensed.Plugin, broker: dispensed.Broker}
-	p, err := newPlugin(ctx, ref)
+	p, err := newPlugin(ctx, ref, m.audit)
 	if err != nil {
 		client.Kill()
 		return err

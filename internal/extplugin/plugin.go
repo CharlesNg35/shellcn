@@ -16,6 +16,7 @@ import (
 
 type grpcPlugin struct {
 	ref      *clientRef
+	audit    AuditFunc
 	manifest plugin.Manifest
 	routes   []plugin.Route
 }
@@ -23,10 +24,10 @@ type grpcPlugin struct {
 // New fetches and reconstructs the manifest once, binding each route to a gRPC
 // shim that forwards to the subprocess.
 func New(ctx context.Context, client pluginv1.PluginClient) (plugin.Plugin, error) {
-	return newPlugin(ctx, &clientRef{client: client})
+	return newPlugin(ctx, &clientRef{client: client}, nil)
 }
 
-func newPlugin(ctx context.Context, ref *clientRef) (plugin.Plugin, error) {
+func newPlugin(ctx context.Context, ref *clientRef, audit AuditFunc) (plugin.Plugin, error) {
 	client, _ := ref.get()
 	resp, err := client.GetManifest(ctx, &pluginv1.Empty{})
 	if err != nil {
@@ -36,7 +37,7 @@ func newPlugin(ctx context.Context, ref *clientRef) (plugin.Plugin, error) {
 	if err != nil {
 		return nil, err
 	}
-	g := &grpcPlugin{ref: ref, manifest: manifest, routes: routes}
+	g := &grpcPlugin{ref: ref, audit: audit, manifest: manifest, routes: routes}
 	for i := range g.routes {
 		g.bind(&g.routes[i])
 	}
@@ -61,7 +62,7 @@ func (g *grpcPlugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plu
 	// plugin reaches its target through the gateway, not on its own.
 	if broker != nil && cfg.Net != nil {
 		id := broker.NextId()
-		host := newHostServer(cfg.Net, broker)
+		host := newHostServer(cfg.Net, broker, g.audit)
 		go broker.AcceptAndServe(id, func(opts []grpc.ServerOption) *grpc.Server {
 			s := grpc.NewServer(opts...)
 			pluginv1.RegisterHostServer(s, host)

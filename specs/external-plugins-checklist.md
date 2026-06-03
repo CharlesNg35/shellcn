@@ -131,12 +131,18 @@ by the core's `cfg.Net`) on a brokered id, passed to the plugin as
 - [x] SDK `NetTransport`: `DialContext` → `Host.DialTarget` → brokered `Conn.Pipe`.
       `HTTP()` returns `ok=false` (use `DialContext`), exactly like the core's
       `Direct` transport — so HTTP-over-L4 works for direct/agent plugins.
-- [~] `Host.HTTPProxyEndpoint` is implemented (returns the core's L7 base URL when
-      `cfg.Net.HTTP()` is available) but the **agent `http_proxy` RoundTripper
-      injection** path isn't wired — only first-party (k8s) needs it; external
-      plugins use L4. Noted as the one remaining L7 sub-case.
-- [~] `Host.Audit` RPC exists; forwarding to the core audit writer is wired with
-      stream routes in Step 5 (no-op until then).
+- [x] **L7 egress is wired:** `Host.OpenHTTPConn` brokers a conn to a core-run
+      reverse proxy (`grpcplugin.NewHTTPProxyBridge`, served over `Conn.Pipe` with
+      a `singleConnListener`) that applies `cfg.Net`'s RoundTripper — so agent
+      `http_proxy` auth injection works. SDK `brokerTransport.HTTP()` returns that
+      L7 client. Tested: `TestPluginL7ThroughCore` (plugin fetches an HTTP target
+      through the core's reverse proxy). The reverse-proxy primitive is reused by
+      Step 6.
+- [x] **`Host.Audit` forwards end-to-end:** the plugin's `rc.Audit(...)` →
+      `Host.Audit` (per-connection host client) → core `AuditFunc`
+      (`Manager` `WithAudit`). Tested: `TestPluginAuditForwardsToCore`. (The core
+      `AuditFunc` connects to the real audit writer when the server adopts the
+      Manager — a startup-wiring step, not a plugin gap.)
 - [x] **Egress stays in the core:** the plugin never dials targets itself.
 - [x] **DoD met (end-to-end):** `TestPluginEgressThroughCore` — a real subprocess
       plugin echoes bytes off a TCP target **through the core's transport**; with

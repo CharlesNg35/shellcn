@@ -4,12 +4,31 @@ package plugintest
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"time"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
+
+// HTTPTransport returns a plugin.NetTransport that offers an L7 client (base URL
+// + RoundTripper), like the core's agent http_proxy mode, for testing a plugin's
+// HTTP egress. DialContext (L4) is unavailable.
+func HTTPTransport(baseURL string, rt http.RoundTripper) plugin.NetTransport {
+	return httpTransport{baseURL: baseURL, rt: rt}
+}
+
+type httpTransport struct {
+	baseURL string
+	rt      http.RoundTripper
+}
+
+func (httpTransport) DialContext(context.Context, string, string) (net.Conn, error) {
+	return nil, errors.New("plugintest: L7-only transport has no DialContext")
+}
+
+func (t httpTransport) HTTP() (string, http.RoundTripper, bool) { return t.baseURL, t.rt, true }
 
 // DirectTransport returns a plugin.NetTransport that dials targets directly,
 // for driving a plugin Connect/Session in tests. It has no egress allow-list,

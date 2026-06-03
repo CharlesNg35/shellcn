@@ -1004,11 +1004,12 @@ const file_shellcn_plugin_v1_plugin_proto_rawDesc = "" +
 	"\vOpenChannel\x12!.shellcn.plugin.v1.ChannelRequest\x1a\x1c.shellcn.plugin.v1.BrokerRef\x12O\n" +
 	"\x0eServeHTTPProxy\x12\x1f.shellcn.plugin.v1.ProxyRequest\x1a\x1c.shellcn.plugin.v1.BrokerRef2F\n" +
 	"\x04Conn\x12>\n" +
-	"\x04Pipe\x12\x18.shellcn.plugin.v1.Chunk\x1a\x18.shellcn.plugin.v1.Chunk(\x010\x012\xee\x01\n" +
+	"\x04Pipe\x12\x18.shellcn.plugin.v1.Chunk\x1a\x18.shellcn.plugin.v1.Chunk(\x010\x012\xbe\x02\n" +
 	"\x04Host\x12J\n" +
 	"\n" +
 	"DialTarget\x12\x1e.shellcn.plugin.v1.DialRequest\x1a\x1c.shellcn.plugin.v1.BrokerRef\x12W\n" +
-	"\x11HTTPProxyEndpoint\x12 .shellcn.plugin.v1.SessionHandle\x1a .shellcn.plugin.v1.ProxyEndpoint\x12A\n" +
+	"\x11HTTPProxyEndpoint\x12 .shellcn.plugin.v1.SessionHandle\x1a .shellcn.plugin.v1.ProxyEndpoint\x12N\n" +
+	"\fOpenHTTPConn\x12 .shellcn.plugin.v1.SessionHandle\x1a\x1c.shellcn.plugin.v1.BrokerRef\x12A\n" +
 	"\x05Audit\x12\x1e.shellcn.plugin.v1.AuditRecord\x1a\x18.shellcn.plugin.v1.EmptyB\xcd\x01\n" +
 	"\x15com.shellcn.plugin.v1B\vPluginProtoP\x01ZAgithub.com/charlesng35/shellcn/sdk/gen/shellcn/plugin/v1;pluginv1\xa2\x02\x03SPX\xaa\x02\x11Shellcn.Plugin.V1\xca\x02\x11Shellcn\\Plugin\\V1\xe2\x02\x1dShellcn\\Plugin\\V1\\GPBMetadata\xea\x02\x13Shellcn::Plugin::V1b\x06proto3"
 
@@ -1068,22 +1069,24 @@ var file_shellcn_plugin_v1_plugin_proto_depIdxs = []int32{
 	0,  // 16: shellcn.plugin.v1.Conn.Pipe:input_type -> shellcn.plugin.v1.Chunk
 	13, // 17: shellcn.plugin.v1.Host.DialTarget:input_type -> shellcn.plugin.v1.DialRequest
 	4,  // 18: shellcn.plugin.v1.Host.HTTPProxyEndpoint:input_type -> shellcn.plugin.v1.SessionHandle
-	15, // 19: shellcn.plugin.v1.Host.Audit:input_type -> shellcn.plugin.v1.AuditRecord
-	2,  // 20: shellcn.plugin.v1.Plugin.GetManifest:output_type -> shellcn.plugin.v1.Manifest
-	4,  // 21: shellcn.plugin.v1.Plugin.Connect:output_type -> shellcn.plugin.v1.SessionHandle
-	1,  // 22: shellcn.plugin.v1.Plugin.HealthCheck:output_type -> shellcn.plugin.v1.Empty
-	1,  // 23: shellcn.plugin.v1.Plugin.Close:output_type -> shellcn.plugin.v1.Empty
-	7,  // 24: shellcn.plugin.v1.Plugin.Invoke:output_type -> shellcn.plugin.v1.InvokeResponse
-	8,  // 25: shellcn.plugin.v1.Plugin.InvokeServerStream:output_type -> shellcn.plugin.v1.Frame
-	12, // 26: shellcn.plugin.v1.Plugin.OpenStream:output_type -> shellcn.plugin.v1.BrokerRef
-	12, // 27: shellcn.plugin.v1.Plugin.OpenChannel:output_type -> shellcn.plugin.v1.BrokerRef
-	12, // 28: shellcn.plugin.v1.Plugin.ServeHTTPProxy:output_type -> shellcn.plugin.v1.BrokerRef
-	0,  // 29: shellcn.plugin.v1.Conn.Pipe:output_type -> shellcn.plugin.v1.Chunk
-	12, // 30: shellcn.plugin.v1.Host.DialTarget:output_type -> shellcn.plugin.v1.BrokerRef
-	14, // 31: shellcn.plugin.v1.Host.HTTPProxyEndpoint:output_type -> shellcn.plugin.v1.ProxyEndpoint
-	1,  // 32: shellcn.plugin.v1.Host.Audit:output_type -> shellcn.plugin.v1.Empty
-	20, // [20:33] is the sub-list for method output_type
-	7,  // [7:20] is the sub-list for method input_type
+	4,  // 19: shellcn.plugin.v1.Host.OpenHTTPConn:input_type -> shellcn.plugin.v1.SessionHandle
+	15, // 20: shellcn.plugin.v1.Host.Audit:input_type -> shellcn.plugin.v1.AuditRecord
+	2,  // 21: shellcn.plugin.v1.Plugin.GetManifest:output_type -> shellcn.plugin.v1.Manifest
+	4,  // 22: shellcn.plugin.v1.Plugin.Connect:output_type -> shellcn.plugin.v1.SessionHandle
+	1,  // 23: shellcn.plugin.v1.Plugin.HealthCheck:output_type -> shellcn.plugin.v1.Empty
+	1,  // 24: shellcn.plugin.v1.Plugin.Close:output_type -> shellcn.plugin.v1.Empty
+	7,  // 25: shellcn.plugin.v1.Plugin.Invoke:output_type -> shellcn.plugin.v1.InvokeResponse
+	8,  // 26: shellcn.plugin.v1.Plugin.InvokeServerStream:output_type -> shellcn.plugin.v1.Frame
+	12, // 27: shellcn.plugin.v1.Plugin.OpenStream:output_type -> shellcn.plugin.v1.BrokerRef
+	12, // 28: shellcn.plugin.v1.Plugin.OpenChannel:output_type -> shellcn.plugin.v1.BrokerRef
+	12, // 29: shellcn.plugin.v1.Plugin.ServeHTTPProxy:output_type -> shellcn.plugin.v1.BrokerRef
+	0,  // 30: shellcn.plugin.v1.Conn.Pipe:output_type -> shellcn.plugin.v1.Chunk
+	12, // 31: shellcn.plugin.v1.Host.DialTarget:output_type -> shellcn.plugin.v1.BrokerRef
+	14, // 32: shellcn.plugin.v1.Host.HTTPProxyEndpoint:output_type -> shellcn.plugin.v1.ProxyEndpoint
+	12, // 33: shellcn.plugin.v1.Host.OpenHTTPConn:output_type -> shellcn.plugin.v1.BrokerRef
+	1,  // 34: shellcn.plugin.v1.Host.Audit:output_type -> shellcn.plugin.v1.Empty
+	21, // [21:35] is the sub-list for method output_type
+	7,  // [7:21] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name

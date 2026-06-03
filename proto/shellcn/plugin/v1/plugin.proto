@@ -41,9 +41,12 @@ service Host {
   // DialTarget dials a target through the connection's transport (direct or the
   // agent tunnel) and returns a raw brokered conn (L4 egress).
   rpc DialTarget(DialRequest) returns (BrokerRef);
-  // HTTPProxyEndpoint returns a core-run per-session forward proxy the plugin
-  // points an http.Client at (L7 egress, direct or agent http_proxy).
+  // HTTPProxyEndpoint returns the base URL the plugin's http.Client targets for
+  // L7 egress (set only when the connection has an L7 transport).
   rpc HTTPProxyEndpoint(SessionHandle) returns (ProxyEndpoint);
+  // OpenHTTPConn brokers one connection to the core's L7 reverse proxy; the
+  // plugin's http.Transport dials it per HTTP connection.
+  rpc OpenHTTPConn(SessionHandle) returns (BrokerRef);
   // Audit records one stream-internal operation against the core audit log.
   rpc Audit(AuditRecord) returns (Empty);
 }

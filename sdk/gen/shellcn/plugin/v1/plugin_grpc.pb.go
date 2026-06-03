@@ -555,6 +555,7 @@ var Conn_ServiceDesc = grpc.ServiceDesc{
 const (
 	Host_DialTarget_FullMethodName        = "/shellcn.plugin.v1.Host/DialTarget"
 	Host_HTTPProxyEndpoint_FullMethodName = "/shellcn.plugin.v1.Host/HTTPProxyEndpoint"
+	Host_OpenHTTPConn_FullMethodName      = "/shellcn.plugin.v1.Host/OpenHTTPConn"
 	Host_Audit_FullMethodName             = "/shellcn.plugin.v1.Host/Audit"
 )
 
@@ -568,9 +569,12 @@ type HostClient interface {
 	// DialTarget dials a target through the connection's transport (direct or the
 	// agent tunnel) and returns a raw brokered conn (L4 egress).
 	DialTarget(ctx context.Context, in *DialRequest, opts ...grpc.CallOption) (*BrokerRef, error)
-	// HTTPProxyEndpoint returns a core-run per-session forward proxy the plugin
-	// points an http.Client at (L7 egress, direct or agent http_proxy).
+	// HTTPProxyEndpoint returns the base URL the plugin's http.Client targets for
+	// L7 egress (set only when the connection has an L7 transport).
 	HTTPProxyEndpoint(ctx context.Context, in *SessionHandle, opts ...grpc.CallOption) (*ProxyEndpoint, error)
+	// OpenHTTPConn brokers one connection to the core's L7 reverse proxy; the
+	// plugin's http.Transport dials it per HTTP connection.
+	OpenHTTPConn(ctx context.Context, in *SessionHandle, opts ...grpc.CallOption) (*BrokerRef, error)
 	// Audit records one stream-internal operation against the core audit log.
 	Audit(ctx context.Context, in *AuditRecord, opts ...grpc.CallOption) (*Empty, error)
 }
@@ -603,6 +607,16 @@ func (c *hostClient) HTTPProxyEndpoint(ctx context.Context, in *SessionHandle, o
 	return out, nil
 }
 
+func (c *hostClient) OpenHTTPConn(ctx context.Context, in *SessionHandle, opts ...grpc.CallOption) (*BrokerRef, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BrokerRef)
+	err := c.cc.Invoke(ctx, Host_OpenHTTPConn_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *hostClient) Audit(ctx context.Context, in *AuditRecord, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
@@ -623,9 +637,12 @@ type HostServer interface {
 	// DialTarget dials a target through the connection's transport (direct or the
 	// agent tunnel) and returns a raw brokered conn (L4 egress).
 	DialTarget(context.Context, *DialRequest) (*BrokerRef, error)
-	// HTTPProxyEndpoint returns a core-run per-session forward proxy the plugin
-	// points an http.Client at (L7 egress, direct or agent http_proxy).
+	// HTTPProxyEndpoint returns the base URL the plugin's http.Client targets for
+	// L7 egress (set only when the connection has an L7 transport).
 	HTTPProxyEndpoint(context.Context, *SessionHandle) (*ProxyEndpoint, error)
+	// OpenHTTPConn brokers one connection to the core's L7 reverse proxy; the
+	// plugin's http.Transport dials it per HTTP connection.
+	OpenHTTPConn(context.Context, *SessionHandle) (*BrokerRef, error)
 	// Audit records one stream-internal operation against the core audit log.
 	Audit(context.Context, *AuditRecord) (*Empty, error)
 	mustEmbedUnimplementedHostServer()
@@ -643,6 +660,9 @@ func (UnimplementedHostServer) DialTarget(context.Context, *DialRequest) (*Broke
 }
 func (UnimplementedHostServer) HTTPProxyEndpoint(context.Context, *SessionHandle) (*ProxyEndpoint, error) {
 	return nil, status.Error(codes.Unimplemented, "method HTTPProxyEndpoint not implemented")
+}
+func (UnimplementedHostServer) OpenHTTPConn(context.Context, *SessionHandle) (*BrokerRef, error) {
+	return nil, status.Error(codes.Unimplemented, "method OpenHTTPConn not implemented")
 }
 func (UnimplementedHostServer) Audit(context.Context, *AuditRecord) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method Audit not implemented")
@@ -704,6 +724,24 @@ func _Host_HTTPProxyEndpoint_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Host_OpenHTTPConn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SessionHandle)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServer).OpenHTTPConn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Host_OpenHTTPConn_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServer).OpenHTTPConn(ctx, req.(*SessionHandle))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Host_Audit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AuditRecord)
 	if err := dec(in); err != nil {
@@ -736,6 +774,10 @@ var Host_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "HTTPProxyEndpoint",
 			Handler:    _Host_HTTPProxyEndpoint_Handler,
+		},
+		{
+			MethodName: "OpenHTTPConn",
+			Handler:    _Host_OpenHTTPConn_Handler,
 		},
 		{
 			MethodName: "Audit",
