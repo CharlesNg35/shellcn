@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import type { AiGlobalStatus, AiProviderSummary } from "../api/ai";
@@ -44,6 +44,18 @@ vi.mock("vue-router", () => ({
 
 import AiSettingsView from "./AiSettingsView.vue";
 
+// Unmount after each test so PrimeVue Tabs' deferred ink-bar timer can't fire
+// against a torn-down jsdom ("HTMLElement is not defined").
+const mounted: ReturnType<typeof mount>[] = [];
+afterEach(() => {
+  mounted.splice(0).forEach((w) => w.unmount());
+});
+function mountView() {
+  const w = mount(AiSettingsView);
+  mounted.push(w);
+  return w;
+}
+
 beforeEach(() => {
   setActivePinia(createPinia());
   providers.length = 0;
@@ -56,7 +68,7 @@ beforeEach(() => {
 
 describe("AiSettingsView", () => {
   it("shows the shared-AI indicator and an empty state", async () => {
-    const wrapper = mount(AiSettingsView);
+    const wrapper = mountView();
     await flushPromises();
     expect(wrapper.text()).toContain("Shared AI");
     expect(wrapper.text()).toContain("Configured");
@@ -69,7 +81,7 @@ describe("AiSettingsView", () => {
     global.provider = undefined;
     global.model = undefined;
 
-    const wrapper = mount(AiSettingsView);
+    const wrapper = mountView();
     await flushPromises();
     expect(wrapper.text()).toContain("Not configured");
     expect(wrapper.text()).toContain("No personal providers yet");
@@ -86,7 +98,7 @@ describe("AiSettingsView", () => {
       createdAt: "now",
       updatedAt: "now",
     });
-    const wrapper = mount(AiSettingsView);
+    const wrapper = mountView();
     await flushPromises();
     expect(wrapper.text()).toContain("My Claude");
     expect(wrapper.text()).toContain("claude-sonnet-4-5");
