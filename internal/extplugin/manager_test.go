@@ -2,6 +2,8 @@ package extplugin_test
 
 import (
 	"context"
+	"io"
+	"net"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -9,7 +11,27 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/extplugin"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
+
+func echoServer(t *testing.T) string {
+	t.Helper()
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = lis.Close() })
+	go func() {
+		for {
+			conn, err := lis.Accept()
+			if err != nil {
+				return
+			}
+			go func() { _, _ = io.Copy(conn, conn); _ = conn.Close() }()
+		}
+	}()
+	return lis.Addr().String()
+}
 
 func buildDemo(t *testing.T) string {
 	t.Helper()
@@ -102,5 +124,49 @@ func TestManagerRespawnsCrashedPlugin(t *testing.T) {
 			}
 		}
 		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+func TestPluginEgressThroughCore(t *testing.T) {
+	target := echoServer(t)
+	reg := plugin.NewRegistry()
+	m := extplugin.NewManager(buildDemo(t))
+	t.Cleanup(m.Close)
+	if err := m.LoadAll(context.Background(), reg); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	p, _ := reg.Get("demo")
+
+	// With a core transport, the plugin reaches the target through the gateway.
+	sess, err := p.Connect(context.Background(), plugin.ConnectConfig{
+		ConnectionID: "c1", Transport: plugin.TransportDirect,
+		Config: map[string]any{"target": target},
+		Net:    plugintest.DirectTransport(),
+	})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{}, sess, nil, nil, []byte("ping"))
+	res, err := routeByID(p, "demo.echo").Handle(rc)
+	if err != nil {
+		t.Fatalf("echo through core: %v", err)
+	}
+	if res.(map[string]any)["echo"] != "ping" {
+		t.Fatalf("unexpected echo: %v", res)
+	}
+
+	// Without a core transport, egress is impossible — the plugin can't dial out.
+	noNet, err := p.Connect(context.Background(), plugin.ConnectConfig{
+		ConnectionID: "c2", Transport: plugin.TransportDirect,
+		Config: map[string]any{"target": target},
+	})
+	if err != nil {
+		t.Fatalf("connect (no net): %v", err)
+	}
+	defer func() { _ = noNet.Close() }()
+	rc2 := plugin.NewRequestContext(context.Background(), plugin.User{}, noNet, nil, nil, []byte("ping"))
+	if _, err := routeByID(p, "demo.echo").Handle(rc2); err == nil {
+		t.Fatal("expected egress to fail without a core transport")
 	}
 }

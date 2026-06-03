@@ -451,6 +451,108 @@ var Plugin_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	Conn_Pipe_FullMethodName = "/shellcn.plugin.v1.Conn/Pipe"
+)
+
+// ConnClient is the client API for Conn service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Conn is a raw byte stream bridged over the GRPCBroker. The side holding the
+// real net.Conn serves it; the other end wraps the stream as a net.Conn.
+type ConnClient interface {
+	Pipe(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Chunk, Chunk], error)
+}
+
+type connClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewConnClient(cc grpc.ClientConnInterface) ConnClient {
+	return &connClient{cc}
+}
+
+func (c *connClient) Pipe(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Chunk, Chunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Conn_ServiceDesc.Streams[0], Conn_Pipe_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[Chunk, Chunk]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Conn_PipeClient = grpc.BidiStreamingClient[Chunk, Chunk]
+
+// ConnServer is the server API for Conn service.
+// All implementations must embed UnimplementedConnServer
+// for forward compatibility.
+//
+// Conn is a raw byte stream bridged over the GRPCBroker. The side holding the
+// real net.Conn serves it; the other end wraps the stream as a net.Conn.
+type ConnServer interface {
+	Pipe(grpc.BidiStreamingServer[Chunk, Chunk]) error
+	mustEmbedUnimplementedConnServer()
+}
+
+// UnimplementedConnServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedConnServer struct{}
+
+func (UnimplementedConnServer) Pipe(grpc.BidiStreamingServer[Chunk, Chunk]) error {
+	return status.Error(codes.Unimplemented, "method Pipe not implemented")
+}
+func (UnimplementedConnServer) mustEmbedUnimplementedConnServer() {}
+func (UnimplementedConnServer) testEmbeddedByValue()              {}
+
+// UnsafeConnServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ConnServer will
+// result in compilation errors.
+type UnsafeConnServer interface {
+	mustEmbedUnimplementedConnServer()
+}
+
+func RegisterConnServer(s grpc.ServiceRegistrar, srv ConnServer) {
+	// If the following call panics, it indicates UnimplementedConnServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&Conn_ServiceDesc, srv)
+}
+
+func _Conn_Pipe_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ConnServer).Pipe(&grpc.GenericServerStream[Chunk, Chunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Conn_PipeServer = grpc.BidiStreamingServer[Chunk, Chunk]
+
+// Conn_ServiceDesc is the grpc.ServiceDesc for Conn service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var Conn_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "shellcn.plugin.v1.Conn",
+	HandlerType: (*ConnServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Pipe",
+			Handler:       _Conn_Pipe_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
+	Metadata: "shellcn/plugin/v1/plugin.proto",
+}
+
+const (
 	Host_DialTarget_FullMethodName        = "/shellcn.plugin.v1.Host/DialTarget"
 	Host_HTTPProxyEndpoint_FullMethodName = "/shellcn.plugin.v1.Host/HTTPProxyEndpoint"
 	Host_Audit_FullMethodName             = "/shellcn.plugin.v1.Host/Audit"

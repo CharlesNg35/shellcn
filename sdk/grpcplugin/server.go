@@ -52,6 +52,13 @@ func (s *server) Connect(ctx context.Context, req *pluginv1.ConnectRequest) (*pl
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 	}
+	if id := req.GetHostBrokerId(); id != 0 && s.broker != nil {
+		cc, err := s.broker.Dial(id)
+		if err != nil {
+			return nil, status.Error(codes.Unavailable, err.Error())
+		}
+		cfg.Net = newBrokerTransport(s.broker, pluginv1.NewHostClient(cc))
+	}
 	sess, err := s.impl.Connect(ctx, cfg)
 	if err != nil {
 		return nil, StatusFromError(err)

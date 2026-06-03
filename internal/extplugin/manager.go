@@ -13,7 +13,6 @@ import (
 	hclog "github.com/hashicorp/go-hclog"
 	goplugin "github.com/hashicorp/go-plugin"
 
-	pluginv1 "github.com/charlesng35/shellcn/sdk/gen/shellcn/plugin/v1"
 	"github.com/charlesng35/shellcn/sdk/grpcplugin"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
@@ -78,11 +77,11 @@ func (m *Manager) LoadAll(ctx context.Context, reg *plugin.Registry) error {
 }
 
 func (m *Manager) load(ctx context.Context, reg *plugin.Registry, path string) error {
-	client, pc, err := m.spawn(path)
+	client, dispensed, err := m.spawn(path)
 	if err != nil {
 		return err
 	}
-	ref := &clientRef{client: pc}
+	ref := &clientRef{client: dispensed.Plugin, broker: dispensed.Broker}
 	p, err := newPlugin(ctx, ref)
 	if err != nil {
 		client.Kill()
@@ -101,7 +100,7 @@ func (m *Manager) load(ctx context.Context, reg *plugin.Registry, path string) e
 	return nil
 }
 
-func (m *Manager) spawn(path string) (*goplugin.Client, pluginv1.PluginClient, error) {
+func (m *Manager) spawn(path string) (*goplugin.Client, *grpcplugin.Client, error) {
 	client := goplugin.NewClient(&goplugin.ClientConfig{
 		HandshakeConfig:  grpcplugin.Handshake,
 		Plugins:          grpcplugin.Plugins(nil),
@@ -120,12 +119,12 @@ func (m *Manager) spawn(path string) (*goplugin.Client, pluginv1.PluginClient, e
 		client.Kill()
 		return nil, nil, err
 	}
-	pc, ok := raw.(pluginv1.PluginClient)
+	dispensed, ok := raw.(*grpcplugin.Client)
 	if !ok {
 		client.Kill()
 		return nil, nil, fmt.Errorf("unexpected plugin type %T", raw)
 	}
-	return client, pc, nil
+	return client, dispensed, nil
 }
 
 // supervise watches a plugin for an unexpected exit and respawns it with bounded
@@ -169,13 +168,13 @@ func (m *Manager) respawn(mp *managed) bool {
 			return false
 		}
 
-		client, pc, err := m.spawn(mp.path)
+		client, dispensed, err := m.spawn(mp.path)
 		if err != nil {
 			m.logger.Warn("respawn failed", "path", mp.path, "err", err)
 			wait = min(wait*2, maxRespawnWait)
 			continue
 		}
-		mp.ref.set(pc)
+		mp.ref.set(dispensed.Plugin, dispensed.Broker)
 		mp.mu.Lock()
 		mp.client = client
 		mp.mu.Unlock()

@@ -10,6 +10,13 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
+// Client is what the host dispenses: the plugin client plus the broker used to
+// serve the per-connection Host service and bridge target conns.
+type Client struct {
+	Plugin pluginv1.PluginClient
+	Broker *goplugin.GRPCBroker
+}
+
 // GoPlugin bridges the ShellCN plugin contract to go-plugin's gRPC plugin. Impl
 // is set on the serve (plugin) side only; the host uses GRPCClient.
 type GoPlugin struct {
@@ -22,8 +29,8 @@ func (g *GoPlugin) GRPCServer(broker *goplugin.GRPCBroker, s *grpc.Server) error
 	return nil
 }
 
-func (g *GoPlugin) GRPCClient(_ context.Context, _ *goplugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
-	return pluginv1.NewPluginClient(c), nil
+func (g *GoPlugin) GRPCClient(_ context.Context, broker *goplugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
+	return &Client{Plugin: pluginv1.NewPluginClient(c), Broker: broker}, nil
 }
 
 // Plugins is the go-plugin set served and consumed under PluginName.

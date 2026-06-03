@@ -14,7 +14,8 @@ type grpcSession struct {
 }
 
 func (s *grpcSession) HealthCheck(ctx context.Context) error {
-	_, err := s.ref.get().HealthCheck(ctx, &pluginv1.SessionHandle{SessionId: s.id})
+	client, _ := s.ref.get()
+	_, err := client.HealthCheck(ctx, &pluginv1.SessionHandle{SessionId: s.id})
 	return grpcplugin.ErrorFromStatus(err)
 }
 
@@ -23,6 +24,7 @@ func (s *grpcSession) OpenChannel(context.Context, plugin.ChannelRequest) (plugi
 }
 
 func (s *grpcSession) Close() error {
-	_, err := s.ref.get().Close(context.Background(), &pluginv1.SessionHandle{SessionId: s.id})
+	client, _ := s.ref.get()
+	_, err := client.Close(context.Background(), &pluginv1.SessionHandle{SessionId: s.id})
 	return grpcplugin.ErrorFromStatus(err)
 }

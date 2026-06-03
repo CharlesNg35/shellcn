@@ -25,6 +25,16 @@ service Plugin {
   rpc ServeHTTPProxy(ProxyRequest) returns (BrokerRef);
 }
 
+// Conn is a raw byte stream bridged over the GRPCBroker. The side holding the
+// real net.Conn serves it; the other end wraps the stream as a net.Conn.
+service Conn {
+  rpc Pipe(stream Chunk) returns (stream Chunk);
+}
+
+message Chunk {
+  bytes data = 1;
+}
+
 // Host is served by the core; the plugin SDK calls it. Network egress and audit
 // stay in the core so the gateway remains the single gatekeeper.
 service Host {
@@ -50,6 +60,7 @@ message ConnectRequest {
   string connection_id = 1;
   string transport = 2;       // "direct" | "agent"
   bytes config_json = 3;      // decrypted config map, JSON-encoded
+  uint32 host_broker_id = 4;  // brokered id of the per-connection Host service (0 = none)
 }
 
 message SessionHandle {

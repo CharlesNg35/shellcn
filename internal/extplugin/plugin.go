@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"net/url"
 
+	"google.golang.org/grpc"
+
 	pluginv1 "github.com/charlesng35/shellcn/sdk/gen/shellcn/plugin/v1"
 	"github.com/charlesng35/shellcn/sdk/grpcplugin"
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -25,7 +27,8 @@ func New(ctx context.Context, client pluginv1.PluginClient) (plugin.Plugin, erro
 }
 
 func newPlugin(ctx context.Context, ref *clientRef) (plugin.Plugin, error) {
-	resp, err := ref.get().GetManifest(ctx, &pluginv1.Empty{})
+	client, _ := ref.get()
+	resp, err := client.GetManifest(ctx, &pluginv1.Empty{})
 	if err != nil {
 		return nil, grpcplugin.ErrorFromStatus(err)
 	}
@@ -48,11 +51,25 @@ func (g *grpcPlugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plu
 	if err != nil {
 		return nil, err
 	}
-	resp, err := g.ref.get().Connect(ctx, &pluginv1.ConnectRequest{
+	client, broker := g.ref.get()
+	req := &pluginv1.ConnectRequest{
 		ConnectionId: cfg.ConnectionID,
 		Transport:    string(cfg.Transport),
 		ConfigJson:   config,
-	})
+	}
+	// Serve a per-connection Host service backed by the core's transport so the
+	// plugin reaches its target through the gateway, not on its own.
+	if broker != nil && cfg.Net != nil {
+		id := broker.NextId()
+		host := newHostServer(cfg.Net, broker)
+		go broker.AcceptAndServe(id, func(opts []grpc.ServerOption) *grpc.Server {
+			s := grpc.NewServer(opts...)
+			pluginv1.RegisterHostServer(s, host)
+			return s
+		})
+		req.HostBrokerId = id
+	}
+	resp, err := client.Connect(ctx, req)
 	if err != nil {
 		return nil, grpcplugin.ErrorFromStatus(err)
 	}
@@ -75,7 +92,8 @@ func (g *grpcPlugin) invoke(rc *plugin.RequestContext, routeID string) (any, err
 	if !ok {
 		return nil, plugin.ErrUnavailable
 	}
-	resp, err := g.ref.get().Invoke(rc.Ctx, &pluginv1.InvokeRequest{
+	client, _ := g.ref.get()
+	resp, err := client.Invoke(rc.Ctx, &pluginv1.InvokeRequest{
 		SessionId: sess.id,
 		RouteId:   routeID,
 		Params:    rc.Params(),
