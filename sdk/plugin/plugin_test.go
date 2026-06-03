@@ -7,8 +7,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type stubPlugin struct {
@@ -552,7 +551,7 @@ func indexOf(s, sub string) int {
 }
 
 func newRC(params map[string]string, query url.Values, body string) *plugin.RequestContext {
-	return plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, nil, params, query, []byte(body))
+	return plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, nil, params, query, []byte(body))
 }
 
 func TestRequestContextBindTypedNoPanic(t *testing.T) {

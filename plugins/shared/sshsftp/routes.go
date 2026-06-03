@@ -18,8 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/sftp"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 const (
@@ -517,7 +516,7 @@ func snippetCreate(protocol string) plugin.Handler {
 			return nil, err
 		}
 		now := time.Now()
-		sn := models.Snippet{
+		sn := plugin.Snippet{
 			ID: uuid.NewString(), OwnerID: rc.User.ID, Protocol: protocol,
 			Name: strings.TrimSpace(req.Name), Body: strings.TrimSpace(req.Body),
 			CreatedAt: now, UpdatedAt: now,
@@ -563,16 +562,16 @@ func snippetDelete(protocol string) plugin.Handler {
 	}
 }
 
-func ownedSnippet(rc *plugin.RequestContext, protocol string) (models.Snippet, error) {
+func ownedSnippet(rc *plugin.RequestContext, protocol string) (plugin.Snippet, error) {
 	if rc.Snippets == nil {
-		return models.Snippet{}, plugin.ErrNotSupported
+		return plugin.Snippet{}, plugin.ErrNotSupported
 	}
 	sn, err := rc.Snippets.Get(rc.Ctx, rc.Param("id"))
 	if err != nil {
-		return models.Snippet{}, err
+		return plugin.Snippet{}, err
 	}
 	if sn.OwnerID != rc.User.ID || sn.Protocol != protocol {
-		return models.Snippet{}, plugin.ErrNotFound
+		return plugin.Snippet{}, plugin.ErrNotFound
 	}
 	return sn, nil
 }
@@ -615,7 +614,7 @@ func pageEntries(currentPath string, entries []FileEntry, req plugin.PageRequest
 	return FilePage{Items: entries[offset:end], NextCursor: next, Total: &total, Path: currentPath}
 }
 
-func pageSnippets(rows []models.Snippet, req plugin.PageRequest) plugin.Page[snippet] {
+func pageSnippets(rows []plugin.Snippet, req plugin.PageRequest) plugin.Page[snippet] {
 	offset := cursorOffset(req.Cursor)
 	if offset < 0 || offset > len(rows) {
 		offset = 0
@@ -640,7 +639,7 @@ func pageSnippets(rows []models.Snippet, req plugin.PageRequest) plugin.Page[sni
 	return plugin.Page[snippet]{Items: items, NextCursor: next, Total: &total}
 }
 
-func snippetFromModel(sn models.Snippet) snippet {
+func snippetFromModel(sn plugin.Snippet) snippet {
 	return snippet{
 		ID: sn.ID,
 		Ref: &plugin.ResourceRef{

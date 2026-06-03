@@ -3,10 +3,11 @@
 BIN_DIR ?= bin
 APP_NAME ?= shellcn
 PKG ?= ./cmd/... ./internal/... ./plugins/...
+SDK_DIR := sdk
 WEB_DIR := web
 WEB_DIST := $(WEB_DIR)/dist
 GO_LDFLAGS ?= -s -w
-GO_SOURCE_DIRS := cmd internal plugins
+GO_SOURCE_DIRS := cmd internal plugins sdk
 
 help:
 	@echo "ShellCN — make targets"
@@ -49,6 +50,7 @@ build-go:
 test: test-web test-e2e ensure-web-dist
 	@echo "Running Go tests..."
 	@go test -race $(PKG)
+	@cd $(SDK_DIR) && go test -race ./...
 
 test-web:
 	@echo "Running frontend unit tests..."
@@ -65,7 +67,7 @@ lint: lint-web lint-go
 
 lint-go:
 	@echo "Linting Go..."
-	@if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run $(PKG); else echo "golangci-lint not found; using go vet"; go vet $(PKG); fi
+	@if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run $(PKG) && (cd $(SDK_DIR) && golangci-lint run ./...); else echo "golangci-lint not found; using go vet"; go vet $(PKG) && (cd $(SDK_DIR) && go vet ./...); fi
 
 lint-web:
 	@echo "Linting frontend..."

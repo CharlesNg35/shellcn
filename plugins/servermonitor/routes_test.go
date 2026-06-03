@@ -5,9 +5,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/hostmonitor"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func sampleRows() []hostmonitor.Row {
@@ -20,7 +19,7 @@ func sampleRows() []hostmonitor.Row {
 
 func pageWith(t *testing.T, q url.Values, rows []hostmonitor.Row) plugin.Page[hostmonitor.Row] {
 	t.Helper()
-	rc := plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, nil, nil, q, nil)
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, nil, nil, q, nil)
 	page, err := pageRows(rc, rows)
 	if err != nil {
 		t.Fatalf("pageRows: %v", err)
@@ -91,7 +90,7 @@ func TestPageRowsFilterMatchesValuesNotMapWrapper(t *testing.T) {
 }
 
 func TestPageRowsRejectsBadCursor(t *testing.T) {
-	rc := plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, nil, nil, url.Values{"cursor": {"abc"}}, nil)
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, nil, nil, url.Values{"cursor": {"abc"}}, nil)
 	if _, err := pageRows(rc, sampleRows()); err == nil {
 		t.Fatal("expected error for non-offset cursor")
 	}

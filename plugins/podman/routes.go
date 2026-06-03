@@ -1,8 +1,8 @@
 package podman
 
 import (
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // Routes wires podman-namespaced route IDs. Containers, images, volumes,

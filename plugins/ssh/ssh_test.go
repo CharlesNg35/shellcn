@@ -3,8 +3,8 @@ package ssh_test
 import (
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/ssh"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestManifestValidates(t *testing.T) {

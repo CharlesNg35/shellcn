@@ -21,8 +21,8 @@ import (
 	"github.com/moby/moby/api/types/volume"
 	dockerclient "github.com/moby/moby/client"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/termshell"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // Row is one generic record returned by the shared handlers. It is an alias so

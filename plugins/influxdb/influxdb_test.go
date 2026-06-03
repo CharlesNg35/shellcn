@@ -6,9 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
@@ -104,7 +103,7 @@ func TestQuerySafetyStopsBeforeNetwork(t *testing.T) {
 	if !errors.As(err, &confirmErr) {
 		t.Fatalf("expected confirmation error, got %v", err)
 	}
-	if got := queryAuditResult(err); got != models.AuditDenied {
+	if got := queryAuditResult(err); got != plugin.AuditDenied {
 		t.Fatalf("confirmation should audit as denied, got %s", got)
 	}
 }

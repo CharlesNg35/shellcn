@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/app"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type Plugin struct{}

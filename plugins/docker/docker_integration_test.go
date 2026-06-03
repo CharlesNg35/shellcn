@@ -16,9 +16,9 @@ import (
 	dockerclient "github.com/moby/moby/client"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func trimName(names []string) string {
@@ -151,7 +151,7 @@ func TestDockerEngineResourceCreateRoundTrip(t *testing.T) {
 
 	call := func(handler func(*plugin.RequestContext) (any, error), params map[string]string, body string) {
 		t.Helper()
-		rc := plugin.NewRequestContext(ctx, models.User{}, ds, params, nil, []byte(body))
+		rc := plugin.NewRequestContext(ctx, plugin.User{}, ds, params, nil, []byte(body))
 		res, err := handler(rc)
 		if err != nil {
 			t.Fatalf("handler: %v", err)
@@ -218,7 +218,7 @@ func TestDockerEngineOpsIntegrationRoundTrip(t *testing.T) {
 
 	call := func(handler func(*plugin.RequestContext) (any, error), params map[string]string, body string) any {
 		t.Helper()
-		rc := plugin.NewRequestContext(ctx, models.User{}, ds, params, nil, []byte(body))
+		rc := plugin.NewRequestContext(ctx, plugin.User{}, ds, params, nil, []byte(body))
 		res, err := handler(rc)
 		if err != nil {
 			t.Fatalf("handler: %v", err)
@@ -301,7 +301,7 @@ func TestDockerEngineOpsIntegrationRoundTrip(t *testing.T) {
 
 	// push: exercise the handler's validation path (empty reference must fail).
 	// A real registry push is not provisioned in this environment.
-	emptyRC := plugin.NewRequestContext(ctx, models.User{}, ds, nil, nil, []byte(`{"image":"  "}`))
+	emptyRC := plugin.NewRequestContext(ctx, plugin.User{}, ds, nil, nil, []byte(`{"image":"  "}`))
 	if _, err := dockerengine.PushImage(emptyRC); err == nil {
 		t.Fatal("PushImage with empty reference should fail validation")
 	}

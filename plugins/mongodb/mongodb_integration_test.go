@@ -14,9 +14,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestMongoDBPluginIntegration(t *testing.T) {
@@ -46,7 +46,7 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 		t.Fatalf("seed MongoDB: %v", err)
 	}
 
-	rc := plugin.NewRequestContext(ctx, models.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
+	rc := plugin.NewRequestContext(ctx, plugin.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
 	databases, err := listDatabases(rc)
 	if err != nil {
 		t.Fatalf("list databases: %v", err)
@@ -55,7 +55,7 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 		t.Fatalf("shellcn database missing: %#v", databases)
 	}
 
-	docs, err := listDocuments(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": "shellcn", "collection": "people"}, nil, nil))
+	docs, err := listDocuments(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": "shellcn", "collection": "people"}, nil, nil))
 	if err != nil {
 		t.Fatalf("list documents: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 	}
 
 	// Database create round-trip (a database is created with its first collection).
-	if _, err := createDatabase(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, []byte(`{"name":"shellcn_it_db","collection":"seed"}`))); err != nil {
+	if _, err := createDatabase(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, []byte(`{"name":"shellcn_it_db","collection":"seed"}`))); err != nil {
 		t.Fatalf("create database: %v", err)
 	}
 	defer func() { _ = s.client.Database("shellcn_it_db").Drop(context.Background()) }()
@@ -83,11 +83,11 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 	}
 
 	// Collection create round-trip.
-	if _, err := createCollection(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": "shellcn"}, nil, []byte(`{"name":"shellcn_it_coll"}`))); err != nil {
+	if _, err := createCollection(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": "shellcn"}, nil, []byte(`{"name":"shellcn_it_coll"}`))); err != nil {
 		t.Fatalf("create collection: %v", err)
 	}
 	defer func() { _ = s.client.Database("shellcn").Collection("shellcn_it_coll").Drop(context.Background()) }()
-	collections, err := listCollections(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": "shellcn"}, mustQuery("p.database=shellcn"), nil))
+	collections, err := listCollections(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": "shellcn"}, mustQuery("p.database=shellcn"), nil))
 	if err != nil {
 		t.Fatalf("list collections: %v", err)
 	}
@@ -97,10 +97,10 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 
 	// Index create → list → drop round-trip.
 	idxParams := map[string]string{"database": "shellcn", "collection": "people"}
-	if _, err := createIndex(plugin.NewRequestContext(ctx, models.User{}, s, idxParams, nil, []byte(`{"keys":{"role":1},"name":"role_1"}`))); err != nil {
+	if _, err := createIndex(plugin.NewRequestContext(ctx, plugin.User{}, s, idxParams, nil, []byte(`{"keys":{"role":1},"name":"role_1"}`))); err != nil {
 		t.Fatalf("create index: %v", err)
 	}
-	indexes, err := listIndexes(plugin.NewRequestContext(ctx, models.User{}, s, idxParams, nil, nil))
+	indexes, err := listIndexes(plugin.NewRequestContext(ctx, plugin.User{}, s, idxParams, nil, nil))
 	if err != nil {
 		t.Fatalf("list indexes: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 		t.Fatalf("created index missing: %#v", indexes)
 	}
 	dropParams := map[string]string{"database": "shellcn", "collection": "people", "name": "role_1"}
-	if _, err := dropIndex(plugin.NewRequestContext(ctx, models.User{}, s, dropParams, nil, nil)); err != nil {
+	if _, err := dropIndex(plugin.NewRequestContext(ctx, plugin.User{}, s, dropParams, nil, nil)); err != nil {
 		t.Fatalf("drop index: %v", err)
 	}
 }

@@ -7,7 +7,7 @@ import (
 
 	natsclient "github.com/nats-io/nats.go"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func ptr[T any](v T) *T { return &v }

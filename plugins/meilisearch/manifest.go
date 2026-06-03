@@ -1,6 +1,6 @@
 package meilisearch
 
-import "github.com/charlesng35/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/sdk/plugin"
 
 // taskStatusSeverities colors a task's status badge by value.
 var taskStatusSeverities = map[string]plugin.Severity{

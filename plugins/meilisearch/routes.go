@@ -13,9 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
@@ -836,9 +835,9 @@ func displayName(item row, fallback string) string {
 	return fallback
 }
 
-func auditResult(err error) models.AuditResult {
+func auditResult(err error) plugin.AuditResult {
 	if err != nil {
-		return models.AuditError
+		return plugin.AuditError
 	}
-	return models.AuditAllowed
+	return plugin.AuditAllowed
 }

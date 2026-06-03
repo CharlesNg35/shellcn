@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func SplitAddresses(raw string, defaultPort int) ([]string, error) {

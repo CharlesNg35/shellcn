@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/secrets"
 	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/internal/store"
 	"github.com/charlesng35/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type credentialRefPlugin struct{}

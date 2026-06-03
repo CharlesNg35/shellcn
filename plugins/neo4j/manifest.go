@@ -1,6 +1,6 @@
 package neo4j
 
-import "github.com/charlesng35/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/sdk/plugin"
 
 // statusSeverities colors a database status / index state badge by value.
 var statusSeverities = map[string]plugin.Severity{

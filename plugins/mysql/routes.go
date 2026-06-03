@@ -15,9 +15,8 @@ import (
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type row map[string]any
@@ -1741,15 +1740,15 @@ func statementReturnsRows(statement string) bool {
 	}
 }
 
-func queryAuditResult(err error) models.AuditResult {
+func queryAuditResult(err error) plugin.AuditResult {
 	if err == nil {
-		return models.AuditAllowed
+		return plugin.AuditAllowed
 	}
 	var confirmErr confirmationError
 	if errors.As(err, &confirmErr) {
-		return models.AuditDenied
+		return plugin.AuditDenied
 	}
-	return models.AuditError
+	return plugin.AuditError
 }
 
 func statementsRequireReview(statements []string) bool {

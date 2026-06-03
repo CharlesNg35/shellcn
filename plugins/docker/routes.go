@@ -1,8 +1,8 @@
 package docker
 
 import (
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // Routes wires the shared Docker-engine handlers to docker-namespaced route IDs,

@@ -17,9 +17,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type row map[string]any
@@ -1627,15 +1626,15 @@ func executeStatement(ctx context.Context, s *Session, pool *pgxpool.Pool, state
 	return out, nil
 }
 
-func queryAuditResult(err error) models.AuditResult {
+func queryAuditResult(err error) plugin.AuditResult {
 	if err == nil {
-		return models.AuditAllowed
+		return plugin.AuditAllowed
 	}
 	var confirmErr confirmationError
 	if errors.As(err, &confirmErr) {
-		return models.AuditDenied
+		return plugin.AuditDenied
 	}
-	return models.AuditError
+	return plugin.AuditError
 }
 
 func statementsRequireReview(statements []string) bool {

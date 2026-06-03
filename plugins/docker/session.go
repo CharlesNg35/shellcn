@@ -3,8 +3,8 @@ package docker
 import (
 	"context"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // defaultSocket is the standard Docker Engine unix socket used when a direct

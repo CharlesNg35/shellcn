@@ -1,6 +1,6 @@
 package swarm
 
-import "github.com/charlesng35/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/sdk/plugin"
 
 // configSchema is the Swarm connection config: the Docker daemon endpoint on a
 // manager node, shown only for direct transport (agent transport tunnels to the

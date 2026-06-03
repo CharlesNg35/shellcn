@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestCockroachDBPluginIntegration(t *testing.T) {
@@ -50,7 +50,7 @@ func TestCockroachDBPluginIntegration(t *testing.T) {
 		defer cleanupCancel()
 		_, _ = s.pool.Exec(cleanupCtx, "DROP DATABASE IF EXISTS "+sqldb.QuoteIdent(createdDatabase))
 	})
-	databases, err := listDatabases(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	databases, err := listDatabases(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, nil))
 	if err != nil {
 		t.Fatalf("list databases after create: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestCockroachDBPluginIntegration(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `CREATE VIEW public.shellcn_v AS SELECT 1 AS x`); err != nil {
 		t.Fatalf("seed view: %v", err)
 	}
-	if _, err := dropView(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "view": "shellcn_v"}, nil, nil)); err != nil {
+	if _, err := dropView(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"schema": "public", "view": "shellcn_v"}, nil, nil)); err != nil {
 		t.Fatalf("drop view: %v", err)
 	}
 	var vcount int
@@ -75,7 +75,7 @@ func TestCockroachDBPluginIntegration(t *testing.T) {
 	if _, err := createSchema(rowMutationRC(ctx, s, nil, map[string]any{"name": "shellcn_sc"})); err != nil {
 		t.Fatalf("create schema: %v", err)
 	}
-	schemas, err := listSchemas(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	schemas, err := listSchemas(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, nil))
 	if err != nil {
 		t.Fatalf("list schemas: %v", err)
 	}
@@ -108,7 +108,7 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 		defer cleanupCancel()
 		_, _ = s.pool.Exec(cleanupCtx, `DROP TABLE IF EXISTS public.shellcn_orders`)
 	})
-	graph, err := relationGraph(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	graph, err := relationGraph(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, nil))
 	if err != nil {
 		t.Fatalf("relation graph: %v", err)
 	}
@@ -116,7 +116,7 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 		t.Fatalf("expected FK edge orders -> people, got %#v", graph)
 	}
 
-	rc := plugin.NewRequestContext(ctx, models.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
+	rc := plugin.NewRequestContext(ctx, plugin.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
 	list, err := listTables(rc)
 	if err != nil {
 		t.Fatalf("list tables: %v", err)
@@ -126,7 +126,7 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 	}
 
 	// A schema tree node expands to its real tables (not detail-tab categories).
-	treeRC := plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.schema": {"public"}}, nil)
+	treeRC := plugin.NewRequestContext(ctx, plugin.User{}, s, nil, url.Values{"p.schema": {"public"}}, nil)
 	treeNodes, err := treeTables(treeRC)
 	if err != nil {
 		t.Fatalf("schema tree children: %v", err)
@@ -141,7 +141,7 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 		t.Fatalf("schema tree should list real tables, got %#v", treeNodes)
 	}
 
-	rows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "table": "shellcn_people"}, nil, nil))
+	rows, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"schema": "public", "table": "shellcn_people"}, nil, nil))
 	if err != nil {
 		t.Fatalf("table rows: %v", err)
 	}
@@ -151,14 +151,14 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 	}
 
 	// Free-text search filters the data grid server-side.
-	matched, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "table": "shellcn_people"}, url.Values{"filter": {"alice"}}, nil))
+	matched, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"schema": "public", "table": "shellcn_people"}, url.Values{"filter": {"alice"}}, nil))
 	if err != nil {
 		t.Fatalf("filtered rows: %v", err)
 	}
 	if len(matched.(plugin.Page[row]).Items) != 1 {
 		t.Fatalf("filter 'alice' should match 1 row, got %#v", matched.(plugin.Page[row]).Items)
 	}
-	missed, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "table": "shellcn_people"}, url.Values{"filter": {"zzz-nomatch"}}, nil))
+	missed, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"schema": "public", "table": "shellcn_people"}, url.Values{"filter": {"zzz-nomatch"}}, nil))
 	if err != nil {
 		t.Fatalf("filtered rows (miss): %v", err)
 	}
@@ -260,7 +260,7 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 	}
 
 	// Drop schema round-trip: the empty schema created earlier drops cleanly.
-	if _, err := dropSchema(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "shellcn_sc"}, nil, nil)); err != nil {
+	if _, err := dropSchema(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"schema": "shellcn_sc"}, nil, nil)); err != nil {
 		t.Fatalf("drop schema: %v", err)
 	}
 	var schemaCount int
@@ -270,10 +270,10 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 
 	// Drop database round-trip: the database created earlier drops through the
 	// handler (it is not the connected database).
-	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": createdDatabase}, nil, nil)); err != nil {
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": createdDatabase}, nil, nil)); err != nil {
 		t.Fatalf("drop database: %v", err)
 	}
-	databasesAfterDrop, err := listDatabases(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	databasesAfterDrop, err := listDatabases(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, nil))
 	if err != nil {
 		t.Fatalf("list databases after drop: %v", err)
 	}
@@ -281,7 +281,7 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 		t.Fatalf("dropped database is still listed: %#v", databasesAfterDrop)
 	}
 	// Dropping the connected database must be refused.
-	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": s.opts.Database}, nil, nil)); err == nil {
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": s.opts.Database}, nil, nil)); err == nil {
 		t.Fatal("dropping the connected database must be rejected")
 	}
 
@@ -297,7 +297,7 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 	if _, err := createUser(rowMutationRC(ctx, s, nil, map[string]any{"name": createdUser})); err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	users, err := listUsers(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	users, err := listUsers(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, nil))
 	if err != nil {
 		t.Fatalf("list users: %v", err)
 	}
@@ -311,10 +311,10 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 	if _, err := s.pool.Exec(ctx, "REVOKE ALL ON DATABASE defaultdb FROM "+sqldb.QuoteIdent(createdUser)); err != nil {
 		t.Fatalf("revoke grant: %v", err)
 	}
-	if _, err := dropUser(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"user": createdUser}, nil, nil)); err != nil {
+	if _, err := dropUser(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"user": createdUser}, nil, nil)); err != nil {
 		t.Fatalf("drop user: %v", err)
 	}
-	usersAfterDrop, err := listUsers(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	usersAfterDrop, err := listUsers(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, nil))
 	if err != nil {
 		t.Fatalf("list users after drop: %v", err)
 	}
@@ -327,15 +327,15 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 	// is read from SHOW QUERIES; cancelling is racy — by the time CANCEL runs the
 	// query (the SHOW QUERIES read itself) has usually finished, so a "not found"
 	// from the cluster is an accepted outcome as long as the handler reaches it.
-	if _, err := cancelSession(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"id": "not-a-hex-token"}, nil, nil)); err == nil {
+	if _, err := cancelSession(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"id": "not-a-hex-token"}, nil, nil)); err == nil {
 		t.Fatal("cancelSession must reject a malformed session id")
 	}
-	if _, err := cancelQueryByID(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"id": "'; SELECT 1"}, nil, nil)); err == nil {
+	if _, err := cancelQueryByID(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"id": "'; SELECT 1"}, nil, nil)); err == nil {
 		t.Fatal("cancelQueryByID must reject a malformed query id")
 	}
 	var queryID string
 	if err := s.pool.QueryRow(ctx, `SELECT query_id FROM [SHOW QUERIES] LIMIT 1`).Scan(&queryID); err == nil && queryID != "" {
-		if _, err := cancelQueryByID(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"id": queryID}, nil, nil)); err != nil && !strings.Contains(err.Error(), "not found") {
+		if _, err := cancelQueryByID(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"id": queryID}, nil, nil)); err != nil && !strings.Contains(err.Error(), "not found") {
 			t.Fatalf("cancel query by id: %v", err)
 		}
 	}
@@ -451,7 +451,7 @@ func configFromDSN(t *testing.T, raw string) map[string]any {
 
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
 	raw, _ := json.Marshal(body)
-	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, raw)
+	return plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, params, nil, raw)
 }
 
 func run(ctx context.Context, t *testing.T, name string, args ...string) string {

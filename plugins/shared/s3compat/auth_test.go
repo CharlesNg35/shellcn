@@ -3,7 +3,7 @@ package s3compat
 import (
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestNormalizeOptionsValidatesAuthFields(t *testing.T) {

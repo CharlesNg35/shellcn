@@ -16,9 +16,9 @@ import (
 	awsdynamodb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestDynamoDBPluginIntegration(t *testing.T) {
@@ -169,7 +169,7 @@ func routeMap(routes []plugin.Route) map[string]plugin.Route {
 
 func call(ctx context.Context, t *testing.T, route plugin.Route, sess plugin.Session, params map[string]string, query url.Values, body []byte) any {
 	t.Helper()
-	out, err := route.Handle(plugin.NewRequestContext(ctx, models.User{}, sess, params, query, body))
+	out, err := route.Handle(plugin.NewRequestContext(ctx, plugin.User{}, sess, params, query, body))
 	if err != nil {
 		t.Fatalf("%s: %v", route.ID, err)
 	}
@@ -177,7 +177,7 @@ func call(ctx context.Context, t *testing.T, route plugin.Route, sess plugin.Ses
 }
 
 func callNoFail(ctx context.Context, route plugin.Route, sess plugin.Session, params map[string]string) {
-	_, _ = route.Handle(plugin.NewRequestContext(ctx, models.User{}, sess, params, nil, nil))
+	_, _ = route.Handle(plugin.NewRequestContext(ctx, plugin.User{}, sess, params, nil, nil))
 }
 
 func pageItems(page any) []map[string]any {

@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestPostgreSQLPluginIntegration(t *testing.T) {
@@ -60,7 +60,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 		_, _ = pool.Exec(cleanupCtx, `DROP TABLE IF EXISTS public.shellcn_people`)
 	})
 
-	rc := plugin.NewRequestContext(ctx, models.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
+	rc := plugin.NewRequestContext(ctx, plugin.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
 	list, err := listTables(rc)
 	if err != nil {
 		t.Fatalf("list tables: %v", err)
@@ -81,7 +81,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	})); err != nil {
 		t.Fatalf("database-level create table: %v", err)
 	}
-	dbList, err := listTables(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public"}, nil, nil))
+	dbList, err := listTables(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"schema": "public"}, nil, nil))
 	if err != nil {
 		t.Fatalf("list tables after database-level create: %v", err)
 	}
@@ -89,7 +89,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 		t.Fatalf("database-level created table was not listed: %#v", dbList)
 	}
 
-	rows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "table": "shellcn_people"}, nil, nil))
+	rows, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"schema": "public", "table": "shellcn_people"}, nil, nil))
 	if err != nil {
 		t.Fatalf("table rows: %v", err)
 	}
@@ -147,7 +147,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	if _, err := pool.Exec(ctx, `INSERT INTO public.shellcn_orders (person_id) VALUES (1)`); err != nil {
 		t.Fatalf("seed child row: %v", err)
 	}
-	orderRows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "table": "shellcn_orders"}, nil, nil))
+	orderRows, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"schema": "public", "table": "shellcn_orders"}, nil, nil))
 	if err != nil {
 		t.Fatalf("child table rows: %v", err)
 	}
@@ -156,7 +156,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 		t.Fatalf("expected _links[person_id] -> shellcn_people, got %#v", orderRows.(plugin.Page[row]).Items[0]["_links"])
 	}
 
-	graph, err := relationGraph(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.schema": {"public"}}, nil))
+	graph, err := relationGraph(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, url.Values{"p.schema": {"public"}}, nil))
 	if err != nil {
 		t.Fatalf("relation graph: %v", err)
 	}
@@ -171,7 +171,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 		"constraints": tableConstraints, "ddl": tableDDL,
 	}
 	for label, fn := range structRoutes {
-		if _, err := fn(plugin.NewRequestContext(ctx, models.User{}, s, tableParams, nil, nil)); err != nil {
+		if _, err := fn(plugin.NewRequestContext(ctx, plugin.User{}, s, tableParams, nil, nil)); err != nil {
 			t.Fatalf("%s route: %v", label, err)
 		}
 	}
@@ -226,7 +226,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	if _, err := alterColumn(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_people", "name": "full_name"}, map[string]any{"type": "varchar(120)", "using": "full_name::varchar(120)"})); err != nil {
 		t.Fatalf("alter column: %v", err)
 	}
-	cres, err := tableColumnsRoute(plugin.NewRequestContext(ctx, models.User{}, s, tableParams, nil, nil))
+	cres, err := tableColumnsRoute(plugin.NewRequestContext(ctx, plugin.User{}, s, tableParams, nil, nil))
 	if err != nil {
 		t.Fatalf("columns route after alter: %v", err)
 	}
@@ -258,7 +258,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	if _, err := pool.Exec(ctx, `CREATE VIEW public.shellcn_people_v AS SELECT id, full_name FROM public.shellcn_people`); err != nil {
 		t.Fatalf("seed view: %v", err)
 	}
-	if _, err := dropView(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "view": "shellcn_people_v"}, nil, nil)); err != nil {
+	if _, err := dropView(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"schema": "public", "view": "shellcn_people_v"}, nil, nil)); err != nil {
 		t.Fatalf("drop view: %v", err)
 	}
 	var vcount int
@@ -271,17 +271,17 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	if _, err := createDatabase(rowMutationRC(ctx, s, nil, map[string]any{"name": "shellcn_droptest"})); err != nil {
 		t.Fatalf("create database: %v", err)
 	}
-	if _, err := listSchemas(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.database": {"shellcn_droptest"}}, nil)); err != nil {
+	if _, err := listSchemas(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, url.Values{"p.database": {"shellcn_droptest"}}, nil)); err != nil {
 		t.Fatalf("browse new database: %v", err)
 	}
-	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": "shellcn_droptest"}, nil, nil)); err != nil {
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": "shellcn_droptest"}, nil, nil)); err != nil {
 		t.Fatalf("drop database after browsing: %v", err)
 	}
 }
 
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
 	raw, _ := json.Marshal(body)
-	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, raw)
+	return plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, params, nil, raw)
 }
 
 func integrationConfig(ctx context.Context, t *testing.T) map[string]any {

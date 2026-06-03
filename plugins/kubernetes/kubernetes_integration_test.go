@@ -15,8 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // These integration tests provision a real single-node k3s cluster in Docker and
@@ -172,7 +171,7 @@ func rcBody(s *Session, params map[string]string, body string) *plugin.RequestCo
 	if body != "" {
 		b = []byte(body)
 	}
-	return plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, s, params, url.Values{}, b)
+	return plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, s, params, url.Values{}, b)
 }
 
 func TestIntegrationKubernetesOps(t *testing.T) {

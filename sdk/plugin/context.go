@@ -10,11 +10,42 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-playground/validator/v10"
-
-	"github.com/charlesng35/shellcn/internal/models"
 )
+
+// User is the lean identity of the acting user handed to a route handler.
+// Authorization is enforced by the core before the handler runs; a handler only
+// needs identity for context and per-owner scoping (e.g. snippets).
+type User struct {
+	ID          string
+	Username    string
+	DisplayName string
+	Roles       []string
+}
+
+// AuditResult is the outcome a handler reports for an audited operation that
+// happens inside a long-lived route (e.g. one statement over a WebSocket).
+type AuditResult string
+
+const (
+	AuditAllowed AuditResult = "allowed"
+	AuditDenied  AuditResult = "denied"
+	AuditError   AuditResult = "error"
+)
+
+// Snippet is a user-owned, per-protocol saved command exposed through the
+// generic snippet routes.
+type Snippet struct {
+	ID        string
+	OwnerID   string
+	Protocol  string
+	Name      string
+	Body      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
 
 // Pagination defaults applied when a request omits or over-asks for a limit.
 const (
@@ -51,15 +82,15 @@ type Page[T any] struct {
 
 // AuditHook records a plugin operation that happens inside a long-lived route,
 // such as one query submitted over a WebSocket stream.
-type AuditHook func(ctx context.Context, result models.AuditResult, params map[string]string, err error)
+type AuditHook func(ctx context.Context, result AuditResult, params map[string]string, err error)
 
 // SnippetStore is the small platform store surface exposed for generic snippet
 // routes. It keeps plugins from depending on the concrete store package.
 type SnippetStore interface {
-	Create(ctx context.Context, s *models.Snippet) error
-	Get(ctx context.Context, id string) (models.Snippet, error)
-	ListByOwner(ctx context.Context, ownerID, protocol string) ([]models.Snippet, error)
-	Update(ctx context.Context, s *models.Snippet) error
+	Create(ctx context.Context, s *Snippet) error
+	Get(ctx context.Context, id string) (Snippet, error)
+	ListByOwner(ctx context.Context, ownerID, protocol string) ([]Snippet, error)
+	Update(ctx context.Context, s *Snippet) error
 	Delete(ctx context.Context, id string) error
 }
 
@@ -100,7 +131,7 @@ var validate = validator.New(validator.WithRequiredStructEnabled())
 // never do panic-prone map[string]any assertions.
 type RequestContext struct {
 	Ctx      context.Context
-	User     models.User
+	User     User
 	Session  Session
 	Snippets SnippetStore
 	audit    AuditHook
@@ -126,14 +157,14 @@ func (rc *RequestContext) WithAuditHook(hook AuditHook) *RequestContext {
 
 // Audit records one operation inside this route. It is a no-op when no core
 // audit hook is attached, which keeps plugin unit tests lightweight.
-func (rc *RequestContext) Audit(result models.AuditResult, params map[string]string, err error) {
+func (rc *RequestContext) Audit(result AuditResult, params map[string]string, err error) {
 	if rc.audit != nil {
 		rc.audit(rc.Ctx, result, params, err)
 	}
 }
 
 // NewRequestContext builds a context for the server adapter and for tests.
-func NewRequestContext(ctx context.Context, user models.User, sess Session, params map[string]string, query url.Values, body []byte) *RequestContext {
+func NewRequestContext(ctx context.Context, user User, sess Session, params map[string]string, query url.Values, body []byte) *RequestContext {
 	return &RequestContext{
 		Ctx:     ctx,
 		User:    user,
@@ -145,7 +176,7 @@ func NewRequestContext(ctx context.Context, user models.User, sess Session, para
 }
 
 // NewMultipartRequestContext builds a context for a multipart/form-data request.
-func NewMultipartRequestContext(ctx context.Context, user models.User, sess Session, params map[string]string, query url.Values, form url.Values, files map[string][]UploadedFile) *RequestContext {
+func NewMultipartRequestContext(ctx context.Context, user User, sess Session, params map[string]string, query url.Values, form url.Values, files map[string][]UploadedFile) *RequestContext {
 	return &RequestContext{
 		Ctx:     ctx,
 		User:    user,

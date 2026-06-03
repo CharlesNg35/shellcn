@@ -10,9 +10,8 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestManifestValidates(t *testing.T) {
@@ -74,7 +73,7 @@ func TestPodsAndContainersAgainstFakeDaemon(t *testing.T) {
 	}
 	defer func() { _ = sess.Close() }()
 	rc := func(params map[string]string) *plugin.RequestContext {
-		return plugin.NewRequestContext(context.Background(), models.User{ID: "u"}, sess, params, url.Values{}, nil)
+		return plugin.NewRequestContext(context.Background(), plugin.User{ID: "u"}, sess, params, url.Values{}, nil)
 	}
 
 	pods, err := listPods(rc(nil))

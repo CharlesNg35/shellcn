@@ -8,9 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/hostmonitor"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestManifestValidates(t *testing.T) {
@@ -29,7 +28,7 @@ func TestDirectCollection(t *testing.T) {
 	}
 	defer func() { _ = sess.Close() }()
 
-	rc := plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, sess, nil, nil, nil)
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, sess, nil, nil, nil)
 	out, err := Overview(rc)
 	if err != nil {
 		t.Fatalf("overview: %v", err)
@@ -55,7 +54,7 @@ func TestRemoteAgentCollection(t *testing.T) {
 	}
 	defer func() { _ = sess.Close() }()
 
-	rc := plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, sess, nil, nil, nil)
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, sess, nil, nil, nil)
 	out, err := Processes(rc)
 	if err != nil {
 		t.Fatalf("processes: %v", err)

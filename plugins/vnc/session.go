@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/rfb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // Session holds the per-connection VNC dial parameters. VNC keeps no persistent

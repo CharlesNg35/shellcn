@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestCassandraPluginIntegration(t *testing.T) {
@@ -44,7 +44,7 @@ func TestCassandraPluginIntegration(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 	s := sess.(*Session)
 
-	rc := plugin.NewRequestContext(ctx, models.User{ID: "u1", Username: "admin"}, s, nil, nil, mustJSON(t, map[string]any{
+	rc := plugin.NewRequestContext(ctx, plugin.User{ID: "u1", Username: "admin"}, s, nil, nil, mustJSON(t, map[string]any{
 		"name":               "shellcn_it",
 		"replication_class":  "SimpleStrategy",
 		"replication_factor": 1,
@@ -60,7 +60,7 @@ func TestCassandraPluginIntegration(t *testing.T) {
 		_ = execCQL(cleanupCtx, s, `DROP KEYSPACE IF EXISTS "shellcn_it"`)
 	})
 
-	createTableRC := plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it"}, nil, mustJSON(t, map[string]any{
+	createTableRC := plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"keyspace": "shellcn_it"}, nil, mustJSON(t, map[string]any{
 		"name": "people",
 		"columns": []map[string]any{
 			{"name": "id", "type": "uuid"},
@@ -80,7 +80,7 @@ func TestCassandraPluginIntegration(t *testing.T) {
 		t.Fatalf("insert row: %v", err)
 	}
 
-	baseRC := plugin.NewRequestContext(ctx, models.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
+	baseRC := plugin.NewRequestContext(ctx, plugin.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
 	waitForTable(ctx, t, baseRC, "shellcn_it", "people")
 
 	keyspaces, err := listKeyspaces(baseRC)
@@ -95,7 +95,7 @@ func TestCassandraPluginIntegration(t *testing.T) {
 	// handler, confirm it lists, then drop it via the handler and confirm it's gone.
 	// Kept distinct from shellcn_it so later sub-steps still have their keyspace.
 	dropKS := "shellcn_it_drop"
-	createDropKSRC := plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, mustJSON(t, map[string]any{
+	createDropKSRC := plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, mustJSON(t, map[string]any{
 		"name":               dropKS,
 		"replication_class":  "SimpleStrategy",
 		"replication_factor": 1,
@@ -115,7 +115,7 @@ func TestCassandraPluginIntegration(t *testing.T) {
 	} else if !pageHasName(list.(plugin.Page[row]), dropKS) {
 		t.Fatalf("throwaway keyspace %q was not listed before drop", dropKS)
 	}
-	if _, err := dropKeyspace(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": dropKS}, nil, nil)); err != nil {
+	if _, err := dropKeyspace(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"keyspace": dropKS}, nil, nil)); err != nil {
 		t.Fatalf("drop keyspace: %v", err)
 	}
 	if list, err := listKeyspaces(baseRC); err != nil {
@@ -126,7 +126,7 @@ func TestCassandraPluginIntegration(t *testing.T) {
 
 	// UDT create/drop round-trip in shellcn_it: create a type via the handler,
 	// confirm it lists, drop it via the handler, confirm it's gone.
-	if _, err := createType(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it"}, nil, mustJSON(t, map[string]any{
+	if _, err := createType(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"keyspace": "shellcn_it"}, nil, mustJSON(t, map[string]any{
 		"name": "address",
 		"fields": []map[string]any{
 			{"name": "street", "type": "text"},
@@ -136,13 +136,13 @@ func TestCassandraPluginIntegration(t *testing.T) {
 	}))); err != nil {
 		t.Fatalf("create type: %v", err)
 	}
-	typeListRC := plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.keyspace": {"shellcn_it"}}, nil)
+	typeListRC := plugin.NewRequestContext(ctx, plugin.User{}, s, nil, url.Values{"p.keyspace": {"shellcn_it"}}, nil)
 	if types, err := listTypes(typeListRC); err != nil {
 		t.Fatalf("list types after create: %v", err)
 	} else if !pageHasName(types.(plugin.Page[row]), "address") {
 		t.Fatalf("created type was not listed")
 	}
-	if _, err := dropType(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "name": "address"}, nil, nil)); err != nil {
+	if _, err := dropType(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"keyspace": "shellcn_it", "name": "address"}, nil, nil)); err != nil {
 		t.Fatalf("drop type: %v", err)
 	}
 	if types, err := listTypes(typeListRC); err != nil {
@@ -160,10 +160,10 @@ func TestCassandraPluginIntegration(t *testing.T) {
 			t.Fatalf("seed materialized view: %v", err)
 		}
 	} else {
-		if _, err := dropView(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "view": "people_by_name"}, nil, nil)); err != nil {
+		if _, err := dropView(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"keyspace": "shellcn_it", "view": "people_by_name"}, nil, nil)); err != nil {
 			t.Fatalf("drop materialized view: %v", err)
 		}
-		views, err := listViews(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.keyspace": {"shellcn_it"}}, nil))
+		views, err := listViews(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, url.Values{"p.keyspace": {"shellcn_it"}}, nil))
 		if err != nil {
 			t.Fatalf("list views: %v", err)
 		}
@@ -172,7 +172,7 @@ func TestCassandraPluginIntegration(t *testing.T) {
 		}
 	}
 
-	tableRC := plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, nil)
+	tableRC := plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, nil)
 	rows, err := tableRows(tableRC)
 	if err != nil {
 		t.Fatalf("table rows: %v", err)
@@ -205,7 +205,7 @@ func TestCassandraPluginIntegration(t *testing.T) {
 	// it, asserting at each step. Identity is the primary key (id), echoed as _key.
 	rowID := "22222222-2222-2222-2222-222222222222"
 	mutationRC := func(body map[string]any) *plugin.RequestContext {
-		return plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, mustJSON(t, body))
+		return plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, mustJSON(t, body))
 	}
 	if _, err := insertRow(mutationRC(map[string]any{"values": map[string]any{"id": rowID, "name": "bob", "access_token": "bob-token"}})); err != nil {
 		t.Fatalf("insert row: %v", err)
@@ -247,12 +247,12 @@ func TestCassandraPluginIntegration(t *testing.T) {
 
 	// Column/index management via declarative DDL actions (CQL).
 	ddlRC := func(body map[string]any) *plugin.RequestContext {
-		return plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, mustJSON(t, body))
+		return plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, mustJSON(t, body))
 	}
 	// Drops read the target name from a query param (the manifest actions pass
 	// name: ${resource.name}), not the body.
 	dropRC := func(name string) *plugin.RequestContext {
-		return plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people", "name": name}, nil, nil)
+		return plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people", "name": name}, nil, nil)
 	}
 	if _, err := createIndex(ddlRC(map[string]any{"name": "ix_people_name", "column": "name"})); err != nil {
 		t.Fatalf("create index: %v", err)
@@ -397,7 +397,7 @@ func pageHasScopedName(page plugin.Page[row], namespace, name string) bool {
 // and returns the first row whose column equals value, or nil when absent.
 func findRowByName(ctx context.Context, t *testing.T, s *Session, column, value string) row {
 	t.Helper()
-	rc := plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, nil)
+	rc := plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, nil)
 	res, err := tableRows(rc)
 	if err != nil {
 		t.Fatalf("table rows: %v", err)

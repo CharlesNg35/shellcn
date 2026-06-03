@@ -1,7 +1,6 @@
 package plugins
 
 import (
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/cassandra"
 	"github.com/charlesng35/shellcn/plugins/clickhouse"
 	"github.com/charlesng35/shellcn/plugins/cockroachdb"
@@ -42,6 +41,7 @@ import (
 	"github.com/charlesng35/shellcn/plugins/typesense"
 	"github.com/charlesng35/shellcn/plugins/vnc"
 	"github.com/charlesng35/shellcn/plugins/webdav"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // Register wires every first-party plugin into the registry. This is the single

@@ -13,8 +13,8 @@ import (
 	"github.com/coder/websocket"
 	pmox "github.com/luthermonson/go-proxmox"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/rfb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // openVMConsole opens a QEMU VNC console: it asks the API for a one-shot

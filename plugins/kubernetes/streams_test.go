@@ -12,8 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/remotecommand"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // captureClient is a ClientStream that records server→client bytes and feeds
@@ -50,7 +49,7 @@ func TestLogsStream(t *testing.T) {
 	sess := connectTo(t, mux)
 
 	cc := &captureClient{ctx: context.Background()}
-	rcx := plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, sess,
+	rcx := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, sess,
 		map[string]string{"namespace": "default", "name": "web-1", "follow": "false"}, nil, nil)
 	if err := LogsStream(rcx, cc); err != nil {
 		t.Fatalf("logs: %v", err)

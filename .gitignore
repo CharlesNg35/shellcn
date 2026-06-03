@@ -20,6 +20,7 @@ build/
 *.test
 *.out
 go.work
+go.work.sum
 vendor/
 .cache
 .gocache

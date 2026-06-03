@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestRedisPluginIntegration(t *testing.T) {
@@ -48,7 +48,7 @@ func TestRedisPluginIntegration(t *testing.T) {
 		t.Fatalf("seed hash: %v", err)
 	}
 
-	rc := plugin.NewRequestContext(ctx, models.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
+	rc := plugin.NewRequestContext(ctx, plugin.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
 	list, err := listKeys(rc)
 	if err != nil {
 		t.Fatalf("list keys: %v", err)
@@ -56,7 +56,7 @@ func TestRedisPluginIntegration(t *testing.T) {
 	if !hasKey(list.(plugin.Page[keyEntry]), "shellcn:string") {
 		t.Fatalf("seeded string key missing: %#v", list)
 	}
-	detail, err := readKey(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"key": "shellcn:hash"}, nil, nil))
+	detail, err := readKey(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"key": "shellcn:hash"}, nil, nil))
 	if err != nil {
 		t.Fatalf("read key: %v", err)
 	}
@@ -74,13 +74,13 @@ func TestRedisPluginIntegration(t *testing.T) {
 
 	// Key write → verify → delete → verify, through the route handlers.
 	writeBody, _ := json.Marshal(map[string]any{"type": "string", "value": "world"})
-	if _, err := writeKey(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"key": "shellcn:written"}, nil, writeBody)); err != nil {
+	if _, err := writeKey(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"key": "shellcn:written"}, nil, writeBody)); err != nil {
 		t.Fatalf("write key: %v", err)
 	}
 	if got, err := s.client.Get(ctx, "shellcn:written").Result(); err != nil || got != "world" {
 		t.Fatalf("written key = %q, err %v", got, err)
 	}
-	if _, err := deleteKey(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"key": "shellcn:written"}, nil, nil)); err != nil {
+	if _, err := deleteKey(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"key": "shellcn:written"}, nil, nil)); err != nil {
 		t.Fatalf("delete key: %v", err)
 	}
 	if n, err := s.client.Exists(ctx, "shellcn:written").Result(); err != nil || n != 0 {

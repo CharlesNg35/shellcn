@@ -7,8 +7,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func connectTo(t *testing.T, mux *http.ServeMux) plugin.Session {
@@ -30,7 +29,7 @@ func connectTo(t *testing.T, mux *http.ServeMux) plugin.Session {
 }
 
 func rc(sess plugin.Session, params map[string]string) *plugin.RequestContext {
-	return plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, sess, params, url.Values{}, nil)
+	return plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, sess, params, url.Values{}, nil)
 }
 
 func TestListResourceNamespacedPods(t *testing.T) {

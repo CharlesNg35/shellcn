@@ -11,8 +11,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/webproxy"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // ServeHTTPProxy reverse-proxies a browser request to a Service or Pod port. It

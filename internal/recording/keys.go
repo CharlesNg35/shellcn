@@ -3,7 +3,7 @@ package recording
 import (
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // fileExt maps a recording format to its blob file extension.

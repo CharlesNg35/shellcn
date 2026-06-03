@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 const (
@@ -177,7 +177,7 @@ func hasDN(t *testing.T, res any, err error, dn string) bool {
 }
 
 func rc(ctx context.Context, s *Session, params map[string]string, query url.Values, body []byte) *plugin.RequestContext {
-	return plugin.NewRequestContext(ctx, models.User{}, s, params, query, body)
+	return plugin.NewRequestContext(ctx, plugin.User{}, s, params, query, body)
 }
 
 func integrationConfig(ctx context.Context, t *testing.T) map[string]any {

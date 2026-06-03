@@ -18,7 +18,6 @@ import (
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/config"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/recording"
 	"github.com/charlesng35/shellcn/internal/service"
@@ -26,6 +25,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/store"
 	"github.com/charlesng35/shellcn/internal/telemetry"
 	"github.com/charlesng35/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // Deps are the server's injected dependencies (wired once in cmd/server).

@@ -1,6 +1,6 @@
 package kubernetes
 
-import "github.com/charlesng35/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/sdk/plugin"
 
 // headerActionIDs are the connection-wide affordances pinned to the workspace
 // header center.

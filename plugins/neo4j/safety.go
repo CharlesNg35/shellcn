@@ -8,7 +8,7 @@ import (
 
 	driver "github.com/neo4j/neo4j-go-driver/v6/neo4j"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 var cypherWriteKeywords = map[string]bool{

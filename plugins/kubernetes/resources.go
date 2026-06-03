@@ -1,6 +1,6 @@
 package kubernetes
 
-import "github.com/charlesng35/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/sdk/plugin"
 
 // customResourceKind is the single generic ResourceType every CRD list reuses;
 // the concrete GVR arrives as a list param, so one type renders all custom kinds.

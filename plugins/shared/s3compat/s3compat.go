@@ -23,8 +23,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	smithy "github.com/aws/smithy-go"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/filesystem"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type Options struct {

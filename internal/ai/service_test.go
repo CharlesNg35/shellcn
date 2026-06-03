@@ -11,9 +11,9 @@ import (
 	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/secrets"
 	"github.com/charlesng35/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type nopInvoker struct{}

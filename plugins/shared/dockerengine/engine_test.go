@@ -15,8 +15,7 @@ import (
 	dockerclient "github.com/moby/moby/client"
 	"github.com/moby/moby/client/pkg/versions"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // podmanCompatAPIVersion is the Docker API version Podman's compatibility layer
@@ -108,7 +107,7 @@ func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 	}
 	defer func() { _ = sess.Close() }()
 
-	rc := plugin.NewRequestContext(context.Background(), models.User{ID: "u"}, sess, nil, url.Values{}, nil)
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u"}, sess, nil, url.Values{}, nil)
 	got, err := ListContainers(rc)
 	if err != nil {
 		t.Fatalf("list containers: %v", err)
@@ -118,7 +117,7 @@ func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 		t.Fatalf("container page unexpected: %+v", page.Items)
 	}
 
-	inspectRC := plugin.NewRequestContext(context.Background(), models.User{ID: "u"}, sess, map[string]string{"id": "abc123"}, url.Values{}, nil)
+	inspectRC := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u"}, sess, map[string]string{"id": "abc123"}, url.Values{}, nil)
 	doc, err := InspectContainer(inspectRC)
 	if err != nil {
 		t.Fatalf("inspect container: %v", err)
@@ -136,7 +135,7 @@ func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 		t.Fatalf("container overview unexpected: %+v", overview)
 	}
 
-	composeRC := plugin.NewRequestContext(context.Background(), models.User{ID: "u"}, sess, map[string]string{"project": "demo"}, url.Values{}, nil)
+	composeRC := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u"}, sess, map[string]string{"project": "demo"}, url.Values{}, nil)
 	services, err := ComposeServices(composeRC)
 	if err != nil {
 		t.Fatalf("compose services: %v", err)
@@ -154,7 +153,7 @@ func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 	}
 
 	createBody := `{"name":"api","image":"nginx:latest","pull":false,"start":true,"command":"nginx -g 'daemon off;'","env":"APP_ENV=test","ports":"8080:80/tcp","binds":"/srv/app:/app:ro","network":"bridge","restart":"unless-stopped"}`
-	createRC := plugin.NewRequestContext(context.Background(), models.User{ID: "u"}, sess, nil, url.Values{}, []byte(createBody))
+	createRC := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u"}, sess, nil, url.Values{}, []byte(createBody))
 	created, err := CreateContainer(createRC)
 	if err != nil {
 		t.Fatalf("create container: %v", err)

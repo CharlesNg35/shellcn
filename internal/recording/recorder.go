@@ -7,7 +7,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // StartInfo is the metadata a Recorder needs to emit its header.

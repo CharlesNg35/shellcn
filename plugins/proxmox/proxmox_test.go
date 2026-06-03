@@ -8,8 +8,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestManifestValidates(t *testing.T) {
@@ -260,7 +259,7 @@ func callList(t *testing.T, sess *Session, h plugin.Handler, params map[string]s
 }
 
 func newRC(sess *Session, params map[string]string) *plugin.RequestContext {
-	return plugin.NewRequestContext(context.Background(), models.User{}, sess, params, url.Values{}, nil)
+	return plugin.NewRequestContext(context.Background(), plugin.User{}, sess, params, url.Values{}, nil)
 }
 
 // directNet dials the literal address — the fake server runs on the configured

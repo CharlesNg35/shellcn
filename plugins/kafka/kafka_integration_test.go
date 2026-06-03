@@ -13,8 +13,7 @@ import (
 
 	"github.com/IBM/sarama"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestKafkaPluginIntegration(t *testing.T) {
@@ -34,24 +33,24 @@ func TestKafkaPluginIntegration(t *testing.T) {
 
 	topic := "shellcn_it_" + time.Now().UTC().Format("20060102150405")
 	create, _ := json.Marshal(map[string]any{"name": topic, "partitions": 1, "replication_factor": 1})
-	if _, err := createTopic(plugin.NewRequestContext(ctx, models.User{}, sess, nil, nil, create)); err != nil {
+	if _, err := createTopic(plugin.NewRequestContext(ctx, plugin.User{}, sess, nil, nil, create)); err != nil {
 		t.Fatalf("create topic: %v", err)
 	}
 	defer func() {
-		_, _ = deleteTopic(plugin.NewRequestContext(context.Background(), models.User{}, sess, map[string]string{"topic": topic}, nil, nil))
+		_, _ = deleteTopic(plugin.NewRequestContext(context.Background(), plugin.User{}, sess, map[string]string{"topic": topic}, nil, nil))
 	}()
-	if _, err := topicOverview(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, nil)); err != nil {
+	if _, err := topicOverview(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"topic": topic}, nil, nil)); err != nil {
 		t.Fatalf("topic overview: %v", err)
 	}
-	if _, err := listPartitions(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, nil)); err != nil {
+	if _, err := listPartitions(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"topic": topic}, nil, nil)); err != nil {
 		t.Fatalf("partitions: %v", err)
 	}
-	if _, err := topicConfig(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, nil)); err != nil {
+	if _, err := topicConfig(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"topic": topic}, nil, nil)); err != nil {
 		t.Fatalf("topic config: %v", err)
 	}
 
 	alter, _ := json.Marshal(map[string]any{"key": "retention.ms", "value": "86400000"})
-	if _, err := alterTopicConfig(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, alter)); err != nil {
+	if _, err := alterTopicConfig(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"topic": topic}, nil, alter)); err != nil {
 		t.Fatalf("alter topic config: %v", err)
 	}
 	if got := kafkaConfigValue(ctx, t, sess, topic, "retention.ms"); got != "86400000" {
@@ -59,7 +58,7 @@ func TestKafkaPluginIntegration(t *testing.T) {
 	}
 
 	addParts, _ := json.Marshal(map[string]any{"count": 3})
-	if _, err := addPartitions(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, addParts)); err != nil {
+	if _, err := addPartitions(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"topic": topic}, nil, addParts)); err != nil {
 		t.Fatalf("add partitions: %v", err)
 	}
 	if n := kafkaPartitionCount(ctx, t, sess, topic); n != 3 {
@@ -67,12 +66,12 @@ func TestKafkaPluginIntegration(t *testing.T) {
 	}
 
 	decrease, _ := json.Marshal(map[string]any{"count": 2})
-	if _, err := addPartitions(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, decrease)); err == nil {
+	if _, err := addPartitions(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"topic": topic}, nil, decrease)); err == nil {
 		t.Fatal("expected error decreasing partition count")
 	}
 
 	produce, _ := json.Marshal(map[string]any{"key": "k1", "value": "hello", "encoding": "string"})
-	if _, err := produceMessage(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, produce)); err != nil {
+	if _, err := produceMessage(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"topic": topic}, nil, produce)); err != nil {
 		t.Fatalf("produce: %v", err)
 	}
 	messages := waitKafkaMessages(ctx, t, sess, topic)
@@ -85,21 +84,21 @@ func TestKafkaPluginIntegration(t *testing.T) {
 	if _, err := s.admin.AlterConsumerGroupOffsets(group, offsets, nil); err != nil {
 		t.Fatalf("create group offset: %v", err)
 	}
-	if _, err := listGroups(plugin.NewRequestContext(ctx, models.User{}, sess, nil, nil, nil)); err != nil {
+	if _, err := listGroups(plugin.NewRequestContext(ctx, plugin.User{}, sess, nil, nil, nil)); err != nil {
 		t.Fatalf("list groups: %v", err)
 	}
-	if _, err := groupOverview(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"group": group}, nil, nil)); err != nil {
+	if _, err := groupOverview(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"group": group}, nil, nil)); err != nil {
 		t.Fatalf("group overview: %v", err)
 	}
-	if _, err := groupOffsets(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"group": group}, nil, nil)); err != nil {
+	if _, err := groupOffsets(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"group": group}, nil, nil)); err != nil {
 		t.Fatalf("group offsets: %v", err)
 	}
 
 	reset, _ := json.Marshal(map[string]any{"target": "earliest"})
-	if _, err := resetGroupOffsets(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"group": group}, nil, reset)); err != nil {
+	if _, err := resetGroupOffsets(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"group": group}, nil, reset)); err != nil {
 		t.Fatalf("reset offsets: %v", err)
 	}
-	res, err := groupOffsets(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"group": group}, nil, nil))
+	res, err := groupOffsets(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"group": group}, nil, nil))
 	if err != nil {
 		t.Fatalf("group offsets after reset: %v", err)
 	}
@@ -137,7 +136,7 @@ func waitKafkaMessages(ctx context.Context, t *testing.T, sess plugin.Session, t
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		res, err := listMessages(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, url.Values{"limit": []string{"10"}}, nil))
+		res, err := listMessages(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"topic": topic}, url.Values{"limit": []string{"10"}}, nil))
 		if err != nil {
 			t.Fatalf("list messages: %v", err)
 		}
@@ -157,7 +156,7 @@ func kafkaConfigValue(ctx context.Context, t *testing.T, sess plugin.Session, to
 	deadline := time.Now().Add(10 * time.Second)
 	last := ""
 	for {
-		res, err := topicConfig(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, nil))
+		res, err := topicConfig(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"topic": topic}, nil, nil))
 		if err != nil {
 			t.Fatalf("topic config: %v", err)
 		}
@@ -179,7 +178,7 @@ func kafkaPartitionCount(ctx context.Context, t *testing.T, sess plugin.Session,
 	for {
 		s := sess.(*Session)
 		_ = s.client.RefreshMetadata(topic)
-		res, err := listPartitions(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, nil))
+		res, err := listPartitions(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"topic": topic}, nil, nil))
 		if err != nil {
 			t.Fatalf("partitions: %v", err)
 		}

@@ -12,8 +12,8 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // ErrWrongPassword is returned when a self password change supplies the wrong

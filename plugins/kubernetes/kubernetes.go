@@ -9,7 +9,7 @@ import (
 	"context"
 
 	"github.com/charlesng35/shellcn/internal/app"
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // In-cluster API + ServiceAccount mount paths. Kubernetes-specific, so they live

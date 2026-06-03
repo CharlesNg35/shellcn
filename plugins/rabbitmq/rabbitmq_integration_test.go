@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestRabbitMQPluginIntegration(t *testing.T) {
@@ -32,32 +32,32 @@ func TestRabbitMQPluginIntegration(t *testing.T) {
 
 	name := "shellcn-it-" + time.Now().UTC().Format("20060102150405")
 	body, _ := json.Marshal(map[string]any{"vhost": cfg["vhost"], "name": name, "durable": false, "auto_delete": true})
-	if _, err := createQueue(plugin.NewRequestContext(ctx, models.User{}, sess, nil, nil, body)); err != nil {
+	if _, err := createQueue(plugin.NewRequestContext(ctx, plugin.User{}, sess, nil, nil, body)); err != nil {
 		t.Fatalf("create queue: %v", err)
 	}
 	defer func() {
-		_, _ = deleteQueue(plugin.NewRequestContext(context.Background(), models.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, nil))
+		_, _ = deleteQueue(plugin.NewRequestContext(context.Background(), plugin.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, nil))
 	}()
-	if _, err := purgeQueue(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, nil)); err != nil {
+	if _, err := purgeQueue(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, nil)); err != nil {
 		t.Fatalf("purge empty queue: %v", err)
 	}
 
 	pub, _ := json.Marshal(map[string]any{"payload": "hello", "payload_encoding": "string"})
-	if _, err := publishQueueMessage(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, pub)); err != nil {
+	if _, err := publishQueueMessage(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, pub)); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	if _, err := queueOverview(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, nil)); err != nil {
+	if _, err := queueOverview(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, nil)); err != nil {
 		t.Fatalf("queue overview: %v", err)
 	}
-	if _, err := queueBindings(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, nil)); err != nil {
+	if _, err := queueBindings(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, nil)); err != nil {
 		t.Fatalf("queue bindings: %v", err)
 	}
 
 	bindBody, _ := json.Marshal(map[string]any{"source": "amq.direct", "routing_key": "shellcn-rk"})
-	if _, err := createBinding(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, bindBody)); err != nil {
+	if _, err := createBinding(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, bindBody)); err != nil {
 		t.Fatalf("create binding: %v", err)
 	}
-	bres, err := queueBindings(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, nil))
+	bres, err := queueBindings(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, nil))
 	if err != nil {
 		t.Fatalf("list bindings after create: %v", err)
 	}
@@ -70,10 +70,10 @@ func TestRabbitMQPluginIntegration(t *testing.T) {
 	if spec == "" {
 		t.Fatalf("created binding not listed: %#v", bres.(plugin.Page[row]).Items)
 	}
-	if _, err := deleteBinding(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"spec": spec}, nil, nil)); err != nil {
+	if _, err := deleteBinding(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"spec": spec}, nil, nil)); err != nil {
 		t.Fatalf("delete binding: %v", err)
 	}
-	res, err := queueMessages(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, url.Values{"limit": []string{"10"}}, nil))
+	res, err := queueMessages(plugin.NewRequestContext(ctx, plugin.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, url.Values{"limit": []string{"10"}}, nil))
 	if err != nil {
 		t.Fatalf("messages: %v", err)
 	}

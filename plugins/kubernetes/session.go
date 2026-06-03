@@ -19,8 +19,8 @@ import (
 	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"github.com/charlesng35/shellcn/internal/app"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/loopback"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // Session is a live connection to one Kubernetes cluster. It holds every

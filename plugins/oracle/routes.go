@@ -14,9 +14,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type row map[string]any
@@ -1949,15 +1948,15 @@ func isDestructiveStatement(statement string) bool {
 	return !isReadOnlyStatement(statement)
 }
 
-func queryAuditResult(err error) models.AuditResult {
+func queryAuditResult(err error) plugin.AuditResult {
 	if err == nil {
-		return models.AuditAllowed
+		return plugin.AuditAllowed
 	}
 	var confirmErr confirmationError
 	if errors.As(err, &confirmErr) || errors.Is(err, plugin.ErrForbidden) {
-		return models.AuditDenied
+		return plugin.AuditDenied
 	}
-	return models.AuditError
+	return plugin.AuditError
 }
 
 func statementsRequireReview(statements []string) bool {

@@ -1,6 +1,6 @@
 package kubernetes
 
-import "github.com/charlesng35/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/sdk/plugin"
 
 // tree builds the Lens-style cluster menu: a direct Overview, top-level Nodes,
 // the expandable Workloads/Config/Network/Storage categories, top-level

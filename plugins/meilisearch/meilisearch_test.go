@@ -8,9 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/searchrest"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // wrappedSession mimics the core's borrowed session.Handle: a plugin.Session
@@ -58,7 +57,7 @@ func TestListTasksDecodesNumericNextCursor(t *testing.T) {
 	})
 	defer closeSrv()
 
-	rc := plugin.NewRequestContext(context.Background(), models.User{}, s, nil, url.Values{}, nil)
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{}, s, nil, url.Values{}, nil)
 	res, err := treeTasks(rc)
 	if err != nil {
 		t.Fatalf("treeTasks: %v", err)
@@ -152,7 +151,7 @@ func TestUpdateKeyPatchesNameAndDescription(t *testing.T) {
 	defer closeSrv()
 
 	body := []byte(`{"name":"Renamed","description":"d"}`)
-	rc := plugin.NewRequestContext(context.Background(), models.User{}, s, map[string]string{"key": "6062abda-a5aa-4414-ac91-ecd7944c0f8d"}, url.Values{}, body)
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{}, s, map[string]string{"key": "6062abda-a5aa-4414-ac91-ecd7944c0f8d"}, url.Values{}, body)
 	if _, err := updateKey(rc); err != nil {
 		t.Fatalf("updateKey: %v", err)
 	}
@@ -170,7 +169,7 @@ func TestUpdateKeyRejectsBadUID(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 	defer closeSrv()
-	rc := plugin.NewRequestContext(context.Background(), models.User{}, s, map[string]string{"key": "bad"}, url.Values{}, []byte(`{"name":"x"}`))
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{}, s, map[string]string{"key": "bad"}, url.Values{}, []byte(`{"name":"x"}`))
 	if _, err := updateKey(rc); err == nil {
 		t.Fatalf("expected invalid uid error")
 	}
@@ -183,7 +182,7 @@ func TestDeleteTaskFiltersByUID(t *testing.T) {
 		_, _ = w.Write([]byte(`{"taskUid":99,"status":"enqueued","type":"taskDeletion"}`))
 	})
 	defer closeSrv()
-	rc := plugin.NewRequestContext(context.Background(), models.User{}, s, map[string]string{"task": "12"}, url.Values{}, nil)
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{}, s, map[string]string{"task": "12"}, url.Values{}, nil)
 	if _, err := deleteTask(rc); err != nil {
 		t.Fatalf("deleteTask: %v", err)
 	}
@@ -198,7 +197,7 @@ func TestDeleteTaskRejectsBadUID(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 	defer closeSrv()
-	rc := plugin.NewRequestContext(context.Background(), models.User{}, s, map[string]string{"task": "abc"}, url.Values{}, nil)
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{}, s, map[string]string{"task": "abc"}, url.Values{}, nil)
 	if _, err := deleteTask(rc); err == nil {
 		t.Fatalf("expected invalid uid error")
 	}

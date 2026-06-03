@@ -3,7 +3,7 @@ package plugins
 import (
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestSearchPluginsValidateAndRegister(t *testing.T) {

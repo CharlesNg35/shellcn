@@ -13,8 +13,8 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/streaming/pkg/httpstream"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/termshell"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // ExecStream runs an interactive exec into a pod container, bridged to the

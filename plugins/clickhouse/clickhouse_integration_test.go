@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestClickHousePluginIntegration(t *testing.T) {
@@ -51,7 +51,7 @@ func TestClickHousePluginIntegration(t *testing.T) {
 		defer cleanupCancel()
 		_, _ = s.db.ExecContext(cleanupCtx, "DROP DATABASE IF EXISTS "+quoteIdent(createdDatabase))
 	})
-	databases, err := listDatabases(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	databases, err := listDatabases(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, nil))
 	if err != nil {
 		t.Fatalf("list databases after create: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestClickHousePluginIntegration(t *testing.T) {
 	if _, err := s.db.ExecContext(ctx, "CREATE VIEW "+qualified(createdDatabase, "shellcn_v")+" AS SELECT 1 AS x"); err != nil {
 		t.Fatalf("seed view: %v", err)
 	}
-	if _, err := dropView(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": createdDatabase, "view": "shellcn_v"}, nil, nil)); err != nil {
+	if _, err := dropView(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": createdDatabase, "view": "shellcn_v"}, nil, nil)); err != nil {
 		t.Fatalf("drop view: %v", err)
 	}
 	var vcount uint64
@@ -93,7 +93,7 @@ func TestClickHousePluginIntegration(t *testing.T) {
 		_, _ = s.db.ExecContext(cleanupCtx, `DROP TABLE IF EXISTS shellcn_people`)
 	})
 
-	rc := plugin.NewRequestContext(ctx, models.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
+	rc := plugin.NewRequestContext(ctx, plugin.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
 	list, err := listTables(rc)
 	if err != nil {
 		t.Fatalf("list tables: %v", err)
@@ -102,7 +102,7 @@ func TestClickHousePluginIntegration(t *testing.T) {
 		t.Fatalf("created table was not listed: %#v", list)
 	}
 
-	rows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": cfg["database"].(string), "table": "shellcn_people"}, nil, nil))
+	rows, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": cfg["database"].(string), "table": "shellcn_people"}, nil, nil))
 	if err != nil {
 		t.Fatalf("table rows: %v", err)
 	}
@@ -113,14 +113,14 @@ func TestClickHousePluginIntegration(t *testing.T) {
 
 	// Free-text search filters the data grid server-side (per-column).
 	chPeople := map[string]string{"database": cfg["database"].(string), "table": "shellcn_people"}
-	chMatch, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, chPeople, url.Values{"filter": {"alice"}}, nil))
+	chMatch, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, chPeople, url.Values{"filter": {"alice"}}, nil))
 	if err != nil {
 		t.Fatalf("filtered rows: %v", err)
 	}
 	if len(chMatch.(plugin.Page[row]).Items) != 1 {
 		t.Fatalf("filter 'alice' should match 1 row, got %#v", chMatch.(plugin.Page[row]).Items)
 	}
-	chMiss, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, chPeople, url.Values{"filter": {"zzz-nomatch"}}, nil))
+	chMiss, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, chPeople, url.Values{"filter": {"zzz-nomatch"}}, nil))
 	if err != nil {
 		t.Fatalf("filtered rows (miss): %v", err)
 	}
@@ -136,7 +136,7 @@ func TestClickHousePluginIntegration(t *testing.T) {
 		t.Fatalf("expected redacted query result, got %#v", result.Rows)
 	}
 
-	tableRC := plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": cfg["database"].(string), "table": "shellcn_people"}, nil, nil)
+	tableRC := plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": cfg["database"].(string), "table": "shellcn_people"}, nil, nil)
 	for name, fn := range map[string]func(*plugin.RequestContext) (any, error){
 		"columns":     tableColumnsRoute,
 		"indexes":     tableIndexes,
@@ -147,7 +147,7 @@ func TestClickHousePluginIntegration(t *testing.T) {
 			t.Fatalf("table %s route: %v", name, err)
 		}
 	}
-	viewRC := plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": cfg["database"].(string), "table": "shellcn_people_view"}, nil, nil)
+	viewRC := plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": cfg["database"].(string), "table": "shellcn_people_view"}, nil, nil)
 	if _, err := tableDefinition(viewRC); err != nil {
 		t.Fatalf("view definition route: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestClickHousePluginIntegration(t *testing.T) {
 		for k, v := range params {
 			full[k] = v
 		}
-		return plugin.NewRequestContext(ctx, models.User{}, s, full, nil, nil)
+		return plugin.NewRequestContext(ctx, plugin.User{}, s, full, nil, nil)
 	}
 	// Data-skipping index create + drop round-trip via the declarative handlers.
 	if _, err := createIndex(rowMutationRC(ctx, s, ddlParams(db), map[string]any{
@@ -270,7 +270,7 @@ func TestClickHousePluginIntegration(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.users WHERE name = ?", itUser).Scan(&userCount); err != nil || userCount != 1 {
 		t.Fatalf("expected user created, got %d err=%v", userCount, err)
 	}
-	if _, err := grantUser(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"user": itUser}, nil, mustJSON(map[string]any{
+	if _, err := grantUser(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"user": itUser}, nil, mustJSON(map[string]any{
 		"privilege": "SELECT", "on": db + ".*",
 	}))); err != nil {
 		t.Fatalf("grant user: %v", err)
@@ -279,7 +279,7 @@ func TestClickHousePluginIntegration(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.grants WHERE user_name = ? AND access_type = 'SELECT'", itUser).Scan(&grantCount); err != nil || grantCount == 0 {
 		t.Fatalf("expected SELECT grant, got %d err=%v", grantCount, err)
 	}
-	if _, err := dropUser(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"user": itUser}, nil, nil)); err != nil {
+	if _, err := dropUser(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"user": itUser}, nil, nil)); err != nil {
 		t.Fatalf("drop user: %v", err)
 	}
 	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.users WHERE name = ?", itUser).Scan(&userCount); err != nil || userCount != 0 {
@@ -288,23 +288,23 @@ func TestClickHousePluginIntegration(t *testing.T) {
 
 	// Merge STOP/START round-trip on a real table. SYSTEM STOP/START MERGES return no
 	// rows; assert the handlers run cleanly and the table still accepts a merge cycle.
-	if _, err := stopMerges(plugin.NewRequestContext(ctx, models.User{}, s, ddlParams(db), nil, nil)); err != nil {
+	if _, err := stopMerges(plugin.NewRequestContext(ctx, plugin.User{}, s, ddlParams(db), nil, nil)); err != nil {
 		t.Fatalf("stop merges: %v", err)
 	}
-	if _, err := startMerges(plugin.NewRequestContext(ctx, models.User{}, s, ddlParams(db), nil, nil)); err != nil {
+	if _, err := startMerges(plugin.NewRequestContext(ctx, plugin.User{}, s, ddlParams(db), nil, nil)); err != nil {
 		t.Fatalf("start merges: %v", err)
 	}
 
 	// Kill-query handler path. Killing a real in-flight query is racy, so target a
 	// query_id that is not running: KILL QUERY succeeds with zero matched queries,
 	// exercising the handler, statement generation, and audit path end to end.
-	if _, err := killProcess(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"id": "shellcn-it-not-running"}, nil, nil)); err != nil {
+	if _, err := killProcess(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"id": "shellcn-it-not-running"}, nil, nil)); err != nil {
 		t.Fatalf("kill process (no match): %v", err)
 	}
 
 	// Kill-mutation handler path. Likewise drive it against a non-existent mutation so
 	// the handler/SQL/validate path runs without depending on a live mutation.
-	if _, err := killMutation(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{
+	if _, err := killMutation(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{
 		"database": db, "table": "shellcn_people", "id": "0000000000",
 	}, nil, nil)); err != nil {
 		t.Fatalf("kill mutation (no match): %v", err)
@@ -315,7 +315,7 @@ func TestClickHousePluginIntegration(t *testing.T) {
 	if _, err := createDatabase(rowMutationRC(ctx, s, nil, map[string]any{"name": dropDB, "if_not_exists": true})); err != nil {
 		t.Fatalf("create database (drop round-trip): %v", err)
 	}
-	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": dropDB}, nil, nil)); err != nil {
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"database": dropDB}, nil, nil)); err != nil {
 		t.Fatalf("drop database: %v", err)
 	}
 	var dbCount int
@@ -423,7 +423,7 @@ func configFromDSN(t *testing.T, raw string) map[string]any {
 }
 
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
-	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, mustJSON(body))
+	return plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, params, nil, mustJSON(body))
 }
 
 func mustJSON(body map[string]any) []byte {
@@ -435,7 +435,7 @@ func mustJSON(body map[string]any) []byte {
 // returns the first row whose column equals value, or nil when absent.
 func findRow(ctx context.Context, t *testing.T, s *Session, params map[string]string, column, value string) row {
 	t.Helper()
-	res, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, params, nil, nil))
+	res, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, params, nil, nil))
 	if err != nil {
 		t.Fatalf("table rows: %v", err)
 	}

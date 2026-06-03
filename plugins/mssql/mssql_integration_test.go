@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestMSSQLPluginIntegration(t *testing.T) {
@@ -52,7 +52,7 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 		defer cleanupCancel()
 		_, _ = s.db.ExecContext(cleanupCtx, "DROP DATABASE "+quoteIdent(createdDatabase))
 	})
-	databases, err := listDatabases(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	databases, err := listDatabases(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, nil))
 	if err != nil {
 		t.Fatalf("list databases after create: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	}
 
 	// Drop the database through the handler (forces SINGLE_USER first).
-	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, map[string]string{"database": createdDatabase}, nil, nil)); err != nil {
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, map[string]string{"database": createdDatabase}, nil, nil)); err != nil {
 		t.Fatalf("drop database: %v", err)
 	}
 	var dbExists int
@@ -69,7 +69,7 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 		t.Fatalf("expected database dropped, got %d err=%v", dbExists, err)
 	}
 	// Dropping the connected database must be refused.
-	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, map[string]string{"database": s.opts.Database}, nil, nil)); err == nil {
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, map[string]string{"database": s.opts.Database}, nil, nil)); err == nil {
 		t.Fatal("dropping the connected database must be rejected")
 	}
 
@@ -81,7 +81,7 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 		_, _ = s.db.ExecContext(cleanupCtx, `DROP DATABASE [shellcn]`)
 	})
 
-	list, err := listTables(plugin.NewRequestContext(ctx, models.User{ID: "u1", Username: "admin"}, s, nil, url.Values{"p.database": {"shellcn"}}, nil))
+	list, err := listTables(plugin.NewRequestContext(ctx, plugin.User{ID: "u1", Username: "admin"}, s, nil, url.Values{"p.database": {"shellcn"}}, nil))
 	if err != nil {
 		t.Fatalf("list tables: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 		t.Fatalf("created table was not listed: %#v", list)
 	}
 
-	rows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"id": objectID("shellcn", "dbo", "people")}, nil, nil))
+	rows, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"id": objectID("shellcn", "dbo", "people")}, nil, nil))
 	if err != nil {
 		t.Fatalf("table rows: %v", err)
 	}
@@ -100,14 +100,14 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 
 	// Free-text search filters the data grid server-side (per-column).
 	msPeople := map[string]string{"id": objectID("shellcn", "dbo", "people")}
-	msMatch, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, msPeople, url.Values{"filter": {"alice"}}, nil))
+	msMatch, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, msPeople, url.Values{"filter": {"alice"}}, nil))
 	if err != nil {
 		t.Fatalf("filtered rows: %v", err)
 	}
 	if len(msMatch.(plugin.Page[row]).Items) != 1 {
 		t.Fatalf("filter 'alice' should match 1 row, got %#v", msMatch.(plugin.Page[row]).Items)
 	}
-	msMiss, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, msPeople, url.Values{"filter": {"zzz-nomatch"}}, nil))
+	msMiss, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, msPeople, url.Values{"filter": {"zzz-nomatch"}}, nil))
 	if err != nil {
 		t.Fatalf("filtered rows (miss): %v", err)
 	}
@@ -154,21 +154,21 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	}
 
 	// Hierarchical tree: database -> schema -> table (3-level drill-down).
-	dbTree, err := treeDatabases(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	dbTree, err := treeDatabases(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, nil))
 	if err != nil {
 		t.Fatalf("tree databases: %v", err)
 	}
 	if !hasBranch(dbTree, "shellcn") {
 		t.Fatalf("database branch missing: %#v", dbTree)
 	}
-	schemaTree, err := treeSchemas(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.database": {"shellcn"}}, nil))
+	schemaTree, err := treeSchemas(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, url.Values{"p.database": {"shellcn"}}, nil))
 	if err != nil {
 		t.Fatalf("tree schemas: %v", err)
 	}
 	if !hasBranch(schemaTree, "dbo") {
 		t.Fatalf("schema branch dbo missing: %#v", schemaTree)
 	}
-	relTree, err := treeRelations(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.database": {"shellcn"}, "p.schema": {"dbo"}}, nil))
+	relTree, err := treeRelations(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, url.Values{"p.database": {"shellcn"}, "p.schema": {"dbo"}}, nil))
 	if err != nil {
 		t.Fatalf("tree relations: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	if _, err := s.db.ExecContext(ctx, `INSERT INTO [shellcn].[dbo].[orders] (person_id) VALUES (1)`); err != nil {
 		t.Fatalf("seed child row: %v", err)
 	}
-	orderRows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"id": objectID("shellcn", "dbo", "orders")}, nil, nil))
+	orderRows, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, map[string]string{"id": objectID("shellcn", "dbo", "orders")}, nil, nil))
 	if err != nil {
 		t.Fatalf("child table rows: %v", err)
 	}
@@ -268,7 +268,7 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	}
 
 	// Foreign-key relationship graph (ERD) over the FK created above.
-	graph, err := relationGraph(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.database": {"shellcn"}}, nil))
+	graph, err := relationGraph(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, url.Values{"p.database": {"shellcn"}}, nil))
 	if err != nil {
 		t.Fatalf("relation graph: %v", err)
 	}
@@ -311,7 +311,7 @@ WHERE dp.name = @p1 AND p.permission_name = 'SELECT' AND p.state_desc = 'GRANT'`
 		t.Fatalf("expected SELECT granted to %s, got %d err=%v", userName, granted, err)
 	}
 
-	if _, err := dropUser(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, grantParams, nil, nil)); err != nil {
+	if _, err := dropUser(plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, grantParams, nil, nil)); err != nil {
 		t.Fatalf("drop user: %v", err)
 	}
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.database_principals WHERE name = @p1`, userName).Scan(&userCount); err != nil || userCount != 0 {
@@ -344,13 +344,13 @@ func exerciseJobControl(ctx context.Context, t *testing.T, s *Session) {
 	}
 
 	jobParams := map[string]string{"name": jobNameValue}
-	if _, err := disableJob(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, jobParams, nil, nil)); err != nil {
+	if _, err := disableJob(plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, jobParams, nil, nil)); err != nil {
 		t.Fatalf("disable job: %v", err)
 	}
 	if enabledOf() {
 		t.Fatal("expected job disabled")
 	}
-	if _, err := enableJob(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, jobParams, nil, nil)); err != nil {
+	if _, err := enableJob(plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, jobParams, nil, nil)); err != nil {
 		t.Fatalf("enable job: %v", err)
 	}
 	if !enabledOf() {
@@ -359,12 +359,12 @@ func exerciseJobControl(ctx context.Context, t *testing.T, s *Session) {
 	// The job has no steps/server target, so a start request may legitimately
 	// fail; assert only that the handler reaches the procedure without a
 	// parameter/validation error.
-	if _, err := startJob(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, jobParams, nil, nil)); err != nil && !errors.Is(err, plugin.ErrUnavailable) {
+	if _, err := startJob(plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, jobParams, nil, nil)); err != nil && !errors.Is(err, plugin.ErrUnavailable) {
 		t.Fatalf("start job: unexpected error class: %v", err)
 	}
 
 	// The job list surfaces the created job and scans enabled as a bool.
-	jobs, err := listJobs(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	jobs, err := listJobs(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, nil, nil))
 	if err != nil {
 		t.Fatalf("list jobs: %v", err)
 	}
@@ -384,7 +384,7 @@ func hasBranch(tree any, label string) bool {
 
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
 	raw, _ := json.Marshal(body)
-	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, raw)
+	return plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, params, nil, raw)
 }
 
 func integrationConfig(ctx context.Context, t *testing.T) map[string]any {

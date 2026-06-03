@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/hostmonitor"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type Session struct {

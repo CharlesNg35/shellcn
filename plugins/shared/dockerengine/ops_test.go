@@ -10,7 +10,7 @@ import (
 
 	"github.com/moby/moby/api/types/registry"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestNormalizeKillSignal(t *testing.T) {

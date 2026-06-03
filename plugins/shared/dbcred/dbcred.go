@@ -4,7 +4,7 @@ package dbcred
 import (
 	"strings"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 type AuthMaterial struct {

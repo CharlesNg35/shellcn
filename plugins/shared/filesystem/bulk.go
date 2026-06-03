@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // Optional Client capabilities. The base Client interface stays minimal so every

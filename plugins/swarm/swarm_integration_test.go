@@ -12,9 +12,8 @@ import (
 	"github.com/moby/moby/api/types/swarm"
 	dockerclient "github.com/moby/moby/client"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // TestSwarmPluginIntegration provisions an isolated swarm inside a docker:dind
@@ -78,7 +77,7 @@ func TestSwarmPluginIntegration(t *testing.T) {
 
 	call := func(handler func(*plugin.RequestContext) (any, error), params map[string]string, body string) {
 		t.Helper()
-		rc := plugin.NewRequestContext(ctx, models.User{ID: "it"}, ds, params, nil, []byte(body))
+		rc := plugin.NewRequestContext(ctx, plugin.User{ID: "it"}, ds, params, nil, []byte(body))
 		res, err := handler(rc)
 		if err != nil {
 			t.Fatalf("handler: %v", err)
