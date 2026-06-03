@@ -23,7 +23,7 @@ type chunkStream interface {
 // no-ops: the stream's lifetime is governed by its context and Close.
 type streamConn struct {
 	stream    chunkStream
-	cancel    context.CancelFunc
+	onClose   func()
 	closeOnce sync.Once
 
 	rmu sync.Mutex
@@ -31,8 +31,8 @@ type streamConn struct {
 	wmu sync.Mutex
 }
 
-func newStreamConn(stream chunkStream, cancel context.CancelFunc) *streamConn {
-	return &streamConn{stream: stream, cancel: cancel}
+func newStreamConn(stream chunkStream, onClose func()) *streamConn {
+	return &streamConn{stream: stream, onClose: onClose}
 }
 
 func (c *streamConn) Read(p []byte) (int, error) {
@@ -64,8 +64,8 @@ func (c *streamConn) Close() error {
 		if cs, ok := c.stream.(interface{ CloseSend() error }); ok {
 			_ = cs.CloseSend()
 		}
-		if c.cancel != nil {
-			c.cancel()
+		if c.onClose != nil {
+			c.onClose()
 		}
 	})
 	return nil
@@ -101,7 +101,7 @@ func (p *pipeServer) Pipe(stream pluginv1.Conn_PipeServer) error {
 // NewConnBridge serves a real conn over a brokered Conn.Pipe stream.
 func NewConnBridge(target net.Conn) pluginv1.ConnServer {
 	return NewPipeServer(func(_ context.Context, conn net.Conn) error {
-		bridge(target, conn)
+		Bridge(target, conn)
 		return nil
 	})
 }
@@ -130,11 +130,12 @@ func DialConn(broker *goplugin.GRPCBroker, id uint32) (net.Conn, error) {
 		_ = cc.Close()
 		return nil, err
 	}
-	return newStreamConn(stream, cancel), nil
+	return newStreamConn(stream, func() { cancel(); _ = cc.Close() }), nil
 }
 
-// bridge copies bytes both ways until either side ends, then closes both.
-func bridge(a, b io.ReadWriteCloser) {
+// Bridge copies bytes both ways between two conns until either side ends, then
+// closes both (closes are idempotent for brokered conns).
+func Bridge(a, b io.ReadWriteCloser) {
 	done := make(chan struct{}, 2)
 	cp := func(dst io.Writer, src io.Reader) {
 		_, _ = io.Copy(dst, src)

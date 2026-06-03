@@ -40,6 +40,7 @@ func (s *grpcSession) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
 	if err := r.Write(conn); err != nil {
 		return
 	}
+	// Pipe raw bytes both ways (brw may hold bytes read past the request line).
 	done := make(chan struct{}, 2)
 	go func() { _, _ = io.Copy(conn, brw); done <- struct{}{} }()
 	go func() { _, _ = io.Copy(browser, conn); done <- struct{}{} }()

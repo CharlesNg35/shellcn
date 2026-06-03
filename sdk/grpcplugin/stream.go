@@ -44,7 +44,7 @@ func (s *server) OpenChannel(ctx context.Context, req *pluginv1.ChannelRequest) 
 		return nil, StatusFromError(err)
 	}
 	srv := NewPipeServer(func(_ context.Context, conn net.Conn) error {
-		bridge(ch, conn)
+		Bridge(ch, conn)
 		return nil
 	})
 	return &pluginv1.BrokerRef{BrokerId: ServeConn(s.broker, srv)}, nil

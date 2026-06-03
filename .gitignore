@@ -71,6 +71,9 @@ tmp/
 temp/
 *.tmp
 
+# Installed out-of-tree plugin binaries (operator drops them here at runtime)
+plugins.d/
+
 # OS
 Thumbs.db
 .DS_Store

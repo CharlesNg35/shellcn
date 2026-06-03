@@ -1,9 +1,6 @@
 package extplugin
 
 import (
-	"io"
-	"net"
-
 	"github.com/charlesng35/shellcn/sdk/gen/pluginv1"
 	"github.com/charlesng35/shellcn/sdk/grpcplugin"
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -27,26 +24,17 @@ func (g *grpcPlugin) stream(rc *plugin.RequestContext, browser plugin.ClientStre
 	if err != nil {
 		return err
 	}
-	bridgeStream(browser, conn)
-	return nil
-}
-
-// bridgeStream copies bytes both ways between the browser stream and the brokered
-// conn, tearing down when the browser disconnects.
-func bridgeStream(browser plugin.ClientStream, conn net.Conn) {
+	// Close the conn if the browser context is cancelled while a copy is blocked;
+	// the watcher exits when the bridge completes so it can't leak.
+	stop := make(chan struct{})
+	defer close(stop)
 	go func() {
-		<-browser.Context().Done()
-		_ = conn.Close()
+		select {
+		case <-browser.Context().Done():
+			_ = conn.Close()
+		case <-stop:
+		}
 	}()
-	done := make(chan struct{}, 2)
-	cp := func(dst io.Writer, src io.Reader) {
-		_, _ = io.Copy(dst, src)
-		done <- struct{}{}
-	}
-	go cp(conn, browser)
-	go cp(browser, conn)
-	<-done
-	_ = conn.Close()
-	_ = browser.Close()
-	<-done
+	grpcplugin.Bridge(browser, conn)
+	return nil
 }

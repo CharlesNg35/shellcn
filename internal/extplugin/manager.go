@@ -198,10 +198,10 @@ func (m *Manager) respawn(mp *managed) bool {
 // Close terminates every spawned subprocess and stops its supervisor.
 func (m *Manager) Close() {
 	m.mu.Lock()
-	managed := m.managed
+	plugins := m.managed
 	m.managed = nil
 	m.mu.Unlock()
-	for _, mp := range managed {
+	for _, mp := range plugins {
 		close(mp.stop)
 		mp.mu.Lock()
 		mp.stopped = true
