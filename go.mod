@@ -1,6 +1,6 @@
 module github.com/charlesng35/shellcn
 
-go 1.26.1
+go 1.26.4
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.46.0

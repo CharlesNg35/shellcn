@@ -1,6 +1,6 @@
 module github.com/charlesng35/shellcn/sdk
 
-go 1.26.1
+go 1.26.4
 
 require (
 	github.com/go-playground/validator/v10 v10.30.2
