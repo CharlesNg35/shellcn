@@ -23,6 +23,8 @@ require (
 	github.com/gocql/gocql v1.7.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
+	github.com/hashicorp/go-hclog v1.6.3
+	github.com/hashicorp/go-plugin v1.8.0
 	github.com/hashicorp/yamux v0.1.2
 	github.com/hirochachacha/go-smb2 v1.1.0
 	github.com/jackc/pgx/v5 v5.6.0
@@ -64,8 +66,6 @@ require (
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/go-playground/validator/v10 v10.30.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/hashicorp/go-hclog v1.6.3 // indirect
-	github.com/hashicorp/go-plugin v1.8.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 )

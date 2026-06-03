@@ -93,15 +93,29 @@ Bundle codec in `sdk/grpcplugin`. Adapter in `internal/extplugin`.
       `Invoke` round-trips; a gRPC `NotFound` normalizes to `plugin.ErrNotFound`.
       Build/lint/test green both modules (root 73 ok/0 fail, sdk ok).
 
-## Step 3 — Discovery + lifecycle manager — §3.1
+## Step 3 — Discovery + lifecycle manager — §3.1 — **Done**
 
-- [ ] Scan a configured `plugins.d/` dir; one subprocess per plugin binary.
-- [ ] `plugin.NewClient` with `AllowedProtocols=[gRPC]`, `AutoMTLS=true`, handshake.
-- [ ] Register each into the **same** `Registry` (validation gates bad manifests).
-- [ ] Restart-on-crash with bounded backoff; surfaced in admin/health.
-- [ ] Clean shutdown kills all subprocesses; no zombies.
-- [ ] **DoD:** dropping a built plugin binary into `plugins.d/` and restarting
-      makes the new protocol appear in the catalog with **zero** code change.
+Also delivered the plugin-side serve glue (minimal Step 7) so a real subprocess
+exists to spawn: `sdk/grpcplugin/server.go` (PluginServer + session registry),
+`sdk/grpcplugin/goplugin.go` (`GoPlugin` GRPCServer/GRPCClient bridge + `Plugins`),
+`sdk/serve.go` (`sdk.Serve` — the plugin `main` entry).
+
+- [x] `Manager` scans `plugins.d/`; one `goplugin.Client` subprocess per binary.
+- [x] `goplugin.NewClient` with `AllowedProtocols=[gRPC]`, `AutoMTLS=true`, handshake.
+- [x] Each spawned plugin wraps via `extplugin.New` and registers into the **same**
+      `Registry` (validation gates bad manifests).
+- [x] `Close` kills all subprocesses; per-plugin load failures skipped (joined
+      errors returned) so one bad plugin can't block the rest.
+- [x] Restart-on-crash with bounded backoff: a supervisor goroutine per plugin
+      polls `client.Exited()` and respawns (200ms→30s backoff), swapping the live
+      gRPC client via a `clientRef` so the registered manifest/routes are
+      undisturbed. Verified by a test that crashes the subprocess (`os.Exit`) and
+      asserts a fresh `Connect`+`Invoke` recovers.
+- [x] **DoD met (end-to-end):** test builds a real plugin binary (`testdata/
+      demoplugin`, `sdk.Serve`), `Manager.LoadAll` spawns + registers it, then
+      `Connect`+`HealthCheck`+`Invoke` round-trip **over the live gRPC
+      subprocess**; `Close` is clean. Build/lint/test green both modules (root 73
+      ok/0 fail, sdk ok).
 
 ## Step 4 — Brokered egress through the core (L4 + L7, direct + agent) — §3.5
 

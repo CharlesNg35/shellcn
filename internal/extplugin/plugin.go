@@ -13,7 +13,7 @@ import (
 )
 
 type grpcPlugin struct {
-	client   pluginv1.PluginClient
+	ref      *clientRef
 	manifest plugin.Manifest
 	routes   []plugin.Route
 }
@@ -21,7 +21,11 @@ type grpcPlugin struct {
 // New fetches and reconstructs the manifest once, binding each route to a gRPC
 // shim that forwards to the subprocess.
 func New(ctx context.Context, client pluginv1.PluginClient) (plugin.Plugin, error) {
-	resp, err := client.GetManifest(ctx, &pluginv1.Empty{})
+	return newPlugin(ctx, &clientRef{client: client})
+}
+
+func newPlugin(ctx context.Context, ref *clientRef) (plugin.Plugin, error) {
+	resp, err := ref.get().GetManifest(ctx, &pluginv1.Empty{})
 	if err != nil {
 		return nil, grpcplugin.ErrorFromStatus(err)
 	}
@@ -29,7 +33,7 @@ func New(ctx context.Context, client pluginv1.PluginClient) (plugin.Plugin, erro
 	if err != nil {
 		return nil, err
 	}
-	g := &grpcPlugin{client: client, manifest: manifest, routes: routes}
+	g := &grpcPlugin{ref: ref, manifest: manifest, routes: routes}
 	for i := range g.routes {
 		g.bind(&g.routes[i])
 	}
@@ -44,7 +48,7 @@ func (g *grpcPlugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plu
 	if err != nil {
 		return nil, err
 	}
-	resp, err := g.client.Connect(ctx, &pluginv1.ConnectRequest{
+	resp, err := g.ref.get().Connect(ctx, &pluginv1.ConnectRequest{
 		ConnectionId: cfg.ConnectionID,
 		Transport:    string(cfg.Transport),
 		ConfigJson:   config,
@@ -52,7 +56,7 @@ func (g *grpcPlugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plu
 	if err != nil {
 		return nil, grpcplugin.ErrorFromStatus(err)
 	}
-	return &grpcSession{id: resp.GetSessionId(), client: g.client}, nil
+	return &grpcSession{id: resp.GetSessionId(), ref: g.ref}, nil
 }
 
 func (g *grpcPlugin) bind(r *plugin.Route) {
@@ -71,7 +75,7 @@ func (g *grpcPlugin) invoke(rc *plugin.RequestContext, routeID string) (any, err
 	if !ok {
 		return nil, plugin.ErrUnavailable
 	}
-	resp, err := g.client.Invoke(rc.Ctx, &pluginv1.InvokeRequest{
+	resp, err := g.ref.get().Invoke(rc.Ctx, &pluginv1.InvokeRequest{
 		SessionId: sess.id,
 		RouteId:   routeID,
 		Params:    rc.Params(),

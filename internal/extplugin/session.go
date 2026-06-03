@@ -9,12 +9,12 @@ import (
 )
 
 type grpcSession struct {
-	id     string
-	client pluginv1.PluginClient
+	id  string
+	ref *clientRef
 }
 
 func (s *grpcSession) HealthCheck(ctx context.Context) error {
-	_, err := s.client.HealthCheck(ctx, &pluginv1.SessionHandle{SessionId: s.id})
+	_, err := s.ref.get().HealthCheck(ctx, &pluginv1.SessionHandle{SessionId: s.id})
 	return grpcplugin.ErrorFromStatus(err)
 }
 
@@ -23,6 +23,6 @@ func (s *grpcSession) OpenChannel(context.Context, plugin.ChannelRequest) (plugi
 }
 
 func (s *grpcSession) Close() error {
-	_, err := s.client.Close(context.Background(), &pluginv1.SessionHandle{SessionId: s.id})
+	_, err := s.ref.get().Close(context.Background(), &pluginv1.SessionHandle{SessionId: s.id})
 	return grpcplugin.ErrorFromStatus(err)
 }
