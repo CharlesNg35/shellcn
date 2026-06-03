@@ -7,7 +7,6 @@ import AiConversationList from "./AiConversationList.vue";
 import AiActionConfirm from "./AiActionConfirm.vue";
 import AiModelSwitcher from "./AiModelSwitcher.vue";
 import AiQueuedMessages from "./AiQueuedMessages.vue";
-import AppAlert from "../../components/AppAlert.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import { useAiChatStore } from "../../stores/aiChat";
 
@@ -92,7 +91,7 @@ onMounted(() => {
       </div>
       <AiModelSwitcher
         v-if="store.providers.length || store.global?.configured"
-        class="max-w-[8.5rem] shrink min-[420px]:max-w-[11rem]"
+        class="max-w-34 shrink min-[420px]:max-w-44"
         :providers="store.providers"
         :global="store.global"
         :provider-id="st.providerId"
@@ -149,13 +148,6 @@ onMounted(() => {
       />
 
       <div class="flex min-h-0 flex-1 flex-col">
-        <div v-if="st.error" class="px-3 pt-3">
-          <AppAlert tone="danger" title="Assistant error">
-            <div class="flex min-w-0 items-center gap-2">
-              <span class="min-w-0 flex-1">{{ st.error }}</span>
-            </div>
-          </AppAlert>
-        </div>
         <AiMessageList
           :messages="st.messages"
           :current-id="st.current?.id ?? null"
