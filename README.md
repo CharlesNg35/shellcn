@@ -18,14 +18,14 @@ servers, containers, databases, and desktops. Run it, open a browser, and you're
 
 _Demo (coming soon):_
 
-It speaks **22 protocols** out of the box today:
+It speaks **20 protocols** out of the box today:
 
-- **Shells**: SSH, Telnet
+- **Shells**: SSH
 - **File transfer**: SFTP, FTP/FTPS, SMB, WebDAV, S3
 - **Containers & clusters**: Docker, Swarm, Podman, Kubernetes, Proxmox
 - **Remote desktops**: VNC, RDP
 - **Databases**: PostgreSQL, MySQL, MongoDB, Redis
-- **Observability**: Prometheus, server monitoring
+- **Observability**: server monitoring
 - **Directory**: LDAP
 
 ## Quick start

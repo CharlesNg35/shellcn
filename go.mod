@@ -31,7 +31,6 @@ require (
 	github.com/pkg/sftp v1.13.10
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.19.0
-	github.com/reiver/go-telnet v0.0.0-20250617105250-7da9ad70a2b2
 	github.com/shirou/gopsutil/v4 v4.26.4
 	github.com/spf13/viper v1.21.0
 	github.com/studio-b12/gowebdav v0.12.0
@@ -171,7 +170,6 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
-	github.com/reiver/go-oi v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect

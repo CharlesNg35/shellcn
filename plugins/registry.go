@@ -10,7 +10,6 @@ import (
 	"github.com/charlesng35/shellcn/plugins/mysql"
 	"github.com/charlesng35/shellcn/plugins/podman"
 	"github.com/charlesng35/shellcn/plugins/postgresql"
-	"github.com/charlesng35/shellcn/plugins/prometheus"
 	"github.com/charlesng35/shellcn/plugins/proxmox"
 	"github.com/charlesng35/shellcn/plugins/rdp"
 	"github.com/charlesng35/shellcn/plugins/redis"
@@ -20,7 +19,6 @@ import (
 	"github.com/charlesng35/shellcn/plugins/smb"
 	"github.com/charlesng35/shellcn/plugins/ssh"
 	"github.com/charlesng35/shellcn/plugins/swarm"
-	"github.com/charlesng35/shellcn/plugins/telnet"
 	"github.com/charlesng35/shellcn/plugins/vnc"
 	"github.com/charlesng35/shellcn/plugins/webdav"
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -39,7 +37,6 @@ func all() []plugin.Plugin {
 	return []plugin.Plugin{
 		ssh.New(),
 		sftp.New(),
-		telnet.New(),
 		ftp.New(),
 		ftps.New(),
 		webdav.New(),
@@ -53,7 +50,6 @@ func all() []plugin.Plugin {
 		proxmox.New(),
 		kubernetes.New(),
 		servermonitor.New(),
-		prometheus.New(),
 		postgresql.New(),
 		mysql.New(),
 		redis.New(),
