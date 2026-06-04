@@ -660,7 +660,6 @@ export interface ProtocolAdminList {
 
 export interface MarketVersion {
   version: string;
-  sdk: string;
   apiVersion: number;
   protocolVersion: number;
   platforms: string[];

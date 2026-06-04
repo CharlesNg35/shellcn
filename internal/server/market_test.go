@@ -46,7 +46,7 @@ func marketFixture(t *testing.T) (*harness, string) {
 			Name: "demo", DisplayName: "Demo", Description: "test plugin",
 			Repo: "github.com/acme/demo", License: "MIT", Maintainers: []string{"acme"},
 			Versions: []pluginmarket.Version{{
-				Version: "0.9.0", SDK: "v0.1.3", APIVersion: 1, ProtocolVersion: grpcplugin.ProtocolVersion,
+				Version: "0.9.0", APIVersion: 1, ProtocolVersion: grpcplugin.ProtocolVersion,
 				Assets: map[string]pluginmarket.Asset{
 					runtime.GOOS + "/" + runtime.GOARCH: {
 						SHA256: hex.EncodeToString(sum[:]),

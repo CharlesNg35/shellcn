@@ -301,7 +301,7 @@ enabled, so behavior is unchanged until an admin acts.
       Protocol availability is enforced at the same boundary (`acquireSession`).
 - [x] Versioning: handshake magic cookie + `ProtocolVersion` refuse an
       unsupported plugin at load; manifest `APIVersion` is validated by the
-      registry. (Step 1.)
+      registry. Marketplace manifests do not pin the SDK module version. (Step 1.)
 - [x] **Out of core scope (by design):** per-subprocess resource limits are an
       ops concern (run the gateway under a container/systemd slice), and the
       cross-compile build matrix belongs to each plugin author's own repo —

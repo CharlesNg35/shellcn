@@ -452,6 +452,9 @@ dependency surface, without changing any behavior. **Prerequisite for Steps 1–
   changes require a new `ProtocolVersion` and a documented migration.
 - The host refuses plugins whose handshake/`ProtocolVersion` it does not support,
   with a clear operator-facing error (never a silent skip).
+- Marketplace manifests do not pin the SDK module version. The install/runtime
+  contract is the plugin's own version plus `APIVersion`, `ProtocolVersion`, the
+  platform asset, and its checksum.
 
 ## 6. Risks & open questions
 

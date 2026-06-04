@@ -24,7 +24,7 @@ func testIndex(assetURL, sha string) Index {
 			Name: "demo", DisplayName: "Demo", Description: "d", Repo: "github.com/a/b",
 			License: "MIT", Maintainers: []string{"a"},
 			Versions: []Version{{
-				Version: "0.2.0", SDK: "v0.1.3", APIVersion: 1, ProtocolVersion: grpcplugin.ProtocolVersion,
+				Version: "0.2.0", APIVersion: 1, ProtocolVersion: grpcplugin.ProtocolVersion,
 				Assets: map[string]Asset{
 					runtime.GOOS + "/" + runtime.GOARCH: {SHA256: sha, URLs: []string{assetURL}},
 				},

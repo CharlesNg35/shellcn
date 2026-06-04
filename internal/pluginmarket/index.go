@@ -20,7 +20,6 @@ type Asset struct {
 // Version is one installable plugin version from the index.
 type Version struct {
 	Version         string           `json:"version"`
-	SDK             string           `json:"sdk"`
 	APIVersion      int              `json:"apiVersion"`
 	ProtocolVersion int              `json:"protocolVersion"`
 	Yanked          bool             `json:"yanked,omitempty"`

@@ -18,7 +18,6 @@ const marketInstallEvent = "market.install"
 
 type marketVersionDTO struct {
 	Version         string          `json:"version"`
-	SDK             string          `json:"sdk"`
 	APIVersion      int             `json:"apiVersion"`
 	ProtocolVersion int             `json:"protocolVersion"`
 	Platforms       []string        `json:"platforms"`
@@ -71,7 +70,7 @@ func (s *Server) handleAdminMarketList(w http.ResponseWriter, r *http.Request) {
 		if v, ok := pluginmarket.Installable(e); ok {
 			dto.Compatible = true
 			dto.Latest = &marketVersionDTO{
-				Version: v.Version, SDK: v.SDK,
+				Version:    v.Version,
 				APIVersion: v.APIVersion, ProtocolVersion: v.ProtocolVersion,
 				Platforms: platformKeys(v), Icon: v.Icon, Projection: v.Projection,
 			}
