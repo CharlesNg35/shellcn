@@ -1,9 +1,13 @@
 package rdp
 
-// keysymToScancode maps the X11 keysyms noVNC sends to RDP set-1 scancodes.
-// It covers letters, digits, common punctuation, modifiers, whitespace, arrows
-// and function keys. Shifted symbols and the extended-key flag (right Ctrl/Alt,
-// navigation cluster) are best-effort and need validation against a live host.
+// keysymToScancode maps the X11 keysyms noVNC sends to RDP set-1 scancodes,
+// covering letters, digits, shifted symbols, punctuation, modifiers, whitespace,
+// arrows and function keys. Shift arrives as its own keysym, so a shifted symbol
+// maps to its base physical key (e.g. '!' -> the '1' key).
+//
+// The navigation cluster (arrows, Home/End/...) needs the extended-key (0xE0)
+// flag, which grdp's input API does not expose, so those keys use their
+// non-extended numpad scancodes and are reliable only with NumLock off.
 var keysymToScancode = map[uint32]int{
 	// Letters — upper- and lower-case share a physical key; Shift arrives as its
 	// own keysym.
@@ -66,6 +70,14 @@ var keysymToScancode = map[uint32]int{
 	0x2c: 0x33, // ,
 	0x2e: 0x34, // .
 	0x2f: 0x35, // /
+
+	// Shifted symbols map to the base physical key; noVNC sends Shift separately.
+	0x21: 0x02, 0x40: 0x03, 0x23: 0x04, 0x24: 0x05, 0x25: 0x06, // ! @ # $ %
+	0x5e: 0x07, 0x26: 0x08, 0x2a: 0x09, 0x28: 0x0a, 0x29: 0x0b, // ^ & * ( )
+	0x5f: 0x0c, 0x2b: 0x0d, // _ +
+	0x7b: 0x1a, 0x7d: 0x1b, 0x7c: 0x2b, // { } |
+	0x3a: 0x27, 0x22: 0x28, 0x7e: 0x29, // : " ~
+	0x3c: 0x33, 0x3e: 0x34, 0x3f: 0x35, // < > ?
 
 	// Arrow cluster (numpad scancodes; lacks the extended-key prefix).
 	0xff51: 0x4b, // Left

@@ -40,7 +40,9 @@ func (p *Plugin) Manifest() plugin.Manifest {
 			Icon:   icon,
 			Type:   plugin.PanelRemoteDesktop,
 			Source: &plugin.DataSource{RouteID: "rdp.desktop", Method: plugin.MethodWS},
-			Config: plugin.RemoteDesktopConfig{Resize: true},
+			// grdp has no display-control channel, so the remote desktop size is
+			// fixed at connect; the browser scales it to fit (no server resize).
+			Config: plugin.RemoteDesktopConfig{Resize: false},
 		}},
 		Streams: []plugin.Stream{{ID: "rdp.desktop", Kind: plugin.StreamDesktop, RouteID: "rdp.desktop"}},
 		Recording: []plugin.RecordingCapability{{
