@@ -76,3 +76,23 @@ func TestParseResizeControl(t *testing.T) {
 		t.Fatal("garbage parsed as resize")
 	}
 }
+
+func TestProxyURL(t *testing.T) {
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{}, nil, nil, nil, nil).
+		WithProxyPrefix("/api/connections/c1/proxy")
+	if got := rc.ProxyURL(); got != "/api/connections/c1/proxy/" {
+		t.Fatalf("bare proxy url = %q", got)
+	}
+	if got := rc.ProxyURL("container", "ab/cd", "https:8443"); got != "/api/connections/c1/proxy/container/ab%2Fcd/https:8443/" {
+		t.Fatalf("segmented proxy url = %q", got)
+	}
+	if got := rc.ProxyPrefix(); got != "/api/connections/c1/proxy" {
+		t.Fatalf("prefix = %q", got)
+	}
+	// Trailing slash on the supplied prefix is normalized away.
+	rc2 := plugin.NewRequestContext(context.Background(), plugin.User{}, nil, nil, nil, nil).
+		WithProxyPrefix("/api/connections/c1/proxy/")
+	if got := rc2.ProxyURL(); got != "/api/connections/c1/proxy/" {
+		t.Fatalf("normalized proxy url = %q", got)
+	}
+}

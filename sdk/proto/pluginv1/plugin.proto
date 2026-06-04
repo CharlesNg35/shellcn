@@ -91,6 +91,7 @@ message InvokeRequest {
   map<string, string> query = 4;
   bytes body = 5;
   ActingUser user = 6;
+  string proxy_prefix = 7;    // the connection's public proxy mount
 }
 
 message InvokeResponse {
@@ -102,6 +103,7 @@ message StreamStart {
   string route_id = 2;
   map<string, string> params = 3;
   ActingUser user = 4;
+  string proxy_prefix = 5;    // the connection's public proxy mount
 }
 
 message ChannelRequest {

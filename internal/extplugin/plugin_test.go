@@ -58,9 +58,10 @@ func (s *stubServer) Invoke(_ context.Context, req *pluginv1.InvokeRequest) (*pl
 		return nil, status.Error(codes.NotFound, "row gone")
 	}
 	out, _ := json.Marshal(map[string]any{
-		"route":   req.GetRouteId(),
-		"session": req.GetSessionId(),
-		"param":   req.GetParams()["k"],
+		"route":       req.GetRouteId(),
+		"session":     req.GetSessionId(),
+		"param":       req.GetParams()["k"],
+		"proxyPrefix": req.GetProxyPrefix(),
 	})
 	return &pluginv1.InvokeResponse{ResultJson: out}, nil
 }
@@ -193,5 +194,29 @@ func TestInvokeThroughSessionHandle(t *testing.T) {
 	}
 	if got := res.(map[string]any); got["route"] != "demo.list" {
 		t.Fatalf("unexpected result: %v", got)
+	}
+}
+
+// TestInvokeForwardsProxyPrefix asserts the proxy mount crosses the wire.
+func TestInvokeForwardsProxyPrefix(t *testing.T) {
+	ctx := context.Background()
+	manifest, routes := fixture()
+	bundle, _ := grpcplugin.EncodeManifest(manifest, routes)
+	p, err := extplugin.New(ctx, dialStub(t, &stubServer{manifest: bundle}))
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+	sess, err := p.Connect(ctx, plugin.ConnectConfig{ConnectionID: "c1", Transport: plugin.TransportDirect})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	rc := plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, sess, nil, nil, nil).
+		WithProxyPrefix("/api/connections/c1/proxy")
+	res, err := p.Routes()[0].Handle(rc)
+	if err != nil {
+		t.Fatalf("handle: %v", err)
+	}
+	if got := res.(map[string]any)["proxyPrefix"]; got != "/api/connections/c1/proxy" {
+		t.Fatalf("proxy prefix across the wire = %#v", got)
 	}
 }
