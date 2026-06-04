@@ -98,7 +98,9 @@ func TestProxyPodTarget(t *testing.T) {
 func TestServeHTTPProxyServesServiceWorker(t *testing.T) {
 	sess := connectTo(t, http.NewServeMux()).(*Session)
 	rec := httptest.NewRecorder()
-	sess.ServeHTTPProxy(rec, httptest.NewRequest(http.MethodGet, "/services/default/web/80/__shellcn_sw.js", nil))
+	req := httptest.NewRequest(http.MethodGet, "/services/default/web/80/__shellcn_sw.js", nil)
+	req.Header.Set(plugin.ProxyPrefixHeader, "/api/connections/c1/proxy")
+	sess.ServeHTTPProxy(rec, req)
 
 	prefix := "/api/connections/c1/proxy/services/default/web/80"
 	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "javascript") {

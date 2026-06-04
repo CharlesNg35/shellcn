@@ -337,6 +337,7 @@ type InvokeRequest struct {
 	Query         map[string]string      `protobuf:"bytes,4,rep,name=query,proto3" json:"query,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Body          []byte                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
 	User          *ActingUser            `protobuf:"bytes,6,opt,name=user,proto3" json:"user,omitempty"`
+	ProxyPrefix   string                 `protobuf:"bytes,7,opt,name=proxy_prefix,json=proxyPrefix,proto3" json:"proxy_prefix,omitempty"` // the connection's public proxy mount (core-owned URL space)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -411,6 +412,13 @@ func (x *InvokeRequest) GetUser() *ActingUser {
 		return x.User
 	}
 	return nil
+}
+
+func (x *InvokeRequest) GetProxyPrefix() string {
+	if x != nil {
+		return x.ProxyPrefix
+	}
+	return ""
 }
 
 type InvokeResponse struct {
@@ -1024,7 +1032,7 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12!\n" +
 	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12\x14\n" +
-	"\x05roles\x18\x04 \x03(\tR\x05roles\"\xf3\x02\n" +
+	"\x05roles\x18\x04 \x03(\tR\x05roles\"\x96\x03\n" +
 	"\rInvokeRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x19\n" +
@@ -1032,7 +1040,8 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\x06params\x18\x03 \x03(\v2#.pluginv1.InvokeRequest.ParamsEntryR\x06params\x128\n" +
 	"\x05query\x18\x04 \x03(\v2\".pluginv1.InvokeRequest.QueryEntryR\x05query\x12\x12\n" +
 	"\x04body\x18\x05 \x01(\fR\x04body\x12(\n" +
-	"\x04user\x18\x06 \x01(\v2\x14.pluginv1.ActingUserR\x04user\x1a9\n" +
+	"\x04user\x18\x06 \x01(\v2\x14.pluginv1.ActingUserR\x04user\x12!\n" +
+	"\fproxy_prefix\x18\a \x01(\tR\vproxyPrefix\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a8\n" +

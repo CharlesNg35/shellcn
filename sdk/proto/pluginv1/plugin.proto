@@ -91,6 +91,7 @@ message InvokeRequest {
   map<string, string> query = 4;
   bytes body = 5;
   ActingUser user = 6;
+  string proxy_prefix = 7;    // the connection's public proxy mount (core-owned URL space)
 }
 
 message InvokeResponse {

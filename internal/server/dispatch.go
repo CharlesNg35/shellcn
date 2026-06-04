@@ -9,6 +9,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -183,6 +184,7 @@ func (s *Server) handleConnectionProxy(w http.ResponseWriter, r *http.Request) {
 	if i := strings.Index(r.URL.EscapedPath(), mark); i >= 0 {
 		rp.URL.RawPath = "/" + r.URL.EscapedPath()[i+len(mark):]
 	}
+	rp.Header.Set(plugin.ProxyPrefixHeader, connProxyPrefix(conn.ID))
 	s.auditEvent(ctx, res, models.AuditAllowed, nil)
 	proxier.ServeHTTPProxy(w, rp)
 }
@@ -336,7 +338,9 @@ func (s *Server) InvokeRoute(ctx context.Context, user models.User, connID, rout
 		s.auditEvent(ctx, res, models.AuditError, err)
 		return nil, err
 	}
-	rc := plugin.NewRequestContext(ctx, toPluginUser(user), handle, res.params, nil, body).WithSnippets(s.snippetStore())
+	rc := plugin.NewRequestContext(ctx, toPluginUser(user), handle, res.params, nil, body).
+		WithSnippets(s.snippetStore()).
+		WithProxyPrefix(connProxyPrefix(res.conn.ID))
 	return s.invoke(ctx, res, rc)
 }
 
@@ -487,14 +491,25 @@ func (s *Server) bindRequest(w http.ResponseWriter, r *http.Request, res resolve
 				files[field] = append(files[field], plugin.NewUploadedFile(field, header))
 			}
 		}
-		return plugin.NewMultipartRequestContext(r.Context(), toPluginUser(res.user), sess, res.params, r.URL.Query(), r.MultipartForm.Value, files).WithSnippets(s.snippetStore()), cleanup, nil
+		return plugin.NewMultipartRequestContext(r.Context(), toPluginUser(res.user), sess, res.params, r.URL.Query(), r.MultipartForm.Value, files).
+			WithSnippets(s.snippetStore()).
+			WithProxyPrefix(connProxyPrefix(res.conn.ID)), cleanup, nil
 	}
 
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxJSONBody))
 	if err != nil {
 		return nil, func() {}, plugin.ErrInvalidInput
 	}
-	return plugin.NewRequestContext(r.Context(), toPluginUser(res.user), sess, res.params, r.URL.Query(), body).WithSnippets(s.snippetStore()), func() {}, nil
+	return plugin.NewRequestContext(r.Context(), toPluginUser(res.user), sess, res.params, r.URL.Query(), body).
+		WithSnippets(s.snippetStore()).
+		WithProxyPrefix(connProxyPrefix(res.conn.ID)), func() {}, nil
+}
+
+// connProxyPrefix is the single source of truth for a connection's public proxy
+// mount. Plugins receive it through the request context (unary routes) and the
+// proxy-prefix header (ServeHTTPProxy) instead of hardcoding the URL space.
+func connProxyPrefix(connID string) string {
+	return "/api/connections/" + url.PathEscape(connID) + "/proxy"
 }
 
 func (s *Server) snippetStore() plugin.SnippetStore {
@@ -589,7 +604,8 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 	rc := plugin.NewRequestContext(streamCtx, toPluginUser(res.user), handle, res.params, r.URL.Query(), nil).
 		WithAuditHook(func(ctx context.Context, result plugin.AuditResult, params map[string]string, err error) {
 			s.auditEventParams(ctx, res, models.AuditResult(result), params, err)
-		})
+		}).
+		WithProxyPrefix(connProxyPrefix(res.conn.ID))
 	if err := res.route.Stream(rc, client); err != nil {
 		_ = c.Close(websocket.StatusInternalError, streamCloseReason(err))
 		return

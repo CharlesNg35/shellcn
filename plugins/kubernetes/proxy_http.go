@@ -27,7 +27,7 @@ func (s *Session) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unsupported proxy target", http.StatusBadRequest)
 		return
 	}
-	prefix := fmt.Sprintf("/api/connections/%s/proxy/%s/%s/%s/%s", s.connID, kind, ns, name, portSeg)
+	prefix := fmt.Sprintf("%s/%s/%s/%s/%s", plugin.RequestProxyPrefix(r), kind, ns, name, portSeg)
 	if rest == webproxy.SWFile {
 		webproxy.ServeWorker(w, prefix)
 		return
@@ -105,7 +105,7 @@ func ServiceProxyURL(rc *plugin.RequestContext) (any, error) {
 			return nil, err
 		}
 	}
-	return proxyURLResult(s.connID, "services", ns, name, portSeg), nil
+	return proxyURLResult(rc, "services", ns, name, portSeg), nil
 }
 
 // PodProxyURL is the pod equivalent of ServiceProxyURL: it proxies straight to a
@@ -127,12 +127,11 @@ func PodProxyURL(rc *plugin.RequestContext) (any, error) {
 			return nil, err
 		}
 	}
-	return proxyURLResult(s.connID, "pods", ns, name, portSeg), nil
+	return proxyURLResult(rc, "pods", ns, name, portSeg), nil
 }
 
-func proxyURLResult(connID, kind, ns, name, portSeg string) map[string]any {
-	u := fmt.Sprintf("/api/connections/%s/proxy/%s/%s/%s/%s/", url.PathEscape(connID), kind, url.PathEscape(ns), url.PathEscape(name), portSeg)
-	return map[string]any{"url": u}
+func proxyURLResult(rc *plugin.RequestContext, kind, ns, name, portSeg string) map[string]any {
+	return map[string]any{"url": rc.ProxyURL(kind, ns, name, portSeg)}
 }
 
 // pickServicePort returns the port segment to proxy ("8080" for http,

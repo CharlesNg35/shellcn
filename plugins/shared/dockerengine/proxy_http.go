@@ -27,7 +27,7 @@ func (s *Session) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unsupported proxy target", http.StatusBadRequest)
 		return
 	}
-	prefix := fmt.Sprintf("/api/connections/%s/proxy/%s/%s/%s", s.connID, kind, id, portSeg)
+	prefix := fmt.Sprintf("%s/%s/%s/%s", plugin.RequestProxyPrefix(r), kind, id, portSeg)
 	if strings.HasSuffix(r.URL.Path, "/"+webproxy.SWFile) {
 		webproxy.ServeWorker(w, prefix)
 		return
@@ -50,11 +50,6 @@ func (s *Session) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
 		PublicPrefix:    prefix,
 		// No upstream-injected prefix: the app emits its own root-relative paths.
 	})
-}
-
-// ProxyURL builds the gateway "open in browser" URL for a target.
-func (s *Session) ProxyURL(kind, id, port string) string {
-	return fmt.Sprintf("/api/connections/%s/proxy/%s/%s/%s/", url.PathEscape(s.connID), kind, url.PathEscape(id), port)
 }
 
 // proxyTarget resolves where to dial: a container via its network, a service via
@@ -233,7 +228,7 @@ func ContainerProxyURL(rc *plugin.RequestContext) (any, error) {
 			return nil, err
 		}
 	}
-	return map[string]any{"url": s.ProxyURL("container", shortID(id), portSeg)}, nil
+	return map[string]any{"url": rc.ProxyURL("container", shortID(id), portSeg)}, nil
 }
 
 // pickWebPort picks the lowest reachable TCP port (Docker exposes only the

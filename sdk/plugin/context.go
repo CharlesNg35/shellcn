@@ -141,12 +141,40 @@ type RequestContext struct {
 	body   []byte
 	form   url.Values
 	files  map[string][]UploadedFile
+
+	proxyPrefix string
 }
 
 // WithSnippets attaches the platform snippet store to a request context.
 func (rc *RequestContext) WithSnippets(snippets SnippetStore) *RequestContext {
 	rc.Snippets = snippets
 	return rc
+}
+
+// WithProxyPrefix attaches the connection's public proxy mount (set by the
+// core; the URL layout never lives in plugin code).
+func (rc *RequestContext) WithProxyPrefix(prefix string) *RequestContext {
+	rc.proxyPrefix = strings.TrimSuffix(prefix, "/")
+	return rc
+}
+
+// ProxyPrefix returns the connection's public proxy mount as supplied by the
+// core, without a trailing slash (empty when the core did not provide one).
+func (rc *RequestContext) ProxyPrefix() string { return rc.proxyPrefix }
+
+// ProxyURL builds the browser-facing "open in browser" URL for this connection:
+// the core-supplied proxy mount plus path-escaped sub-segments and a trailing
+// slash. Handlers return it from routes bound to Open: OpenURL actions instead
+// of hardcoding the gateway's URL space.
+func (rc *RequestContext) ProxyURL(sub ...string) string {
+	var b strings.Builder
+	b.WriteString(rc.proxyPrefix)
+	for _, s := range sub {
+		b.WriteByte('/')
+		b.WriteString(url.PathEscape(s))
+	}
+	b.WriteByte('/')
+	return b.String()
 }
 
 // WithAuditHook attaches the core audit writer for stream-internal operations.

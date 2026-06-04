@@ -138,7 +138,8 @@ func (s *server) Invoke(ctx context.Context, req *pluginv1.InvokeRequest) (*plug
 		return nil, status.Error(codes.NotFound, "unknown route")
 	}
 	rc := plugin.NewRequestContext(ctx, actingUser(req.GetUser()), cs.session, req.GetParams(), queryValues(req.GetQuery()), req.GetBody()).
-		WithAuditHook(cs.auditHook(id))
+		WithAuditHook(cs.auditHook(id)).
+		WithProxyPrefix(req.GetProxyPrefix())
 	res, err := route.Handle(rc)
 	if err != nil {
 		return nil, StatusFromError(err)

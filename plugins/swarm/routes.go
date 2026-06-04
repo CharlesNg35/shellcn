@@ -645,7 +645,7 @@ func serviceProxyURL(rc *plugin.RequestContext) (any, error) {
 			return nil, err
 		}
 	}
-	return map[string]any{"url": s.ProxyURL("service", id, portSeg)}, nil
+	return map[string]any{"url": rc.ProxyURL("service", id, portSeg)}, nil
 }
 
 // pickServicePort picks a service's published TCP port to open, preferring ingress

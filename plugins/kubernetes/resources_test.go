@@ -29,7 +29,9 @@ func connectTo(t *testing.T, mux *http.ServeMux) plugin.Session {
 }
 
 func rc(sess plugin.Session, params map[string]string) *plugin.RequestContext {
-	return plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, sess, params, url.Values{}, nil)
+	// The core supplies the proxy mount on every request context; tests mirror it.
+	return plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, sess, params, url.Values{}, nil).
+		WithProxyPrefix("/api/connections/c1/proxy")
 }
 
 func TestListResourceNamespacedPods(t *testing.T) {

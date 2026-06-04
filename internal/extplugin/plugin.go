@@ -113,12 +113,13 @@ func (g *grpcPlugin) invoke(rc *plugin.RequestContext, routeID string) (any, err
 	}
 	client, _ := g.ref.get()
 	resp, err := client.Invoke(rc.Ctx, &pluginv1.InvokeRequest{
-		SessionId: sess.id,
-		RouteId:   routeID,
-		Params:    rc.Params(),
-		Query:     flattenQuery(rc.Query()),
-		Body:      rc.Body(),
-		User:      wireUser(rc.User),
+		SessionId:   sess.id,
+		RouteId:     routeID,
+		Params:      rc.Params(),
+		Query:       flattenQuery(rc.Query()),
+		Body:        rc.Body(),
+		User:        wireUser(rc.User),
+		ProxyPrefix: rc.ProxyPrefix(),
 	})
 	if err != nil {
 		return nil, grpcplugin.ErrorFromStatus(err)
