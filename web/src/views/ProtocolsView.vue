@@ -1,128 +1,47 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import TabPanels from "primevue/tabpanels";
 import TabPanel from "primevue/tabpanel";
-import DataTable from "primevue/datatable";
-import Column from "primevue/column";
-import Select from "primevue/select";
-import Button from "primevue/button";
 import AppIcon from "../components/AppIcon.vue";
 import AppBreadcrumb from "../components/AppBreadcrumb.vue";
-import { adminMarketApi, adminProtocolsApi } from "../api/admin";
-import { useNotify } from "../composables/useNotify";
-import type {
-  MarketEntry,
-  ProtocolAdminItem,
-  ProtocolAvailability,
-} from "../types/projection";
-
-const notify = useNotify();
+import ProtocolTable from "./protocols/ProtocolTable.vue";
+import MarketTable from "./protocols/MarketTable.vue";
+import { useProtocolsAdmin } from "../composables/useProtocolsAdmin";
+import { useMarketAdmin } from "../composables/useMarketAdmin";
 
 const crumbs = [
   { label: "Settings", to: { name: "settings" } },
   { label: "Protocols" },
 ];
 
-const availabilityChoices: { label: string; value: ProtocolAvailability }[] = [
-  { label: "Enabled", value: "enabled" },
-  { label: "Admins only", value: "admin_only" },
-  { label: "Disabled", value: "disabled" },
-];
-
 const tab = ref("builtin");
-const protocols = ref<ProtocolAdminItem[]>([]);
-const pluginsDir = ref("");
-const loading = ref(true);
-const saving = ref<Record<string, boolean>>({});
 
-const builtIn = computed(() => protocols.value.filter((p) => !p.external));
-const external = computed(() => protocols.value.filter((p) => p.external));
+const {
+  pluginsDir,
+  loading,
+  saving,
+  builtIn,
+  external,
+  load,
+  setAvailability,
+} = useProtocolsAdmin();
 
-const marketEnabled = ref(false);
-const market = ref<MarketEntry[]>([]);
-const marketLoading = ref(true);
-const installing = ref<Record<string, boolean>>({});
+const {
+  enabled: marketEnabled,
+  entries: marketEntries,
+  loading: marketLoading,
+  installing,
+  load: loadMarket,
+  install,
+} = useMarketAdmin(load);
 
-async function loadMarket(): Promise<void> {
-  marketLoading.value = true;
-  try {
-    const res = await adminMarketApi.list();
-    marketEnabled.value = res.enabled;
-    market.value = res.plugins;
-  } catch {
-    marketEnabled.value = false;
-    market.value = [];
-  } finally {
-    marketLoading.value = false;
-  }
-}
-
-async function install(entry: MarketEntry): Promise<void> {
-  installing.value = { ...installing.value, [entry.name]: true };
-  try {
-    const res = await adminMarketApi.install(entry.name);
-    notify.success(
-      res.updated ? "Plugin updated" : "Plugin installed",
-      `${entry.displayName} v${res.version}`,
-    );
-    await Promise.all([load(), loadMarket()]);
-  } catch {
-    notify.error("Installation failed", entry.displayName);
-  } finally {
-    installing.value = { ...installing.value, [entry.name]: false };
-  }
-}
-
-function marketAction(entry: MarketEntry): string | null {
-  if (!entry.compatible) return null;
-  if (!entry.managed) return "Install";
-  if (entry.updateAvailable) return "Update";
-  return null;
-}
-
-async function load(): Promise<void> {
-  loading.value = true;
-  try {
-    const res = await adminProtocolsApi.list();
-    protocols.value = res.protocols;
-    pluginsDir.value = res.dir;
-  } finally {
-    loading.value = false;
-  }
-}
 onMounted(() => {
   void load();
   void loadMarket();
 });
-
-function transportLabel(p: ProtocolAdminItem): string {
-  if (!p.transports?.length) return "—";
-  return p.transports
-    .map((t) => (t === "agent" ? "Agent" : "Direct"))
-    .join(", ");
-}
-
-async function setAvailability(
-  item: ProtocolAdminItem,
-  next: ProtocolAvailability,
-): Promise<void> {
-  const previous = item.availability;
-  if (next === previous) return;
-  saving.value = { ...saving.value, [item.name]: true };
-  item.availability = next;
-  try {
-    await adminProtocolsApi.setAvailability(item.name, next);
-    notify.success("Protocol updated", item.title);
-  } catch {
-    item.availability = previous;
-    notify.error("Could not update protocol", item.title);
-  } finally {
-    saving.value = { ...saving.value, [item.name]: false };
-  }
-}
 </script>
 
 <template>
@@ -159,92 +78,19 @@ async function setAvailability(
         <Tab value="market">
           <AppIcon :icon="{ type: 'lucide', value: 'store' }" :size="14" />
           Marketplace
-          <span class="text-surface-400">({{ market.length }})</span>
+          <span class="text-surface-400">({{ marketEntries.length }})</span>
         </Tab>
       </TabList>
       <TabPanels>
         <TabPanel value="builtin" class="flex h-full flex-col">
           <div class="min-h-0 flex-1">
-            <DataTable
-              :value="builtIn"
+            <ProtocolTable
+              :protocols="builtIn"
               :loading="loading"
-              scrollable
-              scroll-height="flex"
-            >
-              <Column header="Protocol">
-                <template #body="{ data }">
-                  <span class="flex items-center gap-2">
-                    <AppIcon
-                      :icon="(data as ProtocolAdminItem).icon"
-                      :size="18"
-                    />
-                    <span class="min-w-0">
-                      <span
-                        class="block font-medium text-surface-800 dark:text-surface-100"
-                        >{{ (data as ProtocolAdminItem).title }}</span
-                      >
-                      <span class="block text-xs text-surface-400">{{
-                        (data as ProtocolAdminItem).name
-                      }}</span>
-                    </span>
-                  </span>
-                </template>
-              </Column>
-              <Column header="Transports">
-                <template #body="{ data }">
-                  <span class="text-sm text-surface-500">{{
-                    transportLabel(data as ProtocolAdminItem)
-                  }}</span>
-                </template>
-              </Column>
-              <Column header="Capabilities">
-                <template #body="{ data }">
-                  <div class="flex flex-wrap items-center gap-1">
-                    <span
-                      v-for="risk in (data as ProtocolAdminItem).risks"
-                      :key="risk"
-                      class="rounded bg-surface-100 px-1.5 py-0.5 text-xs text-surface-600 capitalize dark:bg-surface-800 dark:text-surface-300"
-                      >{{ risk }}</span
-                    >
-                    <span
-                      v-if="(data as ProtocolAdminItem).recording?.length"
-                      class="inline-flex items-center gap-1 text-xs text-surface-400"
-                    >
-                      <AppIcon
-                        :icon="{ type: 'lucide', value: 'video' }"
-                        :size="12"
-                      />
-                      {{ (data as ProtocolAdminItem).recording!.join(", ") }}
-                    </span>
-                    <span
-                      v-if="
-                        !(data as ProtocolAdminItem).risks?.length &&
-                        !(data as ProtocolAdminItem).recording?.length
-                      "
-                      class="text-sm text-surface-400"
-                      >—</span
-                    >
-                  </div>
-                </template>
-              </Column>
-              <Column header="Availability" :pt="{ bodyCell: 'w-44' }">
-                <template #body="{ data }">
-                  <Select
-                    :model-value="(data as ProtocolAdminItem).availability"
-                    :options="availabilityChoices"
-                    option-label="label"
-                    option-value="value"
-                    :disabled="saving[(data as ProtocolAdminItem).name]"
-                    :aria-label="`Availability for ${(data as ProtocolAdminItem).title}`"
-                    fluid
-                    @update:model-value="
-                      setAvailability(data as ProtocolAdminItem, $event)
-                    "
-                  />
-                </template>
-              </Column>
-              <template #empty>No built-in protocols.</template>
-            </DataTable>
+              :saving="saving"
+              empty-text="No built-in protocols."
+              @set-availability="setAvailability"
+            />
           </div>
         </TabPanel>
 
@@ -265,12 +111,13 @@ async function setAvailability(
               v-if="pluginsDir"
               class="max-w-sm text-sm text-surface-500 dark:text-surface-400"
             >
-              Drop a compiled plugin binary into
+              Install one from the Marketplace tab, or drop a compiled plugin
+              binary into
               <code
                 class="rounded bg-surface-100 px-1 py-0.5 dark:bg-surface-800"
                 >{{ pluginsDir }}</code
               >
-              on the server and restart to load it.
+              on the server and restart.
             </p>
             <p
               v-else
@@ -280,112 +127,14 @@ async function setAvailability(
             </p>
           </div>
           <div v-else class="min-h-0 flex-1">
-            <DataTable
-              :value="external"
+            <ProtocolTable
+              :protocols="external"
               :loading="loading"
-              scrollable
-              scroll-height="flex"
-            >
-              <Column header="Protocol">
-                <template #body="{ data }">
-                  <span class="flex items-center gap-2">
-                    <AppIcon
-                      :icon="(data as ProtocolAdminItem).icon"
-                      :size="18"
-                    />
-                    <span class="min-w-0">
-                      <span
-                        class="block font-medium text-surface-800 dark:text-surface-100"
-                        >{{ (data as ProtocolAdminItem).title }}</span
-                      >
-                      <span class="block text-xs text-surface-400">{{
-                        (data as ProtocolAdminItem).name
-                      }}</span>
-                    </span>
-                  </span>
-                </template>
-              </Column>
-              <Column field="version" header="Version">
-                <template #body="{ data }">
-                  <span class="text-sm text-surface-500">{{
-                    (data as ProtocolAdminItem).version || "—"
-                  }}</span>
-                </template>
-              </Column>
-              <Column header="Status">
-                <template #body="{ data }">
-                  <span
-                    class="inline-flex items-center gap-1.5 text-sm"
-                    :class="
-                      (data as ProtocolAdminItem).healthy
-                        ? 'text-emerald-600'
-                        : 'text-rose-600'
-                    "
-                  >
-                    <span
-                      class="h-2 w-2 rounded-full"
-                      :class="
-                        (data as ProtocolAdminItem).healthy
-                          ? 'bg-emerald-500'
-                          : 'bg-rose-500'
-                      "
-                    />
-                    {{
-                      (data as ProtocolAdminItem).healthy
-                        ? "Running"
-                        : "Offline"
-                    }}
-                  </span>
-                </template>
-              </Column>
-              <Column header="Capabilities">
-                <template #body="{ data }">
-                  <div class="flex flex-wrap items-center gap-1">
-                    <span
-                      v-for="risk in (data as ProtocolAdminItem).risks"
-                      :key="risk"
-                      class="rounded bg-surface-100 px-1.5 py-0.5 text-xs text-surface-600 capitalize dark:bg-surface-800 dark:text-surface-300"
-                      >{{ risk }}</span
-                    >
-                    <span
-                      v-if="(data as ProtocolAdminItem).recording?.length"
-                      class="inline-flex items-center gap-1 text-xs text-surface-400"
-                    >
-                      <AppIcon
-                        :icon="{ type: 'lucide', value: 'video' }"
-                        :size="12"
-                      />
-                      {{ (data as ProtocolAdminItem).recording!.join(", ") }}
-                    </span>
-                    <span
-                      v-if="
-                        !(data as ProtocolAdminItem).risks?.length &&
-                        !(data as ProtocolAdminItem).recording?.length
-                      "
-                      class="text-sm text-surface-400"
-                      >—</span
-                    >
-                  </div>
-                </template>
-              </Column>
-              <Column header="Availability" :pt="{ bodyCell: 'w-44' }">
-                <template #body="{ data }">
-                  <Select
-                    :model-value="(data as ProtocolAdminItem).availability"
-                    :options="availabilityChoices"
-                    option-label="label"
-                    option-value="value"
-                    :disabled="saving[(data as ProtocolAdminItem).name]"
-                    :aria-label="`Availability for ${(data as ProtocolAdminItem).title}`"
-                    fluid
-                    @update:model-value="
-                      setAvailability(data as ProtocolAdminItem, $event)
-                    "
-                  />
-                </template>
-              </Column>
-              <template #empty>No external protocols.</template>
-            </DataTable>
+              :saving="saving"
+              show-status
+              empty-text="No external protocols."
+              @set-availability="setAvailability"
+            />
           </div>
         </TabPanel>
 
@@ -412,85 +161,12 @@ async function setAvailability(
             </p>
           </div>
           <div v-else class="min-h-0 flex-1">
-            <DataTable
-              :value="market"
+            <MarketTable
+              :entries="marketEntries"
               :loading="marketLoading"
-              scrollable
-              scroll-height="flex"
-            >
-              <Column header="Plugin">
-                <template #body="{ data }">
-                  <span class="flex items-center gap-2">
-                    <AppIcon
-                      v-if="(data as MarketEntry).latest"
-                      :icon="(data as MarketEntry).latest!.icon"
-                      :size="18"
-                    />
-                    <span class="min-w-0">
-                      <span
-                        class="block font-medium text-surface-800 dark:text-surface-100"
-                        >{{ (data as MarketEntry).displayName }}</span
-                      >
-                      <span class="block text-xs text-surface-400">
-                        {{ (data as MarketEntry).name }} ·
-                        {{ (data as MarketEntry).license }}
-                      </span>
-                    </span>
-                  </span>
-                </template>
-              </Column>
-              <Column header="Description">
-                <template #body="{ data }">
-                  <span class="block max-w-md text-sm text-surface-500">
-                    {{ (data as MarketEntry).description }}
-                  </span>
-                  <a
-                    :href="`https://${(data as MarketEntry).repo}`"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-xs text-primary-500 hover:underline"
-                    >{{ (data as MarketEntry).repo }}</a
-                  >
-                </template>
-              </Column>
-              <Column header="Latest" :pt="{ bodyCell: 'w-28' }">
-                <template #body="{ data }">
-                  <span class="text-sm text-surface-500">
-                    {{ (data as MarketEntry).latest?.version ?? "—" }}
-                  </span>
-                </template>
-              </Column>
-              <Column header="Status" :pt="{ bodyCell: 'w-44' }">
-                <template #body="{ data }">
-                  <div class="flex items-center gap-2">
-                    <Button
-                      v-if="marketAction(data as MarketEntry)"
-                      :label="marketAction(data as MarketEntry)!"
-                      size="small"
-                      :loading="installing[(data as MarketEntry).name]"
-                      :aria-label="`${marketAction(data as MarketEntry)} ${(data as MarketEntry).displayName}`"
-                      @click="install(data as MarketEntry)"
-                    />
-                    <span
-                      v-else-if="(data as MarketEntry).managed"
-                      class="inline-flex items-center gap-1.5 text-sm text-emerald-600"
-                    >
-                      <span class="h-2 w-2 rounded-full bg-emerald-500" />
-                      Installed
-                      {{
-                        (data as MarketEntry).installedVersion
-                          ? `v${(data as MarketEntry).installedVersion}`
-                          : ""
-                      }}
-                    </span>
-                    <span v-else class="text-sm text-surface-400"
-                      >Incompatible</span
-                    >
-                  </div>
-                </template>
-              </Column>
-              <template #empty>No plugins in the registry yet.</template>
-            </DataTable>
+              :installing="installing"
+              @install="install"
+            />
           </div>
         </TabPanel>
       </TabPanels>
