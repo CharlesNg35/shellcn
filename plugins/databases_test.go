@@ -10,7 +10,7 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 	reg := plugin.NewRegistry()
 	Register(reg)
 
-	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle", "cassandra", "neo4j"} {
+	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb"} {
 		m, ok := reg.Manifest(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)
@@ -27,7 +27,7 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{"postgresql", "mongodb", "cockroachdb", "clickhouse", "oracle"} {
+	for _, name := range []string{"postgresql", "mongodb"} {
 		m, _ := reg.Manifest(name)
 		field, ok := credentialField(m.Config, "auth_client_cert_id")
 		if !ok {
@@ -38,14 +38,14 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{"mysql", "redis", "mssql", "cassandra"} {
+	for _, name := range []string{"mysql", "redis"} {
 		m, _ := reg.Manifest(name)
 		if _, ok := credentialField(m.Config, "auth_client_cert_id"); ok {
 			t.Fatalf("%s should not expose certificate authentication", name)
 		}
 	}
 
-	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle", "cassandra"} {
+	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb"} {
 		m, _ := reg.Manifest(name)
 		tlsField, ok := credentialField(m.Config, "client_cert_id")
 		if !ok {
@@ -55,40 +55,13 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 			t.Fatalf("%s TLS client certificate field should support TLS client certificates: %+v", name, tlsField.Credential.Kinds)
 		}
 	}
-
-	m, ok := reg.Manifest("dynamodb")
-	if !ok {
-		t.Fatal("dynamodb should be registered")
-	}
-	field, ok := credentialField(m.Config, "credential_id")
-	if !ok {
-		t.Fatal("dynamodb should expose credential_id")
-	}
-	if !credentialKindsContain(field.Credential.Kinds, plugin.CredentialCloudAccessKey) {
-		t.Fatalf("dynamodb credential selector should support cloud access keys: %+v", field.Credential.Kinds)
-	}
-	if credentialKindsContain(field.Credential.Kinds, plugin.CredentialDBPassword) || credentialKindsContain(field.Credential.Kinds, plugin.CredentialTLSClientCert) {
-		t.Fatalf("dynamodb credential selector should not advertise database passwords or TLS client certificates: %+v", field.Credential.Kinds)
-	}
-
-	m, ok = reg.Manifest("neo4j")
-	if !ok {
-		t.Fatal("neo4j should be registered")
-	}
-	field, ok = credentialField(m.Config, "bearer_credential_id")
-	if !ok {
-		t.Fatal("neo4j should expose bearer_credential_id")
-	}
-	if !credentialKindsContain(field.Credential.Kinds, plugin.CredentialBearerToken) || credentialKindsContain(field.Credential.Kinds, plugin.CredentialDBPassword) {
-		t.Fatalf("neo4j bearer selector should only advertise bearer tokens: %+v", field.Credential.Kinds)
-	}
 }
 
 func TestDatabaseConfigVisibleValuesAreAuthSpecific(t *testing.T) {
 	reg := plugin.NewRegistry()
 	Register(reg)
 
-	for _, name := range []string{"postgresql", "mysql", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle"} {
+	for _, name := range []string{"postgresql", "mysql", "mongodb"} {
 		m, ok := reg.Manifest(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)
@@ -98,7 +71,7 @@ func TestDatabaseConfigVisibleValuesAreAuthSpecific(t *testing.T) {
 		requireHidden(t, name, visible, "credential_id", "auth_client_cert_id")
 	}
 
-	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle", "cassandra", "neo4j"} {
+	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb"} {
 		m, ok := reg.Manifest(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)
@@ -108,7 +81,7 @@ func TestDatabaseConfigVisibleValuesAreAuthSpecific(t *testing.T) {
 		requireHidden(t, name, visible, "username", "password", "auth_client_cert_id")
 	}
 
-	for _, name := range []string{"redis", "cassandra"} {
+	for _, name := range []string{"redis"} {
 		m, ok := reg.Manifest(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)
@@ -117,7 +90,7 @@ func TestDatabaseConfigVisibleValuesAreAuthSpecific(t *testing.T) {
 		requireHidden(t, name, visible, "username", "password", "credential_id", "auth_client_cert_id")
 	}
 
-	for _, name := range []string{"postgresql", "mongodb", "cockroachdb", "clickhouse", "oracle"} {
+	for _, name := range []string{"postgresql", "mongodb"} {
 		m, ok := reg.Manifest(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)
@@ -140,9 +113,6 @@ func TestDatabaseCreateActionsAreDeclaredAtCollectionLevel(t *testing.T) {
 	}{
 		{"postgresql", "database", "postgresql.database.create", "postgresql.database.create"},
 		{"mysql", "database", "mysql.database.create", "mysql.database.create"},
-		{"clickhouse", "database", "clickhouse.database.create", "clickhouse.database.create"},
-		{"cockroachdb", "database", "cockroachdb.database.create", "cockroachdb.database.create"},
-		{"mssql", "database", "mssql.database.create", "mssql.database.create"},
 	} {
 		m, ok := reg.Manifest(tc.protocol)
 		if !ok {
@@ -200,9 +170,6 @@ func TestEditableDatabaseTablesDeclareColumnMetadataSource(t *testing.T) {
 	}{
 		{"postgresql", "postgresql.table.columns"},
 		{"mysql", "mysql.table.columns"},
-		{"cockroachdb", "cockroachdb.table.columns"},
-		{"mssql", "mssql.table.columns"},
-		{"oracle", "oracle.table.columns"},
 	} {
 		m, ok := reg.Manifest(tc.protocol)
 		if !ok {

@@ -18,33 +18,15 @@ servers, containers, databases, and desktops. Run it, open a browser, and you're
 
 _Demo (coming soon):_
 
-It speaks **40 protocols** out of the box today:
+It speaks **22 protocols** out of the box today:
 
 - **Shells**: SSH, Telnet
-- **File transfer**: SFTP, FTP/FTPS, SMB, NFS, WebDAV, S3, MinIO
+- **File transfer**: SFTP, FTP/FTPS, SMB, WebDAV, S3
 - **Containers & clusters**: Docker, Swarm, Podman, Kubernetes, Proxmox
 - **Remote desktops**: VNC, RDP
-- **Databases**: PostgreSQL, MySQL, MongoDB, Redis, MSSQL, Oracle, CockroachDB, ClickHouse, Cassandra, DynamoDB, Neo4j
-- **Search**: Elasticsearch, OpenSearch, Meilisearch, Typesense, Solr
-- **Observability**: Prometheus, InfluxDB, server monitoring
-- **Messaging**: Kafka, RabbitMQ, NATS
+- **Databases**: PostgreSQL, MySQL, MongoDB, Redis
+- **Observability**: Prometheus, server monitoring
 - **Directory**: LDAP
-
-## Extending it
-
-Every protocol is a plugin, and the web UI renders any plugin the same way. Auth, audit,
-and policy are shared by all of them.
-
-The built-in set stays small on purpose. Need a protocol that isn't here? Write your own
-plugin, no fork or core rebuild needed:
-
-1. Start from the [plugin starter](https://github.com/CharlesNg35/shellcn-plugin-starter) template.
-2. Write your plugin and publish a release on your own repo.
-3. Submit its manifest to [shellcn-plugins](https://github.com/CharlesNg35/shellcn-plugins) with a single PR.
-
-Once merged, anyone can install it from the in-app Marketplace under
-**Settings → Protocols**. Prefer to keep it private? Skip the registry and drop the
-compiled binary into the gateway's plugin directory instead.
 
 ## Quick start
 
@@ -111,6 +93,17 @@ It serves on `:8081` and keeps its data in the working directory.
 > **Early days.** ShellCN is in active development, so expect a few rough edges. Please feel
 > free to take it for a spin and tell us what breaks. Issues and feedback are very welcome.
 
+## Extending it
+
+ShellCN keeps the built-in protocol set small. Extra protocols are installed as plugins.
+
+Use [shellcn-contrib](https://github.com/CharlesNg35/shellcn-contrib) for ShellCN-maintained plugins, or start from
+[shellcn-plugin-starter](https://github.com/CharlesNg35/shellcn-plugin-starter) to build your own.
+
+To make a public plugin installable from the Marketplace, publish a release and submit its
+manifest to [shellcn-plugins](https://github.com/CharlesNg35/shellcn-plugins). For private
+plugins, drop the compiled binary into the gateway plugin directory.
+
 ## Build from source
 
 Requires Go 1.26+ and Node 24+.
@@ -124,12 +117,12 @@ make dev      # live-reloading dev server
 
 ShellCN is developed across a small family of repos we maintain:
 
-| Repository                                                                      | What it is                                                                                                |
-| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [shellcn](https://github.com/CharlesNg35/shellcn)                               | The gateway: core, SDK, and the built-in protocol plugins.                                                |
-| [shellcn-plugins](https://github.com/CharlesNg35/shellcn-plugins)               | The plugin registry that powers the in-app Marketplace.                                                   |
-| [shellcn-contrib](https://github.com/CharlesNg35/shellcn-contrib)               | First-party plugins beyond the built-in set, installable from the Marketplace.                            |
-| [shellcn-plugin-starter](https://github.com/CharlesNg35/shellcn-plugin-starter) | Template + docs for writing your own plugin.                                                              |
+| Repository                                                                      | What it is                                                             |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [shellcn](https://github.com/CharlesNg35/shellcn)                               | The gateway: core, SDK, and the built-in protocol set.                 |
+| [shellcn-plugins](https://github.com/CharlesNg35/shellcn-plugins)               | The plugin registry that powers the in-app Marketplace.                |
+| [shellcn-contrib](https://github.com/CharlesNg35/shellcn-contrib)               | ShellCN-maintained external plugins, installable from the Marketplace. |
+| [shellcn-plugin-starter](https://github.com/CharlesNg35/shellcn-plugin-starter) | Template + docs for writing your own plugin.                           |
 
 ## License
 

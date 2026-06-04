@@ -10,7 +10,7 @@ func TestFilesystemPluginsValidateAndRegister(t *testing.T) {
 	reg := plugin.NewRegistry()
 	Register(reg)
 
-	for _, name := range []string{"ftp", "ftps", "webdav", "smb", "nfs", "s3", "minio"} {
+	for _, name := range []string{"ftp", "ftps", "webdav", "smb", "s3"} {
 		proj, ok := reg.Projection(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)
@@ -19,9 +19,9 @@ func TestFilesystemPluginsValidateAndRegister(t *testing.T) {
 			t.Fatalf("%s category: got %q want %q", name, proj.Category.Key, plugin.CategoryFiles)
 		}
 		// Every filesystem plugin leads with a file browser. Pure transfer
-		// protocols expose exactly that; object stores (s3/minio) add bucket
+		// protocols expose exactly that; object stores add bucket
 		// management tabs alongside it.
-		objectStore := name == "s3" || name == "minio"
+		objectStore := name == "s3"
 		if proj.Tabs[0].Type != plugin.PanelFileBrowser ||
 			(objectStore && len(proj.Tabs) < 1) || (!objectStore && len(proj.Tabs) != 1) {
 			t.Fatalf("%s should lead with a file browser tab: %+v", name, proj.Tabs)
@@ -98,10 +98,7 @@ func TestSharedBasicAuthCredentialCompatibility(t *testing.T) {
 			t.Fatalf("basic auth credential should support %s", name)
 		}
 	}
-	if reg.CredentialKindSupportsProtocol(plugin.CredentialBasicAuth, "nfs") {
-		t.Fatal("nfs should not claim basic auth credential support")
-	}
-	for _, name := range []string{"s3", "minio"} {
+	for _, name := range []string{"s3"} {
 		if !reg.CredentialKindSupportsProtocol(plugin.CredentialCloudAccessKey, name) {
 			t.Fatalf("cloud access key credential should support %s", name)
 		}
@@ -128,23 +125,7 @@ func TestFilesystemAuthSchemasAreProtocolSpecific(t *testing.T) {
 		}
 	}
 
-	nfsManifest, ok := reg.Manifest("nfs")
-	if !ok {
-		t.Fatal("nfs plugin was not registered")
-	}
-	nfsFields := fieldMap(nfsManifest.Config)
-	for _, key := range []string{"auth", "credential_id", "username", "password"} {
-		if nfsFields[key] {
-			t.Fatalf("nfs should not include password auth field %q", key)
-		}
-	}
-	for _, key := range []string{"machine_name", "uid", "gid", "export_path"} {
-		if !nfsFields[key] {
-			t.Fatalf("nfs should include AUTH_SYS/export field %q", key)
-		}
-	}
-
-	for _, name := range []string{"s3", "minio"} {
+	for _, name := range []string{"s3"} {
 		m, ok := reg.Manifest(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)
@@ -181,7 +162,7 @@ func TestFilesystemAuthVisibleValuesAreProtocolSpecific(t *testing.T) {
 		requireFilesystemHidden(t, name, credential, "username", "password", "machine_name", "uid", "gid")
 	}
 
-	for _, name := range []string{"s3", "minio"} {
+	for _, name := range []string{"s3"} {
 		m, ok := reg.Manifest(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)
@@ -194,14 +175,6 @@ func TestFilesystemAuthVisibleValuesAreProtocolSpecific(t *testing.T) {
 		requireFilesystemVisible(t, name, credential, "credential_id", "session_token")
 		requireFilesystemHidden(t, name, credential, "access_key_id", "secret_access_key", "username", "password", "machine_name", "uid", "gid")
 	}
-
-	m, ok := reg.Manifest("nfs")
-	if !ok {
-		t.Fatal("nfs plugin was not registered")
-	}
-	visible := visibleFilesystemFields(m.Config, map[string]any{})
-	requireFilesystemVisible(t, "nfs", visible, "machine_name", "uid", "gid", "export_path")
-	requireFilesystemHidden(t, "nfs", visible, "auth", "credential_id", "username", "password", "access_key_id", "secret_access_key", "session_token")
 }
 
 func fieldMap(schema plugin.Schema) map[string]bool {

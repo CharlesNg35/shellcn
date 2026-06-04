@@ -10,7 +10,7 @@ func TestObservabilityPluginsValidateAndRegister(t *testing.T) {
 	reg := plugin.NewRegistry()
 	Register(reg)
 
-	for _, name := range []string{"prometheus", "influxdb"} {
+	for _, name := range []string{"prometheus"} {
 		proj, ok := reg.Projection(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)
@@ -44,16 +44,6 @@ func TestObservabilityCredentialCompatibility(t *testing.T) {
 			t.Fatalf("prometheus should not advertise %s credentials", kind)
 		}
 	}
-	for _, kind := range []plugin.CredentialKind{plugin.CredentialAPIToken, plugin.CredentialBearerToken, plugin.CredentialBasicAuth} {
-		if !reg.CredentialKindSupportsProtocol(kind, "influxdb") {
-			t.Fatalf("%s credential should support influxdb", kind)
-		}
-	}
-	for _, kind := range []plugin.CredentialKind{plugin.CredentialDBPassword, plugin.CredentialTLSClientCert} {
-		if reg.CredentialKindSupportsProtocol(kind, "influxdb") {
-			t.Fatalf("influxdb should not advertise %s credentials", kind)
-		}
-	}
 }
 
 func TestObservabilitySchemasAreProtocolSpecific(t *testing.T) {
@@ -73,27 +63,6 @@ func TestObservabilitySchemasAreProtocolSpecific(t *testing.T) {
 	for _, key := range []string{"api_key", "database", "keyspace", "brokers", "management_url", "read_only", "confirm_writes"} {
 		if fields[key] {
 			t.Fatalf("prometheus should not expose unrelated field %q", key)
-		}
-	}
-
-	manifest, ok = reg.Manifest("influxdb")
-	if !ok {
-		t.Fatal("influxdb plugin was not registered")
-	}
-	fields = fieldMap(manifest.Config)
-	for _, key := range []string{
-		"api_mode", "endpoint", "org", "database", "auth_v3", "auth_v2", "auth_v1",
-		"api_token_v3", "token_credential_v3_id", "username_v3", "password_v3", "basic_credential_v3_id",
-		"api_token_v2", "token_credential_v2_id", "username_v1", "password_v1", "basic_credential_v1_id",
-		"tls_mode", "ca_certificate", "query_language_v3", "lookback", "timeout", "page_limit", "read_only", "confirm_writes",
-	} {
-		if !fields[key] {
-			t.Fatalf("influxdb should expose field %q", key)
-		}
-	}
-	for _, key := range []string{"auth", "api_token", "token_credential_id", "basic_credential_id", "bearer_token", "credential_id", "poll_interval", "admin_api", "lifecycle_api", "keyspace", "brokers", "management_url"} {
-		if fields[key] {
-			t.Fatalf("influxdb should not expose unrelated or ambiguous field %q", key)
 		}
 	}
 }
