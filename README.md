@@ -117,12 +117,12 @@ make dev      # live-reloading dev server
 
 ShellCN is developed across a small family of repos we maintain:
 
-| Repository                                                                      | What it is                                                             |
-| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| [shellcn](https://github.com/CharlesNg35/shellcn)                               | The gateway: core, SDK, and the built-in protocol set.                 |
-| [shellcn-plugin-registry](https://github.com/CharlesNg35/shellcn-plugin-registry)               | The plugin registry that powers the in-app Marketplace.                |
-| [shellcn-contrib](https://github.com/CharlesNg35/shellcn-contrib)               | ShellCN-maintained external plugins, installable from the Marketplace. |
-| [shellcn-plugin-starter](https://github.com/CharlesNg35/shellcn-plugin-starter) | Template + docs for writing your own plugin.                           |
+| Repository                                                                        | What it is                                                             |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [shellcn](https://github.com/CharlesNg35/shellcn)                                 | The gateway: core, SDK, and the built-in protocol set.                 |
+| [shellcn-plugin-registry](https://github.com/CharlesNg35/shellcn-plugin-registry) | The plugin registry that powers the in-app Marketplace.                |
+| [shellcn-contrib](https://github.com/CharlesNg35/shellcn-contrib)                 | ShellCN-maintained external plugins, installable from the Marketplace. |
+| [shellcn-plugin-starter](https://github.com/CharlesNg35/shellcn-plugin-starter)   | Template + docs for writing your own plugin.                           |
 
 ## License
 
