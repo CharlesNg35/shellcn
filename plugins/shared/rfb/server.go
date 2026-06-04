@@ -85,14 +85,16 @@ type FramebufferServer struct {
 	height int
 	sink   InputSink
 
-	mu        sync.Mutex
-	cond      *sync.Cond
-	clientPF  PixelFormat
-	fb        []byte // width*height*4, native BGRX32
-	dirty     []Rect
-	requested bool
-	full      bool
-	closed    bool
+	mu         sync.Mutex
+	cond       *sync.Cond
+	clientPF   PixelFormat
+	fb         []byte // width*height*4, native BGRX32
+	dirty      []Rect
+	requested  bool
+	full       bool
+	closed     bool
+	wantCursor bool // client advertised the Cursor pseudo-encoding
+	cursorSent bool
 }
 
 // NewFramebufferServer creates a server for a width×height desktop writing to rw.
@@ -236,11 +238,20 @@ func (s *FramebufferServer) readSetEncodings() error {
 		return err
 	}
 	n := int(binary.BigEndian.Uint16(head[1:]))
-	if n > 0 {
-		if _, err := io.ReadFull(s.rw, make([]byte, n*4)); err != nil {
-			return err
+	if n == 0 {
+		return nil
+	}
+	body := make([]byte, n*4)
+	if _, err := io.ReadFull(s.rw, body); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	for i := 0; i < n; i++ {
+		if int32(binary.BigEndian.Uint32(body[i*4:])) == encCursor {
+			s.wantCursor = true
 		}
 	}
+	s.mu.Unlock()
 	return nil
 }
 
@@ -338,10 +349,19 @@ func (s *FramebufferServer) encodeUpdate(rects []Rect, pf PixelFormat) []byte {
 	if bpp == 0 {
 		bpp = 4
 	}
+	// Send the default cursor shape once; noVNC shows nothing otherwise.
+	var cursor []byte
+	extra := 0
+	if s.wantCursor && !s.cursorSent {
+		cursor = encodeCursorRect(pf)
+		s.cursorSent = true
+		extra = 1
+	}
 	out := []byte{0, 0} // message-type 0 + padding
 	count := make([]byte, 2)
-	binary.BigEndian.PutUint16(count, uint16(len(rects)))
+	binary.BigEndian.PutUint16(count, uint16(len(rects)+extra))
 	out = append(out, count...)
+	out = append(out, cursor...)
 	for _, rc := range rects {
 		hdr := make([]byte, 12)
 		binary.BigEndian.PutUint16(hdr[0:], uint16(rc.X))
