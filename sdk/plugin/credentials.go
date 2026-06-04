@@ -97,6 +97,25 @@ func (c *credentialKindSet) clone() *credentialKindSet {
 	return out
 }
 
+// cloneWithout copies the set minus the given kinds (used to revalidate a
+// plugin update against a catalog that excludes its own old declarations).
+func (c *credentialKindSet) cloneWithout(exclude map[CredentialKind]bool) *credentialKindSet {
+	out := c.clone()
+	if len(exclude) == 0 {
+		return out
+	}
+	order := out.order[:0]
+	for _, k := range out.order {
+		if exclude[k] {
+			delete(out.byID, k)
+			continue
+		}
+		order = append(order, k)
+	}
+	out.order = order
+	return out
+}
+
 func (c *credentialKindSet) add(info CredentialKindInfo) error {
 	info = normalizeCredentialKindInfo(info)
 	if err := validateCredentialKindInfo(info); err != nil {

@@ -249,7 +249,7 @@ type harness struct {
 	sessions       map[string]auth.Session // userID → platform session
 }
 
-func newHarness(t *testing.T) *harness {
+func newHarness(t *testing.T, opts ...func(*server.Deps)) *harness {
 	t.Helper()
 	st := store.NewMemory()
 	key, _ := secrets.GenerateMasterKey()
@@ -284,7 +284,7 @@ func newHarness(t *testing.T) *harness {
 	twoFactor := service.NewTwoFactorService(st.Users, vault, "ShellCN")
 	invitations := service.NewInvitationService(st.Invitations, users, email.New(email.SMTP{}))
 
-	srv := server.New(server.Deps{
+	deps := server.Deps{
 		Plugins: reg, Store: st, Sessions: sessMgr,
 		Auth: auth.NewLocalAuthenticator(st.Users), SessionMgr: authMgr,
 		Tickets: auth.NewTicketStore(time.Minute), Policy: pol,
@@ -296,7 +296,11 @@ func newHarness(t *testing.T) *harness {
 			Kind: "openai", Name: "Shared", APIKey: "sk-global-secret", Model: "gpt-4o",
 		}),
 		ModelRegistry: modelreg.New(modelreg.WithURLs("", "")),
-	})
+	}
+	for _, o := range opts {
+		o(&deps)
+	}
+	srv := server.New(deps)
 
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)

@@ -3,6 +3,7 @@ import type { Role } from "../constants/roles";
 import type {
   AdminUser,
   AuditPage,
+  MarketList,
   ProtocolAdminList,
   ProtocolAvailability,
   UserConnectionSummary,
@@ -61,4 +62,14 @@ export const adminProtocolsApi = {
   list: () => api.get<ProtocolAdminList>("/admin/protocols"),
   setAvailability: (name: string, availability: ProtocolAvailability) =>
     api.put<void>(`/admin/protocols/${name}`, { availability }),
+};
+
+// adminMarketApi browses the plugin registry and installs/updates plugins.
+export const adminMarketApi = {
+  list: () => api.get<MarketList>("/admin/market"),
+  install: (name: string, version?: string) =>
+    api.post<{ name: string; version: string; updated: boolean }>(
+      `/admin/market/${name}/install`,
+      version ? { version } : {},
+    ),
 };

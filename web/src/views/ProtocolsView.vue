@@ -8,11 +8,13 @@ import TabPanel from "primevue/tabpanel";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Select from "primevue/select";
+import Button from "primevue/button";
 import AppIcon from "../components/AppIcon.vue";
 import AppBreadcrumb from "../components/AppBreadcrumb.vue";
-import { adminProtocolsApi } from "../api/admin";
+import { adminMarketApi, adminProtocolsApi } from "../api/admin";
 import { useNotify } from "../composables/useNotify";
 import type {
+  MarketEntry,
   ProtocolAdminItem,
   ProtocolAvailability,
 } from "../types/projection";
@@ -39,6 +41,48 @@ const saving = ref<Record<string, boolean>>({});
 const builtIn = computed(() => protocols.value.filter((p) => !p.external));
 const external = computed(() => protocols.value.filter((p) => p.external));
 
+const marketEnabled = ref(false);
+const market = ref<MarketEntry[]>([]);
+const marketLoading = ref(true);
+const installing = ref<Record<string, boolean>>({});
+
+async function loadMarket(): Promise<void> {
+  marketLoading.value = true;
+  try {
+    const res = await adminMarketApi.list();
+    marketEnabled.value = res.enabled;
+    market.value = res.plugins;
+  } catch {
+    marketEnabled.value = false;
+    market.value = [];
+  } finally {
+    marketLoading.value = false;
+  }
+}
+
+async function install(entry: MarketEntry): Promise<void> {
+  installing.value = { ...installing.value, [entry.name]: true };
+  try {
+    const res = await adminMarketApi.install(entry.name);
+    notify.success(
+      res.updated ? "Plugin updated" : "Plugin installed",
+      `${entry.displayName} v${res.version}`,
+    );
+    await Promise.all([load(), loadMarket()]);
+  } catch {
+    notify.error("Installation failed", entry.displayName);
+  } finally {
+    installing.value = { ...installing.value, [entry.name]: false };
+  }
+}
+
+function marketAction(entry: MarketEntry): string | null {
+  if (!entry.compatible) return null;
+  if (!entry.managed) return "Install";
+  if (entry.updateAvailable) return "Update";
+  return null;
+}
+
 async function load(): Promise<void> {
   loading.value = true;
   try {
@@ -49,7 +93,10 @@ async function load(): Promise<void> {
     loading.value = false;
   }
 }
-onMounted(load);
+onMounted(() => {
+  void load();
+  void loadMarket();
+});
 
 function transportLabel(p: ProtocolAdminItem): string {
   if (!p.transports?.length) return "—";
@@ -108,6 +155,11 @@ async function setAvailability(
           <AppIcon :icon="{ type: 'lucide', value: 'puzzle' }" :size="14" />
           External
           <span class="text-surface-400">({{ external.length }})</span>
+        </Tab>
+        <Tab value="market">
+          <AppIcon :icon="{ type: 'lucide', value: 'store' }" :size="14" />
+          Marketplace
+          <span class="text-surface-400">({{ market.length }})</span>
         </Tab>
       </TabList>
       <TabPanels>
@@ -333,6 +385,111 @@ async function setAvailability(
                 </template>
               </Column>
               <template #empty>No external protocols.</template>
+            </DataTable>
+          </div>
+        </TabPanel>
+
+        <TabPanel value="market" class="flex h-full flex-col">
+          <div
+            v-if="!marketLoading && !marketEnabled"
+            class="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center"
+          >
+            <AppIcon
+              :icon="{ type: 'lucide', value: 'store' }"
+              :size="28"
+              class="text-surface-300"
+            />
+            <p class="font-medium text-surface-700 dark:text-surface-200">
+              Marketplace unavailable
+            </p>
+            <p class="max-w-sm text-sm text-surface-500 dark:text-surface-400">
+              The plugin registry is disabled or unreachable. Configure
+              <code
+                class="rounded bg-surface-100 px-1 py-0.5 dark:bg-surface-800"
+                >plugins.market</code
+              >
+              on the server to enable it.
+            </p>
+          </div>
+          <div v-else class="min-h-0 flex-1">
+            <DataTable
+              :value="market"
+              :loading="marketLoading"
+              scrollable
+              scroll-height="flex"
+            >
+              <Column header="Plugin">
+                <template #body="{ data }">
+                  <span class="flex items-center gap-2">
+                    <AppIcon
+                      v-if="(data as MarketEntry).latest"
+                      :icon="(data as MarketEntry).latest!.icon"
+                      :size="18"
+                    />
+                    <span class="min-w-0">
+                      <span
+                        class="block font-medium text-surface-800 dark:text-surface-100"
+                        >{{ (data as MarketEntry).displayName }}</span
+                      >
+                      <span class="block text-xs text-surface-400">
+                        {{ (data as MarketEntry).name }} ·
+                        {{ (data as MarketEntry).license }}
+                      </span>
+                    </span>
+                  </span>
+                </template>
+              </Column>
+              <Column header="Description">
+                <template #body="{ data }">
+                  <span class="block max-w-md text-sm text-surface-500">
+                    {{ (data as MarketEntry).description }}
+                  </span>
+                  <a
+                    :href="`https://${(data as MarketEntry).repo}`"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-xs text-primary-500 hover:underline"
+                    >{{ (data as MarketEntry).repo }}</a
+                  >
+                </template>
+              </Column>
+              <Column header="Latest" :pt="{ bodyCell: 'w-28' }">
+                <template #body="{ data }">
+                  <span class="text-sm text-surface-500">
+                    {{ (data as MarketEntry).latest?.version ?? "—" }}
+                  </span>
+                </template>
+              </Column>
+              <Column header="Status" :pt="{ bodyCell: 'w-44' }">
+                <template #body="{ data }">
+                  <div class="flex items-center gap-2">
+                    <Button
+                      v-if="marketAction(data as MarketEntry)"
+                      :label="marketAction(data as MarketEntry)!"
+                      size="small"
+                      :loading="installing[(data as MarketEntry).name]"
+                      :aria-label="`${marketAction(data as MarketEntry)} ${(data as MarketEntry).displayName}`"
+                      @click="install(data as MarketEntry)"
+                    />
+                    <span
+                      v-else-if="(data as MarketEntry).managed"
+                      class="inline-flex items-center gap-1.5 text-sm text-emerald-600"
+                    >
+                      <span class="h-2 w-2 rounded-full bg-emerald-500" />
+                      Installed
+                      {{
+                        (data as MarketEntry).installedVersion
+                          ? `v${(data as MarketEntry).installedVersion}`
+                          : ""
+                      }}
+                    </span>
+                    <span v-else class="text-sm text-surface-400"
+                      >Incompatible</span
+                    >
+                  </div>
+                </template>
+              </Column>
+              <template #empty>No plugins in the registry yet.</template>
             </DataTable>
           </div>
         </TabPanel>

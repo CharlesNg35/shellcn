@@ -60,6 +60,46 @@ func (r *Registry) Register(p Plugin) error {
 	return nil
 }
 
+// Replace swaps an already-registered plugin for a new instance with the same
+// name (an external plugin update). Validation runs against the catalog minus
+// the old version's own credential kinds so a plugin may keep re-declaring
+// them; kinds are never removed (existing connections may reference them).
+func (r *Registry) Replace(p Plugin) error {
+	m := p.Manifest()
+	routes := p.Routes()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	old, exists := r.byName[m.Name]
+	if !exists {
+		return fmt.Errorf("plugin %q: %w", m.Name, ErrNotFound)
+	}
+
+	ownKinds := map[CredentialKind]bool{}
+	for _, info := range old.manifest.CredentialKinds {
+		ownKinds[normalizeCredentialKindInfo(info).Kind] = true
+	}
+	if err := ValidateWithCredentialKinds(m, routes, r.credentialKinds.cloneWithout(ownKinds)); err != nil {
+		return fmt.Errorf("plugin %q: %w", m.Name, err)
+	}
+	for _, info := range m.CredentialKinds {
+		if _, known := r.credentialKinds.byID[normalizeCredentialKindInfo(info).Kind]; known {
+			continue
+		}
+		if err := r.credentialKinds.add(info); err != nil {
+			return fmt.Errorf("plugin %q: %w", m.Name, err)
+		}
+	}
+	addCredentialKindSupports(r.credentialKinds, m)
+
+	idx := make(map[string]Route, len(routes))
+	for _, rt := range routes {
+		idx[rt.ID] = rt
+	}
+	r.byName[m.Name] = &entry{plugin: p, manifest: m, routes: idx}
+	return nil
+}
+
 // MustRegister panics on registration failure — for wiring at startup.
 func (r *Registry) MustRegister(p Plugin) {
 	if err := r.Register(p); err != nil {

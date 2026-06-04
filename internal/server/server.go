@@ -19,6 +19,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/extplugin"
+	"github.com/charlesng35/shellcn/internal/pluginmarket"
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/recording"
 	"github.com/charlesng35/shellcn/internal/service"
@@ -47,6 +48,8 @@ type Deps struct {
 	Protocols       *service.ProtocolService
 	// ExtPlugins is the out-of-tree plugin manager; nil when none are configured.
 	ExtPlugins *extplugin.Manager
+	// Market is the plugin registry client; nil when the marketplace is disabled.
+	Market *pluginmarket.Service
 	// PluginsDir is the configured external-plugin directory, surfaced read-only
 	// to the admin UI; empty when external loading is disabled.
 	PluginsDir        string
@@ -280,6 +283,8 @@ func (s *Server) routes() chi.Router {
 					if s.deps.Protocols != nil {
 						ar.Get("/admin/protocols", s.handleAdminListProtocols)
 						ar.Put("/admin/protocols/{name}", s.handleAdminSetProtocolAvailability)
+						ar.Get("/admin/market", s.handleAdminMarketList)
+						ar.Post("/admin/market/{name}/install", s.handleAdminMarketInstall)
 					}
 				})
 			}

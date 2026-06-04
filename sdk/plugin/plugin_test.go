@@ -639,3 +639,47 @@ func TestPageLimitClamp(t *testing.T) {
 		t.Errorf("limit clamp: want %d, got %d", plugin.MaxPageLimit, page.Limit)
 	}
 }
+
+func TestRegistryReplace(t *testing.T) {
+	m, routes := sampleManifest()
+	reg := plugin.NewRegistry()
+
+	if err := reg.Replace(&stubPlugin{manifest: m, routes: routes}); !errors.Is(err, plugin.ErrNotFound) {
+		t.Fatalf("replace before register: want ErrNotFound, got %v", err)
+	}
+	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	updated := m
+	updated.Version = "9.9.9"
+	if err := reg.Replace(&stubPlugin{manifest: updated, routes: routes}); err != nil {
+		t.Fatalf("replace: %v", err)
+	}
+	got, ok := reg.Manifest(m.Name)
+	if !ok || got.Version != "9.9.9" {
+		t.Fatalf("manifest after replace: %+v %v", got, ok)
+	}
+}
+
+func TestRegistryReplaceKeepsOwnCredentialKinds(t *testing.T) {
+	m, routes := sampleManifest()
+	m.CredentialKinds = []plugin.CredentialKindInfo{{
+		Kind: "sample_token", Label: "Sample token", SecretLabel: "Token",
+	}}
+	m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth", Fields: []plugin.Field{{
+		Key: "credential", Label: "Credential", Type: plugin.FieldCredentialRef,
+		Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{"sample_token"}},
+	}}}}}
+	reg := plugin.NewRegistry()
+	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	// The update re-declares the same kind: must not collide with itself.
+	if err := reg.Replace(&stubPlugin{manifest: m, routes: routes}); err != nil {
+		t.Fatalf("replace with own kind: %v", err)
+	}
+	if _, ok := reg.CredentialKindLookup("sample_token"); !ok {
+		t.Fatal("own credential kind must survive the replace")
+	}
+}

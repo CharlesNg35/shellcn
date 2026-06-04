@@ -29,6 +29,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/email"
 	"github.com/charlesng35/shellcn/internal/extplugin"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/pluginmarket"
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/recording"
 	"github.com/charlesng35/shellcn/internal/secrets"
@@ -161,6 +162,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	// Out-of-tree plugins: register subprocesses from plugins.dir into the same
 	// registry as the built-ins, forwarding their audit to the core writer.
 	var extPlugins *extplugin.Manager
+	var market *pluginmarket.Service
 	if cfg.Plugins.Dir != "" {
 		extPlugins = extplugin.NewManager(cfg.Plugins.Dir,
 			extplugin.WithLogger(logger),
@@ -178,6 +180,9 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 			logger.Warn("load external plugins", "dir", cfg.Plugins.Dir, "err", err)
 		}
 		defer extPlugins.Close()
+	}
+	if cfg.Plugins.Market.Enabled && len(cfg.Plugins.Market.Indexes) > 0 && extPlugins != nil {
+		market = pluginmarket.New(cfg.Plugins.Market.Indexes)
 	}
 	recBlobs, err := recording.NewLocalBlobStore(cfg.Recordings.Dir)
 	if err != nil {
@@ -308,6 +313,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		Enrollments:       enrollments,
 		Protocols:         protocols,
 		ExtPlugins:        extPlugins,
+		Market:            market,
 		PluginsDir:        cfg.Plugins.Dir,
 		Users:             users,
 		TwoFactor:         twoFactor,

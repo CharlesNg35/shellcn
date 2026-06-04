@@ -2,6 +2,7 @@ package extplugin_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -471,5 +472,49 @@ func TestPluginChannelCapabilities(t *testing.T) {
 	}
 	if got := string(si.ServerInit()); got != "demo-server-init" {
 		t.Fatalf("server init = %q", got)
+	}
+}
+
+func TestLoadOneAndUpdate(t *testing.T) {
+	dir := buildDemo(t)
+	bin := filepath.Join(dir, "demoplugin")
+
+	reg := plugin.NewRegistry()
+	m := extplugin.NewManager(t.TempDir()) // empty dir: nothing loads at startup
+	t.Cleanup(m.Close)
+	if err := m.LoadAll(context.Background(), reg); err != nil {
+		t.Fatalf("loadall: %v", err)
+	}
+	if _, ok := reg.Get("demo"); ok {
+		t.Fatal("registry must start empty")
+	}
+
+	if err := m.LoadOne(context.Background(), reg, bin); err != nil {
+		t.Fatalf("LoadOne: %v", err)
+	}
+	if _, ok := reg.Get("demo"); !ok {
+		t.Fatal("demo must be registered after LoadOne")
+	}
+	if !m.IsManaged("demo") {
+		t.Fatal("demo must be managed after LoadOne")
+	}
+
+	if err := m.Update(context.Background(), reg, "demo", bin); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	p, _ := reg.Get("demo")
+	sess, err := p.Connect(context.Background(), plugin.ConnectConfig{ConnectionID: "c1", Transport: plugin.TransportDirect, Net: plugintest.DirectTransport()})
+	if err != nil {
+		t.Fatalf("connect after update: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+	route, _ := reg.Route("demo", "demo.list")
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u"}, sess, map[string]string{"k": "v"}, nil, nil)
+	if _, err := route.Handle(rc); err != nil {
+		t.Fatalf("invoke after update: %v", err)
+	}
+
+	if err := m.Update(context.Background(), reg, "nope", bin); !errors.Is(err, plugin.ErrNotFound) {
+		t.Fatalf("update of unmanaged plugin: want ErrNotFound, got %v", err)
 	}
 }
