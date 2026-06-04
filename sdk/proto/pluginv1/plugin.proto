@@ -103,6 +103,7 @@ message StreamStart {
   string route_id = 2;
   map<string, string> params = 3;
   ActingUser user = 4;
+  string proxy_prefix = 5;    // the connection's public proxy mount (core-owned URL space)
 }
 
 message ChannelRequest {

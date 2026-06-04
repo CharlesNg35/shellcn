@@ -25,7 +25,8 @@ func (s *server) OpenStream(_ context.Context, req *pluginv1.StreamStart) (*plug
 	}
 	srv := NewPipeServer(func(ctx context.Context, conn net.Conn) error {
 		rc := plugin.NewRequestContext(ctx, actingUser(req.GetUser()), cs.session, req.GetParams(), nil, nil).
-			WithAuditHook(cs.auditHook(req.GetSessionId()))
+			WithAuditHook(cs.auditHook(req.GetSessionId())).
+			WithProxyPrefix(req.GetProxyPrefix())
 		return route.Stream(rc, &clientStream{conn: conn, ctx: ctx})
 	})
 	return &pluginv1.BrokerRef{BrokerId: ServeConn(s.broker, srv)}, nil

@@ -471,6 +471,7 @@ type StreamStart struct {
 	RouteId       string                 `protobuf:"bytes,2,opt,name=route_id,json=routeId,proto3" json:"route_id,omitempty"`
 	Params        map[string]string      `protobuf:"bytes,3,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	User          *ActingUser            `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
+	ProxyPrefix   string                 `protobuf:"bytes,5,opt,name=proxy_prefix,json=proxyPrefix,proto3" json:"proxy_prefix,omitempty"` // the connection's public proxy mount (core-owned URL space)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -531,6 +532,13 @@ func (x *StreamStart) GetUser() *ActingUser {
 		return x.User
 	}
 	return nil
+}
+
+func (x *StreamStart) GetProxyPrefix() string {
+	if x != nil {
+		return x.ProxyPrefix
+	}
+	return ""
 }
 
 type ChannelRequest struct {
@@ -1051,13 +1059,14 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"1\n" +
 	"\x0eInvokeResponse\x12\x1f\n" +
 	"\vresult_json\x18\x01 \x01(\fR\n" +
-	"resultJson\"\xe7\x01\n" +
+	"resultJson\"\x8a\x02\n" +
 	"\vStreamStart\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x19\n" +
 	"\broute_id\x18\x02 \x01(\tR\arouteId\x129\n" +
 	"\x06params\x18\x03 \x03(\v2!.pluginv1.StreamStart.ParamsEntryR\x06params\x12(\n" +
-	"\x04user\x18\x04 \x01(\v2\x14.pluginv1.ActingUserR\x04user\x1a9\n" +
+	"\x04user\x18\x04 \x01(\v2\x14.pluginv1.ActingUserR\x04user\x12!\n" +
+	"\fproxy_prefix\x18\x05 \x01(\tR\vproxyPrefix\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xbc\x01\n" +

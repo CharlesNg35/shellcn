@@ -18,6 +18,7 @@ func (g *grpcPlugin) stream(rc *plugin.RequestContext, browser plugin.ClientStre
 	client, broker := g.ref.get()
 	ref, err := client.OpenStream(rc.Ctx, &pluginv1.StreamStart{
 		SessionId: sess.id, RouteId: routeID, Params: rc.Params(), User: wireUser(rc.User),
+		ProxyPrefix: rc.ProxyPrefix(),
 	})
 	if err != nil {
 		return grpcplugin.ErrorFromStatus(err)
