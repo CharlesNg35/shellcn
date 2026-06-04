@@ -32,16 +32,19 @@ It speaks **40 protocols** out of the box today:
 
 ## Extending it
 
-Every protocol is a self-describing Go plugin, and the frontend is one universal renderer
-that draws whatever a plugin declares - so the UI, auth, audit, and policy are shared by all
-of them.
+Every protocol is a plugin, and the web UI renders any plugin the same way. Auth, audit,
+and policy are shared by all of them.
 
-The built-in protocols above are a **curated, stable set** and won't keep growing in-tree.
-When you need one that isn't here, add it as an **external plugin**: a separate Go binary
-built against the plugin SDK, dropped into the gateway's plugin directory and enabled from
-**Settings → Protocols** - no fork, no core rebuild. It uses the same contract as the
-built-ins, so it's rendered and governed identically. Start from the
-[plugin starter](https://github.com/CharlesNg35/shellcn-plugin-starter).
+The built-in set stays small on purpose. Need a protocol that isn't here? Write your own
+plugin, no fork or core rebuild needed:
+
+1. Start from the [plugin starter](https://github.com/CharlesNg35/shellcn-plugin-starter) template.
+2. Write your plugin and publish a release on your own repo.
+3. Submit its manifest to [shellcn-plugins](https://github.com/CharlesNg35/shellcn-plugins) with a single PR.
+
+Once merged, anyone can install it from the in-app Marketplace under
+**Settings → Protocols**. Prefer to keep it private? Skip the registry and drop the
+compiled binary into the gateway's plugin directory instead.
 
 ## Quick start
 
@@ -124,7 +127,7 @@ ShellCN is developed across a small family of repos we maintain:
 | Repository                                                                      | What it is                                                                                                |
 | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | [shellcn](https://github.com/CharlesNg35/shellcn)                               | The gateway: core, SDK, and the built-in protocol plugins.                                                |
-| [shellcn-plugins](https://github.com/CharlesNg35/shellcn-plugins)               | The plugin registry: community manifests, verified binaries, and the index behind the in-app Marketplace. |
+| [shellcn-plugins](https://github.com/CharlesNg35/shellcn-plugins)               | The plugin registry that powers the in-app Marketplace.                                                   |
 | [shellcn-contrib](https://github.com/CharlesNg35/shellcn-contrib)               | First-party plugins beyond the built-in set, installable from the Marketplace.                            |
 | [shellcn-plugin-starter](https://github.com/CharlesNg35/shellcn-plugin-starter) | Template + docs for writing your own plugin.                                                              |
 
