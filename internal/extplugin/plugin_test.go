@@ -197,9 +197,7 @@ func TestInvokeThroughSessionHandle(t *testing.T) {
 	}
 }
 
-// TestInvokeForwardsProxyPrefix asserts the core-supplied proxy mount crosses
-// the wire so external plugin handlers can build open-in-browser URLs without
-// hardcoding the gateway's URL space.
+// TestInvokeForwardsProxyPrefix asserts the proxy mount crosses the wire.
 func TestInvokeForwardsProxyPrefix(t *testing.T) {
 	ctx := context.Background()
 	manifest, routes := fixture()

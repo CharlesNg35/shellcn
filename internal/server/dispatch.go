@@ -505,9 +505,8 @@ func (s *Server) bindRequest(w http.ResponseWriter, r *http.Request, res resolve
 		WithProxyPrefix(connProxyPrefix(res.conn.ID)), func() {}, nil
 }
 
-// connProxyPrefix is the single source of truth for a connection's public proxy
-// mount. Plugins receive it through the request context (unary routes) and the
-// proxy-prefix header (ServeHTTPProxy) instead of hardcoding the URL space.
+// connProxyPrefix is the single source of truth for a connection's public
+// proxy mount; plugins receive it via the request context and proxy header.
 func connProxyPrefix(connID string) string {
 	return "/api/connections/" + url.PathEscape(connID) + "/proxy"
 }

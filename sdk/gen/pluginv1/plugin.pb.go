@@ -337,7 +337,7 @@ type InvokeRequest struct {
 	Query         map[string]string      `protobuf:"bytes,4,rep,name=query,proto3" json:"query,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Body          []byte                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
 	User          *ActingUser            `protobuf:"bytes,6,opt,name=user,proto3" json:"user,omitempty"`
-	ProxyPrefix   string                 `protobuf:"bytes,7,opt,name=proxy_prefix,json=proxyPrefix,proto3" json:"proxy_prefix,omitempty"` // the connection's public proxy mount (core-owned URL space)
+	ProxyPrefix   string                 `protobuf:"bytes,7,opt,name=proxy_prefix,json=proxyPrefix,proto3" json:"proxy_prefix,omitempty"` // the connection's public proxy mount
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -471,7 +471,7 @@ type StreamStart struct {
 	RouteId       string                 `protobuf:"bytes,2,opt,name=route_id,json=routeId,proto3" json:"route_id,omitempty"`
 	Params        map[string]string      `protobuf:"bytes,3,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	User          *ActingUser            `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
-	ProxyPrefix   string                 `protobuf:"bytes,5,opt,name=proxy_prefix,json=proxyPrefix,proto3" json:"proxy_prefix,omitempty"` // the connection's public proxy mount (core-owned URL space)
+	ProxyPrefix   string                 `protobuf:"bytes,5,opt,name=proxy_prefix,json=proxyPrefix,proto3" json:"proxy_prefix,omitempty"` // the connection's public proxy mount
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

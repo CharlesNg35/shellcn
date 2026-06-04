@@ -151,21 +151,17 @@ func (rc *RequestContext) WithSnippets(snippets SnippetStore) *RequestContext {
 	return rc
 }
 
-// WithProxyPrefix attaches the connection's public proxy mount (set by the
-// core; the URL layout never lives in plugin code).
+// WithProxyPrefix attaches the connection's public proxy mount (core-set).
 func (rc *RequestContext) WithProxyPrefix(prefix string) *RequestContext {
 	rc.proxyPrefix = strings.TrimSuffix(prefix, "/")
 	return rc
 }
 
-// ProxyPrefix returns the connection's public proxy mount as supplied by the
-// core, without a trailing slash (empty when the core did not provide one).
+// ProxyPrefix returns the core-supplied proxy mount, without a trailing slash.
 func (rc *RequestContext) ProxyPrefix() string { return rc.proxyPrefix }
 
-// ProxyURL builds the browser-facing "open in browser" URL for this connection:
-// the core-supplied proxy mount plus path-escaped sub-segments and a trailing
-// slash. Handlers return it from routes bound to Open: OpenURL actions instead
-// of hardcoding the gateway's URL space.
+// ProxyURL builds the "open in browser" URL: the core-supplied proxy mount
+// plus path-escaped segments and a trailing slash.
 func (rc *RequestContext) ProxyURL(sub ...string) string {
 	var b strings.Builder
 	b.WriteString(rc.proxyPrefix)
