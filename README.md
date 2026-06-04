@@ -117,6 +117,17 @@ make build    # single binary at bin/shellcn
 make dev      # live-reloading dev server
 ```
 
+## Related repositories
+
+ShellCN is developed across a small family of repos we maintain:
+
+| Repository                                                                      | What it is                                                                                                |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| [shellcn](https://github.com/CharlesNg35/shellcn)                               | The gateway: core, SDK, and the built-in protocol plugins.                                                |
+| [shellcn-plugins](https://github.com/CharlesNg35/shellcn-plugins)               | The plugin registry: community manifests, verified binaries, and the index behind the in-app Marketplace. |
+| [shellcn-contrib](https://github.com/CharlesNg35/shellcn-contrib)               | First-party plugins beyond the built-in set, installable from the Marketplace.                            |
+| [shellcn-plugin-starter](https://github.com/CharlesNg35/shellcn-plugin-starter) | Template + docs for writing your own plugin.                                                              |
+
 ## License
 
 [GPL-3.0](LICENSE)
