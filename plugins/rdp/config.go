@@ -43,6 +43,15 @@ func configSchema(protocol string) plugin.Schema {
 				Kinds: []plugin.CredentialKind{CredentialRDPPassword}, Protocols: []string{protocol}, Required: true,
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 		}},
+		{Name: "Display", Fields: []plugin.Field{
+			{Key: "resolution", Label: "Resolution", Type: plugin.FieldSelect, Default: "1280x800", Help: "Remote desktop size; the browser scales it to fit.", Options: []plugin.Option{
+				{Label: "1280 x 800", Value: "1280x800"},
+				{Label: "1920 x 1080", Value: "1920x1080"},
+				{Label: "1600 x 900", Value: "1600x900"},
+				{Label: "1366 x 768", Value: "1366x768"},
+				{Label: "1024 x 768", Value: "1024x768"},
+			}},
+		}},
 	}}
 }
 
@@ -52,6 +61,23 @@ type connectOptions struct {
 	User     string
 	Domain   string
 	Password string
+	Width    int
+	Height   int
+}
+
+// parseResolution turns "1920x1080" into width/height, falling back to the
+// default for an empty or malformed value.
+func parseResolution(s string) (int, int) {
+	parts := strings.SplitN(strings.ToLower(strings.TrimSpace(s)), "x", 2)
+	if len(parts) != 2 {
+		return defaultWidth, defaultHeight
+	}
+	w, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+	h, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err1 != nil || err2 != nil || w < 640 || h < 480 || w > 8192 || h > 8192 {
+		return defaultWidth, defaultHeight
+	}
+	return w, h
 }
 
 func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
@@ -59,12 +85,15 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	if !ok || port == 0 {
 		port = defaultPort
 	}
+	w, h := parseResolution(cfg.String("resolution"))
 	opts := connectOptions{
 		Host:     strings.TrimSpace(cfg.String("host")),
 		Port:     port,
 		User:     strings.TrimSpace(cfg.String("username")),
 		Domain:   strings.TrimSpace(cfg.String("domain")),
 		Password: cfg.String("password"),
+		Width:    w,
+		Height:   h,
 	}
 	if strings.TrimSpace(cfg.String("auth")) == "credential" {
 		if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
@@ -99,7 +128,7 @@ func connect(cfg plugin.ConnectConfig) (plugin.Session, error) {
 		addr:     net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port)),
 		user:     user,
 		password: opts.Password,
-		width:    defaultWidth,
-		height:   defaultHeight,
+		width:    opts.Width,
+		height:   opts.Height,
 	}, nil
 }
