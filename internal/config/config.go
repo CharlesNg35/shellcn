@@ -214,7 +214,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("plugins.dir", "plugins.d")
 	v.SetDefault("plugins.market.enabled", true)
 	v.SetDefault("plugins.market.indexes", []string{
-		"https://raw.githubusercontent.com/CharlesNg35/shellcn-plugins/main/index.json",
+		"https://raw.githubusercontent.com/CharlesNg35/shellcn-plugin-registry/main/index.json",
 	})
 }
 

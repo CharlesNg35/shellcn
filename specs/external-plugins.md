@@ -455,6 +455,8 @@ dependency surface, without changing any behavior. **Prerequisite for Steps 1–
 - Marketplace manifests do not pin the SDK module version. The install/runtime
   contract is the plugin's own version plus `APIVersion`, `ProtocolVersion`, the
   platform asset, and its checksum.
+- Marketplace display name and description are derived from the verified plugin
+  binary's manifest projection, not duplicated in the registry manifest.
 
 ## 6. Risks & open questions
 

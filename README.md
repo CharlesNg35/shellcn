@@ -101,7 +101,7 @@ Use [shellcn-contrib](https://github.com/CharlesNg35/shellcn-contrib) for ShellC
 [shellcn-plugin-starter](https://github.com/CharlesNg35/shellcn-plugin-starter) to build your own.
 
 To make a public plugin installable from the Marketplace, publish a release and submit its
-manifest to [shellcn-plugins](https://github.com/CharlesNg35/shellcn-plugins). For private
+manifest to [shellcn-plugin-registry](https://github.com/CharlesNg35/shellcn-plugin-registry). For private
 plugins, drop the compiled binary into the gateway plugin directory.
 
 ## Build from source
@@ -120,7 +120,7 @@ ShellCN is developed across a small family of repos we maintain:
 | Repository                                                                      | What it is                                                             |
 | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | [shellcn](https://github.com/CharlesNg35/shellcn)                               | The gateway: core, SDK, and the built-in protocol set.                 |
-| [shellcn-plugins](https://github.com/CharlesNg35/shellcn-plugins)               | The plugin registry that powers the in-app Marketplace.                |
+| [shellcn-plugin-registry](https://github.com/CharlesNg35/shellcn-plugin-registry)               | The plugin registry that powers the in-app Marketplace.                |
 | [shellcn-contrib](https://github.com/CharlesNg35/shellcn-contrib)               | ShellCN-maintained external plugins, installable from the Marketplace. |
 | [shellcn-plugin-starter](https://github.com/CharlesNg35/shellcn-plugin-starter) | Template + docs for writing your own plugin.                           |
 
