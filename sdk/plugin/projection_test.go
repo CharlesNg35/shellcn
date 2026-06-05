@@ -159,6 +159,39 @@ func TestProjectionGolden(t *testing.T) {
 	}
 }
 
+func TestProjectionUnmarshalsProjectedActionConfig(t *testing.T) {
+	proj := plugin.Projection{
+		Name: "sample",
+		Actions: []plugin.ProjectedAction{{
+			ID:      "sample.edit",
+			Label:   "Edit",
+			RouteID: "sample.update",
+			Panel:   plugin.PanelCodeEditor,
+			Config: plugin.CodeEditorConfig{
+				Language:    "json",
+				SaveRouteID: "sample.update",
+				SaveMethod:  plugin.MethodPut,
+				SaveBodyKey: "document",
+			},
+		}},
+	}
+	raw, err := json.Marshal(proj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got plugin.Projection
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	cfg, ok := got.Actions[0].Config.(plugin.CodeEditorConfig)
+	if !ok {
+		t.Fatalf("action config type = %T, want CodeEditorConfig", got.Actions[0].Config)
+	}
+	if cfg.SaveRouteID != "sample.update" || cfg.SaveMethod != plugin.MethodPut || cfg.SaveBodyKey != "document" {
+		t.Fatalf("action config did not round-trip: %+v", cfg)
+	}
+}
+
 // TestProjectionMatchesContract asserts the projected fields the frontend
 // (projection.ts) relies on exist with the right names/values.
 func TestProjectionMatchesContract(t *testing.T) {

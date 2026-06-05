@@ -71,3 +71,20 @@ func (a *Action) UnmarshalJSON(data []byte) error {
 	a.Config = cfg
 	return nil
 }
+
+func (a *ProjectedAction) UnmarshalJSON(data []byte) error {
+	type wire ProjectedAction
+	aux := struct {
+		*wire
+		Config json.RawMessage `json:"config,omitempty"`
+	}{wire: (*wire)(a)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	cfg, err := decodePanelConfig(a.Panel, aux.Config)
+	if err != nil {
+		return err
+	}
+	a.Config = cfg
+	return nil
+}
