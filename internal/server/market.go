@@ -17,12 +17,12 @@ import (
 const marketInstallEvent = "market.install"
 
 type marketVersionDTO struct {
-	Version         string          `json:"version"`
-	APIVersion      int             `json:"apiVersion"`
-	ProtocolVersion int             `json:"protocolVersion"`
-	Platforms       []string        `json:"platforms"`
-	Icon            plugin.Icon     `json:"icon"`
-	Projection      json.RawMessage `json:"projection,omitempty"`
+	Version         string      `json:"version"`
+	APIVersion      int         `json:"apiVersion"`
+	ProtocolVersion int         `json:"protocolVersion"`
+	Platforms       []string    `json:"platforms"`
+	Icon            plugin.Icon `json:"icon"`
+	SnapshotURL     string      `json:"snapshotUrl"`
 }
 
 type marketEntryDTO struct {
@@ -72,7 +72,7 @@ func (s *Server) handleAdminMarketList(w http.ResponseWriter, r *http.Request) {
 			dto.Latest = &marketVersionDTO{
 				Version:    v.Version,
 				APIVersion: v.APIVersion, ProtocolVersion: v.ProtocolVersion,
-				Platforms: platformKeys(v), Icon: v.Icon, Projection: v.Projection,
+				Platforms: platformKeys(v), Icon: v.Icon, SnapshotURL: v.SnapshotURL,
 			}
 		}
 		if proj, ok := s.deps.Plugins.Projection(e.Name); ok && dto.Managed {

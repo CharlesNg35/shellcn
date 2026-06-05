@@ -664,7 +664,7 @@ export interface MarketVersion {
   protocolVersion: number;
   platforms: string[];
   icon: Icon;
-  projection?: unknown;
+  snapshotUrl: string;
 }
 
 export interface MarketEntry {

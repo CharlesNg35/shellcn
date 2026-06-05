@@ -3,7 +3,6 @@
 package pluginmarket
 
 import (
-	"encoding/json"
 	"fmt"
 	"runtime"
 
@@ -25,8 +24,7 @@ type Version struct {
 	Yanked          bool             `json:"yanked,omitempty"`
 	Assets          map[string]Asset `json:"assets"`
 	Icon            plugin.Icon      `json:"icon"`
-	// Projection is registry-verified; the admin UI reviews it before install.
-	Projection json.RawMessage `json:"projection,omitempty"`
+	SnapshotURL     string           `json:"snapshotUrl"`
 }
 
 // Entry is one plugin in the index.
