@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
@@ -20,7 +21,19 @@ const crumbs = [
   { label: "Protocols" },
 ];
 
-const tab = ref("builtin");
+type ProtocolsTab = "builtin" | "external" | "market";
+
+const route = useRoute();
+const router = useRouter();
+
+function normalizeTab(value: unknown): ProtocolsTab {
+  const tabValue = Array.isArray(value) ? value[0] : value;
+  return tabValue === "external" || tabValue === "market"
+    ? tabValue
+    : "builtin";
+}
+
+const tab = ref<ProtocolsTab>(normalizeTab(route.query.tab));
 const conns = useConnectionsStore();
 const { confirmDanger } = useConfirmAction();
 
@@ -58,6 +71,25 @@ function confirmUninstall(entry: MarketEntry): void {
   });
 }
 
+function setTab(value: string): void {
+  const next = normalizeTab(value);
+  tab.value = next;
+  const query = { ...route.query };
+  if (next === "builtin") {
+    delete query.tab;
+  } else {
+    query.tab = next;
+  }
+  void router.replace({ query });
+}
+
+watch(
+  () => route.query.tab,
+  (value) => {
+    tab.value = normalizeTab(value);
+  },
+);
+
 onMounted(() => {
   void load();
   void loadMarket();
@@ -87,7 +119,7 @@ onMounted(() => {
           tabpanels: { root: 'overflow-visible pt-4' },
           tabpanel: { root: 'focus-visible:outline-none' },
         }"
-        @update:value="tab = String($event)"
+        @update:value="setTab(String($event))"
       >
         <TabList>
           <Tab value="builtin">
@@ -108,7 +140,7 @@ onMounted(() => {
         </TabList>
         <TabPanels>
           <TabPanel value="builtin">
-            <div class="min-h-[28rem]">
+            <div class="min-h-112">
               <ProtocolTable
                 :protocols="builtIn"
                 :loading="loading"
@@ -122,7 +154,7 @@ onMounted(() => {
           <TabPanel value="external">
             <div
               v-if="!loading && !external.length"
-              class="flex min-h-[28rem] flex-col items-center justify-center gap-2 py-12 text-center"
+              class="flex min-h-112 flex-col items-center justify-center gap-2 py-12 text-center"
             >
               <AppIcon
                 :icon="{ type: 'lucide', value: 'puzzle' }"
@@ -151,7 +183,7 @@ onMounted(() => {
                 Plugin loading is disabled on this server.
               </p>
             </div>
-            <div v-else class="min-h-[28rem]">
+            <div v-else class="min-h-112">
               <ProtocolTable
                 :protocols="external"
                 :loading="loading"
@@ -166,7 +198,7 @@ onMounted(() => {
           <TabPanel value="market">
             <div
               v-if="!marketLoading && !marketEnabled"
-              class="flex min-h-[28rem] flex-col items-center justify-center gap-2 py-12 text-center"
+              class="flex min-h-112 flex-col items-center justify-center gap-2 py-12 text-center"
             >
               <AppIcon
                 :icon="{ type: 'lucide', value: 'store' }"

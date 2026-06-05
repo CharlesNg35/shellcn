@@ -3,13 +3,24 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import Select from "primevue/select";
 import InputText from "primevue/inputtext";
+import Button from "primevue/button";
 import { installFetch } from "../test/fetchMock";
 import { useConnectionsStore } from "../stores/connections";
-import ConnectionFormDialog from "./ConnectionFormDialog.vue";
+import { useAuthStore } from "../stores/auth";
+import { Role } from "../constants/roles";
 import ProtocolPicker from "./ProtocolPicker.vue";
 import SchemaForm from "../panels/form/SchemaForm.vue";
 import type { PluginProjection } from "../types/projection";
 import { Layout } from "../types/projection";
+
+const routerPush = vi.fn();
+
+vi.mock("vue-router", () => ({
+  RouterLink: { template: "<a><slot /></a>" },
+  useRouter: () => ({ push: routerPush }),
+}));
+
+import ConnectionFormDialog from "./ConnectionFormDialog.vue";
 
 const projection: PluginProjection = {
   apiVersion: 1,
@@ -47,10 +58,43 @@ const projection: PluginProjection = {
 
 beforeEach(() => {
   setActivePinia(createPinia());
+  routerPush.mockClear();
 });
 afterEach(() => vi.unstubAllGlobals());
 
 describe("ConnectionFormDialog", () => {
+  it("links admins to the Marketplace from the protocol picker", async () => {
+    installFetch(() => ({ body: [] }));
+    const auth = useAuthStore();
+    auth.user = { id: "u-admin", username: "admin", roles: [Role.Admin] };
+    const conns = useConnectionsStore();
+    conns.plugins = [
+      {
+        name: "tester",
+        title: "Tester",
+        icon: { type: "lucide", value: "box" },
+        category: projection.category,
+      },
+    ];
+
+    const wrapper = mount(ConnectionFormDialog, { props: { visible: true } });
+    await flushPromises();
+
+    const button = wrapper
+      .findAllComponents(Button)
+      .find((candidate) => candidate.text().includes("View more"));
+    expect(button).toBeTruthy();
+
+    await button!.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.emitted("update:visible")?.[0]).toEqual([false]);
+    expect(routerPush).toHaveBeenCalledWith({
+      name: "protocols",
+      query: { tab: "market" },
+    });
+  });
+
   it("renders a plugin's config schema and posts a new connection", async () => {
     let posted: Record<string, unknown> | null = null;
     installFetch((url, init) => {
