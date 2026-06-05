@@ -72,4 +72,6 @@ export const adminMarketApi = {
       `/admin/market/${name}/install`,
       version ? { version } : {},
     ),
+  uninstall: (name: string) =>
+    api.del<{ name: string; uninstalled: boolean }>(`/admin/market/${name}`),
 };

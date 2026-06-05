@@ -4,13 +4,14 @@ import { useNotify } from "./useNotify";
 import type { MarketEntry } from "../types/projection";
 
 // useMarketAdmin owns the plugin marketplace state and install/update actions.
-export function useMarketAdmin(onInstalled?: () => Promise<void> | void) {
+export function useMarketAdmin(onChanged?: () => Promise<void> | void) {
   const notify = useNotify();
 
   const enabled = ref(false);
   const entries = ref<MarketEntry[]>([]);
   const loading = ref(true);
   const installing = ref<Record<string, boolean>>({});
+  const uninstalling = ref<Record<string, boolean>>({});
 
   async function load(): Promise<void> {
     loading.value = true;
@@ -34,7 +35,7 @@ export function useMarketAdmin(onInstalled?: () => Promise<void> | void) {
         res.updated ? "Plugin updated" : "Plugin installed",
         `${entry.displayName} v${res.version}`,
       );
-      await Promise.all([load(), onInstalled?.()]);
+      await Promise.all([load(), onChanged?.()]);
     } catch {
       notify.error("Installation failed", entry.displayName);
     } finally {
@@ -42,5 +43,27 @@ export function useMarketAdmin(onInstalled?: () => Promise<void> | void) {
     }
   }
 
-  return { enabled, entries, loading, installing, load, install };
+  async function uninstall(entry: MarketEntry): Promise<void> {
+    uninstalling.value = { ...uninstalling.value, [entry.name]: true };
+    try {
+      await adminMarketApi.uninstall(entry.name);
+      notify.success("Plugin uninstalled", entry.displayName);
+      await Promise.all([load(), onChanged?.()]);
+    } catch {
+      notify.error("Uninstall failed", entry.displayName);
+    } finally {
+      uninstalling.value = { ...uninstalling.value, [entry.name]: false };
+    }
+  }
+
+  return {
+    enabled,
+    entries,
+    loading,
+    installing,
+    uninstalling,
+    load,
+    install,
+    uninstall,
+  };
 }

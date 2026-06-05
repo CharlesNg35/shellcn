@@ -84,4 +84,25 @@ describe("connections store", () => {
     );
     expect(projectionCalls).toHaveLength(1);
   });
+
+  it("refreshes plugin summaries and clears cached projections", async () => {
+    const dockerPlugin = {
+      ...plugins[0],
+      name: "docker",
+      title: "Docker",
+    };
+    installFetch((url) => {
+      if (url.endsWith("/api/plugins/ssh")) return { body: sshProjection };
+      if (url.endsWith("/api/plugins")) return { body: [dockerPlugin] };
+      return { body: [] };
+    });
+    const store = useConnectionsStore();
+
+    await store.projection("ssh");
+    expect(store.projections.ssh).toBeTruthy();
+
+    await store.refreshPlugins();
+    expect(store.plugins).toEqual([dockerPlugin]);
+    expect(store.projections).toEqual({});
+  });
 });

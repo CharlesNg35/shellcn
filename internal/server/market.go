@@ -14,7 +14,10 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-const marketInstallEvent = "market.install"
+const (
+	marketInstallEvent   = "market.install"
+	marketUninstallEvent = "market.uninstall"
+)
 
 type marketVersionDTO struct {
 	Version         string      `json:"version"`
@@ -164,4 +167,29 @@ func (s *Server) handleAdminMarketInstall(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name": name, "version": version.Version, "updated": managed,
 	})
+}
+
+func (s *Server) handleAdminMarketUninstall(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	actor, _ := userFrom(ctx)
+	if !s.marketEnabled() {
+		writeError(w, s.deps.Logger, plugin.ErrNotSupported)
+		return
+	}
+	name := chi.URLParam(r, "name")
+	auditParams := map[string]string{"plugin": name}
+	fail := func(err error) {
+		s.auditAdminEvent(ctx, actor, marketUninstallEvent, models.AuditError, auditParams, err)
+		writeError(w, s.deps.Logger, err)
+	}
+	if !s.deps.ExtPlugins.IsManaged(name) {
+		fail(errors.Join(plugin.ErrNotFound, errors.New("plugin is not installed from the marketplace")))
+		return
+	}
+	if err := s.deps.ExtPlugins.Uninstall(s.deps.Plugins, name); err != nil {
+		fail(err)
+		return
+	}
+	s.auditAdminEvent(ctx, actor, marketUninstallEvent, models.AuditAllowed, auditParams, nil)
+	writeJSON(w, http.StatusOK, map[string]any{"name": name, "uninstalled": true})
 }

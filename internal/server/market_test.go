@@ -132,6 +132,18 @@ func TestMarketListAndInstall(t *testing.T) {
 		t.Fatalf("second install must report an update: %+v", installed)
 	}
 
+	resp = h.do(t, http.MethodDelete, "/api/admin/market/demo", "admin", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("uninstall: %d %s", resp.Status, resp.Body)
+	}
+	if _, err := os.Stat(filepath.Join(pluginsDir, "demo")); !os.IsNotExist(err) {
+		t.Fatalf("binary should be removed after uninstall: %v", err)
+	}
+	resp = h.do(t, http.MethodGet, "/api/admin/protocols", "admin", nil)
+	if resp.Status != http.StatusOK || strings.Contains(string(resp.Body), `"demo"`) {
+		t.Fatalf("protocols after uninstall: %d %s", resp.Status, resp.Body)
+	}
+
 	// A name owned by a built-in is rejected.
 	resp = h.do(t, http.MethodPost, "/api/admin/market/ssh/install", "admin", nil)
 	if resp.Status == http.StatusOK {

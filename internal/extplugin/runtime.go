@@ -3,6 +3,7 @@ package extplugin
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
@@ -67,6 +68,47 @@ func (m *Manager) Update(ctx context.Context, reg *plugin.Registry, name, path s
 	oldClient := old.client
 	old.mu.Unlock()
 	oldClient.Kill()
+	return nil
+}
+
+// Uninstall stops a managed external plugin, removes it from the runtime
+// registry, and deletes the installed binary.
+func (m *Manager) Uninstall(reg *plugin.Registry, name string) error {
+	m.mu.Lock()
+	var old *managed
+	var idx int
+	for i, mp := range m.managed {
+		if mp.name == name {
+			old = mp
+			idx = i
+			break
+		}
+	}
+	if old == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("plugin %q: %w", name, plugin.ErrNotFound)
+	}
+	m.managed = append(m.managed[:idx], m.managed[idx+1:]...)
+	m.mu.Unlock()
+
+	if err := reg.Unregister(name); err != nil {
+		m.mu.Lock()
+		m.managed = append(m.managed, old)
+		m.mu.Unlock()
+		return err
+	}
+
+	close(old.stop)
+	old.mu.Lock()
+	old.stopped = true
+	oldClient := old.client
+	path := old.path
+	old.mu.Unlock()
+	oldClient.Kill()
+
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	return nil
 }
 

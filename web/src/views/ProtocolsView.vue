@@ -11,6 +11,9 @@ import ProtocolTable from "./protocols/ProtocolTable.vue";
 import MarketTable from "./protocols/MarketTable.vue";
 import { useProtocolsAdmin } from "../composables/useProtocolsAdmin";
 import { useMarketAdmin } from "../composables/useMarketAdmin";
+import { useConfirmAction } from "../composables/useConfirmAction";
+import { useConnectionsStore } from "../stores/connections";
+import type { MarketEntry } from "../types/projection";
 
 const crumbs = [
   { label: "Settings", to: { name: "settings" } },
@@ -18,6 +21,8 @@ const crumbs = [
 ];
 
 const tab = ref("builtin");
+const conns = useConnectionsStore();
+const { confirmDanger } = useConfirmAction();
 
 const {
   pluginsDir,
@@ -29,14 +34,29 @@ const {
   setAvailability,
 } = useProtocolsAdmin();
 
+async function refreshAfterMarketChange(): Promise<void> {
+  await Promise.all([load(), conns.refreshPlugins()]);
+}
+
 const {
   enabled: marketEnabled,
   entries: marketEntries,
   loading: marketLoading,
   installing,
+  uninstalling,
   load: loadMarket,
   install,
-} = useMarketAdmin(load);
+  uninstall,
+} = useMarketAdmin(refreshAfterMarketChange);
+
+function confirmUninstall(entry: MarketEntry): void {
+  confirmDanger({
+    header: "Uninstall plugin",
+    message: `Uninstall ${entry.displayName}? Existing connections that use this protocol will stop working until it is installed again.`,
+    acceptLabel: "Uninstall",
+    accept: () => uninstall(entry),
+  });
+}
 
 onMounted(() => {
   void load();
@@ -165,7 +185,9 @@ onMounted(() => {
               :entries="marketEntries"
               :loading="marketLoading"
               :installing="installing"
+              :uninstalling="uninstalling"
               @install="install"
+              @uninstall="confirmUninstall"
             />
           </div>
         </TabPanel>

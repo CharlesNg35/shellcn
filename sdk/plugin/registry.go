@@ -100,6 +100,18 @@ func (r *Registry) Replace(p Plugin) error {
 	return nil
 }
 
+// Unregister removes one plugin entry. Credential kind metadata is intentionally
+// kept because existing saved connections may still reference those kinds.
+func (r *Registry) Unregister(name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.byName[name]; !exists {
+		return fmt.Errorf("plugin %q: %w", name, ErrNotFound)
+	}
+	delete(r.byName, name)
+	return nil
+}
+
 // MustRegister panics on registration failure — for wiring at startup.
 func (r *Registry) MustRegister(p Plugin) {
 	if err := r.Register(p); err != nil {

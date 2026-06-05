@@ -285,6 +285,7 @@ func (s *Server) routes() chi.Router {
 						ar.Put("/admin/protocols/{name}", s.handleAdminSetProtocolAvailability)
 						ar.Get("/admin/market", s.handleAdminMarketList)
 						ar.Post("/admin/market/{name}/install", s.handleAdminMarketInstall)
+						ar.Delete("/admin/market/{name}", s.handleAdminMarketUninstall)
 					}
 				})
 			}

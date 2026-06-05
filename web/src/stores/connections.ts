@@ -51,6 +51,11 @@ export const useConnectionsStore = defineStore("connections", () => {
     folders.value = f;
   }
 
+  async function refreshPlugins(): Promise<void> {
+    plugins.value = await pluginsApi.list();
+    projections.value = {};
+  }
+
   async function createFolder(input: {
     name: string;
     color: ConnectionFolder["color"];
@@ -130,6 +135,7 @@ export const useConnectionsStore = defineStore("connections", () => {
     loaded,
     load,
     refresh,
+    refreshPlugins,
     createFolder,
     updateFolder,
     deleteFolder,
