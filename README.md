@@ -63,9 +63,6 @@ services:
       SHELLCN_BOOTSTRAP_ADMIN_PASSWORD: change-me
     volumes:
       - shellcn-data:/data
-      # Optional - external plugins: drop compiled plugin binaries into ./plugins.d
-      # next to this file, then uncomment the mount below (see "Extending it").
-      # - ./plugins.d:/data/plugins.d
     restart: unless-stopped
 
 volumes:
@@ -74,6 +71,8 @@ volumes:
 
 Generate a key once with `openssl rand -base64 32`, put it in a `.env` file beside the
 compose file as `SHELLCN_MASTER_KEY=...`, then run `docker compose up -d`.
+
+The `/data` volume also persists private plugins placed in `/data/plugins.d`.
 
 ### Single binary
 
@@ -95,14 +94,18 @@ It serves on `:8081` and keeps its data in the working directory.
 
 ## Extending it
 
-ShellCN keeps the built-in protocol set small. Extra protocols are installed as plugins.
+ShellCN keeps the built-in protocol set small. Extra protocols are external plugins:
 
-Use [shellcn-contrib](https://github.com/CharlesNg35/shellcn-contrib) for ShellCN-maintained plugins, or start from
-[shellcn-plugin-starter](https://github.com/CharlesNg35/shellcn-plugin-starter) to build your own.
+- Install ShellCN-maintained plugins from the Marketplace.
+- Build your own with the
+  [plugin starter](https://github.com/CharlesNg35/shellcn-plugin-starter).
+- To publish a plugin, release its binary and submit a manifest to
+  [shellcn-plugin-registry](https://github.com/CharlesNg35/shellcn-plugin-registry).
+- For private plugins, skip the registry and drop the binary in the gateway plugin
+  directory.
 
-To make a public plugin installable from the Marketplace, publish a release and submit its
-manifest to [shellcn-plugin-registry](https://github.com/CharlesNg35/shellcn-plugin-registry). For private
-plugins, drop the compiled binary into the gateway plugin directory.
+The default plugin directory is `/data/plugins.d` in Docker and `./plugins.d` when running
+the single binary. You can override it with `plugins.dir` or `SHELLCN_PLUGINS_DIR`.
 
 ## Build from source
 
