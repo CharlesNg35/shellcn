@@ -553,15 +553,55 @@ func ImagePullSchema() *plugin.Schema {
 func VolumeCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Volume", Fields: []plugin.Field{
 		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
-		{Key: "driver", Label: "Driver", Type: plugin.FieldText, Default: "local", Placeholder: "local", Help: "Volume driver. Use local unless a custom volume plugin is installed."},
+		{Key: "driver", Label: "Driver", Type: plugin.FieldAutocomplete, Default: "local", Placeholder: "local", Options: []plugin.Option{{Label: "Local", Value: "local"}}, Help: "Volume driver. Use local unless a custom volume plugin is installed."},
 	}}}}
 }
 
 func NetworkCreateSchema() *plugin.Schema {
+	return networkCreateSchema(plugin.Field{
+		Key:     "driver",
+		Label:   "Driver",
+		Type:    plugin.FieldSelect,
+		Default: "bridge",
+		Options: dockerNetworkDriverOptions(),
+		Help:    "Network driver.",
+	})
+}
+
+func PodmanNetworkCreateSchema() *plugin.Schema {
+	return networkCreateSchema(plugin.Field{
+		Key:         "driver",
+		Label:       "Driver",
+		Type:        plugin.FieldAutocomplete,
+		Default:     "bridge",
+		Placeholder: "bridge",
+		Options:     podmanNetworkDriverOptions(),
+		Help:        "Network driver. Custom netavark plugin driver names are accepted.",
+	})
+}
+
+func networkCreateSchema(driver plugin.Field) *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Network", Fields: []plugin.Field{
 		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
-		{Key: "driver", Label: "Driver", Type: plugin.FieldText, Default: "bridge", Placeholder: "bridge", Help: "Network driver, e.g. bridge, overlay, macvlan, ipvlan, host, none."},
+		driver,
 	}}}}
+}
+
+func dockerNetworkDriverOptions() []plugin.Option {
+	return []plugin.Option{
+		{Label: "Bridge", Value: "bridge"},
+		{Label: "Overlay", Value: "overlay"},
+		{Label: "Macvlan", Value: "macvlan"},
+		{Label: "IPvlan", Value: "ipvlan"},
+	}
+}
+
+func podmanNetworkDriverOptions() []plugin.Option {
+	return []plugin.Option{
+		{Label: "Bridge", Value: "bridge"},
+		{Label: "Macvlan", Value: "macvlan"},
+		{Label: "IPvlan", Value: "ipvlan"},
+	}
 }
 
 // PullImage pulls an image by reference, waiting for the pull to finish.
@@ -1225,7 +1265,7 @@ func CreateContainerSchema() *plugin.Schema {
 		{Name: "Host", Fields: []plugin.Field{
 			{Key: "ports", Label: "Published ports", Type: plugin.FieldTextarea, Placeholder: "8080:80/tcp\n127.0.0.1:5432:5432/tcp"},
 			{Key: "binds", Label: "Bind mounts", Type: plugin.FieldTextarea, Placeholder: "/srv/app:/app:ro\n/var/log/app:/logs"},
-			{Key: "network", Label: "Network", Type: plugin.FieldText, Placeholder: "bridge"},
+			{Key: "network", Label: "Network", Type: plugin.FieldAutocomplete, Placeholder: "bridge", Options: containerNetworkOptions()},
 			{Key: "restart", Label: "Restart policy", Type: plugin.FieldSelect, Default: string(container.RestartPolicyDisabled), Options: []plugin.Option{
 				{Label: "No", Value: string(container.RestartPolicyDisabled)},
 				{Label: "Always", Value: string(container.RestartPolicyAlways)},
@@ -1235,6 +1275,14 @@ func CreateContainerSchema() *plugin.Schema {
 			{Key: "restart_retries", Label: "Restart retries", Type: plugin.FieldNumber, VisibleWhen: &onFailure, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}}},
 		}},
 	}}
+}
+
+func containerNetworkOptions() []plugin.Option {
+	return []plugin.Option{
+		{Label: "Bridge", Value: "bridge"},
+		{Label: "Host", Value: "host"},
+		{Label: "None", Value: "none"},
+	}
 }
 
 func LogsSchema() *plugin.Schema {

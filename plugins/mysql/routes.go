@@ -86,8 +86,8 @@ func mysqlSession(rc *plugin.RequestContext) (*Session, error) {
 func databaseCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Database", Fields: []plugin.Field{
 		{Key: "name", Label: "Database name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "charset", Label: "Charset", Type: plugin.FieldText, Default: "utf8mb4"},
-		{Key: "collation", Label: "Collation", Type: plugin.FieldText},
+		{Key: "charset", Label: "Charset", Type: plugin.FieldAutocomplete, Default: "utf8mb4", Options: mysqlCharsetOptions()},
+		{Key: "collation", Label: "Collation", Type: plugin.FieldAutocomplete, Options: mysqlCollationOptions()},
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 	}}}}
 }
@@ -95,16 +95,16 @@ func databaseCreateSchema() *plugin.Schema {
 func tableCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
 		{Key: "name", Label: "Table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		sqldb.ColumnsArrayField(sqldb.ColumnsField{TypePlaceholder: "bigint unsigned auto_increment", TypeSuggestions: []string{"int", "bigint", "bigint unsigned auto_increment", "tinyint", "smallint", "decimal(10,2)", "float", "double", "boolean", "varchar(255)", "char(1)", "text", "mediumtext", "longtext", "date", "datetime", "timestamp", "time", "json", "blob"}, Default: true, Primary: true, Unique: true}),
+		sqldb.ColumnsArrayField(sqldb.ColumnsField{TypePlaceholder: "bigint unsigned auto_increment", TypeSuggestions: mysqlColumnTypeSuggestions(), Default: true, Primary: true, Unique: true}),
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
-		{Key: "engine", Label: "Engine", Type: plugin.FieldText, Default: "InnoDB"},
+		{Key: "engine", Label: "Engine", Type: plugin.FieldAutocomplete, Default: "InnoDB", Options: mysqlEngineOptions()},
 	}}}}
 }
 
 func columnAddSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
 		{Key: "name", Label: "Column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "varchar(255)"},
+		mysqlColumnTypeField("Type", "varchar(255)"),
 		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: true},
 		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
 	}}}}
@@ -127,10 +127,51 @@ func tableRenameSchema() *plugin.Schema {
 func columnAlterSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
 		{Key: "new_name", Label: "Rename to", Type: plugin.FieldText, Help: "Leave blank to keep the current name.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "varchar(255)"},
+		mysqlColumnTypeField("Type", "varchar(255)"),
 		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: true},
 		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
 	}}}}
+}
+
+func mysqlColumnTypeField(label string, defaultValue string) plugin.Field {
+	return plugin.Field{
+		Key:         "type",
+		Label:       label,
+		Type:        plugin.FieldAutocomplete,
+		Required:    true,
+		Default:     defaultValue,
+		Placeholder: defaultValue,
+		Options:     stringOptions(mysqlColumnTypeSuggestions()),
+	}
+}
+
+func mysqlColumnTypeSuggestions() []string {
+	return []string{
+		"int", "bigint", "bigint unsigned auto_increment", "tinyint", "smallint",
+		"decimal(10,2)", "float", "double", "boolean", "varchar(255)", "char(1)",
+		"text", "mediumtext", "longtext", "date", "datetime", "timestamp", "time",
+		"json", "blob",
+	}
+}
+
+func mysqlCharsetOptions() []plugin.Option {
+	return stringOptions([]string{"utf8mb4", "utf8", "latin1", "ascii", "binary"})
+}
+
+func mysqlCollationOptions() []plugin.Option {
+	return stringOptions([]string{"utf8mb4_0900_ai_ci", "utf8mb4_unicode_ci", "utf8mb4_bin", "utf8_general_ci", "latin1_swedish_ci"})
+}
+
+func mysqlEngineOptions() []plugin.Option {
+	return stringOptions([]string{"InnoDB", "MyISAM", "MEMORY", "CSV", "ARCHIVE"})
+}
+
+func stringOptions(values []string) []plugin.Option {
+	options := make([]plugin.Option, 0, len(values))
+	for _, value := range values {
+		options = append(options, plugin.Option{Label: value, Value: value})
+	}
+	return options
 }
 
 func constraintAddSchema() *plugin.Schema {

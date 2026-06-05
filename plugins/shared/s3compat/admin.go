@@ -37,6 +37,31 @@ func routeID(protocol, suffix string) string {
 	return protocol + "." + suffix
 }
 
+func AWSRegionOptions() []plugin.Option {
+	regions := []string{
+		"us-east-1", "us-east-2", "us-west-1", "us-west-2",
+		"af-south-1",
+		"ap-east-1", "ap-east-2", "ap-northeast-1", "ap-northeast-2", "ap-northeast-3",
+		"ap-south-1", "ap-south-2",
+		"ap-southeast-1", "ap-southeast-2", "ap-southeast-3", "ap-southeast-4", "ap-southeast-5", "ap-southeast-6", "ap-southeast-7",
+		"ca-central-1", "ca-west-1",
+		"eu-central-1", "eu-central-2",
+		"eu-north-1",
+		"eu-south-1", "eu-south-2",
+		"eu-west-1", "eu-west-2", "eu-west-3",
+		"il-central-1",
+		"me-central-1", "me-south-1",
+		"mx-central-1",
+		"sa-east-1",
+		"us-gov-east-1", "us-gov-west-1",
+	}
+	options := make([]plugin.Option, 0, len(regions))
+	for _, region := range regions {
+		options = append(options, plugin.Option{Label: region, Value: region})
+	}
+	return options
+}
+
 // BucketTab is the bucket-administration tab: a table of buckets with create,
 // delete, and versioning affordances. It coexists with the file browser tab so
 // the object browser stays scoped to the connection's bucket while admins manage
@@ -96,7 +121,7 @@ func AdminRoutes(protocol string) []plugin.Route {
 func bucketCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Bucket", Fields: []plugin.Field{
 		{Key: "name", Label: "Bucket name", Type: plugin.FieldText, Required: true, Placeholder: "my-bucket", Help: "Lowercase letters, numbers, dots and hyphens; 3-63 characters."},
-		{Key: "region", Label: "Region", Type: plugin.FieldText, Placeholder: "us-east-1"},
+		{Key: "region", Label: "Region", Type: plugin.FieldAutocomplete, Placeholder: "us-east-1", Options: AWSRegionOptions()},
 	}}}}
 }
 

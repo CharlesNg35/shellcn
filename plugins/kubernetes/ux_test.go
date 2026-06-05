@@ -1,6 +1,8 @@
 package kubernetes
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -52,6 +54,43 @@ func TestHeaderActionsResolveToActions(t *testing.T) {
 	}
 	if a := byID["kubernetes.cluster.apply"]; a.Open != plugin.OpenDialog || a.Panel != plugin.PanelCodeEditor {
 		t.Errorf("apply YAML should open a code-editor dialog, got open=%q panel=%q", a.Open, a.Panel)
+	}
+}
+
+func TestClusterShellUsesDedicatedPermission(t *testing.T) {
+	for _, r := range Routes() {
+		if r.ID == "kubernetes.cluster.shell" {
+			if r.Permission != permClusterShell {
+				t.Fatalf("cluster shell permission = %q, want %q", r.Permission, permClusterShell)
+			}
+			if r.Permission == "kubernetes.pods.exec" {
+				t.Fatal("cluster shell must not share the pod exec permission")
+			}
+			return
+		}
+	}
+	t.Fatal("cluster shell route missing")
+}
+
+func TestAuditShellRBACUsesStreamAuditHook(t *testing.T) {
+	var gotResult plugin.AuditResult
+	var gotParams map[string]string
+	var gotErr error
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, nil, nil, nil, nil).
+		WithAuditHook(func(_ context.Context, result plugin.AuditResult, params map[string]string, err error) {
+			gotResult = result
+			gotParams = params
+			gotErr = err
+		})
+	err := errors.New("rbac denied")
+
+	auditShellRBAC(rc, err)
+
+	if gotResult != plugin.AuditError || !errors.Is(gotErr, err) {
+		t.Fatalf("audit result = %q err=%v, want error %v", gotResult, gotErr, err)
+	}
+	if gotParams["operation"] != "cluster-shell-rbac" || gotParams["clusterRole"] != "cluster-admin" {
+		t.Fatalf("audit params = %+v", gotParams)
 	}
 }
 

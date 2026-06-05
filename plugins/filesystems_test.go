@@ -145,6 +145,37 @@ func TestFilesystemAuthVisibleValuesAreProtocolSpecific(t *testing.T) {
 	}
 }
 
+func TestS3RegionFieldsUseAutocomplete(t *testing.T) {
+	configRegion, ok := schemaField(testManifest(t, "s3").Config, "region")
+	if !ok {
+		t.Fatal("s3 config should expose a region field")
+	}
+	if configRegion.Type != plugin.FieldAutocomplete || configRegion.Default != "us-east-1" {
+		t.Fatalf("s3 config region = %#v, want autocomplete with us-east-1 default", configRegion)
+	}
+	if len(configRegion.Options) == 0 {
+		t.Fatal("s3 config region should include suggestions")
+	}
+
+	var createSchema *plugin.Schema
+	for _, route := range testPlugin(t, "s3").Routes() {
+		if route.ID == "s3.bucket.create" {
+			createSchema = route.Input
+			break
+		}
+	}
+	if createSchema == nil {
+		t.Fatal("s3.bucket.create should expose an input schema")
+	}
+	createRegion, ok := schemaField(*createSchema, "region")
+	if !ok {
+		t.Fatal("s3 bucket create should expose a region field")
+	}
+	if createRegion.Type != plugin.FieldAutocomplete || len(createRegion.Options) == 0 {
+		t.Fatalf("s3 bucket create region = %#v, want autocomplete suggestions", createRegion)
+	}
+}
+
 func fieldMap(schema plugin.Schema) map[string]bool {
 	fields := map[string]bool{}
 	for _, group := range schema.Groups {
@@ -153,6 +184,17 @@ func fieldMap(schema plugin.Schema) map[string]bool {
 		}
 	}
 	return fields
+}
+
+func schemaField(schema plugin.Schema, key string) (plugin.Field, bool) {
+	for _, group := range schema.Groups {
+		for _, field := range group.Fields {
+			if field.Key == key {
+				return field, true
+			}
+		}
+	}
+	return plugin.Field{}, false
 }
 
 func visibleFilesystemFields(schema plugin.Schema, overrides map[string]any) map[string]bool {

@@ -366,18 +366,27 @@ func TestTableCreateColumnsIsStructuredArray(t *testing.T) {
 	assertColumnsArray(t, New(), "postgresql.table.create", []string{"name", "type", "nullable", "primary", "unique", "default"})
 }
 
-func assertColumnsArray(t *testing.T, p plugin.Plugin, routeID string, wantKeys []string) {
-	t.Helper()
-	var schema *plugin.Schema
-	for _, r := range p.Routes() {
-		if r.ID == routeID {
-			schema = r.Input
-			break
+func TestColumnTypeFieldsUseAutocomplete(t *testing.T) {
+	for _, routeID := range []string{"postgresql.column.add", "postgresql.column.alter"} {
+		schema := routeInputSchema(t, New(), routeID)
+		field := requireRouteField(t, schema, "type")
+		if field.Type != plugin.FieldAutocomplete || field.Default != "text" {
+			t.Fatalf("%s type field = %#v, want text autocomplete", routeID, field)
+		}
+		values := map[string]any{"type": "custom_domain"}
+		if routeID == "postgresql.column.add" {
+			values["name"] = "email"
+			values["nullable"] = true
+		}
+		if err := schema.ValidateValues(values, nil); err != nil {
+			t.Fatalf("%s should allow custom type values: %v", routeID, err)
 		}
 	}
-	if schema == nil {
-		t.Fatalf("route %q has no input schema", routeID)
-	}
+}
+
+func assertColumnsArray(t *testing.T, p plugin.Plugin, routeID string, wantKeys []string) {
+	t.Helper()
+	schema := routeInputSchema(t, p, routeID)
 	var columns *plugin.Field
 	for _, g := range schema.Groups {
 		for i := range g.Fields {
@@ -407,4 +416,31 @@ func assertColumnsArray(t *testing.T, p plugin.Plugin, routeID string, wantKeys 
 			t.Fatalf("%s: columns item keys = %v, want %v", routeID, got, wantKeys)
 		}
 	}
+}
+
+func routeInputSchema(t *testing.T, p plugin.Plugin, routeID string) *plugin.Schema {
+	t.Helper()
+	for _, r := range p.Routes() {
+		if r.ID == routeID {
+			if r.Input == nil {
+				t.Fatalf("route %q has no input schema", routeID)
+			}
+			return r.Input
+		}
+	}
+	t.Fatalf("route %q was not found", routeID)
+	return nil
+}
+
+func requireRouteField(t *testing.T, schema *plugin.Schema, key string) plugin.Field {
+	t.Helper()
+	for _, g := range schema.Groups {
+		for _, field := range g.Fields {
+			if field.Key == key {
+				return field
+			}
+		}
+	}
+	t.Fatalf("schema missing %q field", key)
+	return plugin.Field{}
 }
