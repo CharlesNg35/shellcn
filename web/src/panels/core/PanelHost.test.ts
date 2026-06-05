@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { nextTick } from "vue";
+import { computed, defineComponent, h, nextTick } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PanelHost from "./PanelHost.vue";
 import PanelLoader from "../../components/PanelLoader.vue";
 import { useScopeStore } from "../../stores/scope";
+import { providePanelConfigSchemas } from "./config";
+import type { PanelConfigSchemas } from "./config";
 
 const lifecycle = vi.hoisted(() => ({
   mounts: 0,
@@ -28,6 +30,53 @@ vi.mock("./registry", () => ({
       : undefined,
 }));
 
+const testSchemas: PanelConfigSchemas = {
+  code_editor: {
+    type: "object",
+    properties: {
+      saveMethod: {
+        type: "string",
+        enum: ["POST", "PUT", "PATCH", "DELETE"],
+      },
+    },
+  },
+  dashboard: {
+    type: "object",
+    properties: {
+      cells: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            key: { type: "string" },
+            panel: { type: "string" },
+            config: { type: "object" },
+          },
+        },
+      },
+    },
+  },
+  table: {
+    type: "object",
+    properties: {
+      columns: { type: "array", items: { type: "object" } },
+    },
+  },
+};
+
+const SchemaProvider = defineComponent({
+  setup(_, { slots }) {
+    providePanelConfigSchemas(computed(() => testSchemas));
+    return () => h("div", slots.default?.());
+  },
+});
+
+function mountPanelHost(props: InstanceType<typeof PanelHost>["$props"]) {
+  return mount(PanelHost, {
+    props,
+  });
+}
+
 describe("PanelHost", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -36,19 +85,20 @@ describe("PanelHost", () => {
   });
 
   it("renders a graceful fallback for an unknown panel type", () => {
-    const w = mount(PanelHost, {
-      props: { panel: "totally-made-up", connectionId: "c1" },
-    });
+    const w = mountPanelHost({ panel: "totally-made-up", connectionId: "c1" });
     expect(w.text()).toContain("No renderer for panel type");
     expect(w.text()).toContain("totally-made-up");
   });
 
   it("renders a panel error for malformed generic config", () => {
-    const w = mount(PanelHost, {
-      props: {
-        panel: "table",
-        connectionId: "c1",
-        config: { columns: "bad" },
+    const w = mount(SchemaProvider, {
+      slots: {
+        default: () =>
+          h(PanelHost, {
+            panel: "table",
+            connectionId: "c1",
+            config: { columns: "bad" },
+          }),
       },
     });
 
@@ -62,35 +112,36 @@ describe("PanelHost", () => {
   });
 
   it("validates dashboard cell config recursively", () => {
-    const w = mount(PanelHost, {
-      props: {
-        panel: "dashboard",
-        connectionId: "c1",
-        config: {
-          cells: [
-            {
-              key: "editor",
-              panel: "code_editor",
-              config: { saveMethod: "GET" },
+    const w = mount(SchemaProvider, {
+      slots: {
+        default: () =>
+          h(PanelHost, {
+            panel: "dashboard",
+            connectionId: "c1",
+            config: {
+              cells: [
+                {
+                  key: "editor",
+                  panel: "code_editor",
+                  config: { saveMethod: "GET" },
+                },
+              ],
             },
-          ],
-        },
+          }),
       },
     });
 
     expect(w.text()).toContain(
-      'config.cells[0].config.saveMethod has unsupported method "GET".',
+      "config.cells[0].config.saveMethod must be one of POST, PUT, PATCH, DELETE.",
     );
   });
 
   it("remounts panels when the connection changes", async () => {
-    const w = mount(PanelHost, {
-      props: {
-        panel: "test_panel",
-        connectionId: "c1",
-        source: { routeId: "postgresql.query", method: "WS" },
-        resource: { kind: "table", name: "users", uid: "public.users" },
-      },
+    const w = mountPanelHost({
+      panel: "test_panel",
+      connectionId: "c1",
+      source: { routeId: "postgresql.query", method: "WS" },
+      resource: { kind: "table", name: "users", uid: "public.users" },
     });
 
     expect(lifecycle.mounts).toBe(1);
@@ -106,12 +157,10 @@ describe("PanelHost", () => {
   it("remounts panels when connection scope changes", async () => {
     const scope = useScopeStore();
     scope.configure("c1", [{ param: "database" }]);
-    mount(PanelHost, {
-      props: {
-        panel: "test_panel",
-        connectionId: "c1",
-        source: { routeId: "redis.keys.list" },
-      },
+    mountPanelHost({
+      panel: "test_panel",
+      connectionId: "c1",
+      source: { routeId: "redis.keys.list" },
     });
 
     expect(lifecycle.mounts).toBe(1);

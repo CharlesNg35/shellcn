@@ -50,27 +50,28 @@ type ProjectedRecording struct {
 // projection.ts PluginProjection and excludes handler funcs, raw mount paths,
 // permission keys, audit-event names, and any server-only route internals.
 type Projection struct {
-	APIVersion          int                    `json:"apiVersion"`
-	Name                string                 `json:"name"`
-	Version             string                 `json:"version"`
-	Title               string                 `json:"title"`
-	Description         string                 `json:"description"`
-	Icon                Icon                   `json:"icon"`
-	Category            CategoryInfo           `json:"category"`
-	Config              Schema                 `json:"config"`
-	Capabilities        []Capability           `json:"capabilities"`
-	CredentialKinds     []CredentialKindInfo   `json:"credentialKinds,omitempty"`
-	SupportedTransports []Transport            `json:"supportedTransports"`
-	Agent               *ProjectedAgentProfile `json:"agent,omitempty"`
-	Layout              Layout                 `json:"layout"`
-	Tabs                []Panel                `json:"tabs,omitempty"`
-	Tree                []TreeGroup            `json:"tree,omitempty"`
-	Resources           []ResourceType         `json:"resources,omitempty"`
-	Actions             []ProjectedAction      `json:"actions,omitempty"`
-	HeaderActions       []string               `json:"headerActions,omitempty"`
-	Scope               []ScopeFilter          `json:"scope,omitempty"`
-	Streams             []Stream               `json:"streams,omitempty"`
-	Recording           []ProjectedRecording   `json:"recording,omitempty"`
+	APIVersion          int                             `json:"apiVersion"`
+	Name                string                          `json:"name"`
+	Version             string                          `json:"version"`
+	Title               string                          `json:"title"`
+	Description         string                          `json:"description"`
+	Icon                Icon                            `json:"icon"`
+	Category            CategoryInfo                    `json:"category"`
+	Config              Schema                          `json:"config"`
+	Capabilities        []Capability                    `json:"capabilities"`
+	CredentialKinds     []CredentialKindInfo            `json:"credentialKinds,omitempty"`
+	SupportedTransports []Transport                     `json:"supportedTransports"`
+	Agent               *ProjectedAgentProfile          `json:"agent,omitempty"`
+	Layout              Layout                          `json:"layout"`
+	Tabs                []Panel                         `json:"tabs,omitempty"`
+	Tree                []TreeGroup                     `json:"tree,omitempty"`
+	Resources           []ResourceType                  `json:"resources,omitempty"`
+	Actions             []ProjectedAction               `json:"actions,omitempty"`
+	HeaderActions       []string                        `json:"headerActions,omitempty"`
+	Scope               []ScopeFilter                   `json:"scope,omitempty"`
+	Streams             []Stream                        `json:"streams,omitempty"`
+	Recording           []ProjectedRecording            `json:"recording,omitempty"`
+	PanelConfigSchemas  map[PanelType]PanelConfigSchema `json:"panelConfigSchemas,omitempty"`
 }
 
 // BuildProjection derives the browser projection from a validated manifest and
@@ -95,6 +96,7 @@ func BuildProjection(m Manifest, routes map[string]Route) Projection {
 		HeaderActions:       m.HeaderActions,
 		Scope:               m.Scope,
 		Streams:             m.Streams,
+		PanelConfigSchemas:  PanelConfigSchemas(),
 	}
 
 	if m.Agent != nil {

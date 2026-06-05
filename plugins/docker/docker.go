@@ -76,6 +76,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Resources: resources(),
 		Actions:   actions(),
 		Streams: []plugin.Stream{
+			{ID: "docker.overview.metrics", Kind: plugin.StreamMetrics, RouteID: "docker.overview.metrics"},
 			{ID: "docker.container.logs", Kind: plugin.StreamLogs, RouteID: "docker.container.logs"},
 			{ID: "docker.container.exec", Kind: plugin.StreamTerminal, RouteID: "docker.container.exec"},
 			{ID: "docker.events.watch", Kind: plugin.StreamLogs, RouteID: "docker.events.watch"},

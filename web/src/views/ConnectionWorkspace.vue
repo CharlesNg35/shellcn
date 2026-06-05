@@ -33,6 +33,7 @@ import ShareDialog from "../components/ShareDialog.vue";
 import AiChatLauncher from "../components/AiChatLauncher.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { recordingForStream } from "../composables/useRecordingControl";
+import { providePanelConfigSchemas } from "../panels/core/config";
 import { Layout } from "../types/projection";
 import type {
   Action,
@@ -81,6 +82,9 @@ async function onDelete(): Promise<void> {
 }
 
 const projection = ref<PluginProjection | null>(null);
+providePanelConfigSchemas(
+  computed(() => projection.value?.panelConfigSchemas ?? {}),
+);
 
 provideNavigableKinds(
   computed(

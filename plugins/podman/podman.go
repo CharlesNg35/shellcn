@@ -52,6 +52,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Resources: resources(),
 		Actions:   actions(),
 		Streams: []plugin.Stream{
+			{ID: "podman.overview.metrics", Kind: plugin.StreamMetrics, RouteID: "podman.overview.metrics"},
 			{ID: "podman.container.logs", Kind: plugin.StreamLogs, RouteID: "podman.container.logs"},
 			{ID: "podman.container.exec", Kind: plugin.StreamTerminal, RouteID: "podman.container.exec"},
 			{ID: "podman.events.watch", Kind: plugin.StreamLogs, RouteID: "podman.events.watch"},

@@ -477,7 +477,7 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 	}
 	checkPanelSource := func(ctx string, panel PanelType, ds *DataSource) {
 		switch panel {
-		case PanelTerminal, PanelLogStream, PanelMetrics, PanelQueryEditor, PanelRemoteDesktop:
+		case PanelTerminal, PanelLogStream, PanelMetrics, PanelQueryEditor, PanelRemoteDesktop, PanelTaskProgress:
 			checkStreamSource(ctx, ds)
 		default:
 			if ds != nil {
@@ -656,6 +656,9 @@ func checkPanelConfigRoutes(
 		checkWriteRouteID(ctx+" deleteRouteId", c.DeleteRouteID)
 	case HTTPClientConfig:
 		checkWriteRouteID(ctx+" executeRouteId", c.ExecuteRouteID)
+	case TaskProgressConfig:
+		checkWriteRouteID(ctx+" cancelRouteId", c.CancelRouteID)
+		checkWriteRouteID(ctx+" retryRouteId", c.RetryRouteID)
 	case DashboardConfig:
 		for _, cell := range c.Cells {
 			cellCtx := fmt.Sprintf("%s cell %q", ctx, cell.Key)
@@ -666,6 +669,27 @@ func checkPanelConfigRoutes(
 			checkPanelConfigRoutes(
 				cellCtx,
 				cell.Config,
+				checkReadSource,
+				checkWriteSource,
+				checkRouteID,
+				checkWriteRouteID,
+				checkMultipartRouteID,
+				checkStreamSource,
+				checkPanelSource,
+				checkActionIDs,
+				add,
+			)
+		}
+	case SplitConfig:
+		for _, child := range c.Panels {
+			childCtx := fmt.Sprintf("%s split panel %q", ctx, child.Key)
+			if child.Type == "" {
+				add("%s is missing a panel type", childCtx)
+			}
+			checkPanelSource(childCtx+" source", child.Type, child.Source)
+			checkPanelConfigRoutes(
+				childCtx,
+				child.Config,
 				checkReadSource,
 				checkWriteSource,
 				checkRouteID,

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin/pluginux"
 	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
@@ -29,6 +30,12 @@ func TestAllPluginProjectionsMarshal(t *testing.T) {
 				if action.Risk == plugin.RiskDestructive && !action.RequiresConfirm {
 					t.Fatalf("destructive action %q must require confirmation", action.ID)
 				}
+			}
+			if findings := pluginux.Errors(pluginux.Lint(p.Manifest(), p.Routes())); len(findings) > 0 {
+				for _, finding := range findings {
+					t.Errorf("%s: %s", finding.Path, finding.Message)
+				}
+				t.Fatalf("projection %q has plugin UX errors", name)
 			}
 			if _, err := json.Marshal(proj); err != nil {
 				t.Fatalf("projection does not marshal: %v", err)

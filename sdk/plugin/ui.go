@@ -16,6 +16,10 @@ const (
 	PanelForm          PanelType = "form"
 	PanelEnroll        PanelType = "enroll"
 	PanelDashboard     PanelType = "dashboard"
+	PanelObjectDetail  PanelType = "object_detail"
+	PanelTimeline      PanelType = "timeline"
+	PanelTaskProgress  PanelType = "task_progress"
+	PanelSplit         PanelType = "split"
 
 	PanelGraph      PanelType = "graph"
 	PanelTrace      PanelType = "trace"
@@ -40,6 +44,10 @@ func (CodeEditorConfig) panelConfig()    {}
 func (QueryEditorConfig) panelConfig()   {}
 func (HTTPClientConfig) panelConfig()    {}
 func (RemoteDesktopConfig) panelConfig() {}
+func (ObjectDetailConfig) panelConfig()  {}
+func (TimelineConfig) panelConfig()      {}
+func (TaskProgressConfig) panelConfig()  {}
+func (SplitConfig) panelConfig()         {}
 
 // StreamKind tags the long-lived channel a panel binds to.
 type StreamKind string
@@ -50,6 +58,7 @@ const (
 	StreamDesktop  StreamKind = "desktop"
 	StreamMetrics  StreamKind = "metrics"
 	StreamFile     StreamKind = "file"
+	StreamTask     StreamKind = "task"
 )
 
 // DataSource binds a panel to a route by id; params interpolate from the active
@@ -174,6 +183,60 @@ type FormPanelConfig struct {
 // DashboardConfig renders multiple panels in one responsive grid.
 type DashboardConfig struct {
 	Cells []Panel `json:"cells,omitempty"`
+}
+
+type ObjectDetailField struct {
+	Key        string              `json:"key"`
+	Label      string              `json:"label,omitempty"`
+	Type       ColumnType          `json:"type,omitempty"`
+	Copy       bool                `json:"copy,omitempty"`
+	Redacted   bool                `json:"redacted,omitempty"`
+	Severities map[string]Severity `json:"severities,omitempty"`
+}
+
+type ObjectDetailSection struct {
+	Title  string              `json:"title,omitempty"`
+	Fields []ObjectDetailField `json:"fields,omitempty"`
+}
+
+type ObjectDetailConfig struct {
+	Sections  []ObjectDetailSection `json:"sections,omitempty"`
+	RawToggle bool                  `json:"rawToggle,omitempty"`
+}
+
+type TimelineConfig struct {
+	TimestampField    string `json:"timestampField,omitempty"`
+	TitleField        string `json:"titleField,omitempty"`
+	BodyField         string `json:"bodyField,omitempty"`
+	SeverityField     string `json:"severityField,omitempty"`
+	IconField         string `json:"iconField,omitempty"`
+	ResourceField     string `json:"resourceField,omitempty"`
+	EmptyText         string `json:"emptyText,omitempty"`
+	RefreshIntervalMs int    `json:"refreshIntervalMs,omitempty"`
+}
+
+type TaskProgressConfig struct {
+	Title         string `json:"title,omitempty"`
+	CancelRouteID string `json:"cancelRouteId,omitempty"`
+	RetryRouteID  string `json:"retryRouteId,omitempty"`
+}
+
+type SplitOrientation string
+
+const (
+	SplitHorizontal SplitOrientation = "horizontal"
+	SplitVertical   SplitOrientation = "vertical"
+)
+
+type SplitPanel struct {
+	Panel
+	Size    int `json:"size,omitempty"`
+	MinSize int `json:"minSize,omitempty"`
+}
+
+type SplitConfig struct {
+	Orientation SplitOrientation `json:"orientation,omitempty"`
+	Panels      []SplitPanel     `json:"panels,omitempty"`
 }
 
 // MetricStat is one KPI number card in the metrics panel.

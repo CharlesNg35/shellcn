@@ -254,7 +254,8 @@ The browser must **render** but never **execute**. The core derives a projection
 from the manifest and serves it via `GET /api/plugins` and
 `GET /api/plugins/{name}`. The projection **includes**: identity, category,
 config schema, layout, tabs/tree, resource columns + actions (with `risk` +
-`requiresConfirm`), stream types, panel configs, and route bindings (`RouteID` + params only). It
+`requiresConfirm`), stream types, panel configs, the shared panel-config schema,
+and route bindings (`RouteID` + params only). It
 **excludes**: handler funcs, raw mount paths, permission keys, audit-event names,
 and any server-only route internals. The opaque `RouteID` is the only handle the
 browser holds; the core resolves it to a real URL (§7.1).
@@ -348,7 +349,7 @@ type ActionSuccess struct {
     Navigate  NavigateTarget // move the workbench after success, e.g. "list" — return a deleted resource's detail to its list so it doesn't linger
 }
 
-type StreamKind string // terminal, logs, desktop, metrics, file
+type StreamKind string // terminal, logs, desktop, metrics, file, task
 type Stream struct {
     ID      string // "docker.container.logs"
     Kind    StreamKind
@@ -788,6 +789,10 @@ const (
     PanelRemoteDesktop PanelType = "remote_desktop"
     PanelForm          PanelType = "form"           // schema-rendered
     PanelEnroll        PanelType = "enroll"         // agent install command + live status (§8.4)
+    PanelObjectDetail  PanelType = "object_detail"  // structured property sheet with copy/redaction/raw JSON
+    PanelTimeline      PanelType = "timeline"       // events/tasks/audit trail over a list route
+    PanelTaskProgress  PanelType = "task_progress"  // long-running task stream with progress/cancel/retry
+    PanelSplit         PanelType = "split"          // resizable horizontal/vertical child panel composition
 
     PanelGraph      PanelType = "graph"       // node/edge viz — Neo4j, topology
     PanelTrace      PanelType = "trace"       // span waterfall — Jaeger, Tempo
@@ -1005,16 +1010,25 @@ is allowed for this.
 The core validates every route/action/source reference during plugin
 registration. `DataSource.Method`, when declared, must match the referenced
 route. Read panels (`table`, `form`, `document`, `code_editor`, `file_browser`,
-etc.) must source from `GET` routes; streaming panels (`terminal`, `log_stream`,
-`metrics`, `query_editor`, `remote_desktop`, and table/resource watch sources)
-must source from `WS` routes. Table mutation sources (`insert`, `update`,
-`delete`) and editor/form save methods must resolve to write methods (`POST`,
-`PUT`, `PATCH`, or `DELETE`). Dashboard cells are validated recursively with the
-same rules as top-level tabs. The frontend renderer also validates generic panel
-config structure at the `PanelHost` boundary for values that can break generic
-rendering (iterated arrays, route/method fields, params maps, and recursive
-dashboard cells), then renders a panel error instead of mounting a panel with
-malformed config. Semantic manifest validation stays authoritative in Go.
+`object_detail`, `timeline`, etc.) must source from `GET` routes; streaming
+panels (`terminal`, `log_stream`, `metrics`, `query_editor`, `remote_desktop`,
+`task_progress`, and table/resource watch sources) must source from `WS` routes.
+Table mutation sources (`insert`, `update`, `delete`) and editor/form save
+methods must resolve to write methods (`POST`, `PUT`, `PATCH`, or `DELETE`).
+Dashboard and split child panels are validated recursively with the same rules
+as top-level tabs. The core projects a shared panel-config schema derived from
+SDK panel/config definitions; registration, plugin starter tests, marketplace
+ingestion, and the frontend runtime guard all consume that schema so Go and
+TypeScript do not drift. The frontend renders a panel error instead of mounting
+a panel with malformed config.
+
+`sdk/plugin/pluginux` applies renderer UX rules to manifests: destructive and
+privileged actions must confirm; `OpenDock` is reserved for long-lived
+interactive panels; stream route kind must match the panel type; closed-value
+fields use select/radio, suggested custom values use autocomplete; tables
+declare meaningful column types, empty states, and sort/watch/refresh behavior;
+actions declare icons, labels, and useful success behavior. Errors block
+release; warnings are review prompts.
 
 `remote_desktop` routes expose an RFB/VNC byte stream and the browser lazy-loads
 noVNC. VNC plugins stream raw RFB after the gateway authenticates upstream; RDP

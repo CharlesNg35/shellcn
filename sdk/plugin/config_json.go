@@ -18,6 +18,10 @@ var panelConfigDecoders = map[PanelType]func(json.RawMessage) (PanelConfig, erro
 	PanelQueryEditor:   func(r json.RawMessage) (PanelConfig, error) { return decode[QueryEditorConfig](r) },
 	PanelHTTPClient:    func(r json.RawMessage) (PanelConfig, error) { return decode[HTTPClientConfig](r) },
 	PanelRemoteDesktop: func(r json.RawMessage) (PanelConfig, error) { return decode[RemoteDesktopConfig](r) },
+	PanelObjectDetail:  func(r json.RawMessage) (PanelConfig, error) { return decode[ObjectDetailConfig](r) },
+	PanelTimeline:      func(r json.RawMessage) (PanelConfig, error) { return decode[TimelineConfig](r) },
+	PanelTaskProgress:  func(r json.RawMessage) (PanelConfig, error) { return decode[TaskProgressConfig](r) },
+	PanelSplit:         func(r json.RawMessage) (PanelConfig, error) { return decode[SplitConfig](r) },
 }
 
 func decode[T PanelConfig](raw json.RawMessage) (PanelConfig, error) {

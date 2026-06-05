@@ -369,6 +369,33 @@ export const primeVuePassthrough = {
     label: "hidden",
   },
 
+  timeline: {
+    root: "flex flex-col",
+    event: "flex min-h-16",
+    eventOpposite:
+      "min-w-36 max-w-48 shrink-0 pr-4 text-right text-xs text-surface-500 dark:text-surface-400",
+    eventSeparator: "flex shrink-0 flex-col items-center",
+    eventMarker:
+      "z-10 flex h-6 w-6 items-center justify-center rounded-full border border-surface-300 bg-surface-0 text-surface-500 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-300",
+    eventConnector: "w-px flex-1 bg-surface-200 dark:bg-surface-800",
+    eventContent: "min-w-0 flex-1 pb-5 pl-4",
+  },
+
+  splitter: {
+    root: ({ props }: { props?: { layout?: string } }) =>
+      cn(
+        "flex h-full border-0 bg-surface-0 dark:bg-surface-950",
+        props?.layout === "vertical" ? "flex-col" : "flex-row",
+      ),
+    gutter:
+      "shrink-0 bg-surface-200 transition-colors hover:bg-primary-300 dark:bg-surface-800 dark:hover:bg-primary-700",
+    gutterHandle: "rounded-full bg-surface-400 dark:bg-surface-600",
+  },
+
+  splitterpanel: {
+    root: "min-h-0 overflow-hidden",
+  },
+
   slider: {
     root: "relative h-5 w-full before:absolute before:left-0 before:top-1/2 before:h-1 before:w-full before:-translate-y-1/2 before:rounded-full before:bg-surface-200 dark:before:bg-surface-700",
     range: "absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary-500",

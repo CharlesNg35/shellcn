@@ -339,6 +339,59 @@ func TestValidateAcceptsRemoteDesktopConfig(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsSplitAndTaskProgressPanels(t *testing.T) {
+	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "task",
+		Title:      "Task",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{
+			plugin.TransportDirect,
+		},
+		Tabs: []plugin.Panel{{
+			Key:   "work",
+			Label: "Work",
+			Type:  plugin.PanelSplit,
+			Config: plugin.SplitConfig{
+				Orientation: plugin.SplitHorizontal,
+				Panels: []plugin.SplitPanel{
+					{
+						Panel: plugin.Panel{
+							Key: "rows", Label: "Rows", Type: plugin.PanelTable,
+							Source: &plugin.DataSource{RouteID: "task.rows"},
+						},
+						Size: 40,
+					},
+					{
+						Panel: plugin.Panel{
+							Key: "run", Label: "Run", Type: plugin.PanelTaskProgress,
+							Source: &plugin.DataSource{RouteID: "task.run", Method: plugin.MethodWS},
+							Config: plugin.TaskProgressConfig{
+								CancelRouteID: "task.cancel",
+								RetryRouteID:  "task.retry",
+							},
+						},
+						Size: 60,
+					},
+				},
+			},
+		}},
+		Streams: []plugin.Stream{{ID: "task.run", Kind: plugin.StreamTask, RouteID: "task.run"}},
+	}
+	routes := []plugin.Route{
+		{ID: "task.rows", Method: plugin.MethodGet, Permission: "task.read", Risk: plugin.RiskSafe, Handle: noop},
+		{ID: "task.run", Method: plugin.MethodWS, Permission: "task.read", Risk: plugin.RiskSafe, Stream: stream},
+		{ID: "task.cancel", Method: plugin.MethodPost, Permission: "task.write", Risk: plugin.RiskWrite, Handle: noop},
+		{ID: "task.retry", Method: plugin.MethodPost, Permission: "task.write", Risk: plugin.RiskWrite, Handle: noop},
+	}
+	if err := plugin.Validate(m, routes); err != nil {
+		t.Fatalf("valid split/task manifest rejected: %v", err)
+	}
+}
+
 // TestPanelConfigWireFormat locks the JSON the browser receives for a panel
 // config: typed structs serialize to the same camelCase keys the renderer reads,
 // and zero-value fields are omitted.

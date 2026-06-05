@@ -43,6 +43,10 @@ export type KnownPanelType =
   | "remote_desktop"
   | "form"
   | "enroll"
+  | "object_detail"
+  | "timeline"
+  | "task_progress"
+  | "split"
   | "graph"
   | "trace"
   | "kv"
@@ -51,7 +55,13 @@ export type KnownPanelType =
 
 export type PanelType = KnownPanelType | (string & {});
 
-export type StreamKind = "terminal" | "logs" | "desktop" | "metrics" | "file";
+export type StreamKind =
+  | "terminal"
+  | "logs"
+  | "desktop"
+  | "metrics"
+  | "file"
+  | "task";
 
 export type RecordingClass = "terminal" | "desktop";
 
@@ -365,6 +375,52 @@ export interface RemoteDesktopPanelConfig {
   repeaterID?: string;
 }
 
+export interface ObjectDetailField {
+  key: string;
+  label?: string;
+  type?: ColumnType;
+  copy?: boolean;
+  redacted?: boolean;
+  severities?: Record<string, Severity>;
+}
+
+export interface ObjectDetailSection {
+  title?: string;
+  fields?: ObjectDetailField[];
+}
+
+export interface ObjectDetailPanelConfig {
+  sections?: ObjectDetailSection[];
+  rawToggle?: boolean;
+}
+
+export interface TimelinePanelConfig {
+  timestampField?: string;
+  titleField?: string;
+  bodyField?: string;
+  severityField?: string;
+  iconField?: string;
+  resourceField?: string;
+  emptyText?: string;
+  refreshIntervalMs?: number;
+}
+
+export interface TaskProgressPanelConfig {
+  title?: string;
+  cancelRouteId?: string;
+  retryRouteId?: string;
+}
+
+export interface SplitChildPanel extends DashboardCell {
+  size?: number;
+  minSize?: number;
+}
+
+export interface SplitPanelConfig {
+  orientation?: "horizontal" | "vertical";
+  panels?: SplitChildPanel[];
+}
+
 export type ColumnType =
   | "text"
   | "badge"
@@ -458,6 +514,20 @@ export interface DashboardCell {
 
 export interface DashboardPanelConfig {
   cells: DashboardCell[];
+}
+
+export interface PanelConfigProperty {
+  type: "string" | "number" | "boolean" | "object" | "array";
+  items?: PanelConfigProperty;
+  properties?: Record<string, PanelConfigProperty>;
+  enum?: string[];
+  required?: string[];
+}
+
+export interface PanelConfigSchema {
+  type: "object";
+  properties?: Record<string, PanelConfigProperty>;
+  required?: string[];
 }
 
 export interface TreeGroup {
@@ -559,6 +629,7 @@ export interface PluginProjection {
   scope?: ScopeFilter[];
   streams?: Stream[];
   recording?: RecordingCapability[];
+  panelConfigSchemas?: Record<string, PanelConfigSchema>;
 }
 
 export interface ConnectionSummary {

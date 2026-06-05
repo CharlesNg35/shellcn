@@ -97,7 +97,10 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 			RouteID: "sample.start", Confirm: true, ConfirmText: "Start it?",
 			EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "state", Op: plugin.OpEq, Value: "stopped"}}},
 		}},
-		Streams: []plugin.Stream{{ID: "sample.shell", Kind: plugin.StreamTerminal, RouteID: "sample.shell"}},
+		Streams: []plugin.Stream{
+			{ID: "sample.shell", Kind: plugin.StreamTerminal, RouteID: "sample.shell"},
+			{ID: "sample.logs", Kind: plugin.StreamLogs, RouteID: "sample.logs"},
+		},
 		Recording: []plugin.RecordingCapability{{
 			Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2},
 			StreamIDs: []string{"sample.shell"}, Authoritative: true,

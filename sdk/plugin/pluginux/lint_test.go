@@ -1,0 +1,95 @@
+package pluginux_test
+
+import (
+	"testing"
+
+	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin/pluginux"
+)
+
+func noop(_ *plugin.RequestContext) (any, error) { return nil, nil }
+
+func stream(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
+
+func hasError(findings []pluginux.Finding, message string) bool {
+	for _, finding := range pluginux.Errors(findings) {
+		if finding.Message == message {
+			return true
+		}
+	}
+	return false
+}
+
+func TestLintRejectsPrivilegedActionWithoutConfirm(t *testing.T) {
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "x",
+		Title:      "X",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		Actions: []plugin.Action{{
+			ID:      "x.shell",
+			Label:   "Shell",
+			RouteID: "x.shell",
+		}},
+	}
+	routes := []plugin.Route{{
+		ID: "x.shell", Method: plugin.MethodPost, Permission: "x.shell",
+		Risk: plugin.RiskPrivileged, Handle: noop,
+	}}
+	if !hasError(pluginux.Lint(m, routes), "privileged action must require confirmation") {
+		t.Fatalf("expected privileged action confirmation error")
+	}
+}
+
+func TestLintRequiresStreamDeclarationAndMatchingKind(t *testing.T) {
+	panel := plugin.Panel{
+		Key:    "shell",
+		Label:  "Shell",
+		Type:   plugin.PanelTerminal,
+		Source: &plugin.DataSource{RouteID: "x.shell", Method: plugin.MethodWS},
+	}
+	base := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "x",
+		Title:      "X",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		Tabs:       []plugin.Panel{panel},
+	}
+	routes := []plugin.Route{{
+		ID: "x.shell", Method: plugin.MethodWS, Permission: "x.shell",
+		Risk: plugin.RiskPrivileged, Stream: stream,
+	}}
+	if !hasError(pluginux.Lint(base, routes), `stream panel route "x.shell" is not declared in manifest streams`) {
+		t.Fatalf("expected undeclared stream error")
+	}
+	base.Streams = []plugin.Stream{{ID: "x.shell", Kind: plugin.StreamLogs, RouteID: "x.shell"}}
+	if !hasError(pluginux.Lint(base, routes), `stream route "x.shell" is "logs" but panel "terminal" requires "terminal"`) {
+		t.Fatalf("expected stream kind mismatch error")
+	}
+}
+
+func TestLintAcceptsTaskProgressTaskStream(t *testing.T) {
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "x",
+		Title:      "X",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		Tabs: []plugin.Panel{{
+			Key:    "task",
+			Label:  "Task",
+			Type:   plugin.PanelTaskProgress,
+			Source: &plugin.DataSource{RouteID: "x.task", Method: plugin.MethodWS},
+		}},
+		Streams: []plugin.Stream{{ID: "x.task", Kind: plugin.StreamTask, RouteID: "x.task"}},
+	}
+	routes := []plugin.Route{{
+		ID: "x.task", Method: plugin.MethodWS, Permission: "x.task",
+		Risk: plugin.RiskSafe, Stream: stream,
+	}}
+	if findings := pluginux.Errors(pluginux.Lint(m, routes)); len(findings) != 0 {
+		t.Fatalf("unexpected UX errors: %#v", findings)
+	}
+}

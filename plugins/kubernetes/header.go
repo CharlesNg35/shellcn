@@ -13,9 +13,11 @@ func clusterShellAction() plugin.Action {
 	return plugin.Action{
 		ID: "kubernetes.cluster.shell", Label: "Cluster Shell", Icon: lucide("terminal"),
 		RouteID: "kubernetes.cluster.shell", Open: plugin.OpenDock, Panel: plugin.PanelTerminal,
-		Params:   map[string]string{"tty": "true", "cols": "80", "rows": "24"},
-		Config:   plugin.TerminalConfig{Zoom: true, Search: true},
-		IconOnly: true,
+		Params:      map[string]string{"tty": "true", "cols": "80", "rows": "24"},
+		Config:      plugin.TerminalConfig{Zoom: true, Search: true},
+		Confirm:     true,
+		ConfirmText: "Open a cluster shell with elevated in-cluster permissions?",
+		IconOnly:    true,
 	}
 }
 

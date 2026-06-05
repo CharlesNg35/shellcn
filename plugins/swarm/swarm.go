@@ -68,6 +68,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Resources: resources(),
 		Actions:   actions(),
 		Streams: []plugin.Stream{
+			{ID: "swarm.overview.metrics", Kind: plugin.StreamMetrics, RouteID: "swarm.overview.metrics"},
 			{ID: "swarm.service.logs", Kind: plugin.StreamLogs, RouteID: "swarm.service.logs"},
 		},
 	}

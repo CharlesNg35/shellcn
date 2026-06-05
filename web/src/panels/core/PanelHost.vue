@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { resolvePanel } from "./registry";
 import FallbackPanel from "./FallbackPanel.vue";
 import PanelError from "../shared/PanelError.vue";
-import { panelConfigError } from "./config";
+import { panelConfigError, usePanelConfigSchemas } from "./config";
 import { useScopeStore } from "../../stores/scope";
 import type {
   Action,
@@ -27,7 +27,10 @@ const emit = defineEmits<{
 }>();
 
 const component = computed(() => resolvePanel(props.panel));
-const configError = computed(() => panelConfigError(props.panel, props.config));
+const configSchemas = usePanelConfigSchemas();
+const configError = computed(() =>
+  panelConfigError(props.panel, props.config, configSchemas.value),
+);
 const scope = useScopeStore();
 const panelKey = computed(() =>
   JSON.stringify({
