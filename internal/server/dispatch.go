@@ -26,6 +26,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/recording"
 	"github.com/charlesng35/shellcn/internal/session"
+	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
@@ -591,6 +592,14 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if s.streamReadsClient(res) {
+		go func() {
+			if err := transport.KeepAliveWebSocket(streamCtx, c); err != nil {
+				cancel()
+				_ = c.CloseNow()
+			}
+		}()
+	}
 	// noVNC streams raw RFB bytes over the negotiated "binary" subprotocol;
 	// terminal/log/query streams stay on text frames.
 	msgType := websocket.MessageText
@@ -610,6 +619,18 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 		return
 	}
 	_ = c.Close(websocket.StatusNormalClosure, "")
+}
+
+func (s *Server) streamReadsClient(res resolved) bool {
+	m, ok := s.deps.Plugins.Manifest(res.conn.Protocol)
+	if !ok {
+		return false
+	}
+	stream, ok := m.StreamByRoute(res.route.ID)
+	if !ok {
+		return false
+	}
+	return stream.Kind == plugin.StreamTerminal || stream.Kind == plugin.StreamDesktop
 }
 
 // streamCloseReason fits an error into a WebSocket close reason.

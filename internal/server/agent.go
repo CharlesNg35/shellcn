@@ -242,6 +242,8 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 
 	connID, proxy, err := s.deps.Enrollments.Redeem(r.Context(), hello.Token)
 	if err != nil {
+		agentUser := models.User{ID: "agent", Username: app.AgentUsername}
+		s.auditAgentEvent(r.Context(), agentUser, "", agentConnectEvent, models.AuditDenied, err)
 		_ = wsjson.Write(handshakeCtx, c, transport.AgentConnectResponse{OK: false, Error: "enrollment rejected"})
 		_ = c.Close(websocket.StatusPolicyViolation, "enrollment rejected")
 		return
@@ -267,7 +269,7 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 	agentUser := models.User{ID: "agent", Username: app.AgentUsername}
 	s.auditAgentEvent(r.Context(), agentUser, connID, agentConnectEvent, models.AuditAllowed, nil)
 	s.deps.Logger.Info("agent tunnel online", "connection", connID, "mode", proxy.Mode)
-	tunnelErr := transport.ServeGatewayTunnel(c, connID, s.deps.Tunnels, forward)
+	tunnelErr := transport.ServeGatewayTunnel(r.Context(), c, connID, s.deps.Tunnels, forward)
 	teardownCtx, teardownCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
 	defer teardownCancel()
 	s.deps.Enrollments.MarkOffline(teardownCtx, connID)

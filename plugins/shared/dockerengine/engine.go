@@ -560,8 +560,17 @@ func VolumeCreateSchema() *plugin.Schema {
 func NetworkCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Network", Fields: []plugin.Field{
 		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
-		{Key: "driver", Label: "Driver", Type: plugin.FieldText, Default: "bridge", Placeholder: "bridge", Help: "Network driver, e.g. bridge, overlay, macvlan, ipvlan, host, none."},
+		{Key: "driver", Label: "Driver", Type: plugin.FieldSelect, Default: "bridge", Options: dockerNetworkDriverOptions(), Help: "Network driver."},
 	}}}}
+}
+
+func dockerNetworkDriverOptions() []plugin.Option {
+	return []plugin.Option{
+		{Label: "Bridge", Value: "bridge"},
+		{Label: "Overlay", Value: "overlay"},
+		{Label: "Macvlan", Value: "macvlan"},
+		{Label: "IPvlan", Value: "ipvlan"},
+	}
 }
 
 // PullImage pulls an image by reference, waiting for the pull to finish.

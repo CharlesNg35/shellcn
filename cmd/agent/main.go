@@ -191,7 +191,16 @@ func serve(ctx context.Context, logger *slog.Logger, connectURL, token string, i
 	target := resp.Proxy
 	logger.Info("tunnel online", "mode", target.Mode, "address", target.Address)
 
-	nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
+	tunnelCtx, tunnelCancel := context.WithCancel(ctx)
+	defer tunnelCancel()
+	go func() {
+		if err := transport.KeepAliveWebSocket(tunnelCtx, c); err != nil {
+			tunnelCancel()
+			_ = c.CloseNow()
+		}
+	}()
+
+	nc := websocket.NetConn(tunnelCtx, c, websocket.MessageBinary)
 
 	cfg := yamux.DefaultConfig()
 	cfg.EnableKeepAlive = true

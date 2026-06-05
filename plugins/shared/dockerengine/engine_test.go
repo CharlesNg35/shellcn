@@ -78,6 +78,43 @@ func TestExecCommandsFallbackOnlyForDefaultShell(t *testing.T) {
 	}
 }
 
+func TestNetworkCreateDriverIsSelect(t *testing.T) {
+	schema := NetworkCreateSchema()
+	var driver *plugin.Field
+	for i := range schema.Groups {
+		for j := range schema.Groups[i].Fields {
+			field := &schema.Groups[i].Fields[j]
+			if field.Key == "driver" {
+				driver = field
+				break
+			}
+		}
+	}
+	if driver == nil {
+		t.Fatal("network create schema missing driver field")
+	}
+	if driver.Type != plugin.FieldSelect {
+		t.Fatalf("driver field type = %q, want select", driver.Type)
+	}
+	if driver.Default != "bridge" {
+		t.Fatalf("driver default = %#v, want bridge", driver.Default)
+	}
+	got := make([]any, 0, len(driver.Options))
+	for _, option := range driver.Options {
+		got = append(got, option.Value)
+	}
+	want := []any{"bridge", "overlay", "macvlan", "ipvlan"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("driver options = %#v, want %#v", got, want)
+	}
+	if err := schema.ValidateValues(map[string]any{"name": "app", "driver": "bridge"}, nil); err != nil {
+		t.Fatalf("schema rejected bridge driver: %v", err)
+	}
+	if err := schema.ValidateValues(map[string]any{"name": "app", "driver": "not-a-driver"}, nil); err == nil {
+		t.Fatal("schema accepted an unknown network driver")
+	}
+}
+
 func TestResourceEventDieKeepsContainerListedAsExited(t *testing.T) {
 	ev := resourceEventFromDocker(events.Message{
 		Action: events.ActionDie,

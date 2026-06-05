@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 
 	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
 	"github.com/charlesng35/shellcn/internal/ai/modelreg"
@@ -599,6 +600,40 @@ func TestAgentEnrollmentIsAudited(t *testing.T) {
 		}
 	}
 	t.Fatalf("missing agent enrollment audit row: %+v", rows)
+}
+
+func TestRejectedAgentConnectIsAudited(t *testing.T) {
+	h := newHarness(t)
+	c, resp, err := websocket.Dial(context.Background(), h.wsURL("/api/agent/connect"), nil)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	if err != nil {
+		t.Fatalf("dial agent connect: %v", err)
+	}
+	defer func() { _ = c.CloseNow() }()
+
+	if err := wsjson.Write(context.Background(), c, transport.AgentHello{Token: "not-a-token"}); err != nil {
+		t.Fatalf("write hello: %v", err)
+	}
+	var agentResp transport.AgentConnectResponse
+	if err := wsjson.Read(context.Background(), c, &agentResp); err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	if agentResp.OK {
+		t.Fatal("invalid token should be rejected")
+	}
+
+	rows, err := h.store.Audit.List(context.Background(), store.AuditFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if row.RouteID == "agent.connect" && row.Result == models.AuditDenied && row.Risk == string(plugin.RiskPrivileged) {
+			return
+		}
+	}
+	t.Fatalf("missing denied agent.connect audit row: %+v", rows)
 }
 
 func TestAgentEnrollmentUsesForwardedPublicURL(t *testing.T) {

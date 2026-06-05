@@ -91,8 +91,17 @@ type AgentConnectResponse struct {
 // registered for the lifetime of the tunnel and removed when it closes.
 //
 // It blocks until the tunnel is torn down.
-func ServeGatewayTunnel(c *websocket.Conn, connectionID string, reg *Registry, forward bool) error {
-	nc := websocket.NetConn(context.Background(), c, websocket.MessageBinary)
+func ServeGatewayTunnel(ctx context.Context, c *websocket.Conn, connectionID string, reg *Registry, forward bool) error {
+	tunnelCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		if err := KeepAliveWebSocket(tunnelCtx, c); err != nil {
+			cancel()
+			_ = c.CloseNow()
+		}
+	}()
+
+	nc := websocket.NetConn(tunnelCtx, c, websocket.MessageBinary)
 
 	cfg := yamux.DefaultConfig()
 	cfg.EnableKeepAlive = true

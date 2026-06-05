@@ -39,7 +39,7 @@ func ClusterShellStream(rc *plugin.RequestContext, client plugin.ClientStream) e
 	if err != nil {
 		return err
 	}
-	if err := ensureShellPod(rc.Ctx, client.Context(), s); err != nil {
+	if err := ensureShellPod(client.Context(), rc, s); err != nil {
 		return err
 	}
 
@@ -66,9 +66,11 @@ func interactiveShellCommands(rc *plugin.RequestContext, tty bool) [][]string {
 
 // ensureShellPod reuses a healthy shell pod, recreating it only when missing or
 // dead, then blocks until it is ready to exec into.
-func ensureShellPod(ctx, waitCtx context.Context, s *Session) error {
+func ensureShellPod(waitCtx context.Context, rc *plugin.RequestContext, s *Session) error {
+	ctx := rc.Ctx
 	pods := s.clientset.CoreV1().Pods(shellNamespace)
-	useSA := ensureShellRBAC(ctx, s)
+	useSA, rbacErr := ensureShellRBAC(ctx, s)
+	auditShellRBAC(rc, rbacErr)
 	if p, err := pods.Get(ctx, shellPodName, metav1.GetOptions{}); err == nil && p.DeletionTimestamp == nil {
 		switch {
 		case podReady(p):
@@ -90,15 +92,31 @@ func ensureShellPod(ctx, waitCtx context.Context, s *Session) error {
 // shell, so its kubectl can actually reach the cluster (matching how the agent
 // install binds cluster-admin). It reports whether the dedicated SA is usable;
 // if it can't be created the caller falls back to the namespace default SA.
-func ensureShellRBAC(ctx context.Context, s *Session) bool {
+func ensureShellRBAC(ctx context.Context, s *Session) (bool, error) {
 	sa := s.clientset.CoreV1().ServiceAccounts(shellNamespace)
 	if _, err := sa.Create(ctx, shellServiceAccount(), metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
-		return false
+		return false, apiErr(err)
 	}
 	// A missing binding only narrows what the shell can do; the SA is still usable.
 	crb := s.clientset.RbacV1().ClusterRoleBindings()
-	_, _ = crb.Create(ctx, shellClusterRoleBinding(), metav1.CreateOptions{})
-	return true
+	if _, err := crb.Create(ctx, shellClusterRoleBinding(), metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return true, apiErr(err)
+	}
+	return true, nil
+}
+
+func auditShellRBAC(rc *plugin.RequestContext, err error) {
+	params := map[string]string{
+		"operation":      "cluster-shell-rbac",
+		"namespace":      shellNamespace,
+		"serviceAccount": shellSAName,
+		"clusterRole":    "cluster-admin",
+	}
+	if err != nil {
+		rc.Audit(plugin.AuditError, params, err)
+		return
+	}
+	rc.Audit(plugin.AuditAllowed, params, nil)
 }
 
 func shellLabels() map[string]string {
