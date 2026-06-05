@@ -48,7 +48,7 @@ func configSchema() plugin.Schema {
 	return plugin.Schema{Groups: []plugin.Group{
 		{Name: "Bucket", Fields: []plugin.Field{
 			{Key: "bucket", Label: "Bucket", Type: plugin.FieldText, Required: true, Placeholder: "my-bucket"},
-			{Key: "region", Label: "Region", Type: plugin.FieldText, Required: true, Default: "us-east-1", Placeholder: "us-east-1"},
+			{Key: "region", Label: "Region", Type: plugin.FieldAutocomplete, Required: true, Default: "us-east-1", Placeholder: "us-east-1", Options: s3compat.AWSRegionOptions()},
 			{Key: "prefix", Label: "Prefix", Type: plugin.FieldText, Placeholder: "optional/folder"},
 		}},
 		{Name: "Endpoint", Fields: []plugin.Field{

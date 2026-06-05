@@ -139,7 +139,7 @@ func schemaCreateSchema() *plugin.Schema {
 func tableCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
 		{Key: "name", Label: "Table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		sqldb.ColumnsArrayField(sqldb.ColumnsField{TypePlaceholder: "bigserial", TypeSuggestions: []string{"bigint", "bigserial", "integer", "serial", "smallint", "boolean", "text", "varchar(255)", "char(1)", "numeric(10,2)", "real", "double precision", "date", "timestamptz", "timestamp", "time", "uuid", "jsonb", "json", "bytea", "inet"}, Default: true, Primary: true, Unique: true}),
+		sqldb.ColumnsArrayField(sqldb.ColumnsField{TypePlaceholder: "bigserial", TypeSuggestions: postgresqlColumnTypeSuggestions(), Default: true, Primary: true, Unique: true}),
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 	}}}}
 }
@@ -156,7 +156,7 @@ func tableCreateInDatabaseSchema() *plugin.Schema {
 func columnAddSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
 		{Key: "name", Label: "Column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "text"},
+		postgresqlColumnTypeField("Type", "text"),
 		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: true},
 		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
 	}}}}
@@ -170,9 +170,39 @@ func columnRenameSchema() *plugin.Schema {
 
 func columnAlterSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Change type", Fields: []plugin.Field{
-		{Key: "type", Label: "New type", Type: plugin.FieldText, Required: true, Default: "text"},
+		postgresqlColumnTypeField("New type", "text"),
 		{Key: "using", Label: "USING expression", Type: plugin.FieldText, Help: "Optional cast expression, e.g. column::integer."},
 	}}}}
+}
+
+func postgresqlColumnTypeField(label string, defaultValue string) plugin.Field {
+	return plugin.Field{
+		Key:         "type",
+		Label:       label,
+		Type:        plugin.FieldAutocomplete,
+		Required:    true,
+		Default:     defaultValue,
+		Placeholder: defaultValue,
+		Options:     postgresqlColumnTypeOptions(),
+	}
+}
+
+func postgresqlColumnTypeSuggestions() []string {
+	return []string{
+		"bigint", "bigserial", "integer", "serial", "smallint", "boolean", "text",
+		"varchar(255)", "char(1)", "numeric(10,2)", "real", "double precision",
+		"date", "timestamptz", "timestamp", "time", "uuid", "jsonb", "json",
+		"bytea", "inet",
+	}
+}
+
+func postgresqlColumnTypeOptions() []plugin.Option {
+	values := postgresqlColumnTypeSuggestions()
+	options := make([]plugin.Option, 0, len(values))
+	for _, value := range values {
+		options = append(options, plugin.Option{Label: value, Value: value})
+	}
+	return options
 }
 
 func tableRenameSchema() *plugin.Schema {

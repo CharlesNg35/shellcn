@@ -343,18 +343,42 @@ func TestTableCreateColumnsIsStructuredArray(t *testing.T) {
 	assertColumnsArray(t, New(), "mysql.table.create", []string{"name", "type", "nullable", "primary", "unique", "default"})
 }
 
-func assertColumnsArray(t *testing.T, p plugin.Plugin, routeID string, wantKeys []string) {
-	t.Helper()
-	var schema *plugin.Schema
-	for _, r := range p.Routes() {
-		if r.ID == routeID {
-			schema = r.Input
-			break
+func TestDDLChoiceLikeFieldsUseAutocomplete(t *testing.T) {
+	database := routeInputSchema(t, New(), "mysql.database.create")
+	charset := requireRouteField(t, database, "charset")
+	if charset.Type != plugin.FieldAutocomplete || charset.Default != "utf8mb4" {
+		t.Fatalf("database charset field = %#v, want utf8mb4 autocomplete", charset)
+	}
+	collation := requireRouteField(t, database, "collation")
+	if collation.Type != plugin.FieldAutocomplete {
+		t.Fatalf("database collation field type = %q, want autocomplete", collation.Type)
+	}
+
+	table := routeInputSchema(t, New(), "mysql.table.create")
+	engine := requireRouteField(t, table, "engine")
+	if engine.Type != plugin.FieldAutocomplete || engine.Default != "InnoDB" {
+		t.Fatalf("table engine field = %#v, want InnoDB autocomplete", engine)
+	}
+
+	for _, routeID := range []string{"mysql.column.add", "mysql.column.alter"} {
+		schema := routeInputSchema(t, New(), routeID)
+		field := requireRouteField(t, schema, "type")
+		if field.Type != plugin.FieldAutocomplete || field.Default != "varchar(255)" {
+			t.Fatalf("%s type field = %#v, want varchar autocomplete", routeID, field)
+		}
+		values := map[string]any{"type": "custom_type", "nullable": true}
+		if routeID == "mysql.column.add" {
+			values["name"] = "email"
+		}
+		if err := schema.ValidateValues(values, nil); err != nil {
+			t.Fatalf("%s should allow custom type values: %v", routeID, err)
 		}
 	}
-	if schema == nil {
-		t.Fatalf("route %q has no input schema", routeID)
-	}
+}
+
+func assertColumnsArray(t *testing.T, p plugin.Plugin, routeID string, wantKeys []string) {
+	t.Helper()
+	schema := routeInputSchema(t, p, routeID)
 	var columns *plugin.Field
 	for _, g := range schema.Groups {
 		for i := range g.Fields {
@@ -384,4 +408,31 @@ func assertColumnsArray(t *testing.T, p plugin.Plugin, routeID string, wantKeys 
 			t.Fatalf("%s: columns item keys = %v, want %v", routeID, got, wantKeys)
 		}
 	}
+}
+
+func routeInputSchema(t *testing.T, p plugin.Plugin, routeID string) *plugin.Schema {
+	t.Helper()
+	for _, r := range p.Routes() {
+		if r.ID == routeID {
+			if r.Input == nil {
+				t.Fatalf("route %q has no input schema", routeID)
+			}
+			return r.Input
+		}
+	}
+	t.Fatalf("route %q was not found", routeID)
+	return nil
+}
+
+func requireRouteField(t *testing.T, schema *plugin.Schema, key string) plugin.Field {
+	t.Helper()
+	for _, g := range schema.Groups {
+		for _, field := range g.Fields {
+			if field.Key == key {
+				return field
+			}
+		}
+	}
+	t.Fatalf("schema missing %q field", key)
+	return plugin.Field{}
 }

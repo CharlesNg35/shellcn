@@ -80,19 +80,7 @@ func TestExecCommandsFallbackOnlyForDefaultShell(t *testing.T) {
 
 func TestNetworkCreateDriverIsSelect(t *testing.T) {
 	schema := NetworkCreateSchema()
-	var driver *plugin.Field
-	for i := range schema.Groups {
-		for j := range schema.Groups[i].Fields {
-			field := &schema.Groups[i].Fields[j]
-			if field.Key == "driver" {
-				driver = field
-				break
-			}
-		}
-	}
-	if driver == nil {
-		t.Fatal("network create schema missing driver field")
-	}
+	driver := requireSchemaField(t, schema, "driver")
 	if driver.Type != plugin.FieldSelect {
 		t.Fatalf("driver field type = %q, want select", driver.Type)
 	}
@@ -113,6 +101,62 @@ func TestNetworkCreateDriverIsSelect(t *testing.T) {
 	if err := schema.ValidateValues(map[string]any{"name": "app", "driver": "not-a-driver"}, nil); err == nil {
 		t.Fatal("schema accepted an unknown network driver")
 	}
+}
+
+func TestPodmanNetworkCreateDriverAllowsPluginNames(t *testing.T) {
+	schema := PodmanNetworkCreateSchema()
+	driver := requireSchemaField(t, schema, "driver")
+	if driver.Type != plugin.FieldAutocomplete {
+		t.Fatalf("podman driver field type = %q, want autocomplete", driver.Type)
+	}
+	got := make([]any, 0, len(driver.Options))
+	for _, option := range driver.Options {
+		got = append(got, option.Value)
+	}
+	want := []any{"bridge", "macvlan", "ipvlan"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("podman driver options = %#v, want %#v", got, want)
+	}
+	if err := schema.ValidateValues(map[string]any{"name": "app", "driver": "custom-netavark-plugin"}, nil); err != nil {
+		t.Fatalf("podman schema should allow custom driver names: %v", err)
+	}
+}
+
+func TestVolumeDriverAndContainerNetworkUseAutocomplete(t *testing.T) {
+	volumeDriver := requireSchemaField(t, VolumeCreateSchema(), "driver")
+	if volumeDriver.Type != plugin.FieldAutocomplete || volumeDriver.Default != "local" {
+		t.Fatalf("volume driver field = %#v, want local autocomplete", volumeDriver)
+	}
+	if err := VolumeCreateSchema().ValidateValues(map[string]any{"name": "data", "driver": "custom-volume-plugin"}, nil); err != nil {
+		t.Fatalf("volume schema should allow custom driver names: %v", err)
+	}
+
+	containerNetwork := requireSchemaField(t, CreateContainerSchema(), "network")
+	if containerNetwork.Type != plugin.FieldAutocomplete {
+		t.Fatalf("container network field type = %q, want autocomplete", containerNetwork.Type)
+	}
+	got := make([]any, 0, len(containerNetwork.Options))
+	for _, option := range containerNetwork.Options {
+		got = append(got, option.Value)
+	}
+	want := []any{"bridge", "host", "none"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("container network options = %#v, want %#v", got, want)
+	}
+}
+
+func requireSchemaField(t *testing.T, schema *plugin.Schema, key string) *plugin.Field {
+	t.Helper()
+	for i := range schema.Groups {
+		for j := range schema.Groups[i].Fields {
+			field := &schema.Groups[i].Fields[j]
+			if field.Key == key {
+				return field
+			}
+		}
+	}
+	t.Fatalf("schema missing %q field", key)
+	return nil
 }
 
 func TestResourceEventDieKeepsContainerListedAsExited(t *testing.T) {
