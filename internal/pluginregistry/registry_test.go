@@ -113,6 +113,37 @@ func TestBuiltInCredentialKindsCanBeUsedByMultiplePlugins(t *testing.T) {
 	}
 }
 
+func TestUnregisterRecomputesCredentialCatalog(t *testing.T) {
+	reg := New()
+	for _, protocol := range []string{"ssh", "sftp"} {
+		m, routes := protocolCredentialManifest(protocol, []plugin.CredentialKind{plugin.CredentialSSHPassword})
+		if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
+			t.Fatalf("register %s: %v", protocol, err)
+		}
+	}
+	m, routes := sampleManifest()
+	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
+		t.Fatalf("register sample: %v", err)
+	}
+
+	if err := reg.Unregister("sftp"); err != nil {
+		t.Fatalf("unregister sftp: %v", err)
+	}
+	if reg.CredentialKindSupportsProtocol(plugin.CredentialSSHPassword, "sftp") {
+		t.Fatal("ssh password should no longer support sftp after unregister")
+	}
+	if !reg.CredentialKindSupportsProtocol(plugin.CredentialSSHPassword, "ssh") {
+		t.Fatal("ssh password should still support ssh")
+	}
+
+	if err := reg.Unregister("sample"); err != nil {
+		t.Fatalf("unregister sample: %v", err)
+	}
+	if _, ok := reg.CredentialKindLookup(testCredentialPrivateKey); ok {
+		t.Fatal("custom credential kind should be removed with its plugin")
+	}
+}
+
 func TestRejectsDuplicatePluginCredentialKind(t *testing.T) {
 	m, routes := sampleManifest()
 	reg := New()
@@ -169,6 +200,29 @@ func TestReplaceKeepsOwnCredentialKinds(t *testing.T) {
 	}
 	if _, ok := reg.CredentialKindLookup("sample_token"); !ok {
 		t.Fatal("own credential kind must survive the replace")
+	}
+}
+
+func TestReplaceRecomputesCredentialProtocols(t *testing.T) {
+	m, routes := sampleManifest()
+	reg := New()
+	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	updated := m
+	updated.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{{
+		Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
+		Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{testCredentialPrivateKey}, Protocols: []string{"sftp"}, Required: true},
+	}}}}}
+	if err := reg.Replace(&stubPlugin{manifest: updated, routes: routes}); err != nil {
+		t.Fatalf("replace: %v", err)
+	}
+	if reg.CredentialKindSupportsProtocol(testCredentialPrivateKey, "ssh") {
+		t.Fatal("replaced credential selector should no longer support ssh")
+	}
+	if !reg.CredentialKindSupportsProtocol(testCredentialPrivateKey, "sftp") {
+		t.Fatal("replaced credential selector should support sftp")
 	}
 }
 

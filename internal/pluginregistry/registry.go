@@ -5,7 +5,6 @@ package pluginregistry
 import (
 	"fmt"
 	"sort"
-	"strings"
 	"sync"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -18,15 +17,13 @@ type entry struct {
 }
 
 type Registry struct {
-	mu              sync.RWMutex
-	byName          map[string]*entry
-	credentialKinds *plugin.CredentialKindSet
+	mu     sync.RWMutex
+	byName map[string]*entry
 }
 
 func New() *Registry {
 	return &Registry{
-		byName:          make(map[string]*entry),
-		credentialKinds: plugin.MustCredentialKindSet(plugin.BuiltInCredentialKinds()),
+		byName: make(map[string]*entry),
 	}
 }
 
@@ -39,16 +36,13 @@ func (r *Registry) Register(p plugin.Plugin) error {
 	if _, exists := r.byName[m.Name]; exists {
 		return fmt.Errorf("plugin %q: %w", m.Name, plugin.ErrAlreadyExists)
 	}
-	catalog := r.credentialKinds.Clone()
+	catalog, err := r.credentialCatalogLocked("")
+	if err != nil {
+		return fmt.Errorf("plugin %q: %w", m.Name, err)
+	}
 	if err := plugin.ValidateWithCredentialKinds(m, routes, catalog); err != nil {
 		return fmt.Errorf("plugin %q: %w", m.Name, err)
 	}
-	for _, info := range m.CredentialKinds {
-		if err := r.credentialKinds.Add(info); err != nil {
-			return fmt.Errorf("plugin %q: %w", m.Name, err)
-		}
-	}
-	plugin.AddCredentialKindSupports(r.credentialKinds, m)
 
 	r.byName[m.Name] = &entry{plugin: p, manifest: m, routes: routeMap(routes)}
 	return nil
@@ -60,27 +54,18 @@ func (r *Registry) Replace(p plugin.Plugin) error {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	old, exists := r.byName[m.Name]
+	_, exists := r.byName[m.Name]
 	if !exists {
 		return fmt.Errorf("plugin %q: %w", m.Name, plugin.ErrNotFound)
 	}
 
-	ownKinds := map[plugin.CredentialKind]bool{}
-	for _, info := range old.manifest.CredentialKinds {
-		ownKinds[normalizeKind(info.Kind)] = true
-	}
-	if err := plugin.ValidateWithCredentialKinds(m, routes, r.credentialKinds.CloneWithout(ownKinds)); err != nil {
+	catalog, err := r.credentialCatalogLocked(m.Name)
+	if err != nil {
 		return fmt.Errorf("plugin %q: %w", m.Name, err)
 	}
-	for _, info := range m.CredentialKinds {
-		if _, known := r.credentialKinds.CredentialKindLookup(normalizeKind(info.Kind)); known {
-			continue
-		}
-		if err := r.credentialKinds.Add(info); err != nil {
-			return fmt.Errorf("plugin %q: %w", m.Name, err)
-		}
+	if err := plugin.ValidateWithCredentialKinds(m, routes, catalog); err != nil {
+		return fmt.Errorf("plugin %q: %w", m.Name, err)
 	}
-	plugin.AddCredentialKindSupports(r.credentialKinds, m)
 
 	r.byName[m.Name] = &entry{plugin: p, manifest: m, routes: routeMap(routes)}
 	return nil
@@ -185,19 +170,57 @@ func (r *Registry) Projection(name string) (plugin.Projection, bool) {
 func (r *Registry) CredentialKinds() []plugin.CredentialKindInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.credentialKinds.CredentialKinds()
+	catalog, err := r.credentialCatalogWithSupportsLocked()
+	if err != nil {
+		panic(err)
+	}
+	return catalog.CredentialKinds()
 }
 
 func (r *Registry) CredentialKindLookup(kind plugin.CredentialKind) (plugin.CredentialKindInfo, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.credentialKinds.CredentialKindLookup(kind)
+	catalog, err := r.credentialCatalogWithSupportsLocked()
+	if err != nil {
+		panic(err)
+	}
+	return catalog.CredentialKindLookup(kind)
 }
 
 func (r *Registry) CredentialKindSupportsProtocol(kind plugin.CredentialKind, protocol string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.credentialKinds.CredentialKindSupportsProtocol(kind, protocol)
+	catalog, err := r.credentialCatalogWithSupportsLocked()
+	if err != nil {
+		panic(err)
+	}
+	return catalog.CredentialKindSupportsProtocol(kind, protocol)
+}
+
+func (r *Registry) credentialCatalogLocked(excludeName string) (*plugin.CredentialKindSet, error) {
+	catalog := plugin.MustCredentialKindSet(plugin.BuiltInCredentialKinds())
+	for name, e := range r.byName {
+		if name == excludeName {
+			continue
+		}
+		for _, info := range e.manifest.CredentialKinds {
+			if err := catalog.Add(info); err != nil {
+				return nil, fmt.Errorf("credential kind catalog: %w", err)
+			}
+		}
+	}
+	return catalog, nil
+}
+
+func (r *Registry) credentialCatalogWithSupportsLocked() (*plugin.CredentialKindSet, error) {
+	catalog, err := r.credentialCatalogLocked("")
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range r.byName {
+		plugin.AddCredentialKindSupports(catalog, e.manifest)
+	}
+	return catalog, nil
 }
 
 func routeMap(routes []plugin.Route) map[string]plugin.Route {
@@ -206,8 +229,4 @@ func routeMap(routes []plugin.Route) map[string]plugin.Route {
 		out[rt.ID] = rt
 	}
 	return out
-}
-
-func normalizeKind(kind plugin.CredentialKind) plugin.CredentialKind {
-	return plugin.CredentialKind(strings.TrimSpace(string(kind)))
 }
