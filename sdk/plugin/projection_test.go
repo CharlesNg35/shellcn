@@ -9,7 +9,7 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-const testCredentialSSHPrivateKey plugin.CredentialKind = "ssh_private_key"
+const testCredentialPrivateKey plugin.CredentialKind = "sample_private_key"
 
 // sampleManifest exercises every projection-relevant shape: structured icons
 // (incl. svg), a schema with credential_ref + condition + validators, a WS tab
@@ -26,7 +26,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		Capabilities:        []plugin.Capability{"terminal", "filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		CredentialKinds: []plugin.CredentialKindInfo{{
-			Kind: testCredentialSSHPrivateKey, Label: "SSH private key", SecretLabel: "Private key",
+			Kind: testCredentialPrivateKey, Label: "Sample private key", SecretLabel: "Private key",
 			SecretMultiline: true, IdentityLabel: "Username",
 		}},
 		Layout: plugin.LayoutSidebarTree,
@@ -41,7 +41,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 					AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}},
 				}},
 				{Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-					Kinds: []plugin.CredentialKind{testCredentialSSHPrivateKey}, Protocols: []string{"ssh"}, Required: true,
+					Kinds: []plugin.CredentialKind{testCredentialPrivateKey}, Protocols: []string{"ssh"}, Required: true,
 				}},
 			},
 		}}},

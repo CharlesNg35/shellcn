@@ -24,7 +24,6 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Category:            plugin.CategoryShell,
 		Config:              configSchema("ssh"),
 		Capabilities:        []plugin.Capability{"terminal", "filesystem"},
-		CredentialKinds:     sshsftp.CredentialKinds(),
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
 		Tabs: []plugin.Panel{

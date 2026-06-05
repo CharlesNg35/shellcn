@@ -16,9 +16,7 @@ import (
 type credentialCatalogPlugin struct{}
 
 const (
-	testCredentialSSHPrivateKey plugin.CredentialKind = "ssh_private_key"
-	testCredentialSSHPassword   plugin.CredentialKind = "ssh_password"
-	testCredentialKubeconfig    plugin.CredentialKind = "kubeconfig"
+	testCredentialKubeconfig plugin.CredentialKind = "kubeconfig"
 )
 
 func (credentialCatalogPlugin) Manifest() plugin.Manifest {
@@ -28,14 +26,6 @@ func (credentialCatalogPlugin) Manifest() plugin.Manifest {
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		CredentialKinds: []plugin.CredentialKindInfo{
 			{
-				Kind: testCredentialSSHPrivateKey, Label: "SSH private key", SecretLabel: "Private key",
-				SecretMultiline: true, IdentityLabel: "Username",
-			},
-			{
-				Kind: testCredentialSSHPassword, Label: "SSH password", SecretLabel: "Password",
-				IdentityLabel: "Username",
-			},
-			{
 				Kind: testCredentialKubeconfig, Label: "Kubeconfig", SecretLabel: "Kubeconfig YAML",
 				SecretMultiline: true, IdentityLabel: "Context / user",
 			},
@@ -44,7 +34,7 @@ func (credentialCatalogPlugin) Manifest() plugin.Manifest {
 			{
 				Key: "ssh_credential", Label: "SSH credential", Type: plugin.FieldCredentialRef,
 				Credential: &plugin.CredentialSelector{
-					Kinds: []plugin.CredentialKind{testCredentialSSHPrivateKey, testCredentialSSHPassword}, Protocols: []string{"ssh"},
+					Kinds: []plugin.CredentialKind{plugin.CredentialSSHPrivateKey, plugin.CredentialSSHPassword}, Protocols: []string{"ssh"},
 				},
 			},
 			{

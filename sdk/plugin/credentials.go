@@ -27,6 +27,14 @@ type CredentialKindCatalog interface {
 
 var builtInCredentialKindCatalog = []CredentialKindInfo{
 	{
+		Kind: CredentialSSHPrivateKey, Label: "SSH private key", SecretLabel: "Private key",
+		SecretMultiline: true, IdentityLabel: "Username",
+	},
+	{
+		Kind: CredentialSSHPassword, Label: "SSH password", SecretLabel: "Password",
+		IdentityLabel: "Username",
+	},
+	{
 		Kind: CredentialDBPassword, Label: "Database password", SecretLabel: "Password",
 		IdentityLabel: "Database user",
 	},

@@ -9,7 +9,7 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-const testCredentialSSHPrivateKey plugin.CredentialKind = "ssh_private_key"
+const testCredentialPrivateKey plugin.CredentialKind = "sample_private_key"
 
 type stubPlugin struct {
 	manifest plugin.Manifest
@@ -76,18 +76,40 @@ func TestDerivesCredentialKindProtocolsFromSelectors(t *testing.T) {
 	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	info, ok := reg.CredentialKindLookup(testCredentialSSHPrivateKey)
+	info, ok := reg.CredentialKindLookup(testCredentialPrivateKey)
 	if !ok {
 		t.Fatal("ssh private key kind not registered")
 	}
 	if len(info.CompatibleProtocols) != 1 || info.CompatibleProtocols[0] != "ssh" {
 		t.Fatalf("derived protocols = %+v, want [ssh]", info.CompatibleProtocols)
 	}
-	if !reg.CredentialKindSupportsProtocol(testCredentialSSHPrivateKey, "ssh") {
+	if !reg.CredentialKindSupportsProtocol(testCredentialPrivateKey, "ssh") {
 		t.Fatal("ssh private key should support ssh")
 	}
-	if reg.CredentialKindSupportsProtocol(testCredentialSSHPrivateKey, "postgres") {
+	if reg.CredentialKindSupportsProtocol(testCredentialPrivateKey, "postgres") {
 		t.Fatal("ssh private key should not support postgres")
+	}
+}
+
+func TestBuiltInCredentialKindsCanBeUsedByMultiplePlugins(t *testing.T) {
+	reg := New()
+	for _, protocol := range []string{"ssh", "sftp"} {
+		m, routes := protocolCredentialManifest(protocol, []plugin.CredentialKind{
+			plugin.CredentialSSHPrivateKey,
+			plugin.CredentialSSHPassword,
+		})
+		if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
+			t.Fatalf("register %s: %v", protocol, err)
+		}
+	}
+	for _, kind := range []plugin.CredentialKind{plugin.CredentialSSHPrivateKey, plugin.CredentialSSHPassword} {
+		info, ok := reg.CredentialKindLookup(kind)
+		if !ok {
+			t.Fatalf("credential kind %q was not registered", kind)
+		}
+		if got := strings.Join(info.CompatibleProtocols, ","); got != "sftp,ssh" {
+			t.Fatalf("%s protocols = %q, want sftp,ssh", kind, got)
+		}
 	}
 }
 
@@ -162,19 +184,40 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		Category:            plugin.CategoryShell,
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		CredentialKinds: []plugin.CredentialKindInfo{{
-			Kind: testCredentialSSHPrivateKey, Label: "SSH private key", SecretLabel: "Private key",
+			Kind: testCredentialPrivateKey, Label: "Sample private key", SecretLabel: "Private key",
 			SecretMultiline: true, IdentityLabel: "Username",
 		}},
 		Layout: plugin.LayoutTabs,
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{{
 			Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
-			Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{testCredentialSSHPrivateKey}, Protocols: []string{"ssh"}, Required: true},
+			Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{testCredentialPrivateKey}, Protocols: []string{"ssh"}, Required: true},
 		}}}}},
 	}
 	routes := []plugin.Route{
 		{ID: "sample.list", Method: plugin.MethodGet, Permission: "sample.read", Risk: plugin.RiskSafe, AuditEvent: "sample.list", Handle: noop},
 		{ID: "sample.start", Method: plugin.MethodPost, Permission: "sample.start", Risk: plugin.RiskWrite, AuditEvent: "sample.start", Handle: noop},
 	}
+	return m, routes
+}
+
+func protocolCredentialManifest(name string, kinds []plugin.CredentialKind) (plugin.Manifest, []plugin.Route) {
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	m := plugin.Manifest{
+		APIVersion:          plugin.CurrentAPIVersion,
+		Name:                name,
+		Title:               strings.ToUpper(name),
+		Category:            plugin.CategoryShell,
+		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+		Layout:              plugin.LayoutTabs,
+		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Auth", Fields: []plugin.Field{{
+			Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
+			Credential: &plugin.CredentialSelector{Kinds: kinds, Protocols: []string{name}, Required: true},
+		}}}}},
+	}
+	routes := []plugin.Route{{
+		ID: name + ".list", Method: plugin.MethodGet, Permission: name + ".read",
+		Risk: plugin.RiskSafe, AuditEvent: name + ".list", Handle: noop,
+	}}
 	return m, routes
 }
 

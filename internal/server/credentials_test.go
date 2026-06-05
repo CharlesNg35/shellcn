@@ -73,14 +73,14 @@ func TestCredentialKindsEndpoint(t *testing.T) {
 	var sshPassword plugin.CredentialKindInfo
 	for _, kind := range out {
 		seen[kind.Kind] = true
-		if kind.Kind == plugin.CredentialKind("ssh_password") {
+		if kind.Kind == plugin.CredentialSSHPassword {
 			sshPassword = kind
 		}
 		if kind.Label == "" || kind.SecretLabel == "" {
 			t.Fatalf("credential kind missing labels: %+v", kind)
 		}
 	}
-	if !seen[plugin.CredentialDBPassword] || !seen[plugin.CredentialKind("ssh_password")] {
+	if !seen[plugin.CredentialDBPassword] || !seen[plugin.CredentialSSHPassword] {
 		t.Fatalf("credential catalog missing expected kinds: %+v", seen)
 	}
 	if len(sshPassword.CompatibleProtocols) != 1 || sshPassword.CompatibleProtocols[0] != "ssh" {
