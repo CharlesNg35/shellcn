@@ -592,7 +592,7 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	if s.streamReadsClient(res) {
+	if s.streamHasContinuousClientReader(res) {
 		go func() {
 			if err := transport.KeepAliveWebSocket(streamCtx, c); err != nil {
 				cancel()
@@ -621,7 +621,7 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 	_ = c.Close(websocket.StatusNormalClosure, "")
 }
 
-func (s *Server) streamReadsClient(res resolved) bool {
+func (s *Server) streamHasContinuousClientReader(res resolved) bool {
 	m, ok := s.deps.Plugins.Manifest(res.conn.Protocol)
 	if !ok {
 		return false
@@ -630,7 +630,11 @@ func (s *Server) streamReadsClient(res resolved) bool {
 	if !ok {
 		return false
 	}
-	return stream.Kind == plugin.StreamTerminal || stream.Kind == plugin.StreamDesktop
+	return streamKindHasContinuousClientReader(stream.Kind)
+}
+
+func streamKindHasContinuousClientReader(kind plugin.StreamKind) bool {
+	return kind == plugin.StreamTerminal || kind == plugin.StreamDesktop
 }
 
 // streamCloseReason fits an error into a WebSocket close reason.
