@@ -4,17 +4,12 @@ import (
 	"testing"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func TestObservabilityPluginsValidateAndRegister(t *testing.T) {
-	reg := plugin.NewRegistry()
-	Register(reg)
-
 	for _, name := range []string{"server_monitor"} {
-		proj, ok := reg.Projection(name)
-		if !ok {
-			t.Fatalf("plugin %q was not registered", name)
-		}
+		proj := testProjection(t, name)
 		if proj.Category.Key != plugin.CategoryObservability {
 			t.Fatalf("%s category: got %q want %q", name, proj.Category.Key, plugin.CategoryObservability)
 		}
@@ -31,24 +26,17 @@ func TestObservabilityPluginsValidateAndRegister(t *testing.T) {
 }
 
 func TestObservabilityCredentialCompatibility(t *testing.T) {
-	reg := plugin.NewRegistry()
-	Register(reg)
+	manifest := testManifest(t, "server_monitor")
 
 	for _, kind := range []plugin.CredentialKind{plugin.CredentialBasicAuth, plugin.CredentialBearerToken, plugin.CredentialAPIToken, plugin.CredentialDBPassword} {
-		if reg.CredentialKindSupportsProtocol(kind, "server_monitor") {
+		if plugintest.CredentialKindSupported(manifest.Config, kind) {
 			t.Fatalf("server_monitor should not advertise %s credentials", kind)
 		}
 	}
 }
 
 func TestObservabilitySchemasAreProtocolSpecific(t *testing.T) {
-	reg := plugin.NewRegistry()
-	Register(reg)
-
-	manifest, ok := reg.Manifest("server_monitor")
-	if !ok {
-		t.Fatal("server_monitor plugin was not registered")
-	}
+	manifest := testManifest(t, "server_monitor")
 	fields := fieldMap(manifest.Config)
 	for _, key := range []string{"metrics_interval_seconds", "process_limit", "connection_limit"} {
 		if !fields[key] {

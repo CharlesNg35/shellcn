@@ -4,17 +4,12 @@ import (
 	"testing"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func TestFilesystemPluginsValidateAndRegister(t *testing.T) {
-	reg := plugin.NewRegistry()
-	Register(reg)
-
 	for _, name := range []string{"ftp", "ftps", "webdav", "smb", "s3"} {
-		proj, ok := reg.Projection(name)
-		if !ok {
-			t.Fatalf("plugin %q was not registered", name)
-		}
+		proj := testProjection(t, name)
 		if proj.Category.Key != plugin.CategoryFiles {
 			t.Fatalf("%s category: got %q want %q", name, proj.Category.Key, plugin.CategoryFiles)
 		}
@@ -35,10 +30,7 @@ func TestFilesystemPluginsValidateAndRegister(t *testing.T) {
 }
 
 func TestPluginConfigDefaultsSatisfyNumericValidators(t *testing.T) {
-	reg := plugin.NewRegistry()
-	Register(reg)
-
-	for _, p := range reg.All() {
+	for _, p := range allTestPlugins(t) {
 		m := p.Manifest()
 		for _, group := range m.Config.Groups {
 			for _, field := range group.Fields {
@@ -71,10 +63,7 @@ func TestPluginConfigDefaultsSatisfyNumericValidators(t *testing.T) {
 }
 
 func TestPasswordAndStoredCredentialAreMutuallyExclusiveByDefault(t *testing.T) {
-	reg := plugin.NewRegistry()
-	Register(reg)
-
-	for _, p := range reg.All() {
+	for _, p := range allTestPlugins(t) {
 		m := p.Manifest()
 		fields := fieldMap(m.Config)
 		if !fields["password"] || !fields["credential_id"] {
@@ -90,30 +79,21 @@ func TestPasswordAndStoredCredentialAreMutuallyExclusiveByDefault(t *testing.T) 
 }
 
 func TestSharedBasicAuthCredentialCompatibility(t *testing.T) {
-	reg := plugin.NewRegistry()
-	Register(reg)
-
 	for _, name := range []string{"ftp", "ftps", "webdav", "smb"} {
-		if !reg.CredentialKindSupportsProtocol(plugin.CredentialBasicAuth, name) {
+		if !plugintest.CredentialKindSupported(testManifest(t, name).Config, plugin.CredentialBasicAuth) {
 			t.Fatalf("basic auth credential should support %s", name)
 		}
 	}
 	for _, name := range []string{"s3"} {
-		if !reg.CredentialKindSupportsProtocol(plugin.CredentialCloudAccessKey, name) {
+		if !plugintest.CredentialKindSupported(testManifest(t, name).Config, plugin.CredentialCloudAccessKey) {
 			t.Fatalf("cloud access key credential should support %s", name)
 		}
 	}
 }
 
 func TestFilesystemAuthSchemasAreProtocolSpecific(t *testing.T) {
-	reg := plugin.NewRegistry()
-	Register(reg)
-
 	for _, name := range []string{"ftp", "ftps", "webdav", "smb"} {
-		m, ok := reg.Manifest(name)
-		if !ok {
-			t.Fatalf("plugin %q was not registered", name)
-		}
+		m := testManifest(t, name)
 		fields := fieldMap(m.Config)
 		for _, key := range []string{"machine_name", "uid", "gid", "export_path"} {
 			if fields[key] {
@@ -126,10 +106,7 @@ func TestFilesystemAuthSchemasAreProtocolSpecific(t *testing.T) {
 	}
 
 	for _, name := range []string{"s3"} {
-		m, ok := reg.Manifest(name)
-		if !ok {
-			t.Fatalf("plugin %q was not registered", name)
-		}
+		m := testManifest(t, name)
 		fields := fieldMap(m.Config)
 		for _, key := range []string{"username", "password", "machine_name", "uid", "gid"} {
 			if fields[key] {
@@ -145,14 +122,8 @@ func TestFilesystemAuthSchemasAreProtocolSpecific(t *testing.T) {
 }
 
 func TestFilesystemAuthVisibleValuesAreProtocolSpecific(t *testing.T) {
-	reg := plugin.NewRegistry()
-	Register(reg)
-
 	for _, name := range []string{"ftp", "ftps", "webdav", "smb"} {
-		m, ok := reg.Manifest(name)
-		if !ok {
-			t.Fatalf("plugin %q was not registered", name)
-		}
+		m := testManifest(t, name)
 		password := visibleFilesystemFields(m.Config, map[string]any{"auth": "password"})
 		requireFilesystemVisible(t, name, password, "username", "password")
 		requireFilesystemHidden(t, name, password, "credential_id", "machine_name", "uid", "gid")
@@ -163,10 +134,7 @@ func TestFilesystemAuthVisibleValuesAreProtocolSpecific(t *testing.T) {
 	}
 
 	for _, name := range []string{"s3"} {
-		m, ok := reg.Manifest(name)
-		if !ok {
-			t.Fatalf("plugin %q was not registered", name)
-		}
+		m := testManifest(t, name)
 		accessKey := visibleFilesystemFields(m.Config, map[string]any{"auth": "access_key"})
 		requireFilesystemVisible(t, name, accessKey, "access_key_id", "secret_access_key", "session_token")
 		requireFilesystemHidden(t, name, accessKey, "credential_id", "username", "password", "machine_name", "uid", "gid")

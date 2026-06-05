@@ -22,6 +22,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/internal/store"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
@@ -68,12 +69,12 @@ type AgentState struct {
 type EnrollmentService struct {
 	store   store.EnrollmentStore
 	conns   store.ConnectionStore
-	plugins *plugin.Registry
+	plugins *pluginregistry.Registry
 	ttl     time.Duration
 	now     func() time.Time
 }
 
-func NewEnrollmentService(s store.EnrollmentStore, conns store.ConnectionStore, plugins *plugin.Registry) *EnrollmentService {
+func NewEnrollmentService(s store.EnrollmentStore, conns store.ConnectionStore, plugins *pluginregistry.Registry) *EnrollmentService {
 	return &EnrollmentService{store: s, conns: conns, plugins: plugins, ttl: DefaultEnrollmentTTL, now: time.Now}
 }
 

@@ -30,6 +30,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/extplugin"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/pluginmarket"
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/recording"
 	"github.com/charlesng35/shellcn/internal/secrets"
@@ -126,7 +127,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		return err
 	}
 
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	plugins.Register(reg)
 
 	pol, err := policy.New()

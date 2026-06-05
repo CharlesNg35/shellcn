@@ -24,9 +24,13 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
+type Registrar interface {
+	MustRegister(plugin.Plugin)
+}
+
 // Register wires every first-party plugin into the registry. This is the single
-// place to add a new protocol plugin — append its constructor to all().
-func Register(reg *plugin.Registry) {
+// place to add a new protocol plugin: append its constructor to all().
+func Register(reg Registrar) {
 	for _, p := range all() {
 		reg.MustRegister(p)
 	}

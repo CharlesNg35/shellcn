@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 // LoadOne spawns and registers a single freshly-installed plugin binary at
 // runtime (the marketplace install path).
-func (m *Manager) LoadOne(ctx context.Context, reg *plugin.Registry, path string) error {
+func (m *Manager) LoadOne(ctx context.Context, reg *pluginregistry.Registry, path string) error {
 	return m.load(ctx, reg, path)
 }
 
@@ -18,7 +19,7 @@ func (m *Manager) LoadOne(ctx context.Context, reg *plugin.Registry, path string
 // must present the same plugin name, the registry entry is replaced, and only
 // then is the old subprocess stopped. Live sessions of the old version are
 // dropped; the session registry reconnects lazily.
-func (m *Manager) Update(ctx context.Context, reg *plugin.Registry, name, path string) error {
+func (m *Manager) Update(ctx context.Context, reg *pluginregistry.Registry, name, path string) error {
 	m.mu.Lock()
 	var old *managed
 	for _, mp := range m.managed {
@@ -73,7 +74,7 @@ func (m *Manager) Update(ctx context.Context, reg *plugin.Registry, name, path s
 
 // Uninstall stops a managed external plugin, removes it from the runtime
 // registry, and deletes the installed binary.
-func (m *Manager) Uninstall(reg *plugin.Registry, name string) error {
+func (m *Manager) Uninstall(reg *pluginregistry.Registry, name string) error {
 	m.mu.Lock()
 	var old *managed
 	var idx int

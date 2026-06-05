@@ -12,6 +12,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/internal/secrets"
 	"github.com/charlesng35/shellcn/internal/store"
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -99,7 +100,7 @@ func TestAgentListsResourcesViaTools(t *testing.T) {
 	global := config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", Model: "gpt-4o"}
 	providers := aiconfig.New(st.AIProviders, vault, global)
 
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(demoPlugin{})
 	inv := &recordingInvoker{}
 
@@ -163,7 +164,7 @@ func TestTurnPersistsConversationHistory(t *testing.T) {
 	providers := aiconfig.New(st.AIProviders, vault, global)
 	mem := memory.New(st.AIConversations, st.AIMessages)
 
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(demoPlugin{})
 
 	svc := ai.New(providers, global, reg, &recordingInvoker{}, mem, modelreg.New(modelreg.WithURLs("", ""))).WithProviderFactory(

@@ -129,15 +129,10 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 
 func TestProjectionGolden(t *testing.T) {
 	m, routes := sampleManifest()
-	reg := plugin.NewRegistry()
-	stub := &stubPlugin{manifest: m, routes: routes}
-	if err := reg.Register(stub); err != nil {
-		t.Fatalf("register: %v", err)
+	if err := plugin.Validate(m, routes); err != nil {
+		t.Fatalf("validate: %v", err)
 	}
-	proj, ok := reg.Projection("sample")
-	if !ok {
-		t.Fatal("projection not found")
-	}
+	proj := plugin.BuildProjection(m, routeMap(routes))
 	got, err := json.MarshalIndent(proj, "", "  ")
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -157,6 +152,14 @@ func TestProjectionGolden(t *testing.T) {
 	if string(got) != string(want) {
 		t.Errorf("projection JSON drifted from golden.\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
+}
+
+func routeMap(routes []plugin.Route) map[string]plugin.Route {
+	out := make(map[string]plugin.Route, len(routes))
+	for _, route := range routes {
+		out[route.ID] = route
+	}
+	return out
 }
 
 func TestProjectionUnmarshalsProjectedActionConfig(t *testing.T) {

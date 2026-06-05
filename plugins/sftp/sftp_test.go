@@ -4,16 +4,12 @@ import (
 	"testing"
 
 	"github.com/charlesng35/shellcn/plugins/sftp"
-	"github.com/charlesng35/shellcn/plugins/ssh"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func TestManifestValidates(t *testing.T) {
-	reg := plugin.NewRegistry()
-	reg.MustRegister(ssh.New())
-	if err := reg.Register(sftp.New()); err != nil {
-		t.Fatalf("sftp manifest invalid: %v", err)
-	}
+	plugintest.ValidatePlugin(t, sftp.New())
 }
 
 func TestManifestIsFileOnly(t *testing.T) {

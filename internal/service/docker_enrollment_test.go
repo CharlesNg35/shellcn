@@ -8,6 +8,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/internal/store"
 	"github.com/charlesng35/shellcn/plugins/docker"
@@ -17,7 +18,7 @@ import (
 func TestEnrollmentCommandUsesPublishedAgentImage(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(docker.New())
 	if err := st.Connections.Create(ctx, &models.Connection{
 		ID: "docker-agent", Name: "Docker", Protocol: "docker", OwnerID: "owner",
@@ -53,7 +54,7 @@ func TestEnrollmentCommandUsesPublishedAgentImage(t *testing.T) {
 func TestEnrollmentCommandAdaptsLocalhostForContainer(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(docker.New())
 	if err := st.Connections.Create(ctx, &models.Connection{
 		ID: "docker-agent", Name: "Docker", Protocol: "docker", OwnerID: "owner",
@@ -88,7 +89,7 @@ func TestEnrollmentCommandAdaptsLocalhostForContainer(t *testing.T) {
 func TestEnrollmentOffersComposeFile(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(docker.New())
 	if err := st.Connections.Create(ctx, &models.Connection{
 		ID: "docker-agent", Name: "Docker", Protocol: "docker", OwnerID: "owner",

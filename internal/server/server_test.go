@@ -23,6 +23,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/email"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/recording"
 	"github.com/charlesng35/shellcn/internal/secrets"
@@ -255,7 +256,7 @@ func newHarness(t *testing.T, opts ...func(*server.Deps)) *harness {
 	key, _ := secrets.GenerateMasterKey()
 	vault, _ := secrets.NewVault(key)
 
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(testPlugin{})
 	reg.MustRegister(boomPlugin{})
 	reg.MustRegister(internalPlugin{})

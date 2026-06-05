@@ -7,14 +7,8 @@ import (
 )
 
 func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
-	reg := plugin.NewRegistry()
-	Register(reg)
-
 	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb"} {
-		m, ok := reg.Manifest(name)
-		if !ok {
-			t.Fatalf("plugin %q was not registered", name)
-		}
+		m := testManifest(t, name)
 		field, ok := credentialField(m.Config, "credential_id")
 		if !ok {
 			t.Fatalf("%s should expose credential_id", name)
@@ -28,7 +22,7 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 	}
 
 	for _, name := range []string{"postgresql", "mongodb"} {
-		m, _ := reg.Manifest(name)
+		m := testManifest(t, name)
 		field, ok := credentialField(m.Config, "auth_client_cert_id")
 		if !ok {
 			t.Fatalf("%s should expose auth_client_cert_id for certificate authentication", name)
@@ -39,14 +33,14 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 	}
 
 	for _, name := range []string{"mysql", "redis"} {
-		m, _ := reg.Manifest(name)
+		m := testManifest(t, name)
 		if _, ok := credentialField(m.Config, "auth_client_cert_id"); ok {
 			t.Fatalf("%s should not expose certificate authentication", name)
 		}
 	}
 
 	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb"} {
-		m, _ := reg.Manifest(name)
+		m := testManifest(t, name)
 		tlsField, ok := credentialField(m.Config, "client_cert_id")
 		if !ok {
 			t.Fatalf("%s should expose client_cert_id in TLS settings", name)
@@ -58,43 +52,28 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 }
 
 func TestDatabaseConfigVisibleValuesAreAuthSpecific(t *testing.T) {
-	reg := plugin.NewRegistry()
-	Register(reg)
-
 	for _, name := range []string{"postgresql", "mysql", "mongodb"} {
-		m, ok := reg.Manifest(name)
-		if !ok {
-			t.Fatalf("plugin %q was not registered", name)
-		}
+		m := testManifest(t, name)
 		visible := visibleDatabaseFields(m.Config, map[string]any{"auth": "password", "tls_mode": "disable", "encrypt": "disable"})
 		requireVisible(t, name, visible, "username", "password")
 		requireHidden(t, name, visible, "credential_id", "auth_client_cert_id")
 	}
 
 	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb"} {
-		m, ok := reg.Manifest(name)
-		if !ok {
-			t.Fatalf("plugin %q was not registered", name)
-		}
+		m := testManifest(t, name)
 		visible := visibleDatabaseFields(m.Config, map[string]any{"auth": "credential", "tls_mode": "disable", "encrypt": "disable"})
 		requireVisible(t, name, visible, "credential_id")
 		requireHidden(t, name, visible, "username", "password", "auth_client_cert_id")
 	}
 
 	for _, name := range []string{"redis"} {
-		m, ok := reg.Manifest(name)
-		if !ok {
-			t.Fatalf("plugin %q was not registered", name)
-		}
+		m := testManifest(t, name)
 		visible := visibleDatabaseFields(m.Config, map[string]any{"auth": "none", "tls_mode": "disable"})
 		requireHidden(t, name, visible, "username", "password", "credential_id", "auth_client_cert_id")
 	}
 
 	for _, name := range []string{"postgresql", "mongodb"} {
-		m, ok := reg.Manifest(name)
-		if !ok {
-			t.Fatalf("plugin %q was not registered", name)
-		}
+		m := testManifest(t, name)
 		visible := visibleDatabaseFields(m.Config, map[string]any{"auth": "client_certificate", "tls_mode": "disable"})
 		requireVisible(t, name, visible, "auth_client_cert_id")
 		requireHidden(t, name, visible, "password", "credential_id", "client_cert_id")
@@ -102,9 +81,6 @@ func TestDatabaseConfigVisibleValuesAreAuthSpecific(t *testing.T) {
 }
 
 func TestDatabaseCreateActionsAreDeclaredAtCollectionLevel(t *testing.T) {
-	reg := plugin.NewRegistry()
-	Register(reg)
-
 	for _, tc := range []struct {
 		protocol string
 		kind     string
@@ -114,10 +90,8 @@ func TestDatabaseCreateActionsAreDeclaredAtCollectionLevel(t *testing.T) {
 		{"postgresql", "database", "postgresql.database.create", "postgresql.database.create"},
 		{"mysql", "database", "mysql.database.create", "mysql.database.create"},
 	} {
-		m, ok := reg.Manifest(tc.protocol)
-		if !ok {
-			t.Fatalf("plugin %q was not registered", tc.protocol)
-		}
+		p := testPlugin(t, tc.protocol)
+		m := p.Manifest()
 		res, ok := resourceByKind(m, tc.kind)
 		if !ok {
 			t.Fatalf("%s should expose resource %q", tc.protocol, tc.kind)
@@ -128,15 +102,13 @@ func TestDatabaseCreateActionsAreDeclaredAtCollectionLevel(t *testing.T) {
 		if !manifestHasAction(m, tc.actionID, tc.routeID) {
 			t.Fatalf("%s action %s should route to %s", tc.protocol, tc.actionID, tc.routeID)
 		}
-		if _, ok := reg.Route(tc.protocol, tc.routeID); !ok {
+		if !routeExists(p.Routes(), tc.routeID) {
 			t.Fatalf("%s route %s was not registered", tc.protocol, tc.routeID)
 		}
 	}
 
-	m, ok := reg.Manifest("mongodb")
-	if !ok {
-		t.Fatal("mongodb was not registered")
-	}
+	p := testPlugin(t, "mongodb")
+	m := p.Manifest()
 	database, ok := resourceByKind(m, "database")
 	if !ok {
 		t.Fatal("mongodb should expose database resources")
@@ -155,15 +127,12 @@ func TestDatabaseCreateActionsAreDeclaredAtCollectionLevel(t *testing.T) {
 	if !manifestHasAction(m, "mongodb.collection.create", "mongodb.collection.create") {
 		t.Fatal("mongodb collection create action should route to mongodb.collection.create")
 	}
-	if _, ok := reg.Route("mongodb", "mongodb.collection.create"); !ok {
+	if !routeExists(p.Routes(), "mongodb.collection.create") {
 		t.Fatal("mongodb collection create route was not registered")
 	}
 }
 
 func TestEditableDatabaseTablesDeclareColumnMetadataSource(t *testing.T) {
-	reg := plugin.NewRegistry()
-	Register(reg)
-
 	for _, tc := range []struct {
 		protocol string
 		routeID  string
@@ -171,10 +140,8 @@ func TestEditableDatabaseTablesDeclareColumnMetadataSource(t *testing.T) {
 		{"postgresql", "postgresql.table.columns"},
 		{"mysql", "mysql.table.columns"},
 	} {
-		m, ok := reg.Manifest(tc.protocol)
-		if !ok {
-			t.Fatalf("plugin %q was not registered", tc.protocol)
-		}
+		p := testPlugin(t, tc.protocol)
+		m := p.Manifest()
 		res, ok := resourceByKind(m, "table")
 		if !ok {
 			t.Fatalf("%s should expose table resources", tc.protocol)
@@ -194,10 +161,19 @@ func TestEditableDatabaseTablesDeclareColumnMetadataSource(t *testing.T) {
 		if source.RouteID != tc.routeID {
 			t.Fatalf("%s columnsSource = %q, want %q", tc.protocol, source.RouteID, tc.routeID)
 		}
-		if _, ok := reg.Route(tc.protocol, tc.routeID); !ok {
+		if !routeExists(p.Routes(), tc.routeID) {
 			t.Fatalf("%s route %s was not registered", tc.protocol, tc.routeID)
 		}
 	}
+}
+
+func routeExists(routes []plugin.Route, routeID string) bool {
+	for _, route := range routes {
+		if route.ID == routeID {
+			return true
+		}
+	}
+	return false
 }
 
 func credentialField(schema plugin.Schema, key string) (plugin.Field, bool) {

@@ -52,14 +52,17 @@ var builtInCredentialKindCatalog = []CredentialKindInfo{
 	},
 }
 
-type credentialKindSet struct {
+// CredentialKindSet is a mutable credential-kind catalog.
+type CredentialKindSet struct {
 	order    []CredentialKind
 	byID     map[CredentialKind]CredentialKindInfo
 	supports map[CredentialKind]map[string]bool
 }
 
-func newCredentialKindSet(base []CredentialKindInfo) (*credentialKindSet, error) {
-	c := &credentialKindSet{
+// NewCredentialKindSet returns a catalog initialized with the given credential
+// kinds.
+func NewCredentialKindSet(base []CredentialKindInfo) (*CredentialKindSet, error) {
+	c := &CredentialKindSet{
 		byID:     map[CredentialKind]CredentialKindInfo{},
 		supports: map[CredentialKind]map[string]bool{},
 	}
@@ -71,16 +74,22 @@ func newCredentialKindSet(base []CredentialKindInfo) (*credentialKindSet, error)
 	return c, nil
 }
 
-func mustCredentialKindSet(base []CredentialKindInfo) *credentialKindSet {
-	c, err := newCredentialKindSet(base)
+func mustCredentialKindSet(base []CredentialKindInfo) *CredentialKindSet {
+	c, err := NewCredentialKindSet(base)
 	if err != nil {
 		panic(err)
 	}
 	return c
 }
 
-func (c *credentialKindSet) clone() *credentialKindSet {
-	out := &credentialKindSet{
+// MustCredentialKindSet returns a catalog initialized with the given credential
+// kinds and panics if the input is invalid.
+func MustCredentialKindSet(base []CredentialKindInfo) *CredentialKindSet {
+	return mustCredentialKindSet(base)
+}
+
+func (c *CredentialKindSet) clone() *CredentialKindSet {
+	out := &CredentialKindSet{
 		order:    append([]CredentialKind(nil), c.order...),
 		byID:     make(map[CredentialKind]CredentialKindInfo, len(c.byID)),
 		supports: make(map[CredentialKind]map[string]bool, len(c.supports)),
@@ -97,9 +106,14 @@ func (c *credentialKindSet) clone() *credentialKindSet {
 	return out
 }
 
+// Clone returns a deep copy of the catalog.
+func (c *CredentialKindSet) Clone() *CredentialKindSet {
+	return c.clone()
+}
+
 // cloneWithout copies the set minus the given kinds (used to revalidate a
 // plugin update against a catalog that excludes its own old declarations).
-func (c *credentialKindSet) cloneWithout(exclude map[CredentialKind]bool) *credentialKindSet {
+func (c *CredentialKindSet) cloneWithout(exclude map[CredentialKind]bool) *CredentialKindSet {
 	out := c.clone()
 	if len(exclude) == 0 {
 		return out
@@ -116,7 +130,12 @@ func (c *credentialKindSet) cloneWithout(exclude map[CredentialKind]bool) *crede
 	return out
 }
 
-func (c *credentialKindSet) add(info CredentialKindInfo) error {
+// CloneWithout returns a deep copy excluding the given credential kinds.
+func (c *CredentialKindSet) CloneWithout(exclude map[CredentialKind]bool) *CredentialKindSet {
+	return c.cloneWithout(exclude)
+}
+
+func (c *CredentialKindSet) add(info CredentialKindInfo) error {
 	info = normalizeCredentialKindInfo(info)
 	if err := validateCredentialKindInfo(info); err != nil {
 		return err
@@ -129,7 +148,12 @@ func (c *credentialKindSet) add(info CredentialKindInfo) error {
 	return nil
 }
 
-func (c *credentialKindSet) addSupport(kind CredentialKind, protocol string) {
+// Add appends a credential kind to the catalog.
+func (c *CredentialKindSet) Add(info CredentialKindInfo) error {
+	return c.add(info)
+}
+
+func (c *CredentialKindSet) addSupport(kind CredentialKind, protocol string) {
 	protocol = strings.TrimSpace(protocol)
 	if kind == "" || protocol == "" {
 		return
@@ -140,7 +164,12 @@ func (c *credentialKindSet) addSupport(kind CredentialKind, protocol string) {
 	c.supports[kind][protocol] = true
 }
 
-func (c *credentialKindSet) CredentialKinds() []CredentialKindInfo {
+// AddSupport marks a credential kind as compatible with a protocol.
+func (c *CredentialKindSet) AddSupport(kind CredentialKind, protocol string) {
+	c.addSupport(kind, protocol)
+}
+
+func (c *CredentialKindSet) CredentialKinds() []CredentialKindInfo {
 	out := make([]CredentialKindInfo, 0, len(c.order))
 	for _, kind := range c.order {
 		out = append(out, c.withSupports(kind, c.byID[kind]))
@@ -148,7 +177,7 @@ func (c *credentialKindSet) CredentialKinds() []CredentialKindInfo {
 	return out
 }
 
-func (c *credentialKindSet) CredentialKindLookup(kind CredentialKind) (CredentialKindInfo, bool) {
+func (c *CredentialKindSet) CredentialKindLookup(kind CredentialKind) (CredentialKindInfo, bool) {
 	info, ok := c.byID[kind]
 	if !ok {
 		return CredentialKindInfo{}, false
@@ -156,7 +185,7 @@ func (c *credentialKindSet) CredentialKindLookup(kind CredentialKind) (Credentia
 	return c.withSupports(kind, info), true
 }
 
-func (c *credentialKindSet) CredentialKindSupportsProtocol(kind CredentialKind, protocol string) bool {
+func (c *CredentialKindSet) CredentialKindSupportsProtocol(kind CredentialKind, protocol string) bool {
 	if _, ok := c.byID[kind]; !ok {
 		return false
 	}
@@ -166,7 +195,7 @@ func (c *credentialKindSet) CredentialKindSupportsProtocol(kind CredentialKind, 
 	return c.supports[kind][protocol]
 }
 
-func (c *credentialKindSet) withSupports(kind CredentialKind, info CredentialKindInfo) CredentialKindInfo {
+func (c *CredentialKindSet) withSupports(kind CredentialKind, info CredentialKindInfo) CredentialKindInfo {
 	info = cloneCredentialKindInfo(info)
 	info.CompatibleProtocols = info.CompatibleProtocols[:0]
 	for protocol := range c.supports[kind] {
@@ -183,27 +212,49 @@ func BuiltInCredentialKinds() []CredentialKindInfo {
 }
 
 // CredentialKinds returns the core built-in credential-kind catalog.
-//
-// Prefer Registry.CredentialKinds for user-facing APIs; it includes plugin
-// declared kinds as well.
 func CredentialKinds() []CredentialKindInfo {
 	return BuiltInCredentialKinds()
 }
 
 // CredentialKindLookup returns one core built-in credential kind's metadata.
-//
-// Prefer Registry.CredentialKindLookup when validating user data.
 func CredentialKindLookup(kind CredentialKind) (CredentialKindInfo, bool) {
 	return mustCredentialKindSet(builtInCredentialKindCatalog).CredentialKindLookup(kind)
 }
 
 // CredentialKindSupportsProtocol reports whether a built-in credential kind has
 // built-in protocol support. Core built-ins intentionally declare no protocol
-// support; the registry derives support from plugin credential_ref selectors.
-//
-// Prefer Registry.CredentialKindSupportsProtocol when validating user data.
+// support. Gateway runtime catalogs derive support from plugin credential_ref
+// selectors.
 func CredentialKindSupportsProtocol(kind CredentialKind, protocol string) bool {
 	return mustCredentialKindSet(builtInCredentialKindCatalog).CredentialKindSupportsProtocol(kind, protocol)
+}
+
+func AddCredentialKindSupports(catalog *CredentialKindSet, m Manifest) {
+	for _, group := range m.Config.Groups {
+		for _, field := range group.Fields {
+			addFieldCredentialKindSupports(catalog, m.Name, field)
+		}
+	}
+}
+
+func addFieldCredentialKindSupports(catalog *CredentialKindSet, pluginName string, field Field) {
+	if field.Type == FieldCredentialRef && field.Credential != nil {
+		protocols := field.Credential.Protocols
+		if len(protocols) == 0 && pluginName != "" {
+			protocols = []string{pluginName}
+		}
+		for _, kind := range field.Credential.Kinds {
+			for _, protocol := range protocols {
+				catalog.AddSupport(kind, protocol)
+			}
+		}
+	}
+	for _, child := range field.Fields {
+		addFieldCredentialKindSupports(catalog, pluginName, child)
+	}
+	if field.Item != nil {
+		addFieldCredentialKindSupports(catalog, pluginName, *field.Item)
+	}
 }
 
 func validateCredentialKindInfo(info CredentialKindInfo) error {

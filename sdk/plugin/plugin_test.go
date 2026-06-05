@@ -10,65 +10,6 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-type stubPlugin struct {
-	manifest plugin.Manifest
-	routes   []plugin.Route
-}
-
-func (s *stubPlugin) Manifest() plugin.Manifest { return s.manifest }
-func (s *stubPlugin) Routes() []plugin.Route    { return s.routes }
-func (s *stubPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin.Session, error) {
-	return nil, nil
-}
-
-func TestRegistryRegisterGetAll(t *testing.T) {
-	m, routes := sampleManifest()
-	reg := plugin.NewRegistry()
-	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
-		t.Fatalf("register: %v", err)
-	}
-	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); !errors.Is(err, plugin.ErrAlreadyExists) {
-		t.Fatalf("duplicate register: want ErrAlreadyExists, got %v", err)
-	}
-	if _, ok := reg.Get("sample"); !ok {
-		t.Error("Get(sample) not found")
-	}
-	if all := reg.All(); len(all) != 1 {
-		t.Errorf("All: want 1, got %d", len(all))
-	}
-	if rt, ok := reg.Route("sample", "sample.start"); !ok || rt.Risk != plugin.RiskWrite {
-		t.Errorf("Route lookup failed: ok=%v risk=%v", ok, rt.Risk)
-	}
-	if s := reg.Summaries(); len(s) != 1 || s[0].Name != "sample" {
-		t.Errorf("Summaries unexpected: %+v", s)
-	} else if s[0].Category.Key != plugin.CategoryShell {
-		t.Errorf("Summary category = %+v, want %q", s[0].Category, plugin.CategoryShell)
-	}
-}
-
-func TestRegistrySummariesSortByCategory(t *testing.T) {
-	m, routes := sampleManifest()
-	db := plugin.Manifest{
-		APIVersion:          plugin.CurrentAPIVersion,
-		Name:                "aaa-db",
-		Title:               "AAA Database",
-		Category:            plugin.CategoryDatabases,
-		Layout:              plugin.LayoutTabs,
-		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
-	}
-	reg := plugin.NewRegistry()
-	if err := reg.Register(&stubPlugin{manifest: db}); err != nil {
-		t.Fatalf("register db: %v", err)
-	}
-	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
-		t.Fatalf("register shell: %v", err)
-	}
-	s := reg.Summaries()
-	if got := []string{s[0].Name, s[1].Name}; got[0] != "sample" || got[1] != "aaa-db" {
-		t.Fatalf("summary order = %v, want [sample aaa-db]", got)
-	}
-}
-
 func TestValidateAcceptsAllLayouts(t *testing.T) {
 	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
 	for _, layout := range []plugin.Layout{plugin.LayoutTabs, plugin.LayoutSidebarTree, plugin.LayoutDashboard} {
@@ -426,43 +367,6 @@ func TestPanelConfigWireFormat(t *testing.T) {
 	}
 }
 
-func TestRegistryDerivesCredentialKindProtocolsFromSelectors(t *testing.T) {
-	m, routes := sampleManifest()
-	reg := plugin.NewRegistry()
-	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
-		t.Fatalf("register: %v", err)
-	}
-	info, ok := reg.CredentialKindLookup(testCredentialSSHPrivateKey)
-	if !ok {
-		t.Fatal("ssh private key kind not registered")
-	}
-	if len(info.CompatibleProtocols) != 1 || info.CompatibleProtocols[0] != "ssh" {
-		t.Fatalf("derived protocols = %+v, want [ssh]", info.CompatibleProtocols)
-	}
-	if !reg.CredentialKindSupportsProtocol(testCredentialSSHPrivateKey, "ssh") {
-		t.Fatal("ssh private key should support ssh")
-	}
-	if reg.CredentialKindSupportsProtocol(testCredentialSSHPrivateKey, "postgres") {
-		t.Fatal("ssh private key should not support postgres")
-	}
-}
-
-func TestRegistryRejectsDuplicatePluginCredentialKind(t *testing.T) {
-	m, routes := sampleManifest()
-	reg := plugin.NewRegistry()
-	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
-		t.Fatalf("register first plugin: %v", err)
-	}
-	dup := m
-	dup.Name = "duplicate"
-	for i := range routes {
-		routes[i].ID = "duplicate." + routes[i].ID
-	}
-	if err := reg.Register(&stubPlugin{manifest: dup, routes: routes}); err == nil || !contains(err.Error(), "duplicate credential kind") {
-		t.Fatalf("duplicate credential kind error = %v", err)
-	}
-}
-
 // recordingBase is a minimal manifest with a terminal + desktop stream, used to
 // exercise recording-declaration validation.
 func recordingBase() (plugin.Manifest, []plugin.Route) {
@@ -637,49 +541,5 @@ func TestPageLimitClamp(t *testing.T) {
 	page, _ := newRC(nil, q, "").Page()
 	if page.Limit != plugin.MaxPageLimit {
 		t.Errorf("limit clamp: want %d, got %d", plugin.MaxPageLimit, page.Limit)
-	}
-}
-
-func TestRegistryReplace(t *testing.T) {
-	m, routes := sampleManifest()
-	reg := plugin.NewRegistry()
-
-	if err := reg.Replace(&stubPlugin{manifest: m, routes: routes}); !errors.Is(err, plugin.ErrNotFound) {
-		t.Fatalf("replace before register: want ErrNotFound, got %v", err)
-	}
-	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
-		t.Fatalf("register: %v", err)
-	}
-
-	updated := m
-	updated.Version = "9.9.9"
-	if err := reg.Replace(&stubPlugin{manifest: updated, routes: routes}); err != nil {
-		t.Fatalf("replace: %v", err)
-	}
-	got, ok := reg.Manifest(m.Name)
-	if !ok || got.Version != "9.9.9" {
-		t.Fatalf("manifest after replace: %+v %v", got, ok)
-	}
-}
-
-func TestRegistryReplaceKeepsOwnCredentialKinds(t *testing.T) {
-	m, routes := sampleManifest()
-	m.CredentialKinds = []plugin.CredentialKindInfo{{
-		Kind: "sample_token", Label: "Sample token", SecretLabel: "Token",
-	}}
-	m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth", Fields: []plugin.Field{{
-		Key: "credential", Label: "Credential", Type: plugin.FieldCredentialRef,
-		Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{"sample_token"}},
-	}}}}}
-	reg := plugin.NewRegistry()
-	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
-		t.Fatalf("register: %v", err)
-	}
-	// The update re-declares the same kind: must not collide with itself.
-	if err := reg.Replace(&stubPlugin{manifest: m, routes: routes}); err != nil {
-		t.Fatalf("replace with own kind: %v", err)
-	}
-	if _, ok := reg.CredentialKindLookup("sample_token"); !ok {
-		t.Fatal("own credential kind must survive the replace")
 	}
 }

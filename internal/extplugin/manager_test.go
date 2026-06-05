@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/extplugin"
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
@@ -60,7 +61,7 @@ func routeByID(p plugin.Plugin, id string) plugin.Route {
 func TestManagerLoadsSubprocessPlugin(t *testing.T) {
 	dir := buildDemo(t)
 
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	m := extplugin.NewManager(dir)
 	t.Cleanup(m.Close)
 	if err := m.LoadAll(context.Background(), reg); err != nil {
@@ -99,7 +100,7 @@ func TestManagerLoadsSubprocessPlugin(t *testing.T) {
 }
 
 func TestManagerRespawnsCrashedPlugin(t *testing.T) {
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	m := extplugin.NewManager(buildDemo(t))
 	t.Cleanup(m.Close)
 	if err := m.LoadAll(context.Background(), reg); err != nil {
@@ -134,7 +135,7 @@ func TestManagerRespawnsCrashedPlugin(t *testing.T) {
 
 func TestPluginEgressThroughCore(t *testing.T) {
 	target := echoServer(t)
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	m := extplugin.NewManager(buildDemo(t))
 	t.Cleanup(m.Close)
 	if err := m.LoadAll(context.Background(), reg); err != nil {
@@ -182,7 +183,7 @@ func TestPluginL7ThroughCore(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	m := extplugin.NewManager(buildDemo(t))
 	t.Cleanup(m.Close)
 	if err := m.LoadAll(context.Background(), reg); err != nil {
@@ -217,7 +218,7 @@ func TestPluginAuditForwardsToCore(t *testing.T) {
 		mu.Unlock()
 	}
 
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	m := extplugin.NewManager(buildDemo(t), extplugin.WithAudit(hook))
 	t.Cleanup(m.Close)
 	if err := m.LoadAll(context.Background(), reg); err != nil {
@@ -253,7 +254,7 @@ type testClientStream struct {
 func (s *testClientStream) Context() context.Context { return s.ctx }
 
 func TestPluginBidiStream(t *testing.T) {
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	m := extplugin.NewManager(buildDemo(t))
 	t.Cleanup(m.Close)
 	if err := m.LoadAll(context.Background(), reg); err != nil {
@@ -295,7 +296,7 @@ func TestPluginBidiStream(t *testing.T) {
 }
 
 func TestPluginOpenChannel(t *testing.T) {
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	m := extplugin.NewManager(buildDemo(t))
 	t.Cleanup(m.Close)
 	if err := m.LoadAll(context.Background(), reg); err != nil {
@@ -334,7 +335,7 @@ func TestPluginHTTPProxy(t *testing.T) {
 	}))
 	t.Cleanup(upstream.Close)
 
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	m := extplugin.NewManager(buildDemo(t))
 	t.Cleanup(m.Close)
 	if err := m.LoadAll(context.Background(), reg); err != nil {
@@ -381,7 +382,7 @@ func TestExampleMemoLoads(t *testing.T) {
 		t.Fatalf("build example: %v\n%s", err, out)
 	}
 
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	m := extplugin.NewManager(dir)
 	t.Cleanup(m.Close)
 	if err := m.LoadAll(context.Background(), reg); err != nil {
@@ -416,7 +417,7 @@ func TestExampleMemoLoads(t *testing.T) {
 // the host-side channel wrapper re-exposes exactly what the plugin's channel
 // declared, matching in-process parity.
 func TestPluginChannelCapabilities(t *testing.T) {
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	m := extplugin.NewManager(buildDemo(t))
 	t.Cleanup(m.Close)
 	if err := m.LoadAll(context.Background(), reg); err != nil {
@@ -479,7 +480,7 @@ func TestLoadOneAndUpdate(t *testing.T) {
 	dir := buildDemo(t)
 	bin := filepath.Join(dir, "demoplugin")
 
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	m := extplugin.NewManager(t.TempDir()) // empty dir: nothing loads at startup
 	t.Cleanup(m.Close)
 	if err := m.LoadAll(context.Background(), reg); err != nil {

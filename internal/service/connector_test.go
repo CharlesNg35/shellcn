@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/internal/secrets"
 	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/internal/store"
@@ -46,7 +47,7 @@ func TestConnectorResolvesCredentialRefFieldsFromSchema(t *testing.T) {
 	st := store.NewMemory()
 	key, _ := secrets.GenerateMasterKey()
 	vault, _ := secrets.NewVault(key)
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(credentialRefPlugin{})
 	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg))
 
@@ -94,7 +95,7 @@ func TestConnectorResolvesSharedConnectionCredentialAsConnectionOwner(t *testing
 	st := store.NewMemory()
 	key, _ := secrets.GenerateMasterKey()
 	vault, _ := secrets.NewVault(key)
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(credentialRefPlugin{})
 	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg))
 
@@ -159,7 +160,7 @@ func TestConnectorTransportAllowlistExcludesSecrets(t *testing.T) {
 	st := store.NewMemory()
 	key, _ := secrets.GenerateMasterKey()
 	vault, _ := secrets.NewVault(key)
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(secretHostPlugin{})
 	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg))
 

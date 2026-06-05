@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/internal/secrets"
 	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/internal/store"
@@ -78,7 +79,7 @@ func newCredentialService(t *testing.T) (*service.CredentialService, *store.Stor
 		t.Fatalf("vault: %v", err)
 	}
 	st := store.NewMemory()
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(credentialCatalogPlugin{})
 	return service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg)), st
 }

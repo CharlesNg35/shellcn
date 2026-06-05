@@ -43,7 +43,7 @@ func NewCredentialService(creds store.CredentialStore, grants store.CredentialGr
 		creds:  creds,
 		grants: grants,
 		vault:  vault,
-		kinds:  plugin.NewRegistry(),
+		kinds:  plugin.MustCredentialKindSet(plugin.BuiltInCredentialKinds()),
 	}
 	for _, opt := range opts {
 		opt(svc)
