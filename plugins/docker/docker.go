@@ -198,7 +198,7 @@ func containerResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities()},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.container.overview", Params: map[string]string{"id": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "docker.container.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: dockerengine.ContainerOverviewDetailConfig()},
 				{Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"}, Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "docker.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24"}}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
 				{Key: "logs", Label: "Logs", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "scroll-text"}, Type: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "docker.container.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "code"}, Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.container.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
@@ -226,7 +226,7 @@ func imageResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.image.overview", Params: map[string]string{"id": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "docker.image.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: dockerengine.ImageOverviewDetailConfig()},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "code"}, Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.image.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 			},
 		},
@@ -252,7 +252,7 @@ func volumeResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.volume.overview", Params: map[string]string{"id": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "docker.volume.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: dockerengine.VolumeOverviewDetailConfig()},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "code"}, Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.volume.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 			},
 		},
@@ -278,7 +278,7 @@ func networkResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.network.overview", Params: map[string]string{"id": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "docker.network.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: dockerengine.NetworkOverviewDetailConfig()},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "code"}, Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.network.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 			},
 		},
@@ -302,7 +302,7 @@ func composeResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.compose.overview", Params: map[string]string{"project": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "docker.compose.overview", Params: map[string]string{"project": "${resource.uid}"}}, Config: dockerengine.ComposeOverviewDetailConfig()},
 				{Key: "containers", Label: "Containers", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "box"}, Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.containers", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: containerColumns()}},
 				{Key: "services", Label: "Services", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "workflow"}, Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.services", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns()}},
 			},

@@ -135,7 +135,7 @@ func containerResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities()},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.container.overview", Params: map[string]string{"id": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "podman.container.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: dockerengine.ContainerOverviewDetailConfig()},
 				{Key: "terminal", Label: "Terminal", Icon: icon("terminal"), Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "podman.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24"}}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
 				{Key: "logs", Label: "Logs", Icon: icon("scroll-text"), Type: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "podman.container.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.container.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
@@ -165,10 +165,27 @@ func podResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: dockerengine.StateSeverities()},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.pod.overview", Params: map[string]string{"id": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "podman.pod.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: podOverviewDetailConfig()},
 				{Key: "containers", Label: "Containers", Icon: icon("box"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "podman.pod.containers", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: podContainerColumns}},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.pod.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 			},
+		},
+	}
+}
+
+func podOverviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Pod", Fields: []plugin.ObjectDetailField{
+				{Key: "id", Label: "ID", Copy: true},
+				{Key: "name", Label: "Name", Copy: true},
+				{Key: "state", Label: "State", Type: plugin.ColumnBadge, Severities: dockerengine.StateSeverities()},
+				{Key: "created", Label: "Created", Type: plugin.ColumnDateTime},
+				{Key: "containers", Label: "Containers", Type: plugin.ColumnNumber},
+				{Key: "infraId", Label: "Infra ID", Copy: true},
+				{Key: "labels", Label: "Labels", Type: plugin.ColumnJSON},
+			}},
 		},
 	}
 }
@@ -191,7 +208,7 @@ func imageResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.image.overview", Params: map[string]string{"id": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "podman.image.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: dockerengine.ImageOverviewDetailConfig()},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.image.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 			},
 		},
@@ -216,7 +233,7 @@ func volumeResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.volume.overview", Params: map[string]string{"id": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "podman.volume.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: dockerengine.VolumeOverviewDetailConfig()},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.volume.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 			},
 		},
@@ -240,7 +257,7 @@ func networkResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.network.overview", Params: map[string]string{"id": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "podman.network.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: dockerengine.NetworkOverviewDetailConfig()},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.network.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 			},
 		},

@@ -134,7 +134,7 @@ func qemuResource() plugin.ResourceType {
 				{Key: "console", Label: "Console", Icon: icon("monitor"), Type: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "proxmox.qemu.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.RemoteDesktopConfig{Resize: true, Clipboard: true}},
 				{Key: "snapshots", Label: "Snapshots", Icon: icon("camera"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.snapshots", Params: guestParams()}, Config: plugin.TableConfig{Columns: snapshotColumns(), RowActionIDs: []string{"act.qemu.snapshot.rollback", "act.qemu.snapshot.delete"}}},
 				{Key: "backups", Label: "Backups", Icon: icon("save"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.backups", Params: guestParams()}, Config: plugin.TableConfig{Columns: backupColumns(), RowActionIDs: []string{"act.backup.delete"}, RowClick: plugin.RowClickDetail}},
-				{Key: "hardware", Label: "Hardware", Icon: icon("cpu"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "proxmox.qemu.config", Params: guestParams()}},
+				{Key: "hardware", Label: "Hardware", Icon: icon("cpu"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.qemu.config", Params: guestParams()}, Config: plugin.ObjectDetailConfig{RawToggle: true}},
 			},
 		},
 	}
@@ -155,7 +155,7 @@ func lxcResource() plugin.ResourceType {
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "proxmox.lxc.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
 				{Key: "snapshots", Label: "Snapshots", Icon: icon("camera"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.snapshots", Params: guestParams()}, Config: plugin.TableConfig{Columns: snapshotColumns(), RowActionIDs: []string{"act.lxc.snapshot.rollback", "act.lxc.snapshot.delete"}}},
 				{Key: "backups", Label: "Backups", Icon: icon("save"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.backups", Params: guestParams()}, Config: plugin.TableConfig{Columns: backupColumns(), RowActionIDs: []string{"act.backup.delete"}, RowClick: plugin.RowClickDetail}},
-				{Key: "config", Label: "Config", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "proxmox.lxc.config", Params: guestParams()}},
+				{Key: "config", Label: "Config", Icon: icon("code"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.lxc.config", Params: guestParams()}, Config: plugin.ObjectDetailConfig{RawToggle: true}},
 			},
 		},
 	}

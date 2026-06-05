@@ -55,7 +55,7 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 			t.Fatalf("tab %d = %q, want %q", i, containerRes.Detail.Tabs[i].Key, want)
 		}
 	}
-	if containerRes.Detail.Tabs[0].Type != plugin.PanelDocument || containerRes.Detail.Tabs[0].Source.RouteID != "docker.container.overview" {
+	if containerRes.Detail.Tabs[0].Type != plugin.PanelObjectDetail || containerRes.Detail.Tabs[0].Source.RouteID != "docker.container.overview" {
 		t.Fatalf("container overview should render selected container details, got panel=%s source=%+v", containerRes.Detail.Tabs[0].Type, containerRes.Detail.Tabs[0].Source)
 	}
 	var composeRes *plugin.ResourceType

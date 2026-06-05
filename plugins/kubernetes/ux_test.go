@@ -72,6 +72,50 @@ func TestClusterShellUsesDedicatedPermission(t *testing.T) {
 	t.Fatal("cluster shell route missing")
 }
 
+func TestEventsUseTimelinePanels(t *testing.T) {
+	cluster := clusterResourceType()
+	dashboard := cluster.Detail.Tabs[0]
+	cfg, ok := dashboard.Config.(plugin.DashboardConfig)
+	if !ok {
+		t.Fatalf("cluster dashboard config = %T, want DashboardConfig", dashboard.Config)
+	}
+	found := false
+	for _, cell := range cfg.Cells {
+		if cell.Key != "events" {
+			continue
+		}
+		found = true
+		if cell.Type != plugin.PanelTimeline {
+			t.Fatalf("cluster events panel = %q, want timeline", cell.Type)
+		}
+		if timeline, ok := cell.Config.(plugin.TimelineConfig); !ok || timeline.RefreshIntervalMs == 0 {
+			t.Fatalf("cluster events timeline config = %#v, want refreshable TimelineConfig", cell.Config)
+		}
+	}
+	if !found {
+		t.Fatal("cluster dashboard events panel missing")
+	}
+
+	var pod kind
+	for _, k := range kinds {
+		if k.name == "pod" {
+			pod = k
+			break
+		}
+	}
+	if pod.name == "" {
+		t.Fatal("pod kind missing")
+	}
+	podEvents := eventsTab(pod)
+	if podEvents.Type != plugin.PanelTimeline {
+		t.Fatalf("pod events panel = %q, want timeline", podEvents.Type)
+	}
+	timeline, ok := podEvents.Config.(plugin.TimelineConfig)
+	if !ok || timeline.TimestampField != "createdAt" || timeline.SeverityField != "type" {
+		t.Fatalf("pod events timeline config = %#v", podEvents.Config)
+	}
+}
+
 func TestAuditShellRBACUsesStreamAuditHook(t *testing.T) {
 	var gotResult plugin.AuditResult
 	var gotParams map[string]string

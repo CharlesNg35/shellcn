@@ -103,7 +103,7 @@ func databaseResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mysql.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mysql.database.overview", Params: map[string]string{"database": "${resource.uid}"}}, Config: databaseOverviewDetailConfig()},
 				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"mysql.table.create"}, RowActionIDs: []string{"mysql.table.truncate", "mysql.table.drop"}}},
 				{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Type: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "mysql.relations.graph", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}},
 				{Key: "views", Label: "Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.views.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"mysql.view.drop"}}},
@@ -178,8 +178,39 @@ func userResource() plugin.ResourceType {
 			Detail:  []string{"mysql.user.grant", "mysql.user.drop"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
-			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mysql.user.overview", Params: map[string]string{"user": "${resource.name}", "host": "${resource.namespace}"}}},
+			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mysql.user.overview", Params: map[string]string{"user": "${resource.name}", "host": "${resource.namespace}"}}, Config: userOverviewDetailConfig()},
 		}},
+	}
+}
+
+func databaseOverviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Database", Fields: []plugin.ObjectDetailField{
+				{Key: "name", Label: "Name", Copy: true},
+				{Key: "charset", Label: "Charset"},
+				{Key: "collation", Label: "Collation"},
+				{Key: "version", Label: "Server version"},
+				{Key: "size", Label: "Size", Type: plugin.ColumnBytes},
+				{Key: "tables", Label: "Tables", Type: plugin.ColumnNumber},
+				{Key: "views", Label: "Views", Type: plugin.ColumnNumber},
+			}},
+		},
+	}
+}
+
+func userOverviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "User", Fields: []plugin.ObjectDetailField{
+				{Key: "user", Label: "User", Copy: true},
+				{Key: "host", Label: "Host", Copy: true},
+				{Key: "plugin", Label: "Auth plugin"},
+				{Key: "locked", Label: "Locked", Type: plugin.ColumnBool},
+			}},
+		},
 	}
 }
 

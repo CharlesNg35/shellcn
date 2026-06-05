@@ -155,10 +155,29 @@ func helmReleaseResourceType() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: helmStatusSeverities},
 			Tabs: []plugin.Panel{
 				{
-					Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelDocument,
+					Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelObjectDetail,
 					Source: &plugin.DataSource{RouteID: "kubernetes.helm.release", Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}},
+					Config: helmReleaseDetailConfig(),
 				},
 			},
+		},
+	}
+}
+
+func helmReleaseDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Release", Fields: []plugin.ObjectDetailField{
+				{Key: "name", Label: "Name", Copy: true},
+				{Key: "namespace", Label: "Namespace", Copy: true},
+				{Key: "revision", Label: "Revision", Type: plugin.ColumnNumber},
+				{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Severities: helmStatusSeverities},
+				{Key: "chart", Label: "Chart"},
+				{Key: "appVersion", Label: "App version"},
+				{Key: "updatedAt", Label: "Updated", Type: plugin.ColumnDateTime},
+				{Key: "notes", Label: "Notes"},
+			}},
 		},
 	}
 }
