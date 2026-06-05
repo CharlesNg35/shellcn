@@ -486,7 +486,7 @@ export const primeVuePassthrough = {
   },
 
   card: {
-    root: "overflow-hidden rounded-lg border border-surface-200 bg-surface-0 text-surface-800 shadow-sm dark:border-surface-800 dark:bg-surface-950 dark:text-surface-100",
+    root: "overflow-hidden rounded-lg border border-surface-200 bg-surface-0 text-surface-800 shadow-sm ring-1 ring-surface-950/[0.02] dark:border-surface-800 dark:bg-surface-950 dark:text-surface-100 dark:ring-surface-0/[0.03]",
     header: "border-b border-surface-200 dark:border-surface-800",
     body: "p-4",
     caption: "mb-3",
@@ -602,7 +602,7 @@ export const primeVuePassthrough = {
 
   tabs: { root: "flex min-h-0 flex-col" },
   tablist: {
-    root: "shrink-0 border-b border-surface-200 dark:border-surface-800",
+    root: "sticky top-0 z-20 shrink-0 border-b border-surface-200 bg-surface-0/95 backdrop-blur dark:border-surface-800 dark:bg-surface-950/95",
     content: "flex",
     tabList: "flex gap-1 px-1",
     activeBar: "hidden",

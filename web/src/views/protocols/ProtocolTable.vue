@@ -12,7 +12,7 @@ const props = defineProps<{
   protocols: ProtocolAdminItem[];
   loading: boolean;
   saving: Record<string, boolean>;
-  // showStatus adds the subprocess health column (external plugins only).
+  // showStatus adds the subprocess health column for installed plugins.
   showStatus?: boolean;
   emptyText: string;
 }>();

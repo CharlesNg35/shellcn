@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import DataTable from "primevue/datatable";
-import Column from "primevue/column";
-import Button from "primevue/button";
 import IconField from "primevue/iconfield";
 import InputIcon from "primevue/inputicon";
 import InputText from "primevue/inputtext";
 import Tag from "primevue/tag";
 import AppIcon from "../../components/AppIcon.vue";
 import type { MarketEntry } from "../../types/projection";
+import MarketPluginRow from "./MarketPluginRow.vue";
 
 const props = defineProps<{
   entries: MarketEntry[];
@@ -36,6 +34,7 @@ const filteredEntries = computed(() => {
       entry.homepage,
       entry.license,
       entry.latest?.version,
+      ...(entry.latest?.platforms ?? []),
       entry.installedVersion,
       ...entry.maintainers,
     ]
@@ -46,181 +45,111 @@ const filteredEntries = computed(() => {
   );
 });
 
-function action(entry: MarketEntry): string | null {
-  if (!entry.compatible) return null;
-  if (!entry.managed) return "Install";
-  if (entry.updateAvailable) return "Update";
-  return null;
-}
+const installedCount = computed(
+  () => props.entries.filter((entry) => entry.managed).length,
+);
 
-function status(entry: MarketEntry): {
-  value: string;
-  severity: "success" | "info" | "warn" | "secondary";
-} {
-  if (!entry.compatible) return { value: "Unavailable", severity: "secondary" };
-  if (!entry.managed) return { value: "Not installed", severity: "secondary" };
-  if (entry.updateAvailable)
-    return { value: "Update available", severity: "warn" };
-  return { value: "Installed", severity: "success" };
-}
-
-function version(value?: string): string {
-  return value ? `v${value}` : "Not installed";
-}
+const updateCount = computed(
+  () => props.entries.filter((entry) => entry.updateAvailable).length,
+);
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col gap-3">
+  <div class="flex flex-col gap-4">
     <div
       class="flex flex-col gap-3 rounded-lg border border-surface-200 bg-surface-0 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-surface-800 dark:bg-surface-950"
     >
-      <div>
+      <div class="min-w-0">
         <p class="text-sm font-medium text-surface-800 dark:text-surface-100">
-          Marketplace plugins
+          Marketplace
         </p>
         <p class="text-xs text-surface-500 dark:text-surface-400">
-          ShellCN-maintained external plugins install into this gateway.
+          Install plugins from the registry into this gateway.
         </p>
       </div>
-      <div class="flex items-center gap-2">
-        <IconField class="w-full sm:w-72">
-          <InputIcon class="pi pi-search" />
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div class="flex flex-wrap gap-1.5">
+          <Tag
+            :value="`${props.entries.length} available`"
+            severity="secondary"
+          />
+          <Tag
+            v-if="installedCount"
+            :value="`${installedCount} installed`"
+            severity="success"
+          />
+          <Tag
+            v-if="updateCount"
+            :value="`${updateCount} updates`"
+            severity="warn"
+          />
+        </div>
+        <IconField class="relative w-full sm:w-72">
           <InputText
             v-model="query"
-            class="w-full"
+            class="w-full pr-9"
             placeholder="Search plugins"
             aria-label="Search marketplace plugins"
           />
+          <InputIcon
+            class="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-surface-400"
+          >
+            <AppIcon :icon="{ type: 'lucide', value: 'search' }" :size="14" />
+          </InputIcon>
         </IconField>
-        <span
-          class="hidden text-xs whitespace-nowrap text-surface-400 sm:inline"
-        >
-          {{ filteredEntries.length }} of {{ props.entries.length }}
-        </span>
       </div>
     </div>
 
-    <div
-      class="min-h-0 flex-1 overflow-hidden rounded-lg border border-surface-200 bg-surface-0 dark:border-surface-800 dark:bg-surface-950"
-    >
-      <DataTable
-        :value="filteredEntries"
-        :loading="props.loading"
-        scrollable
-        scroll-height="flex"
-        data-key="name"
-        :pt="{ root: 'h-full', table: 'min-w-[760px]' }"
+    <div v-if="props.loading" class="flex flex-col gap-3">
+      <div
+        v-for="i in 6"
+        :key="i"
+        class="grid animate-pulse gap-3 rounded-lg border border-surface-200 bg-surface-0 p-4 lg:grid-cols-[minmax(0,1fr)_10rem] lg:items-center dark:border-surface-800 dark:bg-surface-950"
       >
-        <Column header="Plugin">
-          <template #body="{ data }">
-            <span class="flex min-w-0 items-center gap-3">
-              <span
-                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-surface-100 text-surface-500 dark:bg-surface-800 dark:text-surface-300"
-              >
-                <AppIcon
-                  v-if="(data as MarketEntry).latest"
-                  :icon="(data as MarketEntry).latest!.icon"
-                  :size="19"
-                />
-                <AppIcon
-                  v-else
-                  :icon="{ type: 'lucide', value: 'puzzle' }"
-                  :size="18"
-                />
-              </span>
-              <span class="min-w-0">
-                <span
-                  class="block truncate font-medium text-surface-800 dark:text-surface-100"
-                  >{{ (data as MarketEntry).displayName }}</span
-                >
-                <span class="block truncate text-xs text-surface-400">
-                  {{ (data as MarketEntry).name }} ·
-                  {{ (data as MarketEntry).license }}
-                </span>
-              </span>
-            </span>
-          </template>
-        </Column>
-        <Column header="Details">
-          <template #body="{ data }">
-            <span
-              class="block max-w-md text-sm text-surface-600 dark:text-surface-300"
-            >
-              {{ (data as MarketEntry).description }}
-            </span>
-            <a
-              :href="`https://${(data as MarketEntry).repo}`"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="mt-1 inline-block text-xs text-primary-500 hover:underline"
-              >{{ (data as MarketEntry).repo }}</a
-            >
-          </template>
-        </Column>
-        <Column header="Version" :pt="{ bodyCell: 'w-36' }">
-          <template #body="{ data }">
-            <span class="block text-sm text-surface-700 dark:text-surface-200">
-              {{ version((data as MarketEntry).latest?.version) }}
-            </span>
-            <span
-              v-if="(data as MarketEntry).installedVersion"
-              class="block text-xs text-surface-400"
-            >
-              Installed {{ version((data as MarketEntry).installedVersion) }}
-            </span>
-          </template>
-        </Column>
-        <Column header="Status" :pt="{ bodyCell: 'w-48' }">
-          <template #body="{ data }">
-            <Tag
-              :value="status(data as MarketEntry).value"
-              :severity="status(data as MarketEntry).severity"
+        <div class="flex gap-3">
+          <div
+            class="h-10 w-10 shrink-0 rounded-md bg-surface-100 dark:bg-surface-800"
+          />
+          <div class="min-w-0 flex-1 space-y-2">
+            <div class="h-4 w-44 rounded bg-surface-100 dark:bg-surface-800" />
+            <div
+              class="h-3 w-full rounded bg-surface-100 dark:bg-surface-800"
             />
-          </template>
-        </Column>
-        <Column header="" :pt="{ bodyCell: 'w-56' }">
-          <template #body="{ data }">
-            <div class="flex justify-end gap-2">
-              <Button
-                v-if="action(data as MarketEntry)"
-                :label="action(data as MarketEntry)!"
-                size="small"
-                :loading="props.installing[(data as MarketEntry).name]"
-                :disabled="props.uninstalling[(data as MarketEntry).name]"
-                :aria-label="`${action(data as MarketEntry)} ${(data as MarketEntry).displayName}`"
-                @click="emit('install', data as MarketEntry)"
-              />
-              <Button
-                v-if="(data as MarketEntry).managed"
-                label="Uninstall"
-                severity="danger"
-                variant="outlined"
-                size="small"
-                :loading="props.uninstalling[(data as MarketEntry).name]"
-                :disabled="props.installing[(data as MarketEntry).name]"
-                :aria-label="`Uninstall ${(data as MarketEntry).displayName}`"
-                @click="emit('uninstall', data as MarketEntry)"
-              />
-            </div>
-          </template>
-        </Column>
-        <template #empty>
-          <div class="flex flex-col items-center gap-2 py-10 text-center">
-            <AppIcon
-              :icon="{ type: 'lucide', value: 'search-x' }"
-              :size="24"
-              class="text-surface-300"
-            />
-            <p class="text-sm text-surface-500">
-              {{
-                query.trim()
-                  ? "No marketplace plugins match your search."
-                  : "No plugins in the registry yet."
-              }}
-            </p>
+            <div class="h-3 w-2/3 rounded bg-surface-100 dark:bg-surface-800" />
           </div>
-        </template>
-      </DataTable>
+        </div>
+        <div class="h-8 rounded bg-surface-100 dark:bg-surface-800" />
+      </div>
+    </div>
+
+    <div v-else-if="filteredEntries.length" class="flex flex-col gap-3">
+      <MarketPluginRow
+        v-for="entry in filteredEntries"
+        :key="entry.name"
+        :entry="entry"
+        :installing="props.installing[entry.name] ?? false"
+        :uninstalling="props.uninstalling[entry.name] ?? false"
+        @install="emit('install', $event)"
+        @uninstall="emit('uninstall', $event)"
+      />
+    </div>
+
+    <div
+      v-else
+      class="flex flex-col items-center gap-2 rounded-lg border border-dashed border-surface-200 bg-surface-0 py-12 text-center dark:border-surface-800 dark:bg-surface-950"
+    >
+      <AppIcon
+        :icon="{ type: 'lucide', value: 'search-x' }"
+        :size="24"
+        class="text-surface-300"
+      />
+      <p class="text-sm text-surface-500">
+        {{
+          query.trim()
+            ? "No marketplace plugins match your search."
+            : "No plugins in the registry yet."
+        }}
+      </p>
     </div>
   </div>
 </template>
