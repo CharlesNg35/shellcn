@@ -370,6 +370,7 @@ export type ColumnType =
   | "badge"
   | "bytes"
   | "datetime"
+  | "relative_time"
   | "number"
   | "percent"
   | "bool"

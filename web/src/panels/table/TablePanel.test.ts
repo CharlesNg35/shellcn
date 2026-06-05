@@ -633,6 +633,48 @@ describe("TablePanel staged edits", () => {
     w.unmount();
   });
 
+  it("updates relative-time columns without refetching rows", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-05T12:00:00Z"));
+    let calls = 0;
+    installFetch(() => {
+      calls += 1;
+      return {
+        body: {
+          items: [
+            {
+              _id: "pod-1",
+              name: "web",
+              age: "2026-06-05T11:59:30Z",
+            },
+          ],
+          nextCursor: "",
+          total: 1,
+        },
+      };
+    });
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "kubernetes.resource.list" },
+        config: {
+          columns: [
+            { key: "name", label: "Name" },
+            { key: "age", label: "Age", type: "relative_time" },
+          ],
+        },
+      },
+    });
+    await flushPromises();
+    expect(w.text()).toContain("30s");
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    await flushPromises();
+    expect(w.text()).toContain("1m");
+    expect(calls).toBe(1);
+    w.unmount();
+  });
+
   it("polls the current page on refreshIntervalMs and replaces rows in place", async () => {
     vi.useFakeTimers();
     let calls = 0;

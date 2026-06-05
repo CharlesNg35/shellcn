@@ -64,15 +64,16 @@ type DataSource struct {
 type ColumnType string
 
 const (
-	ColumnText     ColumnType = "text"
-	ColumnBadge    ColumnType = "badge"
-	ColumnBytes    ColumnType = "bytes"
-	ColumnDateTime ColumnType = "datetime"
-	ColumnNumber   ColumnType = "number"
-	ColumnPercent  ColumnType = "percent"
-	ColumnBool     ColumnType = "bool"
-	ColumnJSON     ColumnType = "json"
-	ColumnIcon     ColumnType = "icon"
+	ColumnText         ColumnType = "text"
+	ColumnBadge        ColumnType = "badge"
+	ColumnBytes        ColumnType = "bytes"
+	ColumnDateTime     ColumnType = "datetime"
+	ColumnRelativeTime ColumnType = "relative_time"
+	ColumnNumber       ColumnType = "number"
+	ColumnPercent      ColumnType = "percent"
+	ColumnBool         ColumnType = "bool"
+	ColumnJSON         ColumnType = "json"
+	ColumnIcon         ColumnType = "icon"
 )
 
 type Column struct {

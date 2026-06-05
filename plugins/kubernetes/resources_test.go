@@ -34,13 +34,14 @@ func rc(sess plugin.Session, params map[string]string) *plugin.RequestContext {
 }
 
 func TestListResourceNamespacedPods(t *testing.T) {
+	const created = "2026-06-05T10:11:12Z"
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/namespaces/default/pods", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, obj{
 			"apiVersion": "v1", "kind": "PodList",
 			"items": []any{
 				obj{
-					"metadata": obj{"name": "web-1", "namespace": "default", "uid": "u1"},
+					"metadata": obj{"name": "web-1", "namespace": "default", "uid": "u1", "creationTimestamp": created},
 					"spec":     obj{"nodeName": "node-a"},
 					"status": obj{
 						"phase":             "Running",
@@ -64,6 +65,9 @@ func TestListResourceNamespacedPods(t *testing.T) {
 	r := page.Items[0]
 	if r["name"] != "web-1" || r["status"] != "Running" || r["ready"] != "1/1" || r["node"] != "node-a" {
 		t.Fatalf("pod row = %+v", r)
+	}
+	if r["age"] != created || r["createdAt"] != created {
+		t.Fatalf("pod age fields = %+v", r)
 	}
 	// Every list row must carry a ref so the grid can open detail + row actions.
 	ref, ok := r["ref"].(plugin.ResourceRef)
@@ -108,6 +112,16 @@ func TestTreeCategoryListsKinds(t *testing.T) {
 	}
 	if !foundPod {
 		t.Fatal("workloads category should include Pods")
+	}
+}
+
+func TestBuiltInAgeColumnsUseRelativeTime(t *testing.T) {
+	for _, k := range kinds {
+		for _, c := range k.columns {
+			if c.Key == "age" && c.Type != plugin.ColumnRelativeTime {
+				t.Fatalf("%s age column type = %q, want %q", k.name, c.Type, plugin.ColumnRelativeTime)
+			}
+		}
 	}
 }
 
