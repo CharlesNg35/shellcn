@@ -7,17 +7,13 @@ import (
 	"testing"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
-	reg := plugin.NewRegistry()
-	if err := reg.Register(New()); err != nil {
-		t.Fatalf("register LDAP plugin: %v", err)
-	}
-	m, ok := reg.Manifest(protocolName)
-	if !ok {
-		t.Fatal("manifest not registered")
-	}
+	p := New()
+	m := p.Manifest()
+	plugintest.ValidatePlugin(t, p)
 	if m.Agent != nil {
 		t.Fatal("LDAP must not declare agent transport")
 	}
@@ -29,9 +25,6 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	}
 	if got := m.Config.Defaults()["read_only"]; got != true {
 		t.Fatalf("read_only manifest default = %#v, want true", got)
-	}
-	if err := plugin.Validate(m, New().Routes()); err != nil {
-		t.Fatalf("manifest invalid: %v", err)
 	}
 }
 

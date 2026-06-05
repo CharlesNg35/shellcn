@@ -6,6 +6,7 @@ import (
 	"maps"
 
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/internal/secrets"
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -16,14 +17,14 @@ import (
 // and wires the transport for the connection's mode. Secret material lives only
 // in the returned ConnectConfig — it is never serialized back to the client.
 type Connector struct {
-	plugins        *plugin.Registry
+	plugins        *pluginregistry.Registry
 	creds          *CredentialService
 	vault          secrets.SecretStore
 	tunnels        transport.TunnelRegistry
 	onSecretAccess func()
 }
 
-func NewConnector(plugins *plugin.Registry, creds *CredentialService, vault secrets.SecretStore, tunnels transport.TunnelRegistry) *Connector {
+func NewConnector(plugins *pluginregistry.Registry, creds *CredentialService, vault secrets.SecretStore, tunnels transport.TunnelRegistry) *Connector {
 	return &Connector{plugins: plugins, creds: creds, vault: vault, tunnels: tunnels}
 }
 

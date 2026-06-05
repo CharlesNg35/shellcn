@@ -14,8 +14,8 @@ import (
 	hclog "github.com/hashicorp/go-hclog"
 	goplugin "github.com/hashicorp/go-plugin"
 
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/sdk/grpcplugin"
-	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 const (
@@ -98,7 +98,7 @@ func NewManager(dir string, opts ...Option) *Manager {
 // LoadAll spawns and registers every plugin binary in the directory. A binary
 // that fails to load is skipped so one bad plugin cannot block the rest; the
 // joined load errors are returned. A missing directory is not an error.
-func (m *Manager) LoadAll(ctx context.Context, reg *plugin.Registry) error {
+func (m *Manager) LoadAll(ctx context.Context, reg *pluginregistry.Registry) error {
 	entries, err := os.ReadDir(m.dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -123,7 +123,7 @@ func (m *Manager) LoadAll(ctx context.Context, reg *plugin.Registry) error {
 	return errors.Join(errs...)
 }
 
-func (m *Manager) load(ctx context.Context, reg *plugin.Registry, path string) error {
+func (m *Manager) load(ctx context.Context, reg *pluginregistry.Registry, path string) error {
 	client, dispensed, err := m.spawn(path)
 	if err != nil {
 		return err

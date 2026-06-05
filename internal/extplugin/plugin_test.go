@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 
 	"github.com/charlesng35/shellcn/internal/extplugin"
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/sdk/gen/pluginv1"
 	"github.com/charlesng35/shellcn/sdk/grpcplugin"
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -96,7 +97,7 @@ func TestProjectionMatchesInProcess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new: %v", err)
 	}
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	if err := reg.Register(p); err != nil {
 		t.Fatalf("register: %v", err)
 	}

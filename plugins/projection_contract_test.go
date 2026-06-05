@@ -5,19 +5,14 @@ import (
 	"testing"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func TestAllPluginProjectionsMarshal(t *testing.T) {
-	reg := plugin.NewRegistry()
-	Register(reg)
-
-	for _, p := range reg.All() {
+	for _, p := range allTestPlugins(t) {
 		name := p.Manifest().Name
 		t.Run(name, func(t *testing.T) {
-			proj, ok := reg.Projection(name)
-			if !ok {
-				t.Fatalf("projection missing for %q", name)
-			}
+			proj := plugintest.Projection(t, p)
 			if proj.Name != name {
 				t.Fatalf("projection name = %q, want %q", proj.Name, name)
 			}

@@ -1,10 +1,10 @@
-# memo — reference out-of-tree ShellCN plugin
+# memo - reference out-of-tree ShellCN plugin
 
 An in-memory notes store, kept deliberately small to show the whole authoring
 surface: a declarative manifest (a table panel with a create form and a row
 delete), unary routes (`list`/`create`/`delete`), and per-connection session
 state. It is its **own Go module** and depends only on
-`github.com/charlesng35/shellcn/sdk` — no core, no `internal/`.
+`github.com/charlesng35/shellcn/sdk` - no core, no `internal/`.
 
 ## Build
 
@@ -15,7 +15,7 @@ GOOS=linux  GOARCH=amd64 go build -o memo-linux-amd64 .
 GOOS=darwin GOARCH=arm64 go build -o memo-darwin-arm64 .
 ```
 
-A plugin is a normal Go binary, so it is OS/arch-specific — build for the machine
+A plugin is a normal Go binary, so it is OS/arch-specific - build for the machine
 the gateway runs on. Prefer pure-Go dependencies so cross-compilation stays a
 one-liner.
 

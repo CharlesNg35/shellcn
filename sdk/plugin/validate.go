@@ -34,7 +34,7 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 	if existing == nil {
 		existing = mustCredentialKindSet(builtInCredentialKindCatalog)
 	}
-	catalog, err := newCredentialKindSet(credentialKindDefinitions(existing.CredentialKinds()))
+	catalog, err := NewCredentialKindSet(credentialKindDefinitions(existing.CredentialKinds()))
 	if err != nil {
 		add("credential kind catalog is invalid: %v", err)
 		catalog = mustCredentialKindSet(nil)

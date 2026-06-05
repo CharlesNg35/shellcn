@@ -8,6 +8,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/internal/store"
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -52,7 +53,7 @@ func (agentTestPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin.Se
 func TestEnrollmentArtifactsAndRedeem(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(agentTestPlugin{})
 	if err := st.Connections.Create(ctx, &models.Connection{
 		ID: "agent-conn", Name: "Agent", Protocol: "agenttest", OwnerID: "owner",
@@ -111,7 +112,7 @@ func TestEnrollmentArtifactsAndRedeem(t *testing.T) {
 func TestEnrollmentLocalDevContainerCommand(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(agentTestPlugin{})
 	if err := st.Connections.Create(ctx, &models.Connection{
 		ID: "agent-conn", Name: "Agent", Protocol: "agenttest", OwnerID: "owner",
@@ -175,7 +176,7 @@ func (urlArtifactPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin.
 func TestURLDeliveredArtifactLazyMint(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(urlArtifactPlugin{})
 	if err := st.Connections.Create(ctx, &models.Connection{
 		ID: "url-conn", Name: "URL", Protocol: "urlagent", OwnerID: "owner",
@@ -225,7 +226,7 @@ func TestURLDeliveredArtifactLazyMint(t *testing.T) {
 func TestRenderArtifactContentRejectsWrongConnection(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(urlArtifactPlugin{})
 	_ = st.Connections.Create(ctx, &models.Connection{ID: "url-conn", Protocol: "urlagent", OwnerID: "o", Transport: string(plugin.TransportAgent)})
 	svc := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)

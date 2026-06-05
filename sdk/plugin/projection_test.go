@@ -9,7 +9,7 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-const testCredentialSSHPrivateKey plugin.CredentialKind = "ssh_private_key"
+const testCredentialPrivateKey plugin.CredentialKind = "sample_private_key"
 
 // sampleManifest exercises every projection-relevant shape: structured icons
 // (incl. svg), a schema with credential_ref + condition + validators, a WS tab
@@ -26,7 +26,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		Capabilities:        []plugin.Capability{"terminal", "filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		CredentialKinds: []plugin.CredentialKindInfo{{
-			Kind: testCredentialSSHPrivateKey, Label: "SSH private key", SecretLabel: "Private key",
+			Kind: testCredentialPrivateKey, Label: "Sample private key", SecretLabel: "Private key",
 			SecretMultiline: true, IdentityLabel: "Username",
 		}},
 		Layout: plugin.LayoutSidebarTree,
@@ -41,7 +41,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 					AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}},
 				}},
 				{Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-					Kinds: []plugin.CredentialKind{testCredentialSSHPrivateKey}, Protocols: []string{"ssh"}, Required: true,
+					Kinds: []plugin.CredentialKind{testCredentialPrivateKey}, Protocols: []string{"ssh"}, Required: true,
 				}},
 			},
 		}}},
@@ -129,15 +129,10 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 
 func TestProjectionGolden(t *testing.T) {
 	m, routes := sampleManifest()
-	reg := plugin.NewRegistry()
-	stub := &stubPlugin{manifest: m, routes: routes}
-	if err := reg.Register(stub); err != nil {
-		t.Fatalf("register: %v", err)
+	if err := plugin.Validate(m, routes); err != nil {
+		t.Fatalf("validate: %v", err)
 	}
-	proj, ok := reg.Projection("sample")
-	if !ok {
-		t.Fatal("projection not found")
-	}
+	proj := plugin.BuildProjection(m, routeMap(routes))
 	got, err := json.MarshalIndent(proj, "", "  ")
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -156,6 +151,47 @@ func TestProjectionGolden(t *testing.T) {
 	}
 	if string(got) != string(want) {
 		t.Errorf("projection JSON drifted from golden.\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func routeMap(routes []plugin.Route) map[string]plugin.Route {
+	out := make(map[string]plugin.Route, len(routes))
+	for _, route := range routes {
+		out[route.ID] = route
+	}
+	return out
+}
+
+func TestProjectionUnmarshalsProjectedActionConfig(t *testing.T) {
+	proj := plugin.Projection{
+		Name: "sample",
+		Actions: []plugin.ProjectedAction{{
+			ID:      "sample.edit",
+			Label:   "Edit",
+			RouteID: "sample.update",
+			Panel:   plugin.PanelCodeEditor,
+			Config: plugin.CodeEditorConfig{
+				Language:    "json",
+				SaveRouteID: "sample.update",
+				SaveMethod:  plugin.MethodPut,
+				SaveBodyKey: "document",
+			},
+		}},
+	}
+	raw, err := json.Marshal(proj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got plugin.Projection
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	cfg, ok := got.Actions[0].Config.(plugin.CodeEditorConfig)
+	if !ok {
+		t.Fatalf("action config type = %T, want CodeEditorConfig", got.Actions[0].Config)
+	}
+	if cfg.SaveRouteID != "sample.update" || cfg.SaveMethod != plugin.MethodPut || cfg.SaveBodyKey != "document" {
+		t.Fatalf("action config did not round-trip: %+v", cfg)
 	}
 }
 

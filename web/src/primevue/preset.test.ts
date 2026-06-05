@@ -56,6 +56,12 @@ describe("primeVuePassthrough", () => {
     }
   });
 
+  it("keeps tab navigation visible while tab panels scroll", () => {
+    expect(primeVuePassthrough.tablist.root).toContain("sticky");
+    expect(primeVuePassthrough.tablist.root).toContain("top-0");
+    expect(primeVuePassthrough.tablist.root).toContain("backdrop-blur");
+  });
+
   it("keeps modal chrome bounded and scrollable", () => {
     expect(primeVuePassthrough.dialog.mask).toContain("pointer-events-auto");
     expect(primeVuePassthrough.dialog.mask).toContain("fixed");

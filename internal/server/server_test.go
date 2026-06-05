@@ -23,6 +23,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/email"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/recording"
 	"github.com/charlesng35/shellcn/internal/secrets"
@@ -249,13 +250,13 @@ type harness struct {
 	sessions       map[string]auth.Session // userID → platform session
 }
 
-func newHarness(t *testing.T) *harness {
+func newHarness(t *testing.T, opts ...func(*server.Deps)) *harness {
 	t.Helper()
 	st := store.NewMemory()
 	key, _ := secrets.GenerateMasterKey()
 	vault, _ := secrets.NewVault(key)
 
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(testPlugin{})
 	reg.MustRegister(boomPlugin{})
 	reg.MustRegister(internalPlugin{})
@@ -284,7 +285,7 @@ func newHarness(t *testing.T) *harness {
 	twoFactor := service.NewTwoFactorService(st.Users, vault, "ShellCN")
 	invitations := service.NewInvitationService(st.Invitations, users, email.New(email.SMTP{}))
 
-	srv := server.New(server.Deps{
+	deps := server.Deps{
 		Plugins: reg, Store: st, Sessions: sessMgr,
 		Auth: auth.NewLocalAuthenticator(st.Users), SessionMgr: authMgr,
 		Tickets: auth.NewTicketStore(time.Minute), Policy: pol,
@@ -296,7 +297,11 @@ func newHarness(t *testing.T) *harness {
 			Kind: "openai", Name: "Shared", APIKey: "sk-global-secret", Model: "gpt-4o",
 		}),
 		ModelRegistry: modelreg.New(modelreg.WithURLs("", "")),
-	})
+	}
+	for _, o := range opts {
+		o(&deps)
+	}
+	srv := server.New(deps)
 
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)

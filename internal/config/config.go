@@ -138,7 +138,14 @@ func (c RecordingsConfig) CleanupEvery() time.Duration {
 // PluginsConfig points at the directory scanned for out-of-tree plugin binaries.
 // Empty disables external-plugin loading; a missing directory is not an error.
 type PluginsConfig struct {
-	Dir string `mapstructure:"dir"`
+	Dir    string       `mapstructure:"dir"`
+	Market MarketConfig `mapstructure:"market"`
+}
+
+// MarketConfig points the gateway at one or more plugin registry indexes.
+type MarketConfig struct {
+	Enabled bool     `mapstructure:"enabled"`
+	Indexes []string `mapstructure:"indexes"`
 }
 
 // Load reads config.yaml from the current directory, ./config, or any extra
@@ -205,6 +212,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("recordings.cleanup_interval", "1h")
 	v.SetDefault("recordings.max_chunk_bytes", 8<<20)
 	v.SetDefault("plugins.dir", "plugins.d")
+	v.SetDefault("plugins.market.enabled", true)
+	v.SetDefault("plugins.market.indexes", []string{
+		"https://raw.githubusercontent.com/CharlesNg35/shellcn-plugin-registry/main/index.json",
+	})
 }
 
 func (c *Config) SlogLevel() slog.Level {

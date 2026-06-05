@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/internal/secrets"
 	"github.com/charlesng35/shellcn/internal/store"
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -20,12 +21,12 @@ import (
 // write-only secret update semantics.
 type ConnectionService struct {
 	conns   store.ConnectionStore
-	plugins *plugin.Registry
+	plugins *pluginregistry.Registry
 	creds   *CredentialService
 	vault   secrets.SecretStore
 }
 
-func NewConnectionService(conns store.ConnectionStore, plugins *plugin.Registry, creds *CredentialService, vault secrets.SecretStore) *ConnectionService {
+func NewConnectionService(conns store.ConnectionStore, plugins *pluginregistry.Registry, creds *CredentialService, vault secrets.SecretStore) *ConnectionService {
 	return &ConnectionService{conns: conns, plugins: plugins, creds: creds, vault: vault}
 }
 

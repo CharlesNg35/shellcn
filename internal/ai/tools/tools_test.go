@@ -9,6 +9,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/ai/engine"
 	"github.com/charlesng35/shellcn/internal/ai/tools"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
@@ -94,9 +95,9 @@ func (r *recordingInvoker) InvokeRoute(_ context.Context, _ models.User, _, rout
 	return r.result, r.err
 }
 
-func registry(t *testing.T) *plugin.Registry {
+func registry(t *testing.T) *pluginregistry.Registry {
 	t.Helper()
-	reg := plugin.NewRegistry()
+	reg := pluginregistry.New()
 	reg.MustRegister(demoPlugin{})
 	return reg
 }
@@ -259,7 +260,7 @@ func TestConfirmerGatesWritesNotReads(t *testing.T) {
 	}
 }
 
-func mustBuild(t *testing.T, reg *plugin.Registry, allowed map[plugin.RiskLevel]bool, inv tools.Invoker) *tools.ToolSet {
+func mustBuild(t *testing.T, reg *pluginregistry.Registry, allowed map[plugin.RiskLevel]bool, inv tools.Invoker) *tools.ToolSet {
 	t.Helper()
 	ts, err := tools.Build(reg, "demo", allowed, inv, models.User{ID: "u"}, "c1")
 	if err != nil {

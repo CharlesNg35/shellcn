@@ -7,27 +7,23 @@ import (
 
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
-	reg := plugin.NewRegistry()
-	if err := reg.Register(New()); err != nil {
-		t.Fatalf("register Redis plugin: %v", err)
-	}
-	m, ok := reg.Manifest(protocolName)
-	if !ok {
-		t.Fatal("manifest not registered")
-	}
+	p := New()
+	m := p.Manifest()
+	plugintest.ValidatePlugin(t, p)
 	if m.Agent != nil {
 		t.Fatal("Redis must not declare agent transport")
 	}
 	if len(m.SupportedTransports) != 1 || m.SupportedTransports[0] != plugin.TransportDirect {
 		t.Fatalf("unexpected transports: %+v", m.SupportedTransports)
 	}
-	if !reg.CredentialKindSupportsProtocol(plugin.CredentialDBPassword, protocolName) {
+	if !plugintest.CredentialKindSupported(m.Config, plugin.CredentialDBPassword) {
 		t.Fatal("database password credential should support Redis")
 	}
-	if !reg.CredentialKindSupportsProtocol(plugin.CredentialTLSClientCert, protocolName) {
+	if !plugintest.CredentialKindSupported(m.Config, plugin.CredentialTLSClientCert) {
 		t.Fatal("TLS client certificate credential should support Redis")
 	}
 	if got := m.Config.Defaults()["read_only"]; got != true {
@@ -38,9 +34,6 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	}
 	if len(m.Scope) != 1 || m.Scope[0].Param != databaseScopeParam || m.Scope[0].DefaultValue != "0" {
 		t.Fatalf("database scope not declared correctly: %+v", m.Scope)
-	}
-	if err := plugin.Validate(m, New().Routes()); err != nil {
-		t.Fatalf("manifest invalid: %v", err)
 	}
 	var console *plugin.Panel
 	for i := range m.Tabs {

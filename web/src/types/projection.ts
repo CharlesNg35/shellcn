@@ -658,6 +658,35 @@ export interface ProtocolAdminList {
   protocols: ProtocolAdminItem[];
 }
 
+export interface MarketVersion {
+  version: string;
+  apiVersion: number;
+  protocolVersion: number;
+  platforms: string[];
+  icon: Icon;
+  snapshotUrl: string;
+}
+
+export interface MarketEntry {
+  name: string;
+  displayName: string;
+  description: string;
+  repo: string;
+  homepage?: string;
+  license: string;
+  maintainers: string[];
+  latest?: MarketVersion;
+  compatible: boolean;
+  installedVersion?: string;
+  managed: boolean;
+  updateAvailable: boolean;
+}
+
+export interface MarketList {
+  enabled: boolean;
+  plugins: MarketEntry[];
+}
+
 export interface AuditEntry {
   id: string;
   time: string;

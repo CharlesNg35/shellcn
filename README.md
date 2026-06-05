@@ -18,30 +18,15 @@ servers, containers, databases, and desktops. Run it, open a browser, and you're
 
 _Demo (coming soon):_
 
-It speaks **40 protocols** out of the box today:
+It speaks **20 protocols** out of the box today:
 
-- **Shells**: SSH, Telnet
-- **File transfer**: SFTP, FTP/FTPS, SMB, NFS, WebDAV, S3, MinIO
+- **Shells**: SSH
+- **File transfer**: SFTP, FTP/FTPS, SMB, WebDAV, S3
 - **Containers & clusters**: Docker, Swarm, Podman, Kubernetes, Proxmox
 - **Remote desktops**: VNC, RDP
-- **Databases**: PostgreSQL, MySQL, MongoDB, Redis, MSSQL, Oracle, CockroachDB, ClickHouse, Cassandra, DynamoDB, Neo4j
-- **Search**: Elasticsearch, OpenSearch, Meilisearch, Typesense, Solr
-- **Observability**: Prometheus, InfluxDB, server monitoring
-- **Messaging**: Kafka, RabbitMQ, NATS
+- **Databases**: PostgreSQL, MySQL, MongoDB, Redis
+- **Observability**: server monitoring
 - **Directory**: LDAP
-
-## Extending it
-
-Every protocol is a self-describing Go plugin, and the frontend is one universal renderer
-that draws whatever a plugin declares - so the UI, auth, audit, and policy are shared by all
-of them.
-
-The built-in protocols above are a **curated, stable set** and won't keep growing in-tree.
-When you need one that isn't here, add it as an **external plugin**: a separate Go binary
-built against the plugin SDK, dropped into the gateway's plugin directory and enabled from
-**Settings → Protocols** - no fork, no core rebuild. It uses the same contract as the
-built-ins, so it's rendered and governed identically. Start from the
-[plugin starter](https://github.com/CharlesNg35/shellcn-plugin-starter).
 
 ## Quick start
 
@@ -78,9 +63,6 @@ services:
       SHELLCN_BOOTSTRAP_ADMIN_PASSWORD: change-me
     volumes:
       - shellcn-data:/data
-      # Optional - external plugins: drop compiled plugin binaries into ./plugins.d
-      # next to this file, then uncomment the mount below (see "Extending it").
-      # - ./plugins.d:/data/plugins.d
     restart: unless-stopped
 
 volumes:
@@ -89,6 +71,8 @@ volumes:
 
 Generate a key once with `openssl rand -base64 32`, put it in a `.env` file beside the
 compose file as `SHELLCN_MASTER_KEY=...`, then run `docker compose up -d`.
+
+The `/data` volume also persists private plugins placed in `/data/plugins.d`.
 
 ### Single binary
 
@@ -108,6 +92,21 @@ It serves on `:8081` and keeps its data in the working directory.
 > **Early days.** ShellCN is in active development, so expect a few rough edges. Please feel
 > free to take it for a spin and tell us what breaks. Issues and feedback are very welcome.
 
+## Extending it
+
+ShellCN keeps the built-in protocol set small. Extra protocols are external plugins:
+
+- Install ShellCN-maintained plugins from the Marketplace.
+- Build your own with the
+  [plugin starter](https://github.com/CharlesNg35/shellcn-plugin-starter).
+- To publish a plugin, release its binary and submit a manifest to
+  [shellcn-plugin-registry](https://github.com/CharlesNg35/shellcn-plugin-registry).
+- For private plugins, skip the registry and drop the binary in the gateway plugin
+  directory.
+
+The default plugin directory is `/data/plugins.d` in Docker and `./plugins.d` when running
+the single binary. You can override it with `plugins.dir` or `SHELLCN_PLUGINS_DIR`.
+
 ## Build from source
 
 Requires Go 1.26+ and Node 24+.
@@ -116,6 +115,17 @@ Requires Go 1.26+ and Node 24+.
 make build    # single binary at bin/shellcn
 make dev      # live-reloading dev server
 ```
+
+## Related repositories
+
+ShellCN is developed across a small family of repos we maintain:
+
+| Repository                                                                        | What it is                                                             |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [shellcn](https://github.com/CharlesNg35/shellcn)                                 | The gateway: core, SDK, and the built-in protocol set.                 |
+| [shellcn-plugin-registry](https://github.com/CharlesNg35/shellcn-plugin-registry) | The plugin registry that powers the in-app Marketplace.                |
+| [shellcn-contrib](https://github.com/CharlesNg35/shellcn-contrib)                 | ShellCN-maintained external plugins, installable from the Marketplace. |
+| [shellcn-plugin-starter](https://github.com/CharlesNg35/shellcn-plugin-starter)   | Template + docs for writing your own plugin.                           |
 
 ## License
 

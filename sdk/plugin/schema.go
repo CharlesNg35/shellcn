@@ -39,6 +39,8 @@ const (
 type CredentialKind string
 
 const (
+	CredentialSSHPrivateKey  CredentialKind = "ssh_private_key"
+	CredentialSSHPassword    CredentialKind = "ssh_password"
 	CredentialTLSClientCert  CredentialKind = "tls_client_cert"
 	CredentialDBPassword     CredentialKind = "db_password"
 	CredentialAPIToken       CredentialKind = "api_token"

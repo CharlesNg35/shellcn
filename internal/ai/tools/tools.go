@@ -39,7 +39,7 @@ type Confirmer interface {
 	Confirm(ctx context.Context, req ConfirmRequest) (bool, error)
 }
 
-// RouteSource enumerates a protocol's routes (satisfied by *plugin.Registry).
+// RouteSource enumerates a protocol's routes.
 type RouteSource interface {
 	Get(name string) (plugin.Plugin, bool)
 }
