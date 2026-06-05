@@ -5,6 +5,7 @@ import Select from "primevue/select";
 import InputText from "primevue/inputtext";
 import Checkbox from "primevue/checkbox";
 import Button from "primevue/button";
+import { useRouter } from "vue-router";
 import { ApiError } from "../api/client";
 import { connectionsApi } from "../api/connections";
 import { aiApi } from "../api/ai";
@@ -14,6 +15,7 @@ import SchemaForm from "../panels/form/SchemaForm.vue";
 import { mergeSchemaDefaults } from "../panels/form/defaults";
 import ProtocolPicker from "./ProtocolPicker.vue";
 import AppIcon from "./AppIcon.vue";
+import RoleGate from "./RoleGate.vue";
 import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
 import { TRANSPORT_DIRECT } from "../types/projection";
 import type {
@@ -31,6 +33,7 @@ const emit = defineEmits<{
 
 const conns = useConnectionsStore();
 const notify = useNotify();
+const router = useRouter();
 
 const isEdit = computed(() => Boolean(props.connectionId));
 const protocol = ref("");
@@ -171,6 +174,11 @@ function close(): void {
   emit("update:visible", false);
 }
 
+async function openMarketplace(): Promise<void> {
+  close();
+  await router.push({ name: "protocols", query: { tab: "market" } });
+}
+
 function requestSubmit(): void {
   nameError.value = name.value.trim() ? null : "A name is required.";
   if (nameError.value) return;
@@ -240,15 +248,30 @@ async function onConfig(
 
     <div v-else class="flex min-w-0 flex-col gap-5">
       <div v-if="!isEdit && !protocol" class="flex min-w-0 flex-col gap-1.5">
-        <label
-          class="text-sm font-medium text-surface-700 dark:text-surface-200"
-        >
-          Protocol
-          <span class="font-normal text-surface-400"
-            >({{ conns.plugins.length }})</span
+        <div class="flex items-center justify-between gap-3">
+          <label
+            class="text-sm font-medium text-surface-700 dark:text-surface-200"
           >
-          <span class="text-red-500">*</span>
-        </label>
+            Protocol
+            <span class="font-normal text-surface-400"
+              >({{ conns.plugins.length }})</span
+            >
+            <span class="text-red-500">*</span>
+          </label>
+          <RoleGate admin>
+            <Button
+              type="button"
+              size="small"
+              severity="secondary"
+              variant="link"
+              class="shrink-0 !px-0 !py-0 text-xs"
+              @click="openMarketplace"
+            >
+              <AppIcon :icon="{ type: 'lucide', value: 'store' }" :size="13" />
+              View more
+            </Button>
+          </RoleGate>
+        </div>
         <ProtocolPicker
           :model-value="protocol"
           :plugins="conns.plugins"
