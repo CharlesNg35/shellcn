@@ -3,7 +3,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { defineComponent, ref } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import PrimeVue from "primevue/config";
 import { installFetch } from "../../test/fetchMock";
+import { primeVuePassthrough } from "../../primevue/preset";
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
@@ -99,6 +101,7 @@ import MetricsPanel from "./MetricsPanel.vue";
 import CodeEditorPanel from "./CodeEditorPanel.vue";
 import QueryEditorPanel from "./QueryEditorPanel.vue";
 import RemoteDesktopPanel from "./RemoteDesktopPanel.vue";
+import StreamStatusBar from "./StreamStatusBar.vue";
 import TerminalGridPanel from "./TerminalGridPanel.vue";
 
 const props = {
@@ -380,6 +383,21 @@ describe("streaming stub panels", () => {
         .findAll("[data-terminal-grid-panel-size]")
         .map((panel) => panel.attributes("data-terminal-grid-panel-size")),
     ).toEqual(["30", "70"]);
+    w.unmount();
+  });
+
+  it("keeps stream error details controls vertically centered", () => {
+    const w = mount(StreamStatusBar, {
+      props: { status: "disconnected", error: "connection closed" },
+      global: {
+        plugins: [[PrimeVue, { unstyled: true, pt: primeVuePassthrough }]],
+      },
+    });
+
+    const details = w.get('button[aria-label="Show error details"]');
+    expect(details.classes()).toContain("inline-flex");
+    expect(details.classes()).toContain("items-center");
+    expect(details.classes()).toContain("h-7");
     w.unmount();
   });
 

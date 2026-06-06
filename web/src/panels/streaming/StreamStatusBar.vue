@@ -93,7 +93,7 @@ function reconnectable(status: string): boolean {
         size="small"
         title="Why did it fail?"
         aria-label="Show error details"
-        :pt="{ root: 'h-7 px-1.5 text-surface-400' }"
+        class="h-7 px-1.5 py-0 text-surface-400"
         @click="showError"
       >
         <AppIcon :icon="{ type: 'lucide', value: 'info' }" :size="14" />
