@@ -318,7 +318,7 @@ func composeResource() plugin.ResourceType {
 
 func actions() []plugin.Action {
 	return []plugin.Action{
-		{ID: "docker.engine.shell", Label: "Docker Shell", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"}, RouteID: "docker.engine.shell", Open: plugin.OpenDock, Panel: plugin.PanelTerminal, Params: map[string]string{"cols": "80", "rows": "24"}, Config: plugin.TerminalConfig{Zoom: true, Search: true}, Confirm: true, ConfirmText: "Open a Docker shell with access to the Docker daemon?", IconOnly: true},
+		{ID: "docker.engine.shell", Label: "Docker Shell", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"}, RouteID: "docker.engine.shell", Open: plugin.OpenDock, Panel: plugin.PanelTerminal, Params: map[string]string{"cols": "80", "rows": "24"}, Config: plugin.TerminalConfig{Zoom: true, Search: true}, Confirm: true, ConfirmText: "Open a Docker shell with access to the Docker daemon?"},
 		{ID: "docker.container.create", Label: "New container", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "plus"}, RouteID: "docker.container.create"},
 		{ID: "docker.container.open", Label: "Open", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "external-link"}, RouteID: "docker.container.open", Open: plugin.OpenURL, Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: dockerengine.WhenState("running")},
 		{ID: "docker.container.start", Label: "Start", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"}, RouteID: "docker.container.start", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: dockerengine.WhenState("created", "exited", "dead"), Group: "Lifecycle"},

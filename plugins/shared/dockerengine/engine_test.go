@@ -162,8 +162,11 @@ func TestEngineShellCreateOptionsMountDockerSocket(t *testing.T) {
 	if got := opts.Config.Labels[engineShellLabel]; got != "true" {
 		t.Fatalf("shell label = %q, want true", got)
 	}
-	if got := opts.Config.Env; fmt.Sprint(got) != fmt.Sprint([]string{"DOCKER_HOST=unix:///var/run/docker.sock"}) {
+	if got := opts.Config.Env; fmt.Sprint(got) != fmt.Sprint([]string{"DOCKER_HOST=unix:///var/run/docker.sock", "HOME=/root"}) {
 		t.Fatalf("shell env = %#v", got)
+	}
+	if opts.Config.WorkingDir != "/root" {
+		t.Fatalf("shell working dir = %q, want /root", opts.Config.WorkingDir)
 	}
 	if got := opts.HostConfig.Binds; fmt.Sprint(got) != fmt.Sprint([]string{"/run/docker.sock:/var/run/docker.sock:rw"}) {
 		t.Fatalf("shell binds = %#v", got)
@@ -178,7 +181,7 @@ func TestEngineShellCreateOptionsUsesTCPDockerHost(t *testing.T) {
 	if len(opts.HostConfig.Binds) != 0 {
 		t.Fatalf("tcp shell should not bind mount a socket: %#v", opts.HostConfig.Binds)
 	}
-	if got := opts.Config.Env; fmt.Sprint(got) != fmt.Sprint([]string{"DOCKER_HOST=tcp://docker.internal:2375"}) {
+	if got := opts.Config.Env; fmt.Sprint(got) != fmt.Sprint([]string{"DOCKER_HOST=tcp://docker.internal:2375", "HOME=/root"}) {
 		t.Fatalf("tcp shell env = %#v", got)
 	}
 }

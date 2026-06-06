@@ -127,9 +127,10 @@ func engineShellCreateOptions(ep endpoint) dockerclient.ContainerCreateOptions {
 		Config: &container.Config{
 			Image:      engineShellImage,
 			Cmd:        []string{"/bin/sh", "-c", engineShellKeepalive},
-			Env:        env,
+			Env:        append(env, "HOME=/root"),
 			OpenStdin:  true,
 			Tty:        true,
+			WorkingDir: "/root",
 			Labels:     engineShellLabels(),
 			StopSignal: "SIGTERM",
 		},
