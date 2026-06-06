@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import projectionSrc from "./projection.ts?raw";
+import adminSrc from "./projection/admin.ts?raw";
+import agentSrc from "./projection/agent.ts?raw";
+import connectionsSrc from "./projection/connections.ts?raw";
+import coreSrc from "./projection/core.ts?raw";
+import indexSrc from "./projection/index.ts?raw";
+import marketSrc from "./projection/market.ts?raw";
+import panelsSrc from "./projection/panels.ts?raw";
+import pluginSrc from "./projection/plugin.ts?raw";
+import recordingSrc from "./projection/recording.ts?raw";
+import resourcesSrc from "./projection/resources.ts?raw";
+import schemaSrc from "./projection/schema.ts?raw";
 import { Layout } from "./projection";
 import type {
   CredentialSummary,
@@ -125,7 +135,20 @@ describe("projection contract", () => {
   });
 
   it("contains no server-only field names", () => {
-    const code = projectionSrc
+    const code = [
+      adminSrc,
+      agentSrc,
+      connectionsSrc,
+      coreSrc,
+      indexSrc,
+      marketSrc,
+      panelsSrc,
+      pluginSrc,
+      recordingSrc,
+      resourcesSrc,
+      schemaSrc,
+    ]
+      .join("\n")
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/\/\/.*$/gm, "");
     const forbidden = [
@@ -139,7 +162,7 @@ describe("projection contract", () => {
     for (const token of forbidden) {
       expect(
         code.includes(token),
-        `projection.ts must not leak "${token}"`,
+        `projection types must not leak "${token}"`,
       ).toBe(false);
     }
   });

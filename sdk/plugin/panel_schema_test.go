@@ -44,6 +44,28 @@ func TestPanelConfigSchemasCoverConfigJSONFields(t *testing.T) {
 	}
 }
 
+func TestPanelConfigSchemasCoverConfiglessPanelTypes(t *testing.T) {
+	schemas := plugin.PanelConfigSchemas()
+	for _, panel := range []plugin.PanelType{
+		plugin.PanelDocument,
+		plugin.PanelLogStream,
+		plugin.PanelEnroll,
+	} {
+		t.Run(string(panel), func(t *testing.T) {
+			schema, ok := schemas[panel]
+			if !ok {
+				t.Fatalf("missing schema for %q", panel)
+			}
+			if schema.Type != "object" {
+				t.Fatalf("schema type = %q, want object", schema.Type)
+			}
+			if len(schema.Properties) != 0 {
+				t.Fatalf("schema properties = %#v, want closed empty object", schema.Properties)
+			}
+		})
+	}
+}
+
 func TestNestedPanelConfigSchemasCoverSDKTypes(t *testing.T) {
 	schemas := plugin.PanelConfigSchemas()
 	assertArrayItemSchemaMatchesStruct(t, "metrics.stats", plugin.MetricStat{}, schemas[plugin.PanelMetrics].Properties["stats"])

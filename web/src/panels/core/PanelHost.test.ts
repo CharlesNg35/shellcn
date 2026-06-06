@@ -42,6 +42,10 @@ const testSchemas: PanelConfigSchemas = {
       zoom: { type: "boolean" },
     },
   },
+  document: {
+    type: "object",
+    properties: {},
+  },
   code_editor: {
     type: "object",
     properties: {
@@ -153,6 +157,21 @@ describe("PanelHost", () => {
     expect(w.text()).toContain(
       "config.cells[0].config.saveMethod must be one of POST, PUT, PATCH, DELETE.",
     );
+  });
+
+  it("rejects config on configless panels", () => {
+    const w = mount(SchemaProvider, {
+      slots: {
+        default: () =>
+          h(PanelHost, {
+            panel: "document",
+            connectionId: "c1",
+            config: { _private: true },
+          }),
+      },
+    });
+
+    expect(w.text()).toContain("config._private is not supported.");
   });
 
   it("passes runtime recording metadata outside plugin config validation", () => {

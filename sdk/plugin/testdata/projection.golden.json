@@ -393,6 +393,14 @@
         }
       }
     },
+    "document": {
+      "type": "object",
+      "properties": {}
+    },
+    "enroll": {
+      "type": "object",
+      "properties": {}
+    },
     "file_browser": {
       "type": "object",
       "properties": {
@@ -564,6 +572,10 @@
           "type": "string"
         }
       }
+    },
+    "log_stream": {
+      "type": "object",
+      "properties": {}
     },
     "metrics": {
       "type": "object",

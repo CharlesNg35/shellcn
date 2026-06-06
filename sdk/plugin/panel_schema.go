@@ -10,7 +10,7 @@ type PanelConfigProperty struct {
 
 type PanelConfigSchema struct {
 	Type       string                         `json:"type"`
-	Properties map[string]PanelConfigProperty `json:"properties,omitempty"`
+	Properties map[string]PanelConfigProperty `json:"properties"`
 	Required   []string                       `json:"required,omitempty"`
 }
 
@@ -60,6 +60,9 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("uploadFieldName", stringProp()),
 			),
 		},
+		PanelLogStream: {Type: "object", Properties: props()},
+		PanelDocument:  {Type: "object", Properties: props()},
+		PanelEnroll:    {Type: "object", Properties: props()},
 		PanelForm: {
 			Type: "object",
 			Properties: props(

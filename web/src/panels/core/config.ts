@@ -70,8 +70,9 @@ function validateObject(
   schema: Pick<PanelConfigSchema, "properties" | "required">,
   path: string,
 ): string | null {
+  const hasDeclaredProperties = schema.properties !== undefined;
   const properties = schema.properties ?? {};
-  if (!Object.keys(properties).length && !(schema.required ?? []).length) {
+  if (!hasDeclaredProperties && !(schema.required ?? []).length) {
     return null;
   }
   for (const key of schema.required ?? []) {
