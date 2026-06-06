@@ -34,6 +34,7 @@ import AiChatLauncher from "../components/AiChatLauncher.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { recordingForStream } from "../composables/useRecordingControl";
 import { providePanelConfigSchemas } from "../panels/core/config";
+import { providePanelRecordingResolver } from "../panels/core/recording";
 import { Layout } from "../types/projection";
 import type {
   Action,
@@ -82,9 +83,14 @@ async function onDelete(): Promise<void> {
 }
 
 const projection = ref<PluginProjection | null>(null);
+const connection = computed(() => conns.byId(props.id));
 providePanelConfigSchemas(
   computed(() => projection.value?.panelConfigSchemas ?? {}),
 );
+providePanelRecordingResolver((source) => {
+  if (!projection.value || !source) return null;
+  return recordingForStream(projection.value, connection.value, source.routeId);
+});
 
 provideNavigableKinds(
   computed(
@@ -96,7 +102,6 @@ const error = ref<string | null>(null);
 const sessionConnecting = ref(false);
 const showEnroll = ref(false);
 
-const connection = computed(() => conns.byId(props.id));
 const view = computed(() => ws.view(props.id));
 const workspaceUrl = useWorkspaceUrlSync({
   connectionId: () => props.id,
@@ -167,14 +172,7 @@ const activeTab = computed(() =>
 );
 
 function tabConfig(tab: TabDef): Record<string, unknown> {
-  const base = tab.config ?? {};
-  if (!projection.value || !tab.source) return base;
-  const rec = recordingForStream(
-    projection.value,
-    connection.value,
-    tab.source.routeId,
-  );
-  return rec ? { ...base, _recording: rec } : base;
+  return tab.config ?? {};
 }
 
 const scopeFilters = computed(() => projection.value?.scope ?? []);

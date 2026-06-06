@@ -11,12 +11,16 @@ const props = withDefaults(
     connectionId: string;
     cells: DashboardCell[];
     actions?: Action[];
-    // Optional config resolver (e.g. to overlay recording metadata); defaults to
-    // the cell's own config.
+    // Optional config resolver for connection-level dashboard tabs; defaults to
+    // the cell's own manifest config.
     resolveConfig?: (cell: DashboardCell) => Record<string, unknown>;
     emptyText?: string;
   }>(),
-  { actions: () => [], resolveConfig: undefined, emptyText: "No panels." },
+  {
+    actions: () => [],
+    resolveConfig: undefined,
+    emptyText: "No panels.",
+  },
 );
 
 const emit = defineEmits<{

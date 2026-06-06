@@ -9,7 +9,6 @@ import { useStream } from "../../composables/useStream";
 import { useTheme } from "../../composables/useTheme";
 import AppIcon from "../../components/AppIcon.vue";
 import RecordingControls from "../../components/recordings/RecordingControls.vue";
-import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import type { PanelProps } from "../core/types";
 import type { TerminalPanelConfig } from "../../types/projection";
 import PanelLoader from "../../components/PanelLoader.vue";
@@ -80,9 +79,7 @@ const terminalSurface = computed(() =>
     : "bg-surface-0 text-surface-800",
 );
 
-const recording = computed(
-  () => (props.config?._recording as RecordingDescriptor | undefined) ?? null,
-);
+const recording = computed(() => props.recording ?? null);
 const showRecording = computed(
   () => recording.value && recording.value.policy !== "disabled",
 );

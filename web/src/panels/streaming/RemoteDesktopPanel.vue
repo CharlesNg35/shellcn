@@ -5,7 +5,6 @@ import {
   useDesktopRecorder,
   desktopRecordingSupported,
 } from "../../composables/useDesktopRecorder";
-import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import AppIcon from "../../components/AppIcon.vue";
 import PanelLoader from "../../components/PanelLoader.vue";
 import type { RemoteDesktopPanelConfig } from "../../types/projection";
@@ -31,9 +30,7 @@ let activeRun = 0;
 const remoteConfig = computed(
   () => props.config as Partial<RemoteDesktopPanelConfig> | undefined,
 );
-const descriptor = computed(
-  () => (props.config?._recording as RecordingDescriptor | undefined) ?? null,
-);
+const descriptor = computed(() => props.recording ?? null);
 const recordable = computed(
   () => descriptor.value && descriptor.value.policy !== "disabled",
 );

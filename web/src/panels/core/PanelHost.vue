@@ -4,6 +4,7 @@ import { resolvePanel } from "./registry";
 import FallbackPanel from "./FallbackPanel.vue";
 import PanelError from "../shared/PanelError.vue";
 import { panelConfigError, usePanelConfigSchemas } from "./config";
+import { usePanelRecordingResolver } from "./recording";
 import { useScopeStore } from "../../stores/scope";
 import type {
   Action,
@@ -12,12 +13,14 @@ import type {
   ResourceRef,
   Row,
 } from "../../types/projection";
+import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 
 const props = defineProps<{
   panel: PanelType;
   connectionId: string;
   source?: DataSource;
   config?: Record<string, unknown>;
+  recording?: RecordingDescriptor | null;
   resource?: ResourceRef | null;
   actions?: Action[];
 }>();
@@ -30,6 +33,12 @@ const component = computed(() => resolvePanel(props.panel));
 const configSchemas = usePanelConfigSchemas();
 const configError = computed(() =>
   panelConfigError(props.panel, props.config, configSchemas.value),
+);
+const recordingResolver = usePanelRecordingResolver();
+const panelRecording = computed(() =>
+  props.recording === undefined
+    ? recordingResolver(props.source)
+    : props.recording,
 );
 const scope = useScopeStore();
 const panelKey = computed(() =>
@@ -60,6 +69,7 @@ function onSelect(row: Row): void {
     :connection-id="connectionId"
     :source="source"
     :config="config"
+    :recording="panelRecording"
     :resource="resource"
     :actions="actions"
     @action-done="onActionDone"
