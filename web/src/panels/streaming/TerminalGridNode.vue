@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Splitter from "primevue/splitter";
+import type { SplitterResizeEndEvent } from "primevue/splitter";
 import SplitterPanel from "primevue/splitterpanel";
 import type { DataSource, ResourceRef } from "../../types/projection";
 import TerminalPanel from "./TerminalPanel.vue";
@@ -12,53 +13,86 @@ export type TerminalGridLayoutNode =
       type: "split";
       id: string;
       direction: TerminalGridDirection;
-      first: TerminalGridLayoutNode;
-      second: TerminalGridLayoutNode;
+      children: TerminalGridLayoutNode[];
     };
 
 defineOptions({ name: "TerminalGridNode" });
 
-defineProps<{
+const props = defineProps<{
   node: TerminalGridLayoutNode;
   activePaneId: string;
   connectionId: string;
   source: DataSource;
   resource?: ResourceRef | null;
   terminalConfig: Record<string, unknown>;
+  splitSizes: Record<string, number[]>;
 }>();
 
 const emit = defineEmits<{
   focus: [paneId: string];
+  resize: [splitId: string, sizes: number[]];
 }>();
+
+function evenSizes(count: number): number[] {
+  const size = Number((100 / count).toFixed(4));
+  const sizes = Array.from({ length: count }, () => size);
+  sizes[count - 1] = Number((100 - size * (count - 1)).toFixed(4));
+  return sizes;
+}
+
+function savedSizes(splitId: string, count: number): number[] {
+  const sizes = props.splitSizes[splitId];
+  if (!sizes || sizes.length !== count) return evenSizes(count);
+  const total = sizes.reduce((sum, size) => sum + size, 0);
+  if (total <= 0) return evenSizes(count);
+  return sizes.map((size) => Number(((size / total) * 100).toFixed(4)));
+}
+
+function panelSize(splitId: string, index: number, count: number): number {
+  return savedSizes(splitId, count)[index] ?? 100 / count;
+}
+
+function resizeSizes(event: SplitterResizeEndEvent, count: number): number[] {
+  return event.sizes.length === count ? event.sizes : evenSizes(count);
+}
+
+function structureKey(node: TerminalGridLayoutNode): string {
+  if (node.type === "leaf") return node.id;
+  return `${node.id}:${node.children.map((child) => structureKey(child)).join("|")}`;
+}
 </script>
 
 <template>
   <Splitter
     v-if="node.type === 'split'"
+    :key="structureKey(node)"
     class="h-full min-h-0 min-w-0"
     :data-terminal-grid-split="node.direction"
     :layout="node.direction === 'vertical' ? 'vertical' : 'horizontal'"
+    @resizeend="
+      emit('resize', node.id, resizeSizes($event, node.children.length))
+    "
   >
-    <SplitterPanel :size="50" :min-size="15" class="min-h-0 min-w-0">
+    <SplitterPanel
+      v-for="(child, index) in node.children"
+      :key="child.id"
+      :size="panelSize(node.id, index, node.children.length)"
+      :min-size="12"
+      class="min-h-0 min-w-0"
+      :data-terminal-grid-panel-size="
+        panelSize(node.id, index, node.children.length)
+      "
+    >
       <TerminalGridNode
-        :node="node.first"
+        :node="child"
         :active-pane-id="activePaneId"
         :connection-id="connectionId"
         :source="source"
         :resource="resource"
         :terminal-config="terminalConfig"
+        :split-sizes="splitSizes"
         @focus="emit('focus', $event)"
-      />
-    </SplitterPanel>
-    <SplitterPanel :size="50" :min-size="15" class="min-h-0 min-w-0">
-      <TerminalGridNode
-        :node="node.second"
-        :active-pane-id="activePaneId"
-        :connection-id="connectionId"
-        :source="source"
-        :resource="resource"
-        :terminal-config="terminalConfig"
-        @focus="emit('focus', $event)"
+        @resize="(splitId, sizes) => emit('resize', splitId, sizes)"
       />
     </SplitterPanel>
   </Splitter>

@@ -3,6 +3,7 @@ import { createPinia } from "pinia";
 import PrimeVue from "primevue/config";
 import ToastService from "primevue/toastservice";
 import ConfirmationService from "primevue/confirmationservice";
+import Tooltip from "primevue/tooltip";
 import App from "./App.vue";
 import router from "./router";
 import { primeVuePassthrough } from "./primevue/preset";
@@ -19,4 +20,5 @@ createApp(App)
   .use(PrimeVue, { unstyled: true, pt: primeVuePassthrough })
   .use(ToastService)
   .use(ConfirmationService)
+  .directive("tooltip", Tooltip)
   .mount("#app");

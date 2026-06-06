@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Button from "primevue/button";
+import Tooltip from "primevue/tooltip";
 import AppIcon from "../../components/AppIcon.vue";
 import PanelError from "../shared/PanelError.vue";
 import type { PanelProps } from "../core/types";
@@ -17,6 +18,7 @@ import TerminalGridNode, {
 
 const props = defineProps<PanelProps>();
 const streams = useStreamChannelsStore();
+const vTooltip = Tooltip;
 
 const cfg = computed(
   () => (props.config as TerminalGridPanelConfig | undefined) ?? {},
@@ -40,6 +42,7 @@ const terminalConfig = computed<Record<string, unknown> & TerminalPanelConfig>(
 let seq = 0;
 const layout = ref<TerminalGridLayoutNode>(leaf());
 const activePaneId = ref(layout.value.id);
+const splitSizes = ref<Record<string, number[]>>({});
 const root = ref<HTMLElement | null>(null);
 const initialized = ref(false);
 
@@ -50,7 +53,17 @@ function leaf(): TerminalGridLayoutNode {
 
 function paneIds(node: TerminalGridLayoutNode = layout.value): string[] {
   if (node.type === "leaf") return [node.id];
-  return [...paneIds(node.first), ...paneIds(node.second)];
+  return node.children.flatMap((child) => paneIds(child));
+}
+
+function splitSpecs(
+  node: TerminalGridLayoutNode = layout.value,
+): Record<string, number> {
+  if (node.type === "leaf") return {};
+  return Object.assign(
+    { [node.id]: node.children.length },
+    ...node.children.map((child) => splitSpecs(child)),
+  );
 }
 
 const paneCount = computed(() => paneIds().length);
@@ -65,16 +78,11 @@ const activePaneLabel = computed(
   () => paneTitles.value[activePaneId.value] ?? "Terminal",
 );
 const recordingPolicy = computed(() => props.recording?.policy ?? "disabled");
-const connectionRecordingEnabled = computed(
-  () => recordingPolicy.value !== "disabled",
-);
 const blocksRecording = computed(() => recordingPolicy.value === "auto");
-const showsRecordingNotice = computed(
-  () =>
-    connectionRecordingEnabled.value &&
-    recordingPolicy.value === "manual" &&
-    paneCount.value > 1,
-);
+
+function buttonTooltip(value: string): { value: string; showDelay: number } {
+  return { value, showDelay: 300 };
+}
 
 function splitTree(
   node: TerminalGridLayoutNode,
@@ -89,15 +97,26 @@ function splitTree(
       type: "split",
       id: `split-${next.id}`,
       direction,
-      first: node,
-      second: next,
+      children: [node, next],
     };
   }
-  return {
+  return normalizeSplit({
     ...node,
-    first: splitTree(node.first, paneId, direction),
-    second: splitTree(node.second, paneId, direction),
-  };
+    children: node.children.map((child) => splitTree(child, paneId, direction)),
+  });
+}
+
+function normalizeSplit(node: TerminalGridLayoutNode): TerminalGridLayoutNode {
+  if (node.type === "leaf") return node;
+  const children = node.children
+    .map((child) => normalizeSplit(child))
+    .flatMap((child) =>
+      child.type === "split" && child.direction === node.direction
+        ? child.children
+        : [child],
+    );
+  if (children.length === 1) return children[0];
+  return { ...node, children };
 }
 
 function removeLeaf(
@@ -105,11 +124,13 @@ function removeLeaf(
   paneId: string,
 ): TerminalGridLayoutNode | null {
   if (node.type === "leaf") return node.id === paneId ? null : node;
-  const first = removeLeaf(node.first, paneId);
-  const second = removeLeaf(node.second, paneId);
-  if (!first) return second;
-  if (!second) return first;
-  return { ...node, first, second };
+  const children = node.children.flatMap((child) => {
+    const next = removeLeaf(child, paneId);
+    return next ? [next] : [];
+  });
+  if (children.length === 0) return null;
+  if (children.length === 1) return children[0];
+  return normalizeSplit({ ...node, children });
 }
 
 function paneDirection(paneId: string): TerminalGridDirection {
@@ -162,6 +183,7 @@ function closePane(paneId = activePaneId.value): void {
 
 function resetLayout(): void {
   if (initialized.value) closeAllPaneStreams();
+  splitSizes.value = {};
   seq = 0;
   layout.value = leaf();
   activePaneId.value = layout.value.id;
@@ -170,12 +192,29 @@ function resetLayout(): void {
   }
 }
 
+function onResize(splitId: string, sizes: number[]): void {
+  splitSizes.value = { ...splitSizes.value, [splitId]: sizes };
+}
+
 onMounted(() => {
   resetLayout();
   initialized.value = true;
 });
 
 onBeforeUnmount(closeAllPaneStreams);
+
+watch(
+  layout,
+  () => {
+    const specs = splitSpecs();
+    splitSizes.value = Object.fromEntries(
+      Object.entries(splitSizes.value).filter(
+        ([splitId, sizes]) => specs[splitId] === sizes.length,
+      ),
+    );
+  },
+  { deep: true },
+);
 </script>
 
 <template>
@@ -186,85 +225,99 @@ onBeforeUnmount(closeAllPaneStreams);
   />
   <div v-else ref="root" class="flex h-full min-h-0 flex-col bg-surface-950">
     <div
-      class="flex min-h-10 items-center gap-2 border-b border-surface-200 bg-surface-0 px-3 py-1.5 dark:border-surface-800 dark:bg-surface-950"
+      class="flex min-h-8 items-center gap-2 border-b border-surface-200 bg-surface-0 px-2 py-0.5 dark:border-surface-800 dark:bg-surface-950"
     >
-      <div class="min-w-0 flex-1">
-        <div class="truncate text-sm font-medium">{{ activePaneLabel }}</div>
-        <div class="text-xs text-surface-500 dark:text-surface-400">
+      <div class="flex min-w-0 flex-1 items-center gap-2">
+        <div class="truncate text-xs font-medium">{{ activePaneLabel }}</div>
+        <div class="shrink-0 text-xs text-surface-500 dark:text-surface-400">
           {{ paneCount }} / {{ maxPanes }} panes
         </div>
       </div>
-      <span
-        v-if="showsRecordingNotice"
-        class="hidden text-xs text-amber-600 sm:inline dark:text-amber-400"
-      >
-        Recording disabled for split view
-      </span>
-      <Button
-        type="button"
-        size="small"
-        severity="secondary"
-        :disabled="!canSplit"
-        aria-label="Split active pane right"
-        @click="splitPane(activePaneId, 'horizontal')"
-      >
-        <AppIcon
-          :icon="{ type: 'lucide', value: 'separator-vertical' }"
-          :size="14"
-        />
-        Split right
-      </Button>
-      <Button
-        type="button"
-        size="small"
-        severity="secondary"
-        :disabled="!canSplit"
-        aria-label="Split active pane down"
-        @click="splitPane(activePaneId, 'vertical')"
-      >
-        <AppIcon
-          :icon="{ type: 'lucide', value: 'separator-horizontal' }"
-          :size="14"
-        />
-        Split down
-      </Button>
-      <Button
-        type="button"
-        size="small"
-        severity="secondary"
-        :disabled="!canSplit"
-        aria-label="Auto split active pane"
-        @click="splitPane(activePaneId, 'auto')"
-      >
-        <AppIcon
-          :icon="{ type: 'lucide', value: 'layout-dashboard' }"
-          :size="14"
-        />
-        Auto
-      </Button>
-      <Button
-        type="button"
-        size="small"
-        severity="secondary"
-        outlined
-        aria-label="Close active pane"
-        :disabled="!canClose"
-        @click="closePane(activePaneId)"
-      >
-        <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="14" />
-        Close
-      </Button>
-      <Button
-        type="button"
-        size="small"
-        severity="secondary"
-        text
-        aria-label="Reset terminal workspace"
-        @click="resetLayout"
-      >
-        <AppIcon :icon="{ type: 'lucide', value: 'rotate-ccw' }" :size="14" />
-        Reset
-      </Button>
+      <div class="flex shrink-0 items-center gap-0.5">
+        <Button
+          v-tooltip.bottom="buttonTooltip('Split right')"
+          type="button"
+          size="small"
+          severity="secondary"
+          text
+          rounded
+          class="h-7 w-7 px-0 py-0"
+          :disabled="!canSplit"
+          aria-label="Split active pane right"
+          @click="splitPane(activePaneId, 'horizontal')"
+        >
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'separator-vertical' }"
+            :size="14"
+          />
+          <span class="sr-only">Split right</span>
+        </Button>
+        <Button
+          v-tooltip.bottom="buttonTooltip('Split down')"
+          type="button"
+          size="small"
+          severity="secondary"
+          text
+          rounded
+          class="h-7 w-7 px-0 py-0"
+          :disabled="!canSplit"
+          aria-label="Split active pane down"
+          @click="splitPane(activePaneId, 'vertical')"
+        >
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'separator-horizontal' }"
+            :size="14"
+          />
+          <span class="sr-only">Split down</span>
+        </Button>
+        <Button
+          v-tooltip.bottom="buttonTooltip('Auto split')"
+          type="button"
+          size="small"
+          severity="secondary"
+          text
+          rounded
+          class="h-7 w-7 px-0 py-0"
+          :disabled="!canSplit"
+          aria-label="Auto split active pane"
+          @click="splitPane(activePaneId, 'auto')"
+        >
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'layout-dashboard' }"
+            :size="14"
+          />
+          <span class="sr-only">Auto split</span>
+        </Button>
+        <Button
+          v-tooltip.bottom="buttonTooltip('Close pane')"
+          type="button"
+          size="small"
+          severity="secondary"
+          text
+          rounded
+          class="h-7 w-7 px-0 py-0"
+          aria-label="Close active pane"
+          :disabled="!canClose"
+          @click="closePane(activePaneId)"
+        >
+          <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="14" />
+          <span class="sr-only">Close pane</span>
+        </Button>
+        <Button
+          v-tooltip.bottom="buttonTooltip('Reset layout')"
+          type="button"
+          size="small"
+          severity="secondary"
+          text
+          rounded
+          class="h-7 w-7 px-0 py-0"
+          aria-label="Reset terminal workspace"
+          @click="resetLayout"
+        >
+          <AppIcon :icon="{ type: 'lucide', value: 'rotate-ccw' }" :size="14" />
+          <span class="sr-only">Reset layout</span>
+        </Button>
+      </div>
     </div>
 
     <div class="min-h-0 flex-1 bg-surface-200 p-1 dark:bg-surface-900">
@@ -276,7 +329,9 @@ onBeforeUnmount(closeAllPaneStreams);
         :source="source"
         :resource="resource"
         :terminal-config="terminalConfig"
+        :split-sizes="splitSizes"
         @focus="activePaneId = $event"
+        @resize="onResize"
       />
     </div>
   </div>

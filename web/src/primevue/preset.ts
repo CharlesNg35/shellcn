@@ -396,6 +396,14 @@ export const primeVuePassthrough = {
     root: "min-h-0 overflow-hidden",
   },
 
+  directives: {
+    tooltip: {
+      root: "pointer-events-none absolute z-[1100] max-w-xs",
+      text: "rounded-md bg-surface-950 px-2 py-1 text-xs font-medium text-surface-0 shadow-lg ring-1 ring-surface-0/10 dark:bg-surface-100 dark:text-surface-950 dark:ring-surface-950/10",
+      arrow: "absolute h-2 w-2 rotate-45 bg-surface-950 dark:bg-surface-100",
+    },
+  },
+
   slider: {
     root: "relative h-5 w-full before:absolute before:left-0 before:top-1/2 before:h-1 before:w-full before:-translate-y-1/2 before:rounded-full before:bg-surface-200 dark:before:bg-surface-700",
     range: "absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary-500",

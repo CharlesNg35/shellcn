@@ -54,6 +54,7 @@ describe("primeVuePassthrough", () => {
     ]) {
       expect(primeVuePassthrough).toHaveProperty(key);
     }
+    expect(primeVuePassthrough.directives).toHaveProperty("tooltip");
   });
 
   it("keeps tab navigation visible while tab panels scroll", () => {
@@ -112,6 +113,16 @@ describe("primeVuePassthrough", () => {
     expect(root).toContain("min-w-0");
     expect(primeVuePassthrough.button.label).toContain("min-w-0");
     expect(primeVuePassthrough.button.label).toContain("truncate");
+  });
+
+  it("styles PrimeVue tooltip directive overlays", () => {
+    expect(primeVuePassthrough.directives.tooltip.root).toContain("absolute");
+    expect(primeVuePassthrough.directives.tooltip.root).toContain("z-[1100]");
+    expect(primeVuePassthrough.directives.tooltip.text).toContain(
+      "bg-surface-950",
+    );
+    expect(primeVuePassthrough.directives.tooltip.text).toContain("text-xs");
+    expect(primeVuePassthrough.directives.tooltip.arrow).toContain("rotate-45");
   });
 
   it("merges conflicting button classes so size props take effect", () => {

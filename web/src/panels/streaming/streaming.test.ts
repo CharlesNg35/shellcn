@@ -302,6 +302,87 @@ describe("streaming stub panels", () => {
     tall.unmount();
   });
 
+  it("keeps repeated same-axis splits evenly distributed", async () => {
+    const horizontal = mount(TerminalGridPanel, {
+      props: { ...props, config: { maxPanes: 4 } },
+    });
+    await flushPromises();
+
+    const splitRight = horizontal
+      .findAll("button")
+      .find(
+        (button) =>
+          button.attributes("aria-label") === "Split active pane right",
+      )!;
+
+    await splitRight.trigger("click");
+    await flushPromises();
+    await splitRight.trigger("click");
+    await flushPromises();
+
+    expect(horizontal.findAll("[data-terminal-grid-pane]")).toHaveLength(3);
+    expect(
+      horizontal
+        .findAll("[data-terminal-grid-panel-size]")
+        .map((panel) => panel.attributes("data-terminal-grid-panel-size")),
+    ).toEqual(["33.3333", "33.3333", "33.3334"]);
+    horizontal.unmount();
+
+    const vertical = mount(TerminalGridPanel, {
+      props: { ...props, config: { maxPanes: 4 } },
+    });
+    await flushPromises();
+
+    const splitDown = vertical
+      .findAll("button")
+      .find(
+        (button) =>
+          button.attributes("aria-label") === "Split active pane down",
+      )!;
+
+    await splitDown.trigger("click");
+    await flushPromises();
+    await splitDown.trigger("click");
+    await flushPromises();
+
+    expect(vertical.findAll("[data-terminal-grid-pane]")).toHaveLength(3);
+    expect(
+      vertical
+        .findAll("[data-terminal-grid-panel-size]")
+        .map((panel) => panel.attributes("data-terminal-grid-panel-size")),
+    ).toEqual(["33.3333", "33.3333", "33.3334"]);
+    vertical.unmount();
+  });
+
+  it("preserves manually resized split sizes", async () => {
+    const w = mount(TerminalGridPanel, {
+      props: { ...props, config: { maxPanes: 2 } },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find(
+        (button) =>
+          button.attributes("aria-label") === "Split active pane right",
+      )!
+      .trigger("click");
+    await flushPromises();
+
+    w.findComponent({ name: "Splitter" }).vm.$emit("resizeend", {
+      originalEvent: new Event("mouseup"),
+      sizes: [30, 70],
+    });
+    await flushPromises();
+
+    expect(
+      w
+        .findAll("[data-terminal-grid-panel-size]")
+        .map((panel) => panel.attributes("data-terminal-grid-panel-size")),
+    ).toEqual(["30", "70"]);
+    w.unmount();
+  });
+
   it("does not show the split recording notice when connection recording is disabled", async () => {
     const w = mount(TerminalGridPanel, {
       props: {
@@ -324,6 +405,7 @@ describe("streaming stub panels", () => {
 
     expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(2);
     expect(w.text()).not.toContain("Recording disabled for split view");
+    expect(w.text()).not.toContain("Recording off");
     w.unmount();
   });
 
@@ -347,7 +429,8 @@ describe("streaming stub panels", () => {
       .trigger("click");
     await flushPromises();
 
-    expect(w.text()).toContain("Recording disabled for split view");
+    expect(w.text()).not.toContain("Recording disabled for split view");
+    expect(w.text()).not.toContain("Recording off");
     expect(w.text()).not.toContain("Start recording");
     w.unmount();
   });
