@@ -88,9 +88,9 @@ func main() {
 		defer func() { _ = rotator.Close() }()
 		logOut = rotator
 	}
-	format := "json"
-	if dev {
-		format = "text"
+	format := telemetry.LogFormatJSON
+	if dev && cfg.Server.LogFile == "" {
+		format = telemetry.LogFormatConsole
 	}
 	logger := telemetry.NewLogger(telemetry.LogConfig{Level: cfg.SlogLevel(), Format: format, Output: logOut})
 	slog.SetDefault(logger)

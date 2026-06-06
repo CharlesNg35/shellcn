@@ -8,17 +8,27 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
+
+	"github.com/lmittmann/tint"
+	"golang.org/x/term"
 )
 
-// RequestIDHeader carries a correlation id across the request boundary.
-const RequestIDHeader = "X-Request-Id"
+const (
+	// RequestIDHeader carries a correlation id across the request boundary.
+	RequestIDHeader = "X-Request-Id"
+
+	LogFormatConsole = "console"
+	LogFormatJSON    = "json"
+	LogFormatText    = "text"
+)
 
 type ctxKey struct{}
 
 // LogConfig configures the structured logger.
 type LogConfig struct {
 	Level  slog.Level
-	Format string    // "json" or "text"
+	Format string    // "console", "json", or "text"
 	Output io.Writer // defaults to os.Stdout
 }
 
@@ -29,14 +39,43 @@ func NewLogger(cfg LogConfig) *slog.Logger {
 	if out == nil {
 		out = os.Stdout
 	}
-	opts := &slog.HandlerOptions{Level: cfg.Level}
 	var h slog.Handler
-	if cfg.Format == "json" {
+	switch cfg.Format {
+	case LogFormatJSON:
+		opts := &slog.HandlerOptions{Level: cfg.Level}
 		h = slog.NewJSONHandler(out, opts)
-	} else {
+	case LogFormatConsole:
+		h = tint.NewHandler(out, &tint.Options{
+			Level:       cfg.Level,
+			TimeFormat:  time.TimeOnly,
+			NoColor:     !shouldColor(out),
+			ReplaceAttr: consoleAttr,
+		})
+	default:
+		opts := &slog.HandlerOptions{Level: cfg.Level}
 		h = slog.NewTextHandler(out, opts)
 	}
 	return slog.New(&contextHandler{Handler: h})
+}
+
+func consoleAttr(_ []string, a slog.Attr) slog.Attr {
+	if a.Value.Kind() == slog.KindAny {
+		if _, ok := a.Value.Any().(error); ok {
+			return tint.Attr(9, a)
+		}
+	}
+	return a
+}
+
+func shouldColor(out io.Writer) bool {
+	if _, disabled := os.LookupEnv("NO_COLOR"); disabled {
+		return false
+	}
+	if force := os.Getenv("FORCE_COLOR"); force != "" && force != "0" {
+		return true
+	}
+	f, ok := out.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
 }
 
 // contextHandler adds the request correlation id to every record under a request.

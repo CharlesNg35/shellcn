@@ -1845,7 +1845,8 @@ from the original stream route.
 
 The gateway itself must be observable. Behind interfaces from day one:
 
-- `log/slog` structured logs.
+- `log/slog` structured logs: JSON for production/file sinks; colorized console
+  formatting only for interactive local terminal output.
 - Prometheus metrics: sessions/channels open, action latency, WS connections,
   failed authorizations, secret-access counts.
 - OpenTelemetry traces (optional, additive).

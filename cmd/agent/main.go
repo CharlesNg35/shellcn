@@ -29,6 +29,7 @@ import (
 	"github.com/hashicorp/yamux"
 
 	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/telemetry"
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/hostmonitor"
 )
@@ -54,7 +55,7 @@ func main() {
 		return
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	logger := telemetry.NewLogger(telemetry.LogConfig{Format: telemetry.LogFormatConsole, Output: os.Stderr})
 
 	if connectURL == "" || token == "" {
 		logger.Error("missing required config", "connect", connectURL != "", "token", token != "")
