@@ -98,6 +98,45 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	if createRoute == nil || createRoute.Input == nil || createRoute.Risk != plugin.RiskWrite {
 		t.Fatalf("create container route mismatch: %+v", createRoute)
 	}
+	if !contains(m.HeaderActions, "docker.engine.shell") {
+		t.Fatalf("header actions = %#v, want docker shell", m.HeaderActions)
+	}
+	var shellAction *plugin.Action
+	for i := range m.Actions {
+		if m.Actions[i].ID == "docker.engine.shell" {
+			shellAction = &m.Actions[i]
+			break
+		}
+	}
+	if shellAction == nil || shellAction.Open != plugin.OpenDock || shellAction.Panel != plugin.PanelTerminal || !shellAction.Confirm {
+		t.Fatalf("docker shell action mismatch: %+v", shellAction)
+	}
+	var shellStream *plugin.Stream
+	for i := range m.Streams {
+		if m.Streams[i].ID == "docker.engine.shell" {
+			shellStream = &m.Streams[i]
+			break
+		}
+	}
+	if shellStream == nil || shellStream.Kind != plugin.StreamTerminal || shellStream.RouteID != "docker.engine.shell" {
+		t.Fatalf("docker shell stream mismatch: %+v", shellStream)
+	}
+	var shellRoute *plugin.Route
+	for i := range routes {
+		if routes[i].ID == "docker.engine.shell" {
+			shellRoute = &routes[i]
+			break
+		}
+	}
+	if shellRoute == nil || shellRoute.Permission != "docker.engine.shell" || shellRoute.Risk != plugin.RiskPrivileged || shellRoute.Method != plugin.MethodWS {
+		t.Fatalf("docker shell route mismatch: %+v", shellRoute)
+	}
+	if shellRoute.Permission == "docker.containers.exec" {
+		t.Fatal("docker engine shell must not reuse the container exec permission")
+	}
+	if len(m.Recording) != 1 || !contains(m.Recording[0].StreamIDs, "docker.engine.shell") {
+		t.Fatalf("recording streams = %#v, want docker.engine.shell", m.Recording)
+	}
 	for i := range routes {
 		if routes[i].ID == "docker.api.execute" {
 			t.Fatal("docker should not expose a raw API execute route")

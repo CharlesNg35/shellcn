@@ -71,19 +71,21 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				},
 			},
 		},
-		Layout:    plugin.LayoutSidebarTree,
-		Tree:      tree(),
-		Resources: resources(),
-		Actions:   actions(),
+		Layout:        plugin.LayoutSidebarTree,
+		HeaderActions: headerActionIDs(),
+		Tree:          tree(),
+		Resources:     resources(),
+		Actions:       actions(),
 		Streams: []plugin.Stream{
 			{ID: "docker.overview.metrics", Kind: plugin.StreamMetrics, RouteID: "docker.overview.metrics"},
+			{ID: "docker.engine.shell", Kind: plugin.StreamTerminal, RouteID: "docker.engine.shell"},
 			{ID: "docker.container.logs", Kind: plugin.StreamLogs, RouteID: "docker.container.logs"},
 			{ID: "docker.container.exec", Kind: plugin.StreamTerminal, RouteID: "docker.container.exec"},
 			{ID: "docker.events.watch", Kind: plugin.StreamLogs, RouteID: "docker.events.watch"},
 		},
 		Recording: []plugin.RecordingCapability{{
 			Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2},
-			StreamIDs: []string{"docker.container.exec"}, Authoritative: true,
+			StreamIDs: []string{"docker.engine.shell", "docker.container.exec"}, Authoritative: true,
 		}},
 	}
 }
@@ -129,6 +131,10 @@ func tree() []plugin.TreeGroup {
 		{Key: "volumes", Label: "Volumes", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "database"}, ResourceKind: "volume"},
 		{Key: "networks", Label: "Networks", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "globe"}, ResourceKind: "network"},
 	}
+}
+
+func headerActionIDs() []string {
+	return []string{"docker.engine.shell"}
 }
 
 func resources() []plugin.ResourceType {
@@ -312,6 +318,7 @@ func composeResource() plugin.ResourceType {
 
 func actions() []plugin.Action {
 	return []plugin.Action{
+		{ID: "docker.engine.shell", Label: "Docker Shell", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"}, RouteID: "docker.engine.shell", Open: plugin.OpenDock, Panel: plugin.PanelTerminal, Params: map[string]string{"cols": "80", "rows": "24"}, Config: plugin.TerminalConfig{Zoom: true, Search: true}, Confirm: true, ConfirmText: "Open a Docker shell with access to the Docker daemon?", IconOnly: true},
 		{ID: "docker.container.create", Label: "New container", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "plus"}, RouteID: "docker.container.create"},
 		{ID: "docker.container.open", Label: "Open", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "external-link"}, RouteID: "docker.container.open", Open: plugin.OpenURL, Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: dockerengine.WhenState("running")},
 		{ID: "docker.container.start", Label: "Start", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"}, RouteID: "docker.container.start", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: dockerengine.WhenState("created", "exited", "dead"), Group: "Lifecycle"},

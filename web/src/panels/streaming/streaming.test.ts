@@ -151,16 +151,22 @@ describe("streaming stub panels", () => {
   }
 
   it("reuses the open channel on remount (stream survives navigation away/back)", async () => {
-    const baseline = streamSockets().length;
-    const first = mount(TerminalPanel, { props });
+    const pinia = createPinia();
+    const first = mount(TerminalPanel, {
+      props,
+      global: { plugins: [pinia] },
+    });
     await flushPromises();
-    expect(streamSockets()).toHaveLength(baseline + 1);
+    expect(streamSockets()).toHaveLength(1);
     streamSockets().at(-1)!.emit("open");
     first.unmount(); // navigate away — channel must persist
 
-    const second = mount(TerminalPanel, { props });
+    const second = mount(TerminalPanel, {
+      props,
+      global: { plugins: [pinia] },
+    });
     await flushPromises();
-    expect(streamSockets()).toHaveLength(baseline + 1); // no new socket — resumed
+    expect(streamSockets()).toHaveLength(1); // no new socket — resumed
     second.unmount();
   });
 
