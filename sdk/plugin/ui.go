@@ -286,6 +286,8 @@ type GraphConfig struct {
 	// ExpandRouteID makes nodes expandable through a read route.
 	ExpandRouteID string `json:"expandRouteId,omitempty"`
 	ExpandParam   string `json:"expandParam,omitempty"`
+	// Exportable controls client-side graph image export. Nil means enabled.
+	Exportable *bool `json:"exportable,omitempty"`
 }
 
 type TraceConfig struct {

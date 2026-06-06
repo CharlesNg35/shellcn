@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
-import { VueFlow, type Node } from "@vue-flow/core";
+import Menu from "primevue/menu";
+import type { MenuItem } from "primevue/menuitem";
+import { VueFlow, type Node as FlowNode } from "@vue-flow/core";
 import { Background } from "@vue-flow/background";
 import { Controls } from "@vue-flow/controls";
 import { MiniMap } from "@vue-flow/minimap";
+import { toJpeg, toPng, toSvg } from "html-to-image";
 import "@vue-flow/core/dist/style.css";
 import "@vue-flow/core/dist/theme-default.css";
 import "@vue-flow/controls/dist/style.css";
@@ -12,6 +15,7 @@ import "@vue-flow/minimap/dist/style.css";
 import { fetchDoc } from "../../api/dataSource";
 import type { GraphPanelConfig } from "../../types/projection";
 import AppIcon from "../../components/AppIcon.vue";
+import { useNotify } from "../../composables/useNotify";
 import PanelLoader from "../../components/PanelLoader.vue";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
@@ -27,9 +31,13 @@ import {
 const MAX_FILTER_CHIPS = 12;
 
 const props = defineProps<PanelProps>();
+const notify = useNotify();
 
 const loading = ref(false);
 const expanding = ref(false);
+const exporting = ref(false);
+const graphFrame = ref<HTMLElement | null>(null);
+const exportMenu = ref<InstanceType<typeof Menu> | null>(null);
 const error = ref<string | null>(null);
 const payload = ref<GraphPayload>({});
 const selectedId = ref<string | null>(null);
@@ -74,6 +82,19 @@ const properties = computed(() =>
 );
 
 const canExpand = computed(() => Boolean(graphConfig.value?.expandRouteId));
+const canExport = computed(
+  () =>
+    (graphConfig.value?.exportable ?? true) &&
+    !loading.value &&
+    !error.value &&
+    graph.value.nodes.length > 0,
+);
+
+const exportItems = computed<MenuItem[]>(() => [
+  { label: "PNG", command: () => void exportGraph("png") },
+  { label: "JPEG", command: () => void exportGraph("jpeg") },
+  { label: "SVG", command: () => void exportGraph("svg") },
+]);
 
 function toggleLabel(label: string): void {
   const next = new Set(hidden.value);
@@ -83,6 +104,10 @@ function toggleLabel(label: string): void {
     next.add(label);
   }
   hidden.value = next;
+}
+
+function toggleExportMenu(event: Event): void {
+  exportMenu.value?.toggle(event);
 }
 
 async function load(): Promise<void> {
@@ -127,8 +152,74 @@ async function expand(nodeId: string): Promise<void> {
   }
 }
 
-function selectNode(event: { node: Node }): void {
+function selectNode(event: { node: FlowNode }): void {
   selectedId.value = event.node.id;
+}
+
+function exportTarget(): HTMLElement | null {
+  const frame = graphFrame.value;
+  return (
+    frame?.querySelector<HTMLElement>(".vue-flow") ??
+    frame?.querySelector<HTMLElement>('[data-test="graph"]') ??
+    null
+  );
+}
+
+function exportBackground(target: HTMLElement): string {
+  const color = getComputedStyle(target).backgroundColor;
+  return color && color !== "rgba(0, 0, 0, 0)" ? color : "#ffffff";
+}
+
+function exportFileName(format: "png" | "jpeg" | "svg"): string {
+  const base =
+    props.resource?.name ||
+    props.resource?.uid ||
+    props.source?.routeId ||
+    "graph";
+  const safe = base
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${safe || "graph"}.${format === "jpeg" ? "jpg" : format}`;
+}
+
+function downloadDataUrl(dataUrl: string, filename: string): void {
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = filename;
+  link.rel = "noopener";
+  link.click();
+}
+
+function includeExportNode(node: Node): boolean {
+  if (!(node instanceof Element)) return true;
+  return !node.closest(".vue-flow__controls, .vue-flow__minimap");
+}
+
+async function exportGraph(format: "png" | "jpeg" | "svg"): Promise<void> {
+  const target = exportTarget();
+  if (!target || exporting.value) return;
+  exporting.value = true;
+  try {
+    const options = {
+      backgroundColor: exportBackground(target),
+      cacheBust: true,
+      filter: includeExportNode,
+      pixelRatio: 2,
+    };
+    const dataUrl =
+      format === "svg"
+        ? await toSvg(target, options)
+        : format === "jpeg"
+          ? await toJpeg(target, { ...options, quality: 0.95 })
+          : await toPng(target, options);
+    downloadDataUrl(dataUrl, exportFileName(format));
+    notify.success("Graph exported", exportFileName(format));
+  } catch (e) {
+    notify.error("Graph export failed", (e as Error).message);
+  } finally {
+    exporting.value = false;
+  }
 }
 
 watch(() => [props.connectionId, props.resource?.uid], load, {
@@ -149,19 +240,42 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           >· double-click a node to expand</span
         >
       </div>
-      <Button
-        type="button"
-        severity="secondary"
-        :disabled="loading"
-        @click="load"
-      >
-        <AppIcon
-          :icon="{ type: 'lucide', value: 'refresh-cw' }"
-          :size="14"
-          :loading="loading || expanding"
-        />
-        Refresh
-      </Button>
+      <div class="flex items-center gap-2">
+        <Button
+          type="button"
+          severity="secondary"
+          size="small"
+          aria-label="Export graph"
+          :disabled="!canExport || exporting"
+          @click="toggleExportMenu"
+        >
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'download' }"
+            :size="14"
+            :loading="exporting"
+          />
+          Export
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'chevron-down' }"
+            :size="14"
+          />
+        </Button>
+        <Menu ref="exportMenu" :model="exportItems" popup />
+        <Button
+          type="button"
+          severity="secondary"
+          size="small"
+          :disabled="loading"
+          @click="load"
+        >
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'refresh-cw' }"
+            :size="14"
+            :loading="loading || expanding"
+          />
+          Refresh
+        </Button>
+      </div>
     </div>
 
     <div
@@ -187,7 +301,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
       </Button>
     </div>
 
-    <div class="min-h-0 flex-1">
+    <div ref="graphFrame" class="min-h-0 flex-1">
       <PanelLoader v-if="loading" />
       <PanelError v-else-if="error" :message="error" retryable @retry="load" />
       <div

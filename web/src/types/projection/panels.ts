@@ -134,7 +134,7 @@ export interface QueryEditorConfig {
   cancelParams?: Record<string, string>;
   completionRouteId?: string;
   completionParams?: Record<string, string>;
-  exportable?: boolean;
+  exportable?: boolean | null;
 }
 
 export interface GraphPanelConfig {
@@ -142,6 +142,7 @@ export interface GraphPanelConfig {
   fitView?: boolean;
   expandRouteId?: string;
   expandParam?: string;
+  exportable?: boolean;
 }
 
 export interface TracePanelConfig {

@@ -92,6 +92,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("fitView", boolProp()),
 				prop("expandRouteId", stringProp()),
 				prop("expandParam", stringProp()),
+				prop("exportable", boolProp()),
 			),
 		},
 		PanelTrace: {Type: "object", Properties: props(prop("serviceField", stringProp()))},

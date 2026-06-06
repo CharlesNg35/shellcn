@@ -931,6 +931,9 @@ by default, so a plugin opts into the review-then-apply workflow deliberately.
 config) are off by default; a plugin must declare them, so data never leaves a
 panel unless the manifest allows it. Export is client-side (the loaded rows) and
 fully generic — every panel that sets the flag gets CSV + JSON for free.
+Graph image export is the exception: `GraphConfig.Exportable` is a pointer, so
+omitted/`null` keeps export enabled, while `false` disables the client-side
+PNG/JPEG/SVG export menu for sensitive graph panels.
 
 **Row-click is automatic; selection is the checkbox.** The renderer learns which
 resource **kinds are navigable** from the projection (those with a detail view)
@@ -1112,6 +1115,7 @@ type GraphConfig struct {
     ExpandRouteID string // optional; nodes become expandable — the panel fetches a
                          // node's neighbourhood from this read route and merges it
     ExpandParam   string // node-id param name for ExpandRouteID (default "node")
+    Exportable    *bool  // nil/null/default true; false hides PNG/JPEG/SVG export
 }
 
 // The graph payload is plugin-emitted JSON the renderer treats generically:

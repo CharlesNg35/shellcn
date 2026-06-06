@@ -48,3 +48,25 @@ func TestManifestConfigRoundTrip(t *testing.T) {
 		t.Fatalf("round-trip not byte-identical:\n %s\n %s", data, again)
 	}
 }
+
+func TestGraphConfigExportableNullDecodesAsDefault(t *testing.T) {
+	var got plugin.Manifest
+	if err := json.Unmarshal([]byte(`{
+		"apiVersion": "shellcn.io/v1",
+		"name": "demo",
+		"tabs": [{
+			"key": "graph",
+			"type": "graph",
+			"config": {"exportable": null}
+		}]
+	}`), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	cfg, ok := got.Tabs[0].Config.(plugin.GraphConfig)
+	if !ok {
+		t.Fatalf("graph config type = %T, want GraphConfig", got.Tabs[0].Config)
+	}
+	if cfg.Exportable != nil {
+		t.Fatalf("exportable = %#v, want nil default", cfg.Exportable)
+	}
+}
