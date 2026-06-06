@@ -65,9 +65,15 @@ const activePaneLabel = computed(
   () => paneTitles.value[activePaneId.value] ?? "Terminal",
 );
 const recordingPolicy = computed(() => props.recording?.policy ?? "disabled");
+const connectionRecordingEnabled = computed(
+  () => recordingPolicy.value !== "disabled",
+);
 const blocksRecording = computed(() => recordingPolicy.value === "auto");
 const showsRecordingNotice = computed(
-  () => recordingPolicy.value === "manual" && paneCount.value > 1,
+  () =>
+    connectionRecordingEnabled.value &&
+    recordingPolicy.value === "manual" &&
+    paneCount.value > 1,
 );
 
 function splitTree(

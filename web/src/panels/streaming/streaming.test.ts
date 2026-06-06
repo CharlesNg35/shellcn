@@ -302,6 +302,31 @@ describe("streaming stub panels", () => {
     tall.unmount();
   });
 
+  it("does not show the split recording notice when connection recording is disabled", async () => {
+    const w = mount(TerminalGridPanel, {
+      props: {
+        ...props,
+        config: { maxPanes: 2 },
+        recording: {
+          class: "terminal",
+          policy: "disabled",
+          authoritative: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Split right"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(2);
+    expect(w.text()).not.toContain("Recording disabled for split view");
+    w.unmount();
+  });
+
   it("disables terminal recording controls for multi-pane workspaces", async () => {
     const w = mount(TerminalGridPanel, {
       props: {
