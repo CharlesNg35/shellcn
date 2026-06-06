@@ -42,6 +42,33 @@ func TestLintRejectsPrivilegedActionWithoutConfirm(t *testing.T) {
 	}
 }
 
+func TestLintRejectsRequiredInputOnOpenURLAction(t *testing.T) {
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "x",
+		Title:      "X",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		Actions: []plugin.Action{{
+			ID:      "x.open",
+			Label:   "Open",
+			RouteID: "x.open",
+			Open:    plugin.OpenURL,
+		}},
+	}
+	routes := []plugin.Route{{
+		ID: "x.open", Method: plugin.MethodGet, Permission: "x.read",
+		Risk: plugin.RiskSafe, Handle: noop,
+		Input: &plugin.Schema{Groups: []plugin.Group{{
+			Name:   "Open",
+			Fields: []plugin.Field{{Key: "port", Label: "Port", Type: plugin.FieldSelect, Required: true}},
+		}}},
+	}}
+	if !hasError(pluginux.Lint(m, routes), "OpenURL action input fields are submitted as route params; required body fields would fail core validation") {
+		t.Fatalf("expected OpenURL required input error")
+	}
+}
+
 func TestLintRequiresStreamDeclarationAndMatchingKind(t *testing.T) {
 	panel := plugin.Panel{
 		Key:    "shell",

@@ -101,8 +101,32 @@ func (l *linter) actions() {
 		if a.Open == plugin.OpenDialog && a.OnSuccess == nil && rt.Risk != plugin.RiskSafe {
 			l.add(Warning, path, "write dialog should declare an onSuccess refresh/navigation hint when useful")
 		}
+		if a.Open == plugin.OpenURL && rt.Input != nil && hasRequiredField(*rt.Input) {
+			l.add(Error, path, "OpenURL action input fields are submitted as route params; required body fields would fail core validation")
+		}
 		l.panel(path+" panel", plugin.Panel{Key: a.ID, Type: a.Panel, Source: &plugin.DataSource{RouteID: a.RouteID, Method: rt.Method}, Config: a.Config})
 	}
+}
+
+func hasRequiredField(schema plugin.Schema) bool {
+	for _, group := range schema.Groups {
+		if fieldsHaveRequired(group.Fields) {
+			return true
+		}
+	}
+	return false
+}
+
+func fieldsHaveRequired(fields []plugin.Field) bool {
+	for _, field := range fields {
+		if field.Required || fieldsHaveRequired(field.Fields) {
+			return true
+		}
+		if field.Item != nil && fieldsHaveRequired([]plugin.Field{*field.Item}) {
+			return true
+		}
+	}
+	return false
 }
 
 func longLivedPanel(panel plugin.PanelType) bool {
