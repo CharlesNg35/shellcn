@@ -79,11 +79,11 @@ func inspectDetailConfig() plugin.ObjectDetailConfig {
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
 		{Key: "overview", Label: "Overview", Icon: icon("layout-dashboard"), Ref: dockerengine.OverviewRef()},
-		{Key: "containers", Label: "Containers", Icon: icon("box"), Source: plugin.DataSource{RouteID: "podman.containers.tree"}, ResourceKind: "container"},
-		{Key: "pods", Label: "Pods", Icon: icon("boxes"), Source: plugin.DataSource{RouteID: "podman.pods.tree"}, ResourceKind: "pod"},
-		{Key: "images", Label: "Images", Icon: icon("layers"), Source: plugin.DataSource{RouteID: "podman.images.tree"}, ResourceKind: "image"},
-		{Key: "volumes", Label: "Volumes", Icon: icon("database"), Source: plugin.DataSource{RouteID: "podman.volumes.tree"}, ResourceKind: "volume"},
-		{Key: "networks", Label: "Networks", Icon: icon("globe"), Source: plugin.DataSource{RouteID: "podman.networks.tree"}, ResourceKind: "network"},
+		{Key: "containers", Label: "Containers", Icon: icon("box"), ResourceKind: "container"},
+		{Key: "pods", Label: "Pods", Icon: icon("boxes"), ResourceKind: "pod"},
+		{Key: "images", Label: "Images", Icon: icon("layers"), ResourceKind: "image"},
+		{Key: "volumes", Label: "Volumes", Icon: icon("database"), ResourceKind: "volume"},
+		{Key: "networks", Label: "Networks", Icon: icon("globe"), ResourceKind: "network"},
 	}
 }
 
