@@ -14,6 +14,7 @@ var panelConfigDecoders = map[PanelType]func(json.RawMessage) (PanelConfig, erro
 	PanelTrace:         func(r json.RawMessage) (PanelConfig, error) { return decode[TraceConfig](r) },
 	PanelKV:            func(r json.RawMessage) (PanelConfig, error) { return decode[KVConfig](r) },
 	PanelTerminal:      func(r json.RawMessage) (PanelConfig, error) { return decode[TerminalConfig](r) },
+	PanelTerminalGrid:  func(r json.RawMessage) (PanelConfig, error) { return decode[TerminalGridConfig](r) },
 	PanelCodeEditor:    func(r json.RawMessage) (PanelConfig, error) { return decode[CodeEditorConfig](r) },
 	PanelQueryEditor:   func(r json.RawMessage) (PanelConfig, error) { return decode[QueryEditorConfig](r) },
 	PanelHTTPClient:    func(r json.RawMessage) (PanelConfig, error) { return decode[HTTPClientConfig](r) },

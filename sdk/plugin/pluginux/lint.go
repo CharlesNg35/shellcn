@@ -107,7 +107,7 @@ func (l *linter) actions() {
 
 func longLivedPanel(panel plugin.PanelType) bool {
 	switch panel {
-	case plugin.PanelTerminal, plugin.PanelRemoteDesktop, plugin.PanelLogStream, plugin.PanelMetrics, plugin.PanelTaskProgress:
+	case plugin.PanelTerminal, plugin.PanelTerminalGrid, plugin.PanelRemoteDesktop, plugin.PanelLogStream, plugin.PanelMetrics, plugin.PanelTaskProgress:
 		return true
 	default:
 		return false
@@ -216,7 +216,7 @@ func (l *linter) streamMatch(path string, p plugin.Panel) {
 
 func expectedStreamKind(panel plugin.PanelType) (plugin.StreamKind, bool) {
 	switch panel {
-	case plugin.PanelTerminal:
+	case plugin.PanelTerminal, plugin.PanelTerminalGrid:
 		return plugin.StreamTerminal, true
 	case plugin.PanelLogStream:
 		return plugin.StreamLogs, true

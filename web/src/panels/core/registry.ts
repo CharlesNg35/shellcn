@@ -30,6 +30,7 @@ export const panelRegistry: Record<string, Component> = {
   task_progress: lazy(() => import("../streaming/TaskProgressPanel.vue")),
   split: lazy(() => import("../specialized/SplitPanel.vue")),
   terminal: lazy(() => import("../streaming/TerminalPanel.vue")),
+  terminal_grid: lazy(() => import("../streaming/TerminalGridPanel.vue")),
   log_stream: lazy(() => import("../streaming/LogStreamPanel.vue")),
   metrics: lazy(() => import("../streaming/MetricsPanel.vue")),
   code_editor: lazy(() => import("../streaming/CodeEditorPanel.vue")),

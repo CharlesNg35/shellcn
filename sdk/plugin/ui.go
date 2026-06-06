@@ -5,6 +5,7 @@ type PanelType string
 
 const (
 	PanelTerminal      PanelType = "terminal"
+	PanelTerminalGrid  PanelType = "terminal_grid"
 	PanelFileBrowser   PanelType = "file_browser"
 	PanelTable         PanelType = "table"
 	PanelMetrics       PanelType = "metrics"
@@ -40,6 +41,7 @@ func (GraphConfig) panelConfig()         {}
 func (TraceConfig) panelConfig()         {}
 func (KVConfig) panelConfig()            {}
 func (TerminalConfig) panelConfig()      {}
+func (TerminalGridConfig) panelConfig()  {}
 func (CodeEditorConfig) panelConfig()    {}
 func (QueryEditorConfig) panelConfig()   {}
 func (HTTPClientConfig) panelConfig()    {}
@@ -306,6 +308,13 @@ type KVConfig struct {
 type TerminalConfig struct {
 	Zoom   bool `json:"zoom,omitempty"`   // font-size +/- controls and Ctrl/⌘ +/-/0
 	Search bool `json:"search,omitempty"` // scrollback find with match navigation
+}
+
+type TerminalGridConfig struct {
+	MaxPanes     int  `json:"maxPanes,omitempty"`
+	DefaultPanes int  `json:"defaultPanes,omitempty"`
+	Zoom         bool `json:"zoom,omitempty"`
+	Search       bool `json:"search,omitempty"`
 }
 
 type CodeEditorConfig struct {

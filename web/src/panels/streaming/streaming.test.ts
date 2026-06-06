@@ -99,6 +99,7 @@ import MetricsPanel from "./MetricsPanel.vue";
 import CodeEditorPanel from "./CodeEditorPanel.vue";
 import QueryEditorPanel from "./QueryEditorPanel.vue";
 import RemoteDesktopPanel from "./RemoteDesktopPanel.vue";
+import TerminalGridPanel from "./TerminalGridPanel.vue";
 
 const props = {
   connectionId: "c1",
@@ -127,6 +128,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 const panels = [
   { name: "terminal", comp: TerminalPanel, status: true },
+  { name: "terminal grid", comp: TerminalGridPanel, status: true },
   { name: "logs", comp: LogStreamPanel, status: true },
   { name: "metrics", comp: MetricsPanel, status: true },
   { name: "remote desktop", comp: RemoteDesktopPanel, status: true },
@@ -170,6 +172,72 @@ describe("streaming stub panels", () => {
     expect(streamSockets()).toHaveLength(2);
     expect(streamSockets()[0].closed).toBe(true);
     second.unmount();
+  });
+
+  it("opens independent terminal channels for split panes on the same stream route", async () => {
+    const w = mount(TerminalGridPanel, {
+      props: { ...props, config: { maxPanes: 2, zoom: true, search: true } },
+    });
+    await flushPromises();
+    expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(1);
+    expect(streamSockets()).toHaveLength(1);
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Split right"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(2);
+    expect(streamSockets()).toHaveLength(2);
+    expect(new Set(streamSockets().map((ws) => ws.url)).size).toBe(1);
+    w.unmount();
+  });
+
+  it("blocks split terminals when terminal recording is mandatory", async () => {
+    const w = mount(TerminalGridPanel, {
+      props: {
+        ...props,
+        recording: {
+          class: "terminal",
+          policy: "auto",
+          authoritative: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain(
+      "Split terminal workspaces are disabled when terminal recording is mandatory.",
+    );
+    expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(0);
+    expect(streamSockets()).toHaveLength(0);
+    w.unmount();
+  });
+
+  it("disables terminal recording controls for multi-pane workspaces", async () => {
+    const w = mount(TerminalGridPanel, {
+      props: {
+        ...props,
+        config: { maxPanes: 2 },
+        recording: {
+          class: "terminal",
+          policy: "manual",
+          authoritative: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Split right"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain("Recording disabled for split view");
+    expect(w.text()).not.toContain("Start recording");
+    w.unmount();
   });
 
   it("reconnects a failed stream from the status bar", async () => {

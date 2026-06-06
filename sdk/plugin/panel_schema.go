@@ -108,6 +108,15 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 			),
 		},
 		PanelTerminal: {Type: "object", Properties: props(prop("zoom", boolProp()), prop("search", boolProp()))},
+		PanelTerminalGrid: {
+			Type: "object",
+			Properties: props(
+				prop("maxPanes", number()),
+				prop("defaultPanes", number()),
+				prop("zoom", boolProp()),
+				prop("search", boolProp()),
+			),
+		},
 		PanelCodeEditor: {
 			Type: "object",
 			Properties: props(

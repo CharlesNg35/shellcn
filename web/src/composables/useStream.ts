@@ -11,6 +11,10 @@ import {
 import { useConnectionStatusStore } from "../stores/connectionStatus";
 import type { DataSource } from "../types/projection";
 
+export interface UseStreamOptions {
+  keySuffix?: string;
+}
+
 // Wires a panel to a store-owned channel. If the channel is already open (e.g.
 // the user switched away and came back), it re-attaches and replays the buffer
 // WITHOUT minting a new ticket or reconnecting. Otherwise it opens once via the
@@ -21,6 +25,7 @@ export function useStream(
   source: DataSource | undefined,
   ctx: ResolveContext,
   onFrame?: (data: string) => void,
+  options: UseStreamOptions = {},
 ) {
   const store = useStreamChannelsStore();
   const live = useConnectionStatusStore();
@@ -41,6 +46,10 @@ export function useStream(
   );
   let unsub: (() => void) | undefined;
 
+  function scopedKey(base: string): string {
+    return options.keySuffix ? `${base}:${options.keySuffix}` : base;
+  }
+
   function attach(k: string): void {
     unsub?.();
     key.value = k;
@@ -55,7 +64,7 @@ export function useStream(
     }
     try {
       localError.value = null;
-      const existing = channelKey(connectionId, source, ctx);
+      const existing = scopedKey(channelKey(connectionId, source, ctx));
       if (force) {
         unsub?.();
         unsub = undefined;
@@ -71,8 +80,9 @@ export function useStream(
         store.close(existing);
       }
       const handle = await prepareStream(connectionId, source, ctx);
-      store.ensure(handle.key, () => new WebSocket(handle.url) as never);
-      attach(handle.key);
+      const handleKey = scopedKey(handle.key);
+      store.ensure(handleKey, () => new WebSocket(handle.url) as never);
+      attach(handleKey);
     } catch (e) {
       localError.value = (e as Error).message;
     }

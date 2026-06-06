@@ -22,6 +22,7 @@ func TestPanelConfigSchemasCoverConfigJSONFields(t *testing.T) {
 		{plugin.PanelTrace, reflect.TypeOf(plugin.TraceConfig{})},
 		{plugin.PanelKV, reflect.TypeOf(plugin.KVConfig{})},
 		{plugin.PanelTerminal, reflect.TypeOf(plugin.TerminalConfig{})},
+		{plugin.PanelTerminalGrid, reflect.TypeOf(plugin.TerminalGridConfig{})},
 		{plugin.PanelCodeEditor, reflect.TypeOf(plugin.CodeEditorConfig{})},
 		{plugin.PanelQueryEditor, reflect.TypeOf(plugin.QueryEditorConfig{})},
 		{plugin.PanelHTTPClient, reflect.TypeOf(plugin.HTTPClientConfig{})},

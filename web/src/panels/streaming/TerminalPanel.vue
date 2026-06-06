@@ -14,7 +14,18 @@ import type { TerminalPanelConfig } from "../../types/projection";
 import PanelLoader from "../../components/PanelLoader.vue";
 import StreamStatusBar from "./StreamStatusBar.vue";
 
-const props = defineProps<PanelProps>();
+const props = withDefaults(
+  defineProps<
+    PanelProps & {
+      streamKeySuffix?: string;
+      recordingEnabled?: boolean;
+    }
+  >(),
+  {
+    streamKeySuffix: undefined,
+    recordingEnabled: true,
+  },
+);
 const { isDark } = useTheme();
 
 const cfg = computed(() => props.config as TerminalPanelConfig | undefined);
@@ -81,7 +92,10 @@ const terminalSurface = computed(() =>
 
 const recording = computed(() => props.recording ?? null);
 const showRecording = computed(
-  () => recording.value && recording.value.policy !== "disabled",
+  () =>
+    props.recordingEnabled &&
+    recording.value &&
+    recording.value.policy !== "disabled",
 );
 
 const container = ref<HTMLElement | null>(null);
@@ -174,6 +188,7 @@ const { status, error, send, reconnect } = useStream(
   props.source,
   { resource: props.resource },
   write,
+  { keySuffix: props.streamKeySuffix },
 );
 
 // Fit the grid to the container; debounced so a burst of resize events settles

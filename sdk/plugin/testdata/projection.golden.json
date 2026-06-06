@@ -1098,6 +1098,23 @@
         }
       }
     },
+    "terminal_grid": {
+      "type": "object",
+      "properties": {
+        "defaultPanes": {
+          "type": "number"
+        },
+        "maxPanes": {
+          "type": "number"
+        },
+        "search": {
+          "type": "boolean"
+        },
+        "zoom": {
+          "type": "boolean"
+        }
+      }
+    },
     "timeline": {
       "type": "object",
       "properties": {

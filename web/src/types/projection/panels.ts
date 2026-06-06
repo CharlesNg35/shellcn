@@ -7,6 +7,7 @@ export const KNOWN_PANEL_TYPES = [
   "table",
   "metrics",
   "log_stream",
+  "terminal_grid",
   "code_editor",
   "document",
   "query_editor",
@@ -176,6 +177,11 @@ export interface MetricsPanelConfig {
 export interface TerminalPanelConfig {
   zoom?: boolean;
   search?: boolean;
+}
+
+export interface TerminalGridPanelConfig extends TerminalPanelConfig {
+  maxPanes?: number;
+  defaultPanes?: number;
 }
 
 export interface KVPanelConfig {
