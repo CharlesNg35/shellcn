@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -31,6 +32,8 @@ const (
 	// fetches — generic, not tied to any plugin or artifact kind.
 	artifactTicketRoute = "agent.artifact"
 )
+
+var errAgentHandshakeRequired = errors.New("agent handshake required")
 
 // canManageConnection reports whether the user may edit/operate a connection:
 // its owner or a holder of a manage grant. Admin confers no implicit access.
@@ -236,6 +239,8 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 
 	var hello transport.AgentHello
 	if err := wsjson.Read(handshakeCtx, c, &hello); err != nil {
+		agentUser := models.User{ID: "agent", Username: app.AgentUsername}
+		s.auditAgentEvent(r.Context(), agentUser, "", agentConnectEvent, models.AuditDenied, errAgentHandshakeRequired)
 		_ = c.Close(websocket.StatusPolicyViolation, "handshake required")
 		return
 	}
@@ -262,6 +267,11 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	if err := wsjson.Write(handshakeCtx, c, resp); err != nil {
+		teardownCtx, teardownCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
+		defer teardownCancel()
+		if !s.tunnelRegistered(connID) {
+			s.deps.Enrollments.MarkOffline(teardownCtx, connID)
+		}
 		_ = c.Close(websocket.StatusInternalError, "handshake failed")
 		return
 	}
@@ -272,7 +282,9 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 	tunnelErr := transport.ServeGatewayTunnel(r.Context(), c, connID, s.deps.Tunnels, forward)
 	teardownCtx, teardownCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
 	defer teardownCancel()
-	s.deps.Enrollments.MarkOffline(teardownCtx, connID)
+	if !s.tunnelRegistered(connID) {
+		s.deps.Enrollments.MarkOffline(teardownCtx, connID)
+	}
 	result := models.AuditAllowed
 	if tunnelErr != nil {
 		result = models.AuditError
