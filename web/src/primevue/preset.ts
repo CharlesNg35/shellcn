@@ -476,6 +476,9 @@ export const primeVuePassthrough = {
     title: dialogTitle,
     content: "min-h-0 overflow-auto p-5",
     footer: dialogFooter,
+    pcMaximizeButton: {
+      root: "rounded-md p-1 text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-200",
+    },
     pcCloseButton: {
       root: "rounded-md p-1 text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-200",
     },

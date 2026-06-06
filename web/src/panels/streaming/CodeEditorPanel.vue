@@ -11,6 +11,7 @@ import { useTheme } from "../../composables/useTheme";
 import type { CodeMirrorEditor } from "../../codemirror";
 import AppIcon from "../../components/AppIcon.vue";
 import CodeDiffView from "../shared/CodeDiffView.vue";
+import { dialogRoot } from "../../primevue/preset";
 
 const props = defineProps<PanelProps>();
 
@@ -35,6 +36,20 @@ const language = computed(() => editorConfig.value?.language ?? "plaintext");
 const saveRouteId = computed(() => editorConfig.value?.saveRouteId);
 const editable = computed(() => Boolean(saveRouteId.value));
 const changed = computed(() => text.value !== originalText.value);
+const diffDialogStyle = { width: "88vw" };
+const diffDialogBreakpoints = { "1199px": "94vw", "575px": "100vw" };
+const diffDialogPt = {
+  root: dialogRoot("max-w-6xl"),
+  content: "min-h-0 overflow-hidden p-0",
+};
+const diffDialogCloseButtonProps = {
+  "aria-label": "Close diff review",
+  title: "Close diff review",
+};
+const diffDialogMaximizeButtonProps = {
+  "aria-label": "Maximize or restore diff review",
+  title: "Maximize or restore diff review",
+};
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -216,10 +231,13 @@ onUnmounted(() => {
       modal
       maximizable
       header="Review changes"
-      :style="{ width: 'min(112rem, 96vw)' }"
-      :breakpoints="{ '960px': '96vw' }"
+      :style="diffDialogStyle"
+      :breakpoints="diffDialogBreakpoints"
+      :pt="diffDialogPt"
+      :close-button-props="diffDialogCloseButtonProps"
+      :maximize-button-props="diffDialogMaximizeButtonProps"
     >
-      <div class="h-[72vh] min-h-0">
+      <div class="h-[min(76vh,56rem)] min-h-0">
         <CodeDiffView
           :original="originalText"
           :modified="text"

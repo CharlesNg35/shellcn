@@ -78,6 +78,12 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.dialog.footer).toContain("shrink-0");
     expect(primeVuePassthrough.dialog.content).toContain("min-h-0");
     expect(primeVuePassthrough.dialog.content).toContain("overflow-auto");
+    expect(primeVuePassthrough.dialog.pcMaximizeButton.root).toContain(
+      "rounded-md",
+    );
+    expect(primeVuePassthrough.dialog.pcCloseButton.root).toContain(
+      "rounded-md",
+    );
     expect(primeVuePassthrough.confirmdialog.content).toContain(
       "overflow-auto",
     );

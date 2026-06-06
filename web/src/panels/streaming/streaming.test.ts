@@ -4,6 +4,7 @@ import { defineComponent, nextTick, ref } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
+import Dialog from "primevue/dialog";
 import { installFetch } from "../../test/fetchMock";
 import { primeVuePassthrough } from "../../primevue/preset";
 import { useStreamChannelsStore } from "../../stores/streamChannels";
@@ -830,6 +831,27 @@ describe("streaming stub panels", () => {
       language: "yaml",
       collapseUnchanged: true,
     });
+    const dialog = w.findComponent(Dialog);
+    const dialogPt = dialog.props("pt") as {
+      root: string;
+      content: string;
+    };
+    expect((dialog.vm.$attrs.style as { width?: string }).width).toBe("88vw");
+    expect(dialog.props("breakpoints")).toMatchObject({
+      "1199px": "94vw",
+      "575px": "100vw",
+    });
+    expect(dialog.props("closeButtonProps")).toMatchObject({
+      "aria-label": "Close diff review",
+      title: "Close diff review",
+    });
+    expect(dialog.props("maximizeButtonProps")).toMatchObject({
+      "aria-label": "Maximize or restore diff review",
+      title: "Maximize or restore diff review",
+    });
+    expect(dialogPt.root).toContain("max-w-6xl");
+    expect(dialogPt.content).toContain("overflow-hidden");
+    expect(dialogPt.content).toContain("p-0");
     w.unmount();
   });
 
