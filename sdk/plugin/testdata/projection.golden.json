@@ -504,7 +504,19 @@
         "defaultHeaders": {
           "type": "array",
           "items": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ]
           }
         },
         "defaultMethod": {
@@ -633,7 +645,46 @@
         "sections": {
           "type": "array",
           "items": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "fields": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "copy": {
+                      "type": "boolean"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "redacted": {
+                      "type": "boolean"
+                    },
+                    "severities": {
+                      "type": "object",
+                      "properties": {
+                        "*": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key"
+                  ]
+                }
+              },
+              "title": {
+                "type": "string"
+              }
+            }
           }
         }
       }
@@ -719,7 +770,67 @@
         "panels": {
           "type": "array",
           "items": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "config": {
+                "type": "object"
+              },
+              "icon": {
+                "type": "object"
+              },
+              "key": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "minSize": {
+                "type": "number"
+              },
+              "panel": {
+                "type": "string"
+              },
+              "size": {
+                "type": "number"
+              },
+              "source": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "GET",
+                      "POST",
+                      "PUT",
+                      "PATCH",
+                      "DELETE",
+                      "WS"
+                    ]
+                  },
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "*": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "routeId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "routeId"
+                ]
+              },
+              "span": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "key",
+              "panel"
+            ]
           }
         }
       }
@@ -770,7 +881,18 @@
           ]
         },
         "defaultSort": {
-          "type": "object"
+          "type": "object",
+          "properties": {
+            "desc": {
+              "type": "boolean"
+            },
+            "field": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "field"
+          ]
         },
         "delete": {
           "type": "object",

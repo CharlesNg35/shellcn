@@ -23,7 +23,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("columnsSource", dataSource()),
 				prop("watch", dataSource()),
 				prop("refreshIntervalMs", number()),
-				prop("defaultSort", object()),
+				prop("defaultSort", sortKey()),
 				prop("actionIds", array(stringProp())),
 				prop("rowActionIds", array(stringProp())),
 				prop("selectable", boolProp()),
@@ -141,7 +141,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("methods", array(stringProp())),
 				prop("defaultMethod", stringProp()),
 				prop("defaultUrl", stringProp()),
-				prop("defaultHeaders", array(object())),
+				prop("defaultHeaders", array(headerDefault())),
 				prop("defaultBody", stringProp()),
 			),
 		},
@@ -157,7 +157,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 		PanelObjectDetail: {
 			Type: "object",
 			Properties: props(
-				prop("sections", array(object())),
+				prop("sections", array(objectDetailSection())),
 				prop("rawToggle", boolProp()),
 			),
 		},
@@ -186,7 +186,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 			Type: "object",
 			Properties: props(
 				prop("orientation", enum("horizontal", "vertical")),
-				prop("panels", array(object())),
+				prop("panels", array(splitPanelObject())),
 			),
 		},
 	}
@@ -238,6 +238,28 @@ func dataSource() PanelConfigProperty {
 	}
 }
 
+func sortKey() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("field", stringProp()),
+			prop("desc", boolProp()),
+		),
+		Required: []string{"field"},
+	}
+}
+
+func headerDefault() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("key", stringProp()),
+			prop("value", stringProp()),
+		),
+		Required: []string{"key", "value"},
+	}
+}
+
 func metricItem(withMax bool) PanelConfigProperty {
 	properties := props(
 		prop("key", stringProp()),
@@ -248,6 +270,31 @@ func metricItem(withMax bool) PanelConfigProperty {
 		properties["max"] = number()
 	}
 	return PanelConfigProperty{Type: "object", Properties: properties, Required: []string{"key"}}
+}
+
+func objectDetailSection() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("title", stringProp()),
+			prop("fields", array(objectDetailField())),
+		),
+	}
+}
+
+func objectDetailField() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("key", stringProp()),
+			prop("label", stringProp()),
+			prop("type", stringProp()),
+			prop("copy", boolProp()),
+			prop("redacted", boolProp()),
+			prop("severities", stringMap()),
+		),
+		Required: []string{"key"},
+	}
 }
 
 func panelObject() PanelConfigProperty {
@@ -264,4 +311,11 @@ func panelObject() PanelConfigProperty {
 		),
 		Required: []string{"key", "panel"},
 	}
+}
+
+func splitPanelObject() PanelConfigProperty {
+	schema := panelObject()
+	schema.Properties["size"] = number()
+	schema.Properties["minSize"] = number()
+	return schema
 }
