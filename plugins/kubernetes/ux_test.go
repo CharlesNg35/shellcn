@@ -116,6 +116,55 @@ func TestEventsUseTimelinePanels(t *testing.T) {
 	}
 }
 
+func TestResourceOverviewsUseStructuredPanels(t *testing.T) {
+	for _, k := range kinds {
+		res := resourceType(k)
+		if len(res.Detail.Tabs) == 0 {
+			t.Fatalf("%s detail tabs missing", k.name)
+		}
+		overview := res.Detail.Tabs[0]
+		if overview.Key != "overview" || overview.Type != plugin.PanelObjectDetail {
+			t.Fatalf("%s overview = key %q panel %q, want structured object detail", k.name, overview.Key, overview.Type)
+		}
+		if overview.Source == nil || overview.Source.RouteID != "kubernetes.resource.overview" {
+			t.Fatalf("%s overview source = %+v", k.name, overview.Source)
+		}
+		cfg, ok := overview.Config.(plugin.ObjectDetailConfig)
+		if !ok || len(cfg.Sections) == 0 || !cfg.RawToggle {
+			t.Fatalf("%s overview config = %#v, want structured sections with raw toggle", k.name, overview.Config)
+		}
+	}
+}
+
+func TestPodDetailHasMetricsLogsAndShell(t *testing.T) {
+	var pod kind
+	for _, k := range kinds {
+		if k.name == "pod" {
+			pod = k
+		}
+	}
+	if pod.name == "" {
+		t.Fatal("pod kind missing")
+	}
+	res := resourceType(pod)
+	var order []string
+	for _, tab := range res.Detail.Tabs {
+		order = append(order, tab.Key)
+	}
+	want := []string{"overview", "yaml", "metrics", "logs", "terminal", "events"}
+	if strings.Join(order, ",") != strings.Join(want, ",") {
+		t.Fatalf("pod detail tabs = %v, want %v", order, want)
+	}
+	metrics := res.Detail.Tabs[2]
+	if metrics.Type != plugin.PanelMetrics || metrics.Source == nil || metrics.Source.RouteID != "kubernetes.pod.metrics" {
+		t.Fatalf("pod metrics tab = %+v", metrics)
+	}
+	cfg, ok := metrics.Config.(plugin.MetricsConfig)
+	if !ok || len(cfg.Stats) == 0 || len(cfg.Series) == 0 {
+		t.Fatalf("pod metrics config = %#v", metrics.Config)
+	}
+}
+
 func TestAuditShellRBACUsesStreamAuditHook(t *testing.T) {
 	var gotResult plugin.AuditResult
 	var gotParams map[string]string

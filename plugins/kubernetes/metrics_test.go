@@ -79,3 +79,76 @@ func TestNodePods(t *testing.T) {
 		t.Fatalf("rows = %d", got)
 	}
 }
+
+func TestPodFrameIncludesRequestsLimitsAndUsage(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "v1",
+			"kind":       "Pod",
+			"metadata":   obj{"name": "web", "namespace": "default"},
+			"spec": obj{"containers": []any{
+				obj{"name": "app", "resources": obj{
+					"requests": obj{"cpu": "250m", "memory": "128Mi"},
+					"limits":   obj{"cpu": "500m", "memory": "256Mi"},
+				}},
+				obj{"name": "sidecar", "resources": obj{
+					"requests": obj{"cpu": "100m", "memory": "64Mi"},
+					"limits":   obj{"cpu": "200m", "memory": "128Mi"},
+				}},
+			}},
+		})
+	})
+	mux.HandleFunc("/apis/metrics.k8s.io/v1beta1/namespaces/default/pods/web", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "metrics.k8s.io/v1beta1",
+			"kind":       "PodMetrics",
+			"metadata":   obj{"name": "web", "namespace": "default"},
+			"containers": []any{
+				obj{"name": "app", "usage": obj{"cpu": "200m", "memory": "100Mi"}},
+				obj{"name": "sidecar", "usage": obj{"cpu": "50m", "memory": "28Mi"}},
+			},
+		})
+	})
+	sess := connectTo(t, mux).(*Session)
+
+	frame := sess.podFrame(context.Background(), "default", "web")
+	if frame["metricsAvailable"] != true {
+		t.Fatalf("metrics should be available: %+v", frame)
+	}
+	if frame["cpuRequest"] != 0.35 || frame["cpuLimit"] != 0.7 {
+		t.Fatalf("cpu request/limit = %+v", frame)
+	}
+	if frame["memRequest"] != int64(201326592) || frame["memLimit"] != int64(402653184) {
+		t.Fatalf("memory request/limit = %+v", frame)
+	}
+	if frame["mem"] != int64(134217728) {
+		t.Fatalf("memory usage = %+v", frame)
+	}
+	if pct, _ := frame["memLimitPct"].(float64); pct < 33 || pct > 34 {
+		t.Fatalf("memLimitPct = %+v", frame)
+	}
+}
+
+func TestPodFrameDegradesWithoutMetrics(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "v1",
+			"kind":       "Pod",
+			"metadata":   obj{"name": "web", "namespace": "default"},
+			"spec": obj{"containers": []any{
+				obj{"name": "app", "resources": obj{"requests": obj{"memory": "64Mi"}}},
+			}},
+		})
+	})
+	sess := connectTo(t, mux).(*Session)
+
+	frame := sess.podFrame(context.Background(), "default", "web")
+	if frame["metricsAvailable"] != false {
+		t.Fatalf("metrics should be unavailable: %+v", frame)
+	}
+	if frame["memRequest"] != int64(67108864) {
+		t.Fatalf("request should still be shown: %+v", frame)
+	}
+}

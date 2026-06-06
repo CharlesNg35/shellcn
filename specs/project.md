@@ -2150,6 +2150,24 @@ vm.Detail = [Overview(metrics), Console(remote_desktop), Hardware(form),
              Snapshots(table), Backups(table)]
 ```
 
+**Kubernetes** — resource catalog rendered by generic panels; raw manifests are
+available, but operational overviews are structured property sheets:
+
+```
+Layout    = LayoutSidebarTree
+Tree      = [Overview, Workloads, Config, Network, Storage, Access Control, Custom Resources]
+Resources = pod{ List:kubernetes.resource.list, Watch:kubernetes.resource.watch,
+              Detail.Tabs:[Overview(object_detail), YAML(code_editor),
+                           Metrics(metrics), Logs(log_stream), Shell(terminal),
+                           Events(timeline)] }
+Workloads = deployment/statefulset/daemonset/replicaset{
+              Detail.Tabs:[Overview(object_detail), YAML(code_editor),
+                           Pods(table), Events(timeline)] }
+Metrics  = cluster/node/pod metrics stream from metrics.k8s.io when available;
+           frames degrade gracefully and still show declared requests/limits
+           where those values come from the resource spec.
+```
+
 **PostgreSQL** — schema browser as tree, query editor + results as panels:
 
 ```

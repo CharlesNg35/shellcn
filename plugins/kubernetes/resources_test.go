@@ -76,6 +76,63 @@ func TestListResourceNamespacedPods(t *testing.T) {
 	}
 }
 
+func TestResourceOverviewPodIsStructured(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web-1", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "v1",
+			"kind":       "Pod",
+			"metadata": obj{
+				"name":              "web-1",
+				"namespace":         "default",
+				"uid":               "u1",
+				"creationTimestamp": "2026-06-05T10:11:12Z",
+				"labels":            obj{"app": "web"},
+			},
+			"spec": obj{
+				"nodeName":           "node-a",
+				"serviceAccountName": "web-sa",
+				"containers": []any{obj{
+					"name": "app",
+					"resources": obj{
+						"requests": obj{"cpu": "250m", "memory": "128Mi"},
+						"limits":   obj{"cpu": "500m", "memory": "256Mi"},
+					},
+				}},
+				"volumes": []any{obj{"name": "config"}},
+			},
+			"status": obj{
+				"phase":    "Running",
+				"podIP":    "10.1.2.3",
+				"hostIP":   "192.168.1.10",
+				"qosClass": "Burstable",
+				"containerStatuses": []any{
+					obj{"name": "app", "ready": true, "restartCount": int64(2)},
+				},
+			},
+		})
+	})
+	sess := connectTo(t, mux)
+
+	out, err := ResourceOverview(rc(sess, map[string]string{"kind": "pod", "namespace": "default", "name": "web-1"}))
+	if err != nil {
+		t.Fatalf("overview: %v", err)
+	}
+	row := out.(Row)
+	if row["status"] != "Running" || row["ready"] != "1/1" || row["node"] != "node-a" || row["serviceAccount"] != "web-sa" {
+		t.Fatalf("pod overview summary = %+v", row)
+	}
+	if row["cpuRequest"] != 0.25 || row["cpuLimit"] != 0.5 {
+		t.Fatalf("pod overview cpu = %+v", row)
+	}
+	if row["memRequest"] != int64(134217728) || row["memLimit"] != int64(268435456) {
+		t.Fatalf("pod overview memory = %+v", row)
+	}
+	if row["volumes"] != int64(1) || row["restarts"] != int64(2) {
+		t.Fatalf("pod overview counters = %+v", row)
+	}
+}
+
 func TestDeleteResource(t *testing.T) {
 	deleted := false
 	mux := http.NewServeMux()
