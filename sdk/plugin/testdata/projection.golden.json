@@ -393,6 +393,36 @@
         }
       }
     },
+    "diff": {
+      "type": "object",
+      "properties": {
+        "collapseUnchanged": {
+          "type": "boolean"
+        },
+        "language": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "side_by_side",
+            "unified"
+          ]
+        },
+        "modifiedField": {
+          "type": "string"
+        },
+        "modifiedLabel": {
+          "type": "string"
+        },
+        "originalField": {
+          "type": "string"
+        },
+        "originalLabel": {
+          "type": "string"
+        }
+      }
+    },
     "document": {
       "type": "object",
       "properties": {}

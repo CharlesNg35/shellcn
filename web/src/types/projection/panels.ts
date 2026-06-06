@@ -9,6 +9,7 @@ export const KNOWN_PANEL_TYPES = [
   "log_stream",
   "terminal_grid",
   "code_editor",
+  "diff",
   "document",
   "query_editor",
   "remote_desktop",
@@ -120,6 +121,18 @@ export interface CodeEditorConfig {
   saveParams?: Record<string, string>;
   saveBodyKey?: string;
   saveExtra?: Record<string, unknown>;
+}
+
+export type DiffMode = "side_by_side" | "unified";
+
+export interface DiffPanelConfig {
+  language?: string;
+  originalField?: string;
+  modifiedField?: string;
+  originalLabel?: string;
+  modifiedLabel?: string;
+  mode?: DiffMode;
+  collapseUnchanged?: boolean;
 }
 
 export interface QueryEditorConfig {

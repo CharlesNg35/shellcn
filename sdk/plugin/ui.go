@@ -11,6 +11,7 @@ const (
 	PanelMetrics       PanelType = "metrics"
 	PanelLogStream     PanelType = "log_stream"
 	PanelCodeEditor    PanelType = "code_editor"
+	PanelDiff          PanelType = "diff"
 	PanelDocument      PanelType = "document"
 	PanelQueryEditor   PanelType = "query_editor"
 	PanelRemoteDesktop PanelType = "remote_desktop"
@@ -43,6 +44,7 @@ func (KVConfig) panelConfig()            {}
 func (TerminalConfig) panelConfig()      {}
 func (TerminalGridConfig) panelConfig()  {}
 func (CodeEditorConfig) panelConfig()    {}
+func (DiffConfig) panelConfig()          {}
 func (QueryEditorConfig) panelConfig()   {}
 func (HTTPClientConfig) panelConfig()    {}
 func (RemoteDesktopConfig) panelConfig() {}
@@ -327,6 +329,23 @@ type CodeEditorConfig struct {
 	SaveParams     map[string]string `json:"saveParams,omitempty"`
 	SaveBodyKey    string            `json:"saveBodyKey,omitempty"`
 	SaveExtra      map[string]any    `json:"saveExtra,omitempty"`
+}
+
+type DiffMode string
+
+const (
+	DiffSideBySide DiffMode = "side_by_side"
+	DiffUnified    DiffMode = "unified"
+)
+
+type DiffConfig struct {
+	Language          string   `json:"language,omitempty"`
+	OriginalField     string   `json:"originalField,omitempty"`
+	ModifiedField     string   `json:"modifiedField,omitempty"`
+	OriginalLabel     string   `json:"originalLabel,omitempty"`
+	ModifiedLabel     string   `json:"modifiedLabel,omitempty"`
+	Mode              DiffMode `json:"mode,omitempty"`
+	CollapseUnchanged bool     `json:"collapseUnchanged,omitempty"`
 }
 
 type QueryEditorConfig struct {

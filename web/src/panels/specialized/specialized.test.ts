@@ -10,6 +10,7 @@ import GraphPanel from "./GraphPanel.vue";
 import TracePanel from "./TracePanel.vue";
 import KVPanel from "./KVPanel.vue";
 import HTTPClientPanel from "./HTTPClientPanel.vue";
+import DiffPanel from "./DiffPanel.vue";
 
 vi.mock("html-to-image", () => ({
   toJpeg: vi.fn(() => Promise.resolve("data:image/jpeg;base64,graph")),
@@ -42,6 +43,7 @@ vi.mock("@vue-flow/minimap", () => ({
 }));
 vi.mock("../../codemirror", () => ({
   createCodeMirrorEditor: () => ({ view: { destroy() {} } }),
+  createCodeMirrorDiffView: () => ({ destroy() {}, syncTheme() {} }),
   editorValue: () => "",
   setEditorValue: () => {},
   setEditorLanguage: () => {},
@@ -122,6 +124,14 @@ beforeEach(() => {
         },
       };
     }
+    if (url.includes("diff")) {
+      return {
+        body: {
+          before: "kind: Pod\n",
+          after: "kind: Service\n",
+        },
+      };
+    }
     return { body: {} };
   });
 });
@@ -133,6 +143,28 @@ afterEach(() => {
 });
 
 describe("specialized panels", () => {
+  it("renders a configured diff payload", async () => {
+    const w = mount(DiffPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "diff" },
+        config: {
+          language: "yaml",
+          originalField: "before",
+          modifiedField: "after",
+          originalLabel: "Current",
+          modifiedLabel: "Proposed",
+        },
+      },
+    });
+    await flushPromises();
+    await flushPromises();
+
+    expect(w.text()).toContain("Current");
+    expect(w.text()).toContain("Proposed");
+    w.unmount();
+  });
+
   it("renders graph nodes and node details", async () => {
     const w = mount(GraphPanel, {
       props: { connectionId: "c1", source: { routeId: "graph" } },

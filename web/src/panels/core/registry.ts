@@ -34,6 +34,7 @@ export const panelRegistry: Record<string, Component> = {
   log_stream: lazy(() => import("../streaming/LogStreamPanel.vue")),
   metrics: lazy(() => import("../streaming/MetricsPanel.vue")),
   code_editor: lazy(() => import("../streaming/CodeEditorPanel.vue")),
+  diff: lazy(() => import("../specialized/DiffPanel.vue")),
   query_editor: lazy(() => import("../streaming/QueryEditorPanel.vue")),
   remote_desktop: lazy(() => import("../streaming/RemoteDesktopPanel.vue")),
   graph: lazy(() => import("../specialized/GraphPanel.vue")),

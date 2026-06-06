@@ -14,6 +14,7 @@ func TestManifestConfigRoundTrip(t *testing.T) {
 		Name:       "demo",
 		Tabs: []plugin.Panel{
 			{Key: "data", Type: plugin.PanelTable, Config: plugin.TableConfig{Editable: true, RowKey: []string{"id"}}},
+			{Key: "diff", Type: plugin.PanelDiff, Config: plugin.DiffConfig{Language: "yaml", OriginalLabel: "Current", ModifiedLabel: "Edited"}},
 			{Key: "logs", Type: plugin.PanelLogStream},
 		},
 		Actions: []plugin.Action{
@@ -33,8 +34,11 @@ func TestManifestConfigRoundTrip(t *testing.T) {
 	if _, ok := got.Tabs[0].Config.(plugin.TableConfig); !ok {
 		t.Fatalf("table config lost its type: %T", got.Tabs[0].Config)
 	}
-	if got.Tabs[1].Config != nil {
-		t.Fatalf("configless panel gained a config: %T", got.Tabs[1].Config)
+	if _, ok := got.Tabs[1].Config.(plugin.DiffConfig); !ok {
+		t.Fatalf("diff config lost its type: %T", got.Tabs[1].Config)
+	}
+	if got.Tabs[2].Config != nil {
+		t.Fatalf("configless panel gained a config: %T", got.Tabs[2].Config)
 	}
 	if _, ok := got.Actions[0].Config.(plugin.CodeEditorConfig); !ok {
 		t.Fatalf("action config lost its type: %T", got.Actions[0].Config)

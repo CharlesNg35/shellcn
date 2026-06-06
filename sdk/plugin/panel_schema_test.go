@@ -24,6 +24,7 @@ func TestPanelConfigSchemasCoverConfigJSONFields(t *testing.T) {
 		{plugin.PanelTerminal, reflect.TypeOf(plugin.TerminalConfig{})},
 		{plugin.PanelTerminalGrid, reflect.TypeOf(plugin.TerminalGridConfig{})},
 		{plugin.PanelCodeEditor, reflect.TypeOf(plugin.CodeEditorConfig{})},
+		{plugin.PanelDiff, reflect.TypeOf(plugin.DiffConfig{})},
 		{plugin.PanelQueryEditor, reflect.TypeOf(plugin.QueryEditorConfig{})},
 		{plugin.PanelHTTPClient, reflect.TypeOf(plugin.HTTPClientConfig{})},
 		{plugin.PanelRemoteDesktop, reflect.TypeOf(plugin.RemoteDesktopConfig{})},

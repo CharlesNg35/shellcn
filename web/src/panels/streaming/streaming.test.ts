@@ -1,6 +1,6 @@
 /* eslint-disable vue/one-component-per-file */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { defineComponent, ref } from "vue";
+import { defineComponent, nextTick, ref } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
@@ -47,9 +47,21 @@ vi.mock("@xterm/addon-webgl", () => ({
 }));
 const mockCodeMirror = vi.hoisted(() => ({
   value: "",
+  onChange: null as ((value: string) => void) | null,
+  diffOptions: null as unknown,
 }));
 vi.mock("../../codemirror", () => ({
-  createCodeMirrorEditor: () => ({ view: { destroy() {} } }),
+  createCodeMirrorEditor: (
+    _parent: HTMLElement,
+    options: { onChange?: (value: string) => void },
+  ) => {
+    mockCodeMirror.onChange = options.onChange ?? null;
+    return { view: { destroy() {} } };
+  },
+  createCodeMirrorDiffView: (_parent: HTMLElement, options: unknown) => {
+    mockCodeMirror.diffOptions = options;
+    return { destroy() {}, syncTheme() {} };
+  },
   editorValue: () => mockCodeMirror.value,
   setEditorValue: () => {},
   setEditorCompletions: () => {},
@@ -120,6 +132,8 @@ beforeEach(() => {
   setActivePinia(createPinia());
   FakeWS.instances = [];
   mockCodeMirror.value = "";
+  mockCodeMirror.onChange = null;
+  mockCodeMirror.diffOptions = null;
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.stubGlobal("WebSocket", FakeWS);
   installFetch((url) => {
@@ -779,6 +793,43 @@ describe("streaming stub panels", () => {
         },
       },
     ]);
+    w.unmount();
+  });
+
+  it("opens a code editor diff only after content changes", async () => {
+    const w = mount(CodeEditorPanel, {
+      props: {
+        connectionId: "c1",
+        config: {
+          language: "yaml",
+          initialContent: "apiVersion: v1\nkind: Pod\n",
+          saveRouteId: "kubernetes.resource.apply",
+          saveMethod: "POST",
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(w.findAll("button").some((button) => button.text() === "Diff")).toBe(
+      false,
+    );
+
+    mockCodeMirror.value = "apiVersion: v1\nkind: Service\n";
+    mockCodeMirror.onChange?.(mockCodeMirror.value);
+    await nextTick();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text() === "Diff")!
+      .trigger("click");
+    await flushPromises();
+
+    expect(mockCodeMirror.diffOptions).toMatchObject({
+      original: "apiVersion: v1\nkind: Pod\n",
+      modified: "apiVersion: v1\nkind: Service\n",
+      language: "yaml",
+      collapseUnchanged: true,
+    });
     w.unmount();
   });
 

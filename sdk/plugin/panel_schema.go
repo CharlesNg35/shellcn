@@ -130,6 +130,18 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("saveExtra", object()),
 			),
 		},
+		PanelDiff: {
+			Type: "object",
+			Properties: props(
+				prop("language", stringProp()),
+				prop("originalField", stringProp()),
+				prop("modifiedField", stringProp()),
+				prop("originalLabel", stringProp()),
+				prop("modifiedLabel", stringProp()),
+				prop("mode", enum("side_by_side", "unified")),
+				prop("collapseUnchanged", boolProp()),
+			),
+		},
 		PanelQueryEditor: {
 			Type: "object",
 			Properties: props(

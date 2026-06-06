@@ -787,6 +787,7 @@ const (
     PanelMetrics       PanelType = "metrics"
     PanelLogStream     PanelType = "log_stream"
     PanelCodeEditor    PanelType = "code_editor"    // CodeMirror (YAML/JSON/SQL)
+    PanelDiff          PanelType = "diff"           // read-only CodeMirror diff/merge view
     PanelDocument      PanelType = "document"       // JSON/BSON tree editor
     PanelQueryEditor   PanelType = "query_editor"
     PanelRemoteDesktop PanelType = "remote_desktop"
@@ -1015,8 +1016,8 @@ is allowed for this.
 
 The core validates every route/action/source reference during plugin
 registration. `DataSource.Method`, when declared, must match the referenced
-route. Read panels (`table`, `form`, `document`, `code_editor`, `file_browser`,
-`object_detail`, `timeline`, etc.) must source from `GET` routes; streaming
+route. Read panels (`table`, `form`, `document`, `code_editor`, `diff`,
+`file_browser`, `object_detail`, `timeline`, etc.) must source from `GET` routes; streaming
 panels (`terminal`, `terminal_grid`, `log_stream`, `metrics`, `query_editor`,
 `remote_desktop`, `task_progress`, and table/resource watch sources) must source
 from `WS` routes.
@@ -1080,7 +1081,37 @@ the renderer parses the editor text as JSON and sends it under that key, merging
 `SaveExtra` first. This keeps document-store create/upsert flows generic: a
 manifest action can open `PanelCodeEditor` in a dialog with `InitialContent`, then
 save `{"document": {...}}`, `{"item": {...}}`, etc. without frontend
-plugin-specific code.
+plugin-specific code. Writable code editors show a renderer-owned **Diff** button
+only after the loaded buffer changes; it opens a read-only before/after diff of
+the loaded content and the edited buffer. Plugins do not declare custom UI for
+this common review flow.
+
+`PanelDiff` is the route-backed version for preview workflows where a plugin can
+compute both sides, such as Kubernetes dry-run apply, MongoDB document replace,
+Swarm service spec update, or generated DDL preview:
+
+```go
+type DiffMode string
+const (
+    DiffSideBySide DiffMode = "side_by_side"
+    DiffUnified    DiffMode = "unified"
+)
+
+type DiffConfig struct {
+    Language          string   // syntax mode for both sides
+    OriginalField     string   // route response field for the left/original side; default "original"
+    ModifiedField     string   // route response field for the right/modified side; default "modified"
+    OriginalLabel     string
+    ModifiedLabel     string
+    Mode              DiffMode // side_by_side default, or unified
+    CollapseUnchanged bool
+}
+```
+
+The source route returns an object with the configured fields. Values may be
+strings or structured JSON; structured values are pretty-printed before display.
+Do not use `PanelDiff` for current-state inspection; use `PanelObjectDetail` for
+structured objects and `PanelDocument` for rendered documents.
 
 `PanelQueryEditor` sends statements over its declared stream route. It may also
 declare a best-effort cancel route. It is an executable editor/results panel,

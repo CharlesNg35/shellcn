@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Button from "primevue/button";
+import Dialog from "primevue/dialog";
 import { fetchDoc, runAction } from "../../api/dataSource";
 import type { CodeEditorConfig } from "../../types/projection";
 import type { PanelProps } from "../core/types";
@@ -8,6 +9,8 @@ import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "../../components/SkeletonList.vue";
 import { useTheme } from "../../composables/useTheme";
 import type { CodeMirrorEditor } from "../../codemirror";
+import AppIcon from "../../components/AppIcon.vue";
+import CodeDiffView from "../shared/CodeDiffView.vue";
 
 const props = defineProps<PanelProps>();
 
@@ -19,6 +22,8 @@ const useFallback = ref(false);
 const saving = ref(false);
 const saveError = ref<string | null>(null);
 const saved = ref(false);
+const originalText = ref("");
+const showDiff = ref(false);
 let editor: CodeMirrorEditor | null = null;
 let codeMirror: typeof import("../../codemirror") | null = null;
 const editorConfig = computed(
@@ -29,12 +34,14 @@ const { isDark } = useTheme();
 const language = computed(() => editorConfig.value?.language ?? "plaintext");
 const saveRouteId = computed(() => editorConfig.value?.saveRouteId);
 const editable = computed(() => Boolean(saveRouteId.value));
+const changed = computed(() => text.value !== originalText.value);
 
 async function load(): Promise<void> {
   loading.value = true;
   const initial = editorConfig.value?.initialContent;
   if (initial !== undefined) {
     text.value = initial;
+    originalText.value = initial;
     error.value = null;
     await mountEditor();
     return;
@@ -50,6 +57,7 @@ async function load(): Promise<void> {
       resource: props.resource,
     });
     text.value = typeof doc === "string" ? doc : JSON.stringify(doc, null, 2);
+    originalText.value = text.value;
   } catch (e) {
     error.value = (e as Error).message;
     loading.value = false;
@@ -86,10 +94,19 @@ async function mountEditor(): Promise<void> {
   }
 }
 
+function syncTextFromEditor(): void {
+  if (editor) text.value = codeMirror?.editorValue(editor) ?? text.value;
+}
+
+function openDiff(): void {
+  syncTextFromEditor();
+  showDiff.value = true;
+}
+
 async function save(): Promise<void> {
   const routeId = saveRouteId.value;
   if (!routeId) return;
-  if (editor) text.value = codeMirror?.editorValue(editor) ?? text.value;
+  syncTextFromEditor();
   saving.value = true;
   saveError.value = null;
   try {
@@ -109,6 +126,8 @@ async function save(): Promise<void> {
       editorConfig.value?.saveMethod ?? "PUT",
     );
     saved.value = true;
+    originalText.value = text.value;
+    showDiff.value = false;
   } catch (e) {
     saveError.value = (e as Error).message;
   } finally {
@@ -152,6 +171,21 @@ onUnmounted(() => {
         }}</span>
         <span v-else-if="saved" class="text-xs text-emerald-500">Saved</span>
         <Button
+          v-if="changed"
+          type="button"
+          severity="secondary"
+          variant="outlined"
+          size="small"
+          aria-label="Show changes"
+          @click="openDiff"
+        >
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'git-compare' }"
+            :size="14"
+          />
+          Diff
+        </Button>
+        <Button
           type="button"
           label="Save"
           :loading="saving"
@@ -177,5 +211,24 @@ onUnmounted(() => {
       ref="container"
       class="shellcn-codemirror-host min-h-0 flex-1"
     />
+    <Dialog
+      v-model:visible="showDiff"
+      modal
+      maximizable
+      header="Review changes"
+      :style="{ width: 'min(112rem, 96vw)' }"
+      :breakpoints="{ '960px': '96vw' }"
+    >
+      <div class="h-[72vh] min-h-0">
+        <CodeDiffView
+          :original="originalText"
+          :modified="text"
+          :language="language"
+          original-label="Loaded"
+          modified-label="Edited"
+          collapse-unchanged
+        />
+      </div>
+    </Dialog>
   </div>
 </template>
