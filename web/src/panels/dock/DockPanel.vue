@@ -48,21 +48,25 @@ onBeforeUnmount(onResizeEnd);
     <div
       class="flex shrink-0 items-center gap-1 overflow-x-auto bg-surface-50 px-2 py-1 dark:bg-surface-900"
     >
-      <button
+      <div
         v-for="item in state.items"
         :key="item.id"
-        type="button"
-        :title="item.title"
-        class="group flex max-w-48 shrink-0 items-center gap-1.5 overflow-hidden rounded px-2 py-1 text-xs transition-colors"
+        class="group flex shrink-0 items-center overflow-hidden rounded text-xs transition-colors"
         :class="
           item.id === state.activeId
             ? 'bg-surface-0 text-surface-900 shadow-sm dark:bg-surface-800 dark:text-surface-0'
             : 'text-surface-500 hover:text-surface-800 dark:hover:text-surface-200'
         "
-        @click="dock.activate(connectionId, item.id)"
       >
-        <AppIcon v-if="item.icon" :icon="item.icon" :size="13" />
-        <span class="min-w-0 flex-1 truncate">{{ item.title }}</span>
+        <button
+          type="button"
+          :title="item.title"
+          class="flex max-w-48 min-w-0 flex-1 items-center gap-1.5 overflow-hidden px-2 py-1 text-left focus-visible:ring-2 focus-visible:ring-primary-500/35 focus-visible:outline-none focus-visible:ring-inset"
+          @click="dock.activate(connectionId, item.id)"
+        >
+          <AppIcon v-if="item.icon" :icon="item.icon" :size="13" />
+          <span class="min-w-0 flex-1 truncate">{{ item.title }}</span>
+        </button>
         <Button
           type="button"
           text
@@ -75,7 +79,7 @@ onBeforeUnmount(onResizeEnd);
         >
           <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="12" />
         </Button>
-      </button>
+      </div>
       <Button
         type="button"
         text

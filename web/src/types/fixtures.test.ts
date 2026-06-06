@@ -8,12 +8,12 @@ import type {
   ConnectionSummary,
   DataSource,
   PluginProjection,
-  RiskLevel,
 } from "./projection";
+import { RiskLevel } from "./projection";
 
 const projections: Record<string, unknown> = { ssh, docker, proxmox, postgres };
 
-const risks: RiskLevel[] = ["safe", "write", "destructive", "privileged"];
+const risks = Object.values(RiskLevel);
 const iconTypes = ["lucide", "url", "base64", "emoji"];
 
 function assertDataSource(ds: DataSource, where: string) {

@@ -85,17 +85,20 @@ function reconnectable(status: string): boolean {
         aria-hidden="true"
       />
       <span class="font-medium">{{ label(status) }}</span>
-      <button
+      <Button
         v-if="error"
         type="button"
-        class="flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-surface-400 transition hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-200"
+        text
+        severity="secondary"
+        size="small"
         title="Why did it fail?"
         aria-label="Show error details"
+        class="h-7 px-1.5 py-0 text-surface-400"
         @click="showError"
       >
         <AppIcon :icon="{ type: 'lucide', value: 'info' }" :size="14" />
         Details
-      </button>
+      </Button>
     </div>
     <Popover ref="errorPopover">
       <div class="max-w-xs space-y-1">

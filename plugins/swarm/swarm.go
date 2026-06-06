@@ -68,6 +68,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Resources: resources(),
 		Actions:   actions(),
 		Streams: []plugin.Stream{
+			{ID: "swarm.overview.metrics", Kind: plugin.StreamMetrics, RouteID: "swarm.overview.metrics"},
 			{ID: "swarm.service.logs", Kind: plugin.StreamLogs, RouteID: "swarm.service.logs"},
 		},
 	}
@@ -80,6 +81,10 @@ func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.
 }
 
 func icon(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide, Value: name} }
+
+func inspectDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{RawToggle: true}
+}
 
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
@@ -163,10 +168,10 @@ func serviceResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.service.overview", Params: map[string]string{"id": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.service.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: serviceOverviewDetailConfig()},
 				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.service.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns()}},
 				{Key: "logs", Label: "Logs", Icon: icon("scroll-text"), Type: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "swarm.service.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
-				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.service.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
+				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.service.inspect", Params: map[string]string{"id": "${resource.uid}"}}, Config: inspectDetailConfig()},
 			},
 		},
 	}
@@ -186,7 +191,7 @@ func stackResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.stack.overview", Params: map[string]string{"stack": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.stack.overview", Params: map[string]string{"stack": "${resource.uid}"}}, Config: stackOverviewDetailConfig()},
 				{Key: "services", Label: "Services", Icon: icon("workflow"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.stack.services", Params: map[string]string{"stack": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns()}},
 			},
 		},
@@ -211,9 +216,9 @@ func nodeResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: stateSeverities},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.node.overview", Params: map[string]string{"id": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.node.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: nodeOverviewDetailConfig()},
 				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.node.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns()}},
-				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.node.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
+				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.node.inspect", Params: map[string]string{"id": "${resource.uid}"}}, Config: inspectDetailConfig()},
 			},
 		},
 	}
@@ -225,9 +230,90 @@ func taskResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: stateSeverities},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.task.overview", Params: map[string]string{"id": "${resource.uid}"}}},
-				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.task.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.task.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: taskOverviewDetailConfig()},
+				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.task.inspect", Params: map[string]string{"id": "${resource.uid}"}}, Config: inspectDetailConfig()},
 			},
+		},
+	}
+}
+
+func serviceOverviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Service", Fields: []plugin.ObjectDetailField{
+				{Key: "id", Label: "ID", Copy: true},
+				{Key: "name", Label: "Name", Copy: true},
+				{Key: "mode", Label: "Mode"},
+				{Key: "replicas", Label: "Replicas"},
+				{Key: "image", Label: "Image", Copy: true},
+				{Key: "ports", Label: "Ports"},
+				{Key: "stack", Label: "Stack"},
+			}},
+			{Title: "Updates", Fields: []plugin.ObjectDetailField{
+				{Key: "updateState", Label: "Update state", Type: plugin.ColumnBadge, Severities: stateSeverities},
+				{Key: "updateMessage", Label: "Update message"},
+				{Key: "createdAt", Label: "Created", Type: plugin.ColumnDateTime},
+				{Key: "updatedAt", Label: "Updated", Type: plugin.ColumnDateTime},
+			}},
+		},
+	}
+}
+
+func stackOverviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Stack", Fields: []plugin.ObjectDetailField{
+				{Key: "name", Label: "Name", Copy: true},
+				{Key: "services", Label: "Services", Type: plugin.ColumnNumber},
+			}},
+		},
+	}
+}
+
+func nodeOverviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Node", Fields: []plugin.ObjectDetailField{
+				{Key: "id", Label: "ID", Copy: true},
+				{Key: "name", Label: "Hostname", Copy: true},
+				{Key: "role", Label: "Role", Type: plugin.ColumnBadge},
+				{Key: "availability", Label: "Availability", Type: plugin.ColumnBadge, Severities: availabilitySeverities},
+				{Key: "state", Label: "State", Type: plugin.ColumnBadge, Severities: stateSeverities},
+				{Key: "leader", Label: "Leader", Type: plugin.ColumnBool},
+				{Key: "reachability", Label: "Reachability", Type: plugin.ColumnBadge},
+				{Key: "address", Label: "Address", Copy: true},
+			}},
+			{Title: "Platform", Fields: []plugin.ObjectDetailField{
+				{Key: "engine", Label: "Engine"},
+				{Key: "os", Label: "OS"},
+				{Key: "arch", Label: "Architecture"},
+				{Key: "cpus", Label: "CPUs", Type: plugin.ColumnNumber},
+				{Key: "memoryBytes", Label: "Memory", Type: plugin.ColumnBytes},
+				{Key: "createdAt", Label: "Created", Type: plugin.ColumnDateTime},
+			}},
+		},
+	}
+}
+
+func taskOverviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Task", Fields: []plugin.ObjectDetailField{
+				{Key: "id", Label: "ID", Copy: true},
+				{Key: "service", Label: "Service ID", Copy: true},
+				{Key: "node", Label: "Node ID", Copy: true},
+				{Key: "slot", Label: "Slot", Type: plugin.ColumnNumber},
+				{Key: "desiredState", Label: "Desired state", Type: plugin.ColumnBadge, Severities: stateSeverities},
+				{Key: "state", Label: "State", Type: plugin.ColumnBadge, Severities: stateSeverities},
+				{Key: "message", Label: "Message"},
+				{Key: "error", Label: "Error"},
+				{Key: "image", Label: "Image", Copy: true},
+				{Key: "createdAt", Label: "Created", Type: plugin.ColumnDateTime},
+			}},
 		},
 	}
 }

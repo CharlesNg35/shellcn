@@ -37,10 +37,7 @@ func resourceType(k kind) plugin.ResourceType {
 	rowActions := append([]string(nil), k.actionIDs...)
 
 	tabs := []plugin.Panel{
-		{
-			Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelDocument,
-			Source: &plugin.DataSource{RouteID: "kubernetes.resource.get", Params: getParams},
-		},
+		overviewTab(k, getParams),
 		yamlTab(k),
 	}
 	tabs = append(tabs, k.detailTabs...)
@@ -82,11 +79,20 @@ func customResourceType() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
 				{
-					Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelDocument,
-					Source: &plugin.DataSource{RouteID: "kubernetes.resource.get", Params: map[string]string{"kind": "${resource.scope}", "namespace": "${resource.namespace}", "name": "${resource.name}"}},
+					Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelObjectDetail,
+					Source: &plugin.DataSource{RouteID: "kubernetes.resource.overview", Params: map[string]string{"kind": "${resource.scope}", "namespace": "${resource.namespace}", "name": "${resource.name}"}},
+					Config: genericOverviewDetailConfig(),
 				},
 			},
 		},
+	}
+}
+
+func overviewTab(k kind, params map[string]string) plugin.Panel {
+	return plugin.Panel{
+		Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelObjectDetail,
+		Source: &plugin.DataSource{RouteID: "kubernetes.resource.overview", Params: params},
+		Config: overviewDetailConfig(k),
 	}
 }
 

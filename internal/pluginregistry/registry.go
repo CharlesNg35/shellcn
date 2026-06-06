@@ -5,9 +5,11 @@ package pluginregistry
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin/pluginux"
 )
 
 type entry struct {
@@ -43,6 +45,9 @@ func (r *Registry) Register(p plugin.Plugin) error {
 	if err := plugin.ValidateWithCredentialKinds(m, routes, catalog); err != nil {
 		return fmt.Errorf("plugin %q: %w", m.Name, err)
 	}
+	if err := validateUX(m, routes); err != nil {
+		return fmt.Errorf("plugin %q: %w", m.Name, err)
+	}
 
 	r.byName[m.Name] = &entry{plugin: p, manifest: m, routes: routeMap(routes)}
 	return nil
@@ -66,6 +71,9 @@ func (r *Registry) Replace(p plugin.Plugin) error {
 	if err := plugin.ValidateWithCredentialKinds(m, routes, catalog); err != nil {
 		return fmt.Errorf("plugin %q: %w", m.Name, err)
 	}
+	if err := validateUX(m, routes); err != nil {
+		return fmt.Errorf("plugin %q: %w", m.Name, err)
+	}
 
 	r.byName[m.Name] = &entry{plugin: p, manifest: m, routes: routeMap(routes)}
 	return nil
@@ -85,6 +93,18 @@ func (r *Registry) MustRegister(p plugin.Plugin) {
 	if err := r.Register(p); err != nil {
 		panic(err)
 	}
+}
+
+func validateUX(m plugin.Manifest, routes []plugin.Route) error {
+	findings := pluginux.Errors(pluginux.Lint(m, routes))
+	if len(findings) == 0 {
+		return nil
+	}
+	messages := make([]string, len(findings))
+	for i, finding := range findings {
+		messages[i] = finding.Error()
+	}
+	return fmt.Errorf("UX contract: %s", strings.Join(messages, "; "))
 }
 
 func (r *Registry) Get(name string) (plugin.Plugin, bool) {

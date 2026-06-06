@@ -49,11 +49,37 @@ func TestManifestDeclaresPodmanWorkspace(t *testing.T) {
 			if tab.Type == plugin.PanelHTTPClient {
 				t.Fatalf("podman should not expose a raw API panel: resource=%s tab=%s", res.Kind, tab.Key)
 			}
+			if tab.Type == plugin.PanelTerminalGrid {
+				t.Fatalf("podman should keep exec sessions as single terminal panels: resource=%s tab=%s", res.Kind, tab.Key)
+			}
+			if tab.Key == "inspect" {
+				if tab.Type != plugin.PanelObjectDetail {
+					t.Fatalf("podman inspect should render object details: resource=%s panel=%s", res.Kind, tab.Type)
+				}
+				if cfg, ok := tab.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
+					t.Fatalf("podman inspect config for %s = %#v, want raw-toggle object detail", res.Kind, tab.Config)
+				}
+			}
 		}
 	}
 	for _, route := range New().Routes() {
 		if route.ID == "podman.api.execute" {
 			t.Fatal("podman should not expose a raw API execute route")
+		}
+		if route.ID == "podman.container.open" {
+			if route.Input == nil {
+				t.Fatal("podman container open route should declare port input")
+			}
+			field := route.Input.Groups[0].Fields[0]
+			if field.Type != plugin.FieldSelect || field.OptionsSource == nil || field.OptionsSource.RouteID != "podman.container.open.ports" {
+				t.Fatalf("podman open port field should be sourced select: %+v", field)
+			}
+			if field.Required {
+				t.Fatal("podman open port is a URL route param and must not make the GET body schema required")
+			}
+			if err := route.Input.ValidateValues(map[string]any{}, nil); err != nil {
+				t.Fatalf("podman open route input should allow fallback port selection: %v", err)
+			}
 		}
 	}
 }

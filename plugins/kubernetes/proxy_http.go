@@ -134,6 +134,51 @@ func proxyURLResult(rc *plugin.RequestContext, kind, ns, name, portSeg string) m
 	return map[string]any{"url": rc.ProxyURL(kind, ns, name, portSeg)}
 }
 
+func openPortSchema(optionsRouteID string) *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{
+		Name: "Open",
+		Fields: []plugin.Field{{
+			Key:         "port",
+			Label:       "Port",
+			Type:        plugin.FieldSelect,
+			Placeholder: "Select a port",
+			OptionsSource: &plugin.DataSource{
+				RouteID: optionsRouteID,
+				Params: map[string]string{
+					"namespace": "${resource.namespace}",
+					"name":      "${resource.name}",
+				},
+			},
+		}},
+	}}}
+}
+
+func ServiceOpenPorts(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	svc, err := s.clientset.CoreV1().Services(rc.Param("namespace")).Get(rc.Ctx, rc.Param("name"), metav1.GetOptions{})
+	if err != nil {
+		return nil, apiErr(err)
+	}
+	items := servicePortOptions(svc.Spec.Ports)
+	return plugin.Page[plugin.Option]{Items: items, Total: ptr(len(items))}, nil
+}
+
+func PodOpenPorts(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	pod, err := s.clientset.CoreV1().Pods(rc.Param("namespace")).Get(rc.Ctx, rc.Param("name"), metav1.GetOptions{})
+	if err != nil {
+		return nil, apiErr(err)
+	}
+	items := podPortOptions(pod.Spec.Containers)
+	return plugin.Page[plugin.Option]{Items: items, Total: ptr(len(items))}, nil
+}
+
 // pickServicePort returns the port segment to proxy ("8080" for http,
 // "https:8443" for a TLS port). It prefers a port that declares a web protocol
 // (via appProtocol or its name), then falls back to the first port. The scheme
@@ -170,6 +215,72 @@ func portSegment(port int32, scheme string) string {
 		return "https:" + seg
 	}
 	return seg
+}
+
+func servicePortOptions(ports []corev1.ServicePort) []plugin.Option {
+	items := make([]plugin.Option, 0, len(ports))
+	seen := map[string]bool{}
+	for _, p := range ports {
+		if p.Protocol != "" && p.Protocol != corev1.ProtocolTCP {
+			continue
+		}
+		scheme, ok := webScheme(p)
+		if !ok {
+			scheme = defaultScheme(int(p.Port))
+		}
+		value := portSegment(p.Port, scheme)
+		if seen[value] {
+			continue
+		}
+		seen[value] = true
+		label := fmt.Sprintf("%s %d/%s", strings.ToUpper(scheme), p.Port, protocolLabel(p.Protocol))
+		if p.Name != "" {
+			label = p.Name + " - " + label
+		}
+		target := p.TargetPort.String()
+		if target != "" && target != "0" && target != strconv.Itoa(int(p.Port)) {
+			label += " -> " + target
+		}
+		items = append(items, plugin.Option{Label: label, Value: value})
+	}
+	return items
+}
+
+func podPortOptions(containers []corev1.Container) []plugin.Option {
+	var items []plugin.Option
+	seen := map[string]bool{}
+	for _, c := range containers {
+		for _, p := range c.Ports {
+			if p.Protocol != "" && p.Protocol != corev1.ProtocolTCP {
+				continue
+			}
+			scheme, ok := webproxy.WebSchemeFromName(p.Name)
+			if !ok {
+				scheme = defaultScheme(int(p.ContainerPort))
+			}
+			value := portSegment(p.ContainerPort, scheme)
+			if seen[value] {
+				continue
+			}
+			seen[value] = true
+			label := fmt.Sprintf("%s %d/%s", strings.ToUpper(scheme), p.ContainerPort, protocolLabel(p.Protocol))
+			if p.Name != "" {
+				label = p.Name + " - " + label
+			}
+			if c.Name != "" {
+				label += " - " + c.Name
+			}
+			items = append(items, plugin.Option{Label: label, Value: value})
+		}
+	}
+	return items
+}
+
+func protocolLabel(protocol corev1.Protocol) string {
+	if protocol == "" {
+		return string(corev1.ProtocolTCP)
+	}
+	return string(protocol)
 }
 
 // webScheme returns "http"/"https" when a port declares a web protocol via its

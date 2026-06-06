@@ -75,7 +75,7 @@ func databaseResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mongodb.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mongodb.database.overview", Params: map[string]string{"database": "${resource.uid}"}}, Config: databaseOverviewDetailConfig()},
 				{Key: "collections", Label: "Collections", Icon: icon("folders"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.collections.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: collectionColumns(), ActionIDs: []string{"mongodb.collection.create"}, RowActionIDs: []string{"mongodb.collection.drop"}}},
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mongodb.command", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.uid}"}}, Config: commandConfig(`{"serverStatus": 1}`)},
 			},
@@ -97,9 +97,46 @@ func collectionResource() plugin.ResourceType {
 			Tabs: []plugin.Panel{
 				{Key: "documents", Label: "Documents", Icon: icon("braces"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.documents.list", Params: collectionParams()}, Config: plugin.TableConfig{Exportable: true, ActionIDs: []string{"mongodb.document.create"}, RowActionIDs: []string{"mongodb.document.delete"}}},
 				{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.indexes.list", Params: collectionParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"mongodb.index.create"}, RowActionIDs: []string{"mongodb.index.drop"}}},
-				{Key: "stats", Label: "Stats", Icon: icon("bar-chart-3"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mongodb.collection.stats", Params: collectionParams()}},
+				{Key: "stats", Label: "Stats", Icon: icon("bar-chart-3"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mongodb.collection.stats", Params: collectionParams()}, Config: collectionStatsDetailConfig()},
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mongodb.command", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.namespace}"}}, Config: commandConfig(`{"find": "${resource.name}", "filter": {}, "limit": 50}`)},
 			},
+		},
+	}
+}
+
+func databaseOverviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Database", Fields: []plugin.ObjectDetailField{
+				{Key: "db", Label: "Name", Copy: true},
+				{Key: "collections", Label: "Collections", Type: plugin.ColumnNumber},
+				{Key: "views", Label: "Views", Type: plugin.ColumnNumber},
+				{Key: "objects", Label: "Objects", Type: plugin.ColumnNumber},
+				{Key: "avgObjSize", Label: "Average object size", Type: plugin.ColumnBytes},
+				{Key: "dataSize", Label: "Data size", Type: plugin.ColumnBytes},
+				{Key: "storageSize", Label: "Storage size", Type: plugin.ColumnBytes},
+				{Key: "indexes", Label: "Indexes", Type: plugin.ColumnNumber},
+				{Key: "indexSize", Label: "Index size", Type: plugin.ColumnBytes},
+			}},
+		},
+	}
+}
+
+func collectionStatsDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Collection", Fields: []plugin.ObjectDetailField{
+				{Key: "ns", Label: "Namespace", Copy: true},
+				{Key: "count", Label: "Documents", Type: plugin.ColumnNumber},
+				{Key: "avgObjSize", Label: "Average object size", Type: plugin.ColumnBytes},
+				{Key: "size", Label: "Data size", Type: plugin.ColumnBytes},
+				{Key: "storageSize", Label: "Storage size", Type: plugin.ColumnBytes},
+				{Key: "nindexes", Label: "Indexes", Type: plugin.ColumnNumber},
+				{Key: "totalIndexSize", Label: "Index size", Type: plugin.ColumnBytes},
+				{Key: "wiredTiger", Label: "WiredTiger", Type: plugin.ColumnJSON},
+			}},
 		},
 	}
 }

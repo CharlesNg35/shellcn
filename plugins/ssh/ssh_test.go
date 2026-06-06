@@ -19,8 +19,11 @@ func TestManifestExposesTerminalAndFiles(t *testing.T) {
 	if len(m.Tabs) != 3 {
 		t.Fatalf("tabs: got %d want 3", len(m.Tabs))
 	}
-	if m.Tabs[0].Type != plugin.PanelTerminal || m.Tabs[0].Source.RouteID != "ssh.shell" {
+	if m.Tabs[0].Type != plugin.PanelTerminalGrid || m.Tabs[0].Source.RouteID != "ssh.shell" {
 		t.Fatalf("terminal tab not wired to ssh.shell: %+v", m.Tabs[0])
+	}
+	if cfg, ok := m.Tabs[0].Config.(plugin.TerminalGridConfig); !ok || cfg.MaxPanes != 6 || !cfg.Zoom || !cfg.Search {
+		t.Fatalf("terminal grid config missing split/search/zoom support: %#v", m.Tabs[0].Config)
 	}
 	files := m.Tabs[1]
 	if files.Type != plugin.PanelFileBrowser {

@@ -34,13 +34,14 @@ func rc(sess plugin.Session, params map[string]string) *plugin.RequestContext {
 }
 
 func TestListResourceNamespacedPods(t *testing.T) {
+	const created = "2026-06-05T10:11:12Z"
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/namespaces/default/pods", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, obj{
 			"apiVersion": "v1", "kind": "PodList",
 			"items": []any{
 				obj{
-					"metadata": obj{"name": "web-1", "namespace": "default", "uid": "u1"},
+					"metadata": obj{"name": "web-1", "namespace": "default", "uid": "u1", "creationTimestamp": created},
 					"spec":     obj{"nodeName": "node-a"},
 					"status": obj{
 						"phase":             "Running",
@@ -65,10 +66,70 @@ func TestListResourceNamespacedPods(t *testing.T) {
 	if r["name"] != "web-1" || r["status"] != "Running" || r["ready"] != "1/1" || r["node"] != "node-a" {
 		t.Fatalf("pod row = %+v", r)
 	}
+	if r["age"] != created || r["createdAt"] != created {
+		t.Fatalf("pod age fields = %+v", r)
+	}
 	// Every list row must carry a ref so the grid can open detail + row actions.
 	ref, ok := r["ref"].(plugin.ResourceRef)
 	if !ok || ref.Kind != "pod" || ref.Name != "web-1" || ref.Namespace != "default" {
 		t.Fatalf("pod row ref = %+v (ok=%v)", r["ref"], ok)
+	}
+}
+
+func TestResourceOverviewPodIsStructured(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web-1", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "v1",
+			"kind":       "Pod",
+			"metadata": obj{
+				"name":              "web-1",
+				"namespace":         "default",
+				"uid":               "u1",
+				"creationTimestamp": "2026-06-05T10:11:12Z",
+				"labels":            obj{"app": "web"},
+			},
+			"spec": obj{
+				"nodeName":           "node-a",
+				"serviceAccountName": "web-sa",
+				"containers": []any{obj{
+					"name": "app",
+					"resources": obj{
+						"requests": obj{"cpu": "250m", "memory": "128Mi"},
+						"limits":   obj{"cpu": "500m", "memory": "256Mi"},
+					},
+				}},
+				"volumes": []any{obj{"name": "config"}},
+			},
+			"status": obj{
+				"phase":    "Running",
+				"podIP":    "10.1.2.3",
+				"hostIP":   "192.168.1.10",
+				"qosClass": "Burstable",
+				"containerStatuses": []any{
+					obj{"name": "app", "ready": true, "restartCount": int64(2)},
+				},
+			},
+		})
+	})
+	sess := connectTo(t, mux)
+
+	out, err := ResourceOverview(rc(sess, map[string]string{"kind": "pod", "namespace": "default", "name": "web-1"}))
+	if err != nil {
+		t.Fatalf("overview: %v", err)
+	}
+	row := out.(Row)
+	if row["status"] != "Running" || row["ready"] != "1/1" || row["node"] != "node-a" || row["serviceAccount"] != "web-sa" {
+		t.Fatalf("pod overview summary = %+v", row)
+	}
+	if row["cpuRequest"] != 0.25 || row["cpuLimit"] != 0.5 {
+		t.Fatalf("pod overview cpu = %+v", row)
+	}
+	if row["memRequest"] != int64(134217728) || row["memLimit"] != int64(268435456) {
+		t.Fatalf("pod overview memory = %+v", row)
+	}
+	if row["volumes"] != int64(1) || row["restarts"] != int64(2) {
+		t.Fatalf("pod overview counters = %+v", row)
 	}
 }
 
@@ -108,6 +169,16 @@ func TestTreeCategoryListsKinds(t *testing.T) {
 	}
 	if !foundPod {
 		t.Fatal("workloads category should include Pods")
+	}
+}
+
+func TestBuiltInAgeColumnsUseRelativeTime(t *testing.T) {
+	for _, k := range kinds {
+		for _, c := range k.columns {
+			if c.Key == "age" && c.Type != plugin.ColumnRelativeTime {
+				t.Fatalf("%s age column type = %q, want %q", k.name, c.Type, plugin.ColumnRelativeTime)
+			}
+		}
 	}
 }
 

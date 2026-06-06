@@ -103,7 +103,7 @@ func databaseResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mysql.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mysql.database.overview", Params: map[string]string{"database": "${resource.uid}"}}, Config: databaseOverviewDetailConfig()},
 				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"mysql.table.create"}, RowActionIDs: []string{"mysql.table.truncate", "mysql.table.drop"}}},
 				{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Type: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "mysql.relations.graph", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}},
 				{Key: "views", Label: "Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.views.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"mysql.view.drop"}}},
@@ -178,8 +178,39 @@ func userResource() plugin.ResourceType {
 			Detail:  []string{"mysql.user.grant", "mysql.user.drop"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
-			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mysql.user.overview", Params: map[string]string{"user": "${resource.name}", "host": "${resource.namespace}"}}},
+			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mysql.user.overview", Params: map[string]string{"user": "${resource.name}", "host": "${resource.namespace}"}}, Config: userOverviewDetailConfig()},
 		}},
+	}
+}
+
+func databaseOverviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Database", Fields: []plugin.ObjectDetailField{
+				{Key: "name", Label: "Name", Copy: true},
+				{Key: "charset", Label: "Charset"},
+				{Key: "collation", Label: "Collation"},
+				{Key: "version", Label: "Server version"},
+				{Key: "size", Label: "Size", Type: plugin.ColumnBytes},
+				{Key: "tables", Label: "Tables", Type: plugin.ColumnNumber},
+				{Key: "views", Label: "Views", Type: plugin.ColumnNumber},
+			}},
+		},
+	}
+}
+
+func userOverviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "User", Fields: []plugin.ObjectDetailField{
+				{Key: "user", Label: "User", Copy: true},
+				{Key: "host", Label: "Host", Copy: true},
+				{Key: "plugin", Label: "Auth plugin"},
+				{Key: "locked", Label: "Locked", Type: plugin.ColumnBool},
+			}},
+		},
 	}
 }
 
@@ -255,8 +286,8 @@ func actions() []plugin.Action {
 		{ID: "mysql.constraint.add", Label: "Add constraint", Icon: icon("plus"), RouteID: "mysql.constraint.add", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "constraints"}},
 		{ID: "mysql.constraint.drop", Label: "Drop constraint", Icon: icon("trash"), RouteID: "mysql.constraint.drop", Params: map[string]string{"database": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}", "type": "${resource.uid}"}, Confirm: true, ConfirmText: "Drop this constraint?", OnSuccess: &plugin.ActionSuccess{SelectTab: "constraints"}},
 		{ID: "mysql.column.alter", Label: "Alter column", Icon: icon("pencil"), RouteID: "mysql.column.alter", Params: map[string]string{"database": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
-		{ID: "mysql.user.create", Label: "Create user", Icon: icon("user-plus"), RouteID: "mysql.user.create", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
-		{ID: "mysql.user.grant", Label: "Grant privileges", Icon: icon("shield-plus"), RouteID: "mysql.user.grant", Params: map[string]string{"user": "${resource.name}", "host": "${resource.namespace}"}},
+		{ID: "mysql.user.create", Label: "Create user", Icon: icon("user-plus"), RouteID: "mysql.user.create", Confirm: true, ConfirmText: "Create this MySQL user?", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
+		{ID: "mysql.user.grant", Label: "Grant privileges", Icon: icon("shield-plus"), RouteID: "mysql.user.grant", Params: map[string]string{"user": "${resource.name}", "host": "${resource.namespace}"}, Confirm: true, ConfirmText: "Grant these privileges to this MySQL user?"},
 		{ID: "mysql.user.drop", Label: "Drop user", Icon: icon("trash-2"), RouteID: "mysql.user.drop", Params: map[string]string{"user": "${resource.name}", "host": "${resource.namespace}"}, Confirm: true, ConfirmText: "Drop this user? Their privileges are permanently removed."},
 	}
 }

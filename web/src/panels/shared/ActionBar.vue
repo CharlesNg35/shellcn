@@ -4,13 +4,9 @@ import Dialog from "primevue/dialog";
 import Button from "primevue/button";
 import Menu from "primevue/menu";
 import { useToast } from "primevue/usetoast";
-import { runFormAction } from "../../api/dataSource";
-import type {
-  Action,
-  ResourceRef,
-  RiskLevel,
-  Row,
-} from "../../types/projection";
+import { fetchDoc, runFormAction } from "../../api/dataSource";
+import type { Action, ResourceRef, Row } from "../../types/projection";
+import { RiskLevel } from "../../types/projection";
 import AppIcon from "../../components/AppIcon.vue";
 import SchemaForm from "../form/SchemaForm.vue";
 import { isVisible } from "../form/condition";
@@ -66,10 +62,11 @@ const busyAction = ref<string | null>(null);
 const error = ref<string | null>(null);
 
 const riskClass: Record<RiskLevel, string> = {
-  safe: "border border-surface-300 text-surface-700 hover:bg-surface-100 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800",
-  write: "bg-primary-600 text-white hover:bg-primary-700",
-  destructive: "bg-rose-600 text-white hover:bg-rose-700",
-  privileged: "bg-amber-600 text-white hover:bg-amber-700",
+  [RiskLevel.Safe]:
+    "border border-surface-300 text-surface-700 hover:bg-surface-100 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800",
+  [RiskLevel.Write]: "bg-primary-600 text-white hover:bg-primary-700",
+  [RiskLevel.Destructive]: "bg-rose-600 text-white hover:bg-rose-700",
+  [RiskLevel.Privileged]: "bg-amber-600 text-white hover:bg-amber-700",
 };
 
 const MAX_INLINE = 5;
@@ -136,7 +133,7 @@ function menuModel(actions: Action[]) {
 }
 
 function menuItemClass(action: Action): string {
-  return action.risk === "destructive"
+  return action.risk === RiskLevel.Destructive
     ? "text-rose-600 dark:text-rose-400"
     : "text-surface-700 dark:text-surface-200";
 }
@@ -187,18 +184,20 @@ function trigger(action: Action): void {
     dock.openDialog(props.connectionId, dockItem(action));
     return;
   }
+  if (
+    action.requiresConfirm ||
+    action.input ||
+    action.risk === RiskLevel.Destructive ||
+    action.risk === RiskLevel.Privileged
+  ) {
+    pending.value = action;
+    return;
+  }
   if (action.open === "url") {
     void openURL(action);
     return;
   }
-  if (
-    action.requiresConfirm ||
-    action.input ||
-    action.risk === "destructive" ||
-    action.risk === "privileged"
-  )
-    pending.value = action;
-  else void execute(action);
+  void execute(action);
 }
 
 function actionParams(
@@ -219,19 +218,46 @@ function actionParams(
   return params;
 }
 
-async function openURL(action: Action): Promise<void> {
+function formParams(body?: Record<string, unknown>): Record<string, string> {
+  const params: Record<string, string> = {};
+  for (const [key, value] of Object.entries(body ?? {})) {
+    if (value === undefined || value === null || value === "") continue;
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      params[key] = String(value);
+    }
+  }
+  return params;
+}
+
+async function openURL(
+  action: Action,
+  body?: Record<string, unknown>,
+): Promise<void> {
   error.value = null;
+  busy.value = true;
   busyAction.value = action.id;
   const ref = targets()[0] ?? props.resource ?? null;
+  const params = { ...actionParams(action, ref), ...formParams(body) };
   try {
-    const result: unknown = await runFormAction(
-      props.connectionId,
-      action.routeId,
-      { resource: ref },
-      {},
-      actionParams(action, ref),
-      action.method ?? "GET",
-    );
+    const result: unknown =
+      (action.method ?? "GET") === "GET"
+        ? await fetchDoc(
+            props.connectionId,
+            { routeId: action.routeId, params },
+            { resource: ref },
+          )
+        : await runFormAction(
+            props.connectionId,
+            action.routeId,
+            { resource: ref },
+            {},
+            params,
+            action.method ?? "POST",
+          );
     const raw =
       result && typeof result === "object"
         ? (result as Record<string, unknown>).url
@@ -239,11 +265,24 @@ async function openURL(action: Action): Promise<void> {
     if (typeof raw === "string" && raw) {
       window.open(raw, "_blank", "noopener,noreferrer");
     }
+    pending.value = null;
   } catch (e) {
     error.value = (e as Error).message;
+    toast.add({
+      severity: "error",
+      summary: `${action.label} failed`,
+      detail: (e as Error).message,
+      life: 6000,
+    });
   } finally {
+    busy.value = false;
     busyAction.value = null;
   }
+}
+
+function submitPending(action: Action, body?: Record<string, unknown>): void {
+  if (action.open === "url") void openURL(action, body);
+  else void execute(action, body);
 }
 
 async function execute(
@@ -435,6 +474,7 @@ function onVisible(visible: boolean): void {
         <p v-if="pending.confirmText" class="mb-4 text-sm text-surface-500">
           {{ pending.confirmText }}
         </p>
+        <p v-if="error" class="mb-3 text-sm text-red-500">{{ error }}</p>
 
         <SchemaForm
           v-if="pending.input"
@@ -443,11 +483,10 @@ function onVisible(visible: boolean): void {
           :busy="busy"
           :connection-id="connectionId"
           :resource="targets()[0] ?? resource ?? null"
-          @submit="execute(pending, $event)"
+          @submit="submitPending(pending, $event)"
         />
 
         <template v-else>
-          <p v-if="error" class="mb-3 text-sm text-red-500">{{ error }}</p>
           <div class="flex justify-end gap-2">
             <Button
               type="button"
@@ -467,12 +506,12 @@ function onVisible(visible: boolean): void {
               :pt="{
                 root: cn(
                   'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50',
-                  pending.risk === 'destructive'
+                  pending.risk === RiskLevel.Destructive
                     ? 'bg-rose-600'
                     : 'bg-primary-500',
                 ),
               }"
-              @click="execute(pending)"
+              @click="submitPending(pending)"
             />
           </div>
         </template>

@@ -3,18 +3,27 @@ import { defineComponent } from "vue";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import Button from "primevue/button";
+import ToastService from "primevue/toastservice";
 import { installFetch } from "../../test/fetchMock";
+import { toPng } from "html-to-image";
 import GraphPanel from "./GraphPanel.vue";
 import TracePanel from "./TracePanel.vue";
 import KVPanel from "./KVPanel.vue";
 import HTTPClientPanel from "./HTTPClientPanel.vue";
+import DiffPanel from "./DiffPanel.vue";
+
+vi.mock("html-to-image", () => ({
+  toJpeg: vi.fn(() => Promise.resolve("data:image/jpeg;base64,graph")),
+  toPng: vi.fn(() => Promise.resolve("data:image/png;base64,graph")),
+  toSvg: vi.fn(() => Promise.resolve("data:image/svg+xml,graph")),
+}));
 
 vi.mock("@vue-flow/core", () => ({
   VueFlow: defineComponent({
     props: ["nodes", "edges"],
     emits: ["node-click"],
     template:
-      '<div data-test="graph"><button v-for="n in nodes" :key="n.id" type="button" @click="$emit(\'node-click\', { node: n })">{{ n.data.label }}</button><slot /></div>',
+      '<div data-test="graph" class="vue-flow"><button v-for="n in nodes" :key="n.id" type="button" @click="$emit(\'node-click\', { node: n })">{{ n.data.label }}</button><slot /></div>',
   }),
   Handle: defineComponent({
     props: ["type", "position", "id"],
@@ -34,6 +43,7 @@ vi.mock("@vue-flow/minimap", () => ({
 }));
 vi.mock("../../codemirror", () => ({
   createCodeMirrorEditor: () => ({ view: { destroy() {} } }),
+  createCodeMirrorDiffView: () => ({ destroy() {}, syncTheme() {} }),
   editorValue: () => "",
   setEditorValue: () => {},
   setEditorLanguage: () => {},
@@ -114,19 +124,51 @@ beforeEach(() => {
         },
       };
     }
+    if (url.includes("diff")) {
+      return {
+        body: {
+          before: "kind: Pod\n",
+          after: "kind: Service\n",
+        },
+      };
+    }
     return { body: {} };
   });
 });
 
 afterEach(() => {
   document.body.innerHTML = "";
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
 describe("specialized panels", () => {
+  it("renders a configured diff payload", async () => {
+    const w = mount(DiffPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "diff" },
+        config: {
+          language: "yaml",
+          originalField: "before",
+          modifiedField: "after",
+          originalLabel: "Current",
+          modifiedLabel: "Proposed",
+        },
+      },
+    });
+    await flushPromises();
+    await flushPromises();
+
+    expect(w.text()).toContain("Current");
+    expect(w.text()).toContain("Proposed");
+    w.unmount();
+  });
+
   it("renders graph nodes and node details", async () => {
     const w = mount(GraphPanel, {
       props: { connectionId: "c1", source: { routeId: "graph" } },
+      global: { plugins: [ToastService] },
     });
     await flushPromises();
     await flushPromises();
@@ -134,6 +176,44 @@ describe("specialized panels", () => {
     expect(w.text()).toContain("API");
     await w.get('[data-test="graph"] button').trigger("click");
     expect(w.text()).toContain("runtime");
+  });
+
+  it("exports the graph viewport as a PNG", async () => {
+    const w = mount(GraphPanel, {
+      props: { connectionId: "c1", source: { routeId: "graph" } },
+      global: { plugins: [ToastService] },
+    });
+    await flushPromises();
+    await flushPromises();
+
+    await w.get('button[aria-label="Export graph"]').trigger("click");
+    await flushPromises();
+    const pngItem = [...document.body.querySelectorAll("span")].find(
+      (el) => el.textContent === "PNG",
+    );
+    expect(pngItem).toBeTruthy();
+    const click = vi.fn();
+    const anchor = { click } as unknown as HTMLAnchorElement;
+    const createElement = vi
+      .spyOn(document, "createElement")
+      .mockReturnValue(anchor);
+    pngItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushPromises();
+
+    expect(toPng).toHaveBeenCalledWith(
+      expect.objectContaining({
+        className: expect.stringContaining("vue-flow"),
+      }),
+      expect.objectContaining({ cacheBust: true, pixelRatio: 2 }),
+    );
+    const options = vi.mocked(toPng).mock.calls[0][1];
+    expect(
+      options?.filter?.(
+        document.createTextNode("edge label") as unknown as HTMLElement,
+      ),
+    ).toBe(true);
+    expect(click).toHaveBeenCalled();
+    createElement.mockRestore();
   });
 
   it("renders trace spans as a selectable waterfall", async () => {

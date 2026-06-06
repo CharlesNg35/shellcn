@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, watch } from "vue";
 import Button from "primevue/button";
+import Tooltip from "primevue/tooltip";
 import { resolveParams } from "../../api/dataSource";
 import {
   useRecordingControl,
@@ -16,7 +17,12 @@ const props = defineProps<{
   resource?: ResourceRef | null;
   descriptor: RecordingDescriptor;
   streamStatus?: ChannelStatus;
+  disabledReason?: string | null;
 }>();
+const emit = defineEmits<{
+  recordingChange: [recording: boolean];
+}>();
+const vTooltip = Tooltip;
 
 const streamRef = computed(() => ({
   routeId: props.source.routeId,
@@ -31,6 +37,12 @@ let resumeOnOpen = false;
 const typeLabel = computed(() =>
   props.descriptor.class === "desktop" ? "desktop" : "terminal",
 );
+const controlDisabled = computed(() => Boolean(props.disabledReason));
+const disabledTooltip = computed(() => ({
+  value: props.disabledReason ?? "",
+  disabled: !props.disabledReason,
+  showDelay: 300,
+}));
 
 async function startRecording(): Promise<void> {
   resumeOnOpen = true;
@@ -56,6 +68,8 @@ watch(
     }
   },
 );
+
+watch(recording, (next) => emit("recordingChange", next), { immediate: true });
 </script>
 
 <template>
@@ -74,23 +88,28 @@ watch(
       REC
     </span>
 
-    <Button
+    <span
       v-if="canControl && !recording"
-      outlined
-      severity="secondary"
-      size="small"
-      :disabled="busy"
-      @click="startRecording"
+      v-tooltip.bottom="disabledTooltip"
+      class="inline-flex"
     >
-      <AppIcon
-        v-if="busy"
-        :icon="{ type: 'lucide', value: 'circle' }"
-        :size="12"
-        loading
-      />
-      <span v-else class="h-2 w-2 rounded-full bg-rose-400" />
-      Record
-    </Button>
+      <Button
+        outlined
+        severity="secondary"
+        size="small"
+        :disabled="busy || controlDisabled"
+        @click="startRecording"
+      >
+        <AppIcon
+          v-if="busy"
+          :icon="{ type: 'lucide', value: 'circle' }"
+          :size="12"
+          loading
+        />
+        <span v-else class="h-2 w-2 rounded-full bg-rose-400" />
+        Record
+      </Button>
+    </span>
 
     <Button
       v-if="canControl && recording && !forced"

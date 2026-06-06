@@ -3,6 +3,7 @@ import { computed } from "vue";
 import Button from "primevue/button";
 import FileUpload from "primevue/fileupload";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
+import InputText from "primevue/inputtext";
 import ProgressBar from "primevue/progressbar";
 import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
@@ -168,23 +169,29 @@ const statusText = computed(() => {
             :size="15"
             class="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-surface-400"
           />
-          <input
+          <InputText
             v-model="filter"
             type="search"
             placeholder="Filter files…"
             aria-label="Filter files"
             :class="searchClass"
           />
-          <button
+          <Button
             v-if="filter"
             type="button"
             aria-label="Clear filter"
             title="Clear filter"
-            class="absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center rounded p-1 text-surface-400 transition-colors hover:text-surface-700 focus-visible:ring-2 focus-visible:ring-primary-500/35 focus-visible:outline-none dark:hover:text-surface-200"
+            text
+            rounded
+            severity="secondary"
+            size="small"
+            :pt="{
+              root: 'absolute top-1/2 right-1.5 h-7 w-7 -translate-y-1/2 p-0 text-surface-400',
+            }"
             @click="filter = ''"
           >
             <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="14" />
-          </button>
+          </Button>
         </div>
 
         <div class="flex items-center gap-1">

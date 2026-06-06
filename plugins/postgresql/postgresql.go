@@ -93,7 +93,7 @@ func databaseResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "postgresql.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "postgresql.database.overview", Params: map[string]string{"database": "${resource.uid}"}}, Config: databaseOverviewDetailConfig()},
 				{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.schemas.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: schemaColumns(), RowActionIDs: []string{"postgresql.schema.drop"}}},
 				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"postgresql.table.create.in_database"}, RowActionIDs: []string{"postgresql.table.truncate", "postgresql.table.drop"}}},
 				{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Type: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "postgresql.relations.graph", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}},
@@ -112,7 +112,7 @@ func schemaResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "postgresql.schema.overview", Params: schemaParams()}},
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "postgresql.schema.overview", Params: schemaParams()}, Config: schemaOverviewDetailConfig()},
 				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.tables.list", Params: schemaParams()}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"postgresql.table.create"}, RowActionIDs: []string{"postgresql.table.truncate", "postgresql.table.drop"}}},
 				{Key: "views", Label: "Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.views.list", Params: schemaParams()}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"postgresql.view.drop"}}},
 				{Key: "functions", Label: "Functions", Icon: icon("function-square"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.functions.list", Params: schemaParams()}, Config: plugin.TableConfig{Columns: functionColumns()}},
@@ -177,8 +177,58 @@ func sequenceResource() plugin.ResourceType {
 		Kind: "sequence", Title: "Sequences",
 		List: plugin.DataSource{RouteID: "postgresql.sequences.list"}, Columns: sequenceColumns(),
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Panel{
-			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "postgresql.sequence.overview", Params: tableParams()}},
+			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "postgresql.sequence.overview", Params: tableParams()}, Config: sequenceOverviewDetailConfig()},
 		}},
+	}
+}
+
+func databaseOverviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Database", Fields: []plugin.ObjectDetailField{
+				{Key: "name", Label: "Name", Copy: true},
+				{Key: "user", Label: "User", Copy: true},
+				{Key: "version", Label: "Server version"},
+				{Key: "size", Label: "Size", Type: plugin.ColumnBytes},
+				{Key: "schemas", Label: "Schemas", Type: plugin.ColumnNumber},
+				{Key: "tables", Label: "Tables", Type: plugin.ColumnNumber},
+			}},
+		},
+	}
+}
+
+func schemaOverviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Schema", Fields: []plugin.ObjectDetailField{
+				{Key: "name", Label: "Name", Copy: true},
+				{Key: "owner", Label: "Owner"},
+				{Key: "tables", Label: "Tables", Type: plugin.ColumnNumber},
+				{Key: "views", Label: "Views", Type: plugin.ColumnNumber},
+				{Key: "sequences", Label: "Sequences", Type: plugin.ColumnNumber},
+				{Key: "functions", Label: "Functions", Type: plugin.ColumnNumber},
+			}},
+		},
+	}
+}
+
+func sequenceOverviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Sequence", Fields: []plugin.ObjectDetailField{
+				{Key: "sequence_schema", Label: "Schema", Copy: true},
+				{Key: "sequence_name", Label: "Name", Copy: true},
+				{Key: "data_type", Label: "Data type"},
+				{Key: "start_value", Label: "Start value", Type: plugin.ColumnNumber},
+				{Key: "minimum_value", Label: "Minimum value", Type: plugin.ColumnNumber},
+				{Key: "maximum_value", Label: "Maximum value", Type: plugin.ColumnNumber},
+				{Key: "increment", Label: "Increment", Type: plugin.ColumnNumber},
+				{Key: "cycle_option", Label: "Cycle", Type: plugin.ColumnBadge},
+			}},
+		},
 	}
 }
 

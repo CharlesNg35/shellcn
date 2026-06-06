@@ -145,6 +145,47 @@ func TestVolumeDriverAndContainerNetworkUseAutocomplete(t *testing.T) {
 	}
 }
 
+func TestEngineShellCreateOptionsMountDockerSocket(t *testing.T) {
+	opts := engineShellCreateOptions(endpoint{network: "unix", address: "/run/docker.sock"})
+	if opts.Name != engineShellName {
+		t.Fatalf("shell container name = %q, want %q", opts.Name, engineShellName)
+	}
+	if opts.Config.Image != engineShellImage {
+		t.Fatalf("shell image = %q, want %q", opts.Config.Image, engineShellImage)
+	}
+	if fmt.Sprint(opts.Config.Cmd) != fmt.Sprint([]string{"/bin/sh", "-c", engineShellKeepalive}) {
+		t.Fatalf("shell command = %#v", opts.Config.Cmd)
+	}
+	if !opts.Config.OpenStdin || !opts.Config.Tty {
+		t.Fatalf("shell tty/stdin = %v/%v, want true/true", opts.Config.Tty, opts.Config.OpenStdin)
+	}
+	if got := opts.Config.Labels[engineShellLabel]; got != "true" {
+		t.Fatalf("shell label = %q, want true", got)
+	}
+	if got := opts.Config.Env; fmt.Sprint(got) != fmt.Sprint([]string{"DOCKER_HOST=unix:///var/run/docker.sock", "HOME=/root"}) {
+		t.Fatalf("shell env = %#v", got)
+	}
+	if opts.Config.WorkingDir != "/root" {
+		t.Fatalf("shell working dir = %q, want /root", opts.Config.WorkingDir)
+	}
+	if got := opts.HostConfig.Binds; fmt.Sprint(got) != fmt.Sprint([]string{"/run/docker.sock:/var/run/docker.sock:rw"}) {
+		t.Fatalf("shell binds = %#v", got)
+	}
+	if opts.HostConfig.RestartPolicy.Name != "unless-stopped" {
+		t.Fatalf("shell restart policy = %q, want unless-stopped", opts.HostConfig.RestartPolicy.Name)
+	}
+}
+
+func TestEngineShellCreateOptionsUsesTCPDockerHost(t *testing.T) {
+	opts := engineShellCreateOptions(endpoint{network: "tcp", address: "docker.internal:2375"})
+	if len(opts.HostConfig.Binds) != 0 {
+		t.Fatalf("tcp shell should not bind mount a socket: %#v", opts.HostConfig.Binds)
+	}
+	if got := opts.Config.Env; fmt.Sprint(got) != fmt.Sprint([]string{"DOCKER_HOST=tcp://docker.internal:2375", "HOME=/root"}) {
+		t.Fatalf("tcp shell env = %#v", got)
+	}
+}
+
 func requireSchemaField(t *testing.T, schema *plugin.Schema, key string) *plugin.Field {
 	t.Helper()
 	for i := range schema.Groups {

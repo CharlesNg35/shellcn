@@ -193,6 +193,7 @@ const TYPE_COLUMN_WIDTH: Partial<
   icon: "3rem",
   number: "9rem",
   json: "22rem",
+  relative_time: "9rem",
 };
 
 const canExport = computed(() => Boolean(tableConfig.value?.exportable));
@@ -634,6 +635,23 @@ function formatNumber(v: number, col: ColumnSpec): string {
   return col.type === "percent" ? `${n}%` : n;
 }
 
+const relativeNow = ref(Date.now());
+const hasRelativeTimeColumn = computed(() =>
+  columns.value.some((col) => col.type === "relative_time"),
+);
+
+function formatRelativeTime(v: string): string {
+  const ts = Date.parse(v);
+  if (Number.isNaN(ts)) return v;
+  const seconds = Math.floor(Math.max(0, relativeNow.value - ts) / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
 function display(row: Row, col: ColumnSpec): string {
   const v = row[col.key];
   if (v === undefined || v === null || v === "") return "—";
@@ -648,6 +666,8 @@ function display(row: Row, col: ColumnSpec): string {
     typeof v === "number"
   )
     return formatNumber(v, col);
+  if (col.type === "relative_time" && typeof v === "string")
+    return formatRelativeTime(v);
   if (col.type === "datetime" && typeof v === "string")
     return new Date(v).toLocaleString();
   if (typeof v === "object") return JSON.stringify(v);
@@ -1028,6 +1048,15 @@ const { pause: pausePoll, resume: resumePoll } = useIntervalFn(
   () => refreshMs.value || 1000,
   { immediate: false },
 );
+
+const { pause: pauseRelativeTime, resume: resumeRelativeTime } = useIntervalFn(
+  () => {
+    relativeNow.value = Date.now();
+  },
+  1000,
+  { immediate: false },
+);
+
 vueWatch(
   () => refreshMs.value > 0 && active.value && visibility.value === "visible",
   (on, was) => {
@@ -1037,6 +1066,22 @@ vueWatch(
     }
     if (was === false) void refresh(); // catch up after being paused
     resumePoll();
+  },
+  { immediate: true },
+);
+
+vueWatch(
+  () =>
+    hasRelativeTimeColumn.value &&
+    active.value &&
+    visibility.value === "visible",
+  (on) => {
+    if (!on) {
+      pauseRelativeTime();
+      return;
+    }
+    relativeNow.value = Date.now();
+    resumeRelativeTime();
   },
   { immediate: true },
 );
@@ -1079,7 +1124,7 @@ onUnmounted(() => {
       class="flex items-center gap-3 border-b border-surface-200 px-4 py-2 dark:border-surface-800"
     >
       <div class="w-56">
-        <input
+        <InputText
           v-model="filterText"
           type="search"
           placeholder="Filter…"

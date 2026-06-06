@@ -45,6 +45,29 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	if console == nil || console.Type != plugin.PanelTerminal || console.Source == nil || console.Source.RouteID != "redis.terminal" {
 		t.Fatalf("console should be a terminal panel backed by redis.terminal, got %+v", console)
 	}
+	if console.Type == plugin.PanelTerminalGrid {
+		t.Fatal("redis console should stay a single terminal panel")
+	}
+	var info *plugin.Panel
+	for i := range m.Tabs {
+		if m.Tabs[i].Key == "info" {
+			info = &m.Tabs[i]
+			break
+		}
+	}
+	if info == nil || info.Type != plugin.PanelObjectDetail {
+		t.Fatalf("info should render object details, got %+v", info)
+	}
+	if cfg, ok := info.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
+		t.Fatalf("info config = %#v, want raw-toggle object detail", info.Config)
+	}
+	dash, ok := m.Tabs[0].Config.(plugin.DashboardConfig)
+	if !ok {
+		t.Fatalf("overview config = %T, want DashboardConfig", m.Tabs[0].Config)
+	}
+	if len(dash.Cells) == 0 || dash.Cells[0].Key != "server" || dash.Cells[0].Type != plugin.PanelObjectDetail {
+		t.Fatalf("server dashboard cell = %+v, want object_detail", dash.Cells)
+	}
 }
 
 func TestParseCommand(t *testing.T) {

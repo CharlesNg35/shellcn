@@ -345,6 +345,19 @@ func networkPolicyRow(o obj) Row {
 	}
 }
 
+func shortDuration(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
+}
+
 func jobDuration(o obj) string {
 	startRaw := str(o, "status", "startTime")
 	if startRaw == "" {

@@ -2,13 +2,14 @@ import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import AiActionConfirm from "./AiActionConfirm.vue";
 import type { PendingConfirm } from "../../stores/aiChat";
+import { RiskLevel } from "../../types/projection";
 
 function pending(over: Partial<PendingConfirm> = {}): PendingConfirm {
   return {
     toolId: "t1",
     toolName: "demo_delete",
     routeId: "demo.delete",
-    risk: "destructive",
+    risk: RiskLevel.Destructive,
     destructive: true,
     params: { name: "prod-db" },
     body: { cascade: true },
@@ -28,7 +29,9 @@ describe("AiActionConfirm", () => {
 
   it("emits approve and reject", async () => {
     const wrapper = mount(AiActionConfirm, {
-      props: { pending: pending({ destructive: false, risk: "write" }) },
+      props: {
+        pending: pending({ destructive: false, risk: RiskLevel.Write }),
+      },
     });
     const buttons = wrapper.findAll("button");
     await buttons[0].trigger("click"); // Reject

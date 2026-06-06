@@ -93,7 +93,9 @@ var (
 
 func nameCol() plugin.Column { return col("name", "Name") }
 func nsCol() plugin.Column   { return col("namespace", "Namespace") }
-func ageCol() plugin.Column  { return col("age", "Age") }
+func ageCol() plugin.Column {
+	return col("age", "Age", func(c *plugin.Column) { c.Type = plugin.ColumnRelativeTime })
+}
 
 // Action sets referenced by kinds. Edit/logs/exec are added by steps 3–4.
 var (

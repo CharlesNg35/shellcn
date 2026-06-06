@@ -6,6 +6,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
@@ -27,6 +28,16 @@ func NodeMetrics(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	return metricsLoop(rc, client, func(ctx context.Context) map[string]any {
 		s, _ := sess(rc)
 		return s.nodeFrame(ctx, node)
+	})
+}
+
+// PodMetrics streams one pod's current CPU/memory usage with request/limit
+// context when metrics-server is installed.
+func PodMetrics(rc *plugin.RequestContext, client plugin.ClientStream) error {
+	namespace, name := rc.Param("namespace"), rc.Param("name")
+	return metricsLoop(rc, client, func(ctx context.Context) map[string]any {
+		s, _ := sess(rc)
+		return s.podFrame(ctx, namespace, name)
 	})
 }
 
@@ -129,6 +140,38 @@ func (s *Session) nodeFrame(ctx context.Context, node string) map[string]any {
 	frame["mem"] = memUse
 	frame["cpuPct"] = pct(cpuUse, cpuCap)
 	frame["memPct"] = pct(memUse, memCap)
+	return frame
+}
+
+func (s *Session) podFrame(ctx context.Context, namespace, name string) map[string]any {
+	frame := map[string]any{"metricsAvailable": false}
+	pod, err := s.clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return frame
+	}
+	podObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(pod)
+	reqCPU, reqMem, limCPU, limMem := podResourceTotals(podObj)
+	frame["cpuRequest"] = milliToCores(reqCPU)
+	frame["memRequest"] = reqMem
+	frame["cpuLimit"] = milliToCores(limCPU)
+	frame["memLimit"] = limMem
+
+	pm, err := s.metrics.MetricsV1beta1().PodMetricses(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return frame
+	}
+	var cpuUse, memUse int64
+	for i := range pm.Containers {
+		cpuUse += pm.Containers[i].Usage.Cpu().MilliValue()
+		memUse += pm.Containers[i].Usage.Memory().Value()
+	}
+	frame["metricsAvailable"] = true
+	frame["cpu"] = milliToCores(cpuUse)
+	frame["mem"] = memUse
+	frame["cpuRequestPct"] = pct(cpuUse, reqCPU)
+	frame["memRequestPct"] = pct(memUse, reqMem)
+	frame["cpuLimitPct"] = pct(cpuUse, limCPU)
+	frame["memLimitPct"] = pct(memUse, limMem)
 	return frame
 }
 

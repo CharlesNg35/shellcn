@@ -15,6 +15,14 @@ func podRefParams(extra map[string]string) map[string]string {
 func podDetailTabs() []plugin.Panel {
 	return []plugin.Panel{
 		{
+			Key: "metrics", Label: "Metrics", Icon: lucide("activity"), Type: plugin.PanelMetrics,
+			Source: &plugin.DataSource{
+				RouteID: "kubernetes.pod.metrics", Method: plugin.MethodWS,
+				Params: podRefParams(nil),
+			},
+			Config: podMetricsConfig(),
+		},
+		{
 			Key: "logs", Label: "Logs", Icon: lucide("scroll-text"), Type: plugin.PanelLogStream,
 			Source: &plugin.DataSource{
 				RouteID: "kubernetes.pod.logs", Method: plugin.MethodWS,
@@ -41,6 +49,29 @@ func streams() []plugin.Stream {
 		{ID: "kubernetes.cluster.shell", Kind: plugin.StreamTerminal, RouteID: "kubernetes.cluster.shell"},
 		{ID: "kubernetes.cluster.metrics", Kind: plugin.StreamMetrics, RouteID: "kubernetes.cluster.metrics"},
 		{ID: "kubernetes.node.metrics", Kind: plugin.StreamMetrics, RouteID: "kubernetes.node.metrics"},
+		{ID: "kubernetes.pod.metrics", Kind: plugin.StreamMetrics, RouteID: "kubernetes.pod.metrics"},
+	}
+}
+
+func podMetricsConfig() plugin.MetricsConfig {
+	return plugin.MetricsConfig{
+		Stats: []plugin.MetricStat{
+			{Key: "cpu", Label: "CPU", Unit: "cores"},
+			{Key: "mem", Label: "Memory", Unit: "bytes"},
+			{Key: "cpuRequest", Label: "CPU request", Unit: "cores"},
+			{Key: "memRequest", Label: "Memory request", Unit: "bytes"},
+			{Key: "cpuLimit", Label: "CPU limit", Unit: "cores"},
+			{Key: "memLimit", Label: "Memory limit", Unit: "bytes"},
+		},
+		Gauges: []plugin.MetricGauge{
+			{Key: "cpuLimitPct", Label: "CPU limit", Unit: "%", Max: 100},
+			{Key: "memLimitPct", Label: "Memory limit", Unit: "%", Max: 100},
+		},
+		Series: []plugin.MetricSeries{
+			{Key: "cpu", Label: "CPU cores"},
+			{Key: "mem", Label: "Memory", Unit: "bytes"},
+		},
+		History: 60,
 	}
 }
 

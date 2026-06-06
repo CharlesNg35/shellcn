@@ -33,6 +33,21 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	if len(m.Resources) != 6 {
 		t.Fatalf("resources = %d, want 6", len(m.Resources))
 	}
+	for _, res := range m.Resources {
+		for _, tab := range res.Detail.Tabs {
+			if tab.Type == plugin.PanelTerminalGrid {
+				t.Fatalf("docker should keep exec sessions as single terminal panels: resource=%s tab=%s", res.Kind, tab.Key)
+			}
+			if tab.Key == "inspect" {
+				if tab.Type != plugin.PanelObjectDetail {
+					t.Fatalf("docker inspect should render object details: resource=%s panel=%s", res.Kind, tab.Type)
+				}
+				if cfg, ok := tab.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
+					t.Fatalf("docker inspect config for %s = %#v, want raw-toggle object detail", res.Kind, tab.Config)
+				}
+			}
+		}
+	}
 	var containerRes *plugin.ResourceType
 	for i := range m.Resources {
 		if m.Resources[i].Kind == "container" {
@@ -55,8 +70,16 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 			t.Fatalf("tab %d = %q, want %q", i, containerRes.Detail.Tabs[i].Key, want)
 		}
 	}
-	if containerRes.Detail.Tabs[0].Type != plugin.PanelDocument || containerRes.Detail.Tabs[0].Source.RouteID != "docker.container.overview" {
+	if containerRes.Detail.Tabs[0].Type != plugin.PanelObjectDetail || containerRes.Detail.Tabs[0].Source.RouteID != "docker.container.overview" {
 		t.Fatalf("container overview should render selected container details, got panel=%s source=%+v", containerRes.Detail.Tabs[0].Type, containerRes.Detail.Tabs[0].Source)
+	}
+	if containerRes.Detail.Tabs[1].Type != plugin.PanelTerminal {
+		t.Fatalf("container terminal panel = %s, want %s", containerRes.Detail.Tabs[1].Type, plugin.PanelTerminal)
+	}
+	if inspect := containerRes.Detail.Tabs[3]; inspect.Type != plugin.PanelObjectDetail || inspect.Source.RouteID != "docker.container.inspect" {
+		t.Fatalf("container inspect should render object details, got panel=%s source=%+v", inspect.Type, inspect.Source)
+	} else if cfg, ok := inspect.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
+		t.Fatalf("container inspect config = %#v, want raw-toggle object detail", inspect.Config)
 	}
 	var composeRes *plugin.ResourceType
 	for i := range m.Resources {
@@ -97,6 +120,65 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	}
 	if createRoute == nil || createRoute.Input == nil || createRoute.Risk != plugin.RiskWrite {
 		t.Fatalf("create container route mismatch: %+v", createRoute)
+	}
+	var openRoute *plugin.Route
+	for i := range routes {
+		if routes[i].ID == "docker.container.open" {
+			openRoute = &routes[i]
+			break
+		}
+	}
+	if openRoute == nil || openRoute.Input == nil {
+		t.Fatalf("open container route should declare port input: %+v", openRoute)
+	}
+	openPort := openRoute.Input.Groups[0].Fields[0]
+	if openPort.Type != plugin.FieldSelect || openPort.OptionsSource == nil || openPort.OptionsSource.RouteID != "docker.container.open.ports" {
+		t.Fatalf("open port field should be sourced select: %+v", openPort)
+	}
+	if openPort.Required {
+		t.Fatal("open port is a URL route param and must not make the GET body schema required")
+	}
+	if err := openRoute.Input.ValidateValues(map[string]any{}, nil); err != nil {
+		t.Fatalf("open route input should allow fallback port selection: %v", err)
+	}
+	if !contains(m.HeaderActions, "docker.engine.shell") {
+		t.Fatalf("header actions = %#v, want docker shell", m.HeaderActions)
+	}
+	var shellAction *plugin.Action
+	for i := range m.Actions {
+		if m.Actions[i].ID == "docker.engine.shell" {
+			shellAction = &m.Actions[i]
+			break
+		}
+	}
+	if shellAction == nil || shellAction.Open != plugin.OpenDock || shellAction.Panel != plugin.PanelTerminal || !shellAction.Confirm {
+		t.Fatalf("docker shell action mismatch: %+v", shellAction)
+	}
+	var shellStream *plugin.Stream
+	for i := range m.Streams {
+		if m.Streams[i].ID == "docker.engine.shell" {
+			shellStream = &m.Streams[i]
+			break
+		}
+	}
+	if shellStream == nil || shellStream.Kind != plugin.StreamTerminal || shellStream.RouteID != "docker.engine.shell" {
+		t.Fatalf("docker shell stream mismatch: %+v", shellStream)
+	}
+	var shellRoute *plugin.Route
+	for i := range routes {
+		if routes[i].ID == "docker.engine.shell" {
+			shellRoute = &routes[i]
+			break
+		}
+	}
+	if shellRoute == nil || shellRoute.Permission != "docker.engine.shell" || shellRoute.Risk != plugin.RiskPrivileged || shellRoute.Method != plugin.MethodWS {
+		t.Fatalf("docker shell route mismatch: %+v", shellRoute)
+	}
+	if shellRoute.Permission == "docker.containers.exec" {
+		t.Fatal("docker engine shell must not reuse the container exec permission")
+	}
+	if len(m.Recording) != 1 || !contains(m.Recording[0].StreamIDs, "docker.engine.shell") {
+		t.Fatalf("recording streams = %#v, want docker.engine.shell", m.Recording)
 	}
 	for i := range routes {
 		if routes[i].ID == "docker.api.execute" {

@@ -159,6 +159,25 @@ textarea:focus-visible,
   height: 100%;
 }
 
+.shellcn-diff-host {
+  position: relative;
+  overflow: hidden;
+  background: var(--p-surface-0);
+}
+
+.dark .shellcn-diff-host {
+  background: var(--p-surface-950);
+}
+
+.shellcn-diff-host .cm-mergeView {
+  height: 100%;
+  overflow: auto;
+}
+
+.shellcn-diff-host .cm-editor {
+  height: 100%;
+}
+
 /* Respect users who prefer reduced motion. */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -18,6 +18,40 @@ func TestManifestValidates(t *testing.T) {
 	}
 }
 
+func TestManifestUsesObjectDetailForSystemOverview(t *testing.T) {
+	m := New().Manifest()
+	if len(m.Tabs) == 0 {
+		t.Fatal("missing overview tab")
+	}
+	dash, ok := m.Tabs[0].Config.(plugin.DashboardConfig)
+	if !ok {
+		t.Fatalf("overview config = %T, want DashboardConfig", m.Tabs[0].Config)
+	}
+	var dashboardSystem *plugin.Panel
+	for i := range dash.Cells {
+		if dash.Cells[i].Key == "system" {
+			dashboardSystem = &dash.Cells[i]
+			break
+		}
+	}
+	if dashboardSystem == nil || dashboardSystem.Type != plugin.PanelObjectDetail {
+		t.Fatalf("dashboard system panel = %+v, want object_detail", dashboardSystem)
+	}
+	if cfg, ok := dashboardSystem.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
+		t.Fatalf("dashboard system config = %#v, want raw-toggle object detail", dashboardSystem.Config)
+	}
+	var systemTab *plugin.Panel
+	for i := range m.Tabs {
+		if m.Tabs[i].Key == "system" {
+			systemTab = &m.Tabs[i]
+			break
+		}
+	}
+	if systemTab == nil || systemTab.Type != plugin.PanelObjectDetail {
+		t.Fatalf("system tab = %+v, want object_detail", systemTab)
+	}
+}
+
 func TestDirectCollection(t *testing.T) {
 	sess, err := Connect(context.Background(), plugin.ConnectConfig{
 		Transport: plugin.TransportDirect,

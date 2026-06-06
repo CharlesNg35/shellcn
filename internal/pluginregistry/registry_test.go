@@ -160,6 +160,31 @@ func TestRejectsDuplicatePluginCredentialKind(t *testing.T) {
 	}
 }
 
+func TestRegisterRejectsUXContractErrors(t *testing.T) {
+	m, routes := sampleManifest()
+	m.Actions = []plugin.Action{{
+		ID:      "sample.open",
+		Label:   "Open",
+		Icon:    plugin.Icon{Type: plugin.IconLucide, Value: "external-link"},
+		RouteID: "sample.open",
+		Open:    plugin.OpenURL,
+	}}
+	routes = append(routes, plugin.Route{
+		ID:         "sample.open",
+		Method:     plugin.MethodGet,
+		Permission: "sample.open",
+		Risk:       plugin.RiskSafe,
+		AuditEvent: "sample.open",
+		Input:      &plugin.Schema{Groups: []plugin.Group{{Name: "Target", Fields: []plugin.Field{{Key: "port", Label: "Port", Type: plugin.FieldSelect, Required: true}}}}},
+		Handle:     func(_ *plugin.RequestContext) (any, error) { return nil, nil },
+	})
+
+	err := New().Register(&stubPlugin{manifest: m, routes: routes})
+	if err == nil || !contains(err.Error(), "UX contract") || !contains(err.Error(), "OpenURL action input fields are submitted as route params") {
+		t.Fatalf("register UX error = %v", err)
+	}
+}
+
 func TestReplace(t *testing.T) {
 	m, routes := sampleManifest()
 	reg := New()

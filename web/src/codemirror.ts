@@ -1,4 +1,5 @@
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { MergeView, unifiedMergeView } from "@codemirror/merge";
 import {
   autocompletion,
   type Completion,
@@ -64,6 +65,21 @@ export interface CodeMirrorOptions {
   ariaLabel?: string;
   completions?: CodeMirrorCompletion[];
   onChange?: (value: string) => void;
+}
+
+export type CodeMirrorDiffMode = "side_by_side" | "unified";
+
+export interface CodeMirrorDiffView {
+  destroy: () => void;
+  syncTheme: () => void;
+}
+
+export interface CodeMirrorDiffOptions {
+  original: string;
+  modified: string;
+  language?: string;
+  mode?: CodeMirrorDiffMode;
+  collapseUnchanged?: boolean;
 }
 
 interface HighlightPalette {
@@ -600,6 +616,93 @@ export function createCodeMirrorEditor(
     readOnly,
     theme,
     completions,
+  };
+}
+
+function diffCollapse(
+  collapse?: boolean,
+): { margin?: number; minSize?: number } | undefined {
+  return collapse ? { margin: 3, minSize: 8 } : undefined;
+}
+
+function diffEditorExtensions(
+  language: string | undefined,
+  theme: Compartment,
+  ariaLabel: string,
+): Extension[] {
+  return [
+    editorSetup,
+    EditorView.lineWrapping,
+    EditorView.contentAttributes.of({ "aria-label": ariaLabel }),
+    languageExtension(language),
+    readOnlyExtension(true),
+    theme.of(currentCodeMirrorTheme()),
+  ];
+}
+
+export function createCodeMirrorDiffView(
+  parent: HTMLElement,
+  options: CodeMirrorDiffOptions,
+): CodeMirrorDiffView {
+  if (options.mode === "unified") {
+    const theme = new Compartment();
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: options.modified,
+        extensions: [
+          ...diffEditorExtensions(options.language, theme, "Modified content"),
+          unifiedMergeView({
+            original: options.original,
+            gutter: true,
+            collapseUnchanged: diffCollapse(options.collapseUnchanged),
+          }),
+        ],
+      }),
+    });
+    return {
+      destroy: () => view.destroy(),
+      syncTheme: () => {
+        view.dispatch({
+          effects: theme.reconfigure(currentCodeMirrorTheme()),
+        });
+      },
+    };
+  }
+
+  const originalTheme = new Compartment();
+  const modifiedTheme = new Compartment();
+  const view = new MergeView({
+    a: {
+      doc: options.original,
+      extensions: diffEditorExtensions(
+        options.language,
+        originalTheme,
+        "Original content",
+      ),
+    },
+    b: {
+      doc: options.modified,
+      extensions: diffEditorExtensions(
+        options.language,
+        modifiedTheme,
+        "Modified content",
+      ),
+    },
+    parent,
+    gutter: true,
+    collapseUnchanged: diffCollapse(options.collapseUnchanged),
+  });
+  return {
+    destroy: () => view.destroy(),
+    syncTheme: () => {
+      view.a.dispatch({
+        effects: originalTheme.reconfigure(currentCodeMirrorTheme()),
+      });
+      view.b.dispatch({
+        effects: modifiedTheme.reconfigure(currentCodeMirrorTheme()),
+      });
+    },
   };
 }
 

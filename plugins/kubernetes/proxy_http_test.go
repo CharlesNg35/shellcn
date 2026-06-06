@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
@@ -170,6 +173,40 @@ func TestPodProxyURL(t *testing.T) {
 	}
 }
 
+func TestOpenPortOptions(t *testing.T) {
+	appProtocol := "https"
+	serviceOptions := servicePortOptions([]corev1.ServicePort{
+		{Name: "grpc", Port: 9000, TargetPort: intstr.FromInt32(9001)},
+		{Name: "web", Port: 8443, AppProtocol: &appProtocol},
+	})
+	if len(serviceOptions) != 2 {
+		t.Fatalf("service options = %#v", serviceOptions)
+	}
+	if serviceOptions[0].Value != "9000" || !strings.Contains(serviceOptions[0].Label, "9000/TCP -> 9001") {
+		t.Fatalf("service option 0 unexpected: %+v", serviceOptions[0])
+	}
+	if serviceOptions[1].Value != "https:8443" || !strings.Contains(serviceOptions[1].Label, "web") {
+		t.Fatalf("service option 1 unexpected: %+v", serviceOptions[1])
+	}
+
+	podOptions := podPortOptions([]corev1.Container{{
+		Name: "app",
+		Ports: []corev1.ContainerPort{
+			{Name: "metrics", ContainerPort: 9090},
+			{Name: "https", ContainerPort: 8443},
+		},
+	}})
+	if len(podOptions) != 2 {
+		t.Fatalf("pod options = %#v", podOptions)
+	}
+	if podOptions[0].Value != "9090" || !strings.Contains(podOptions[0].Label, "app") {
+		t.Fatalf("pod option 0 unexpected: %+v", podOptions[0])
+	}
+	if podOptions[1].Value != "https:8443" {
+		t.Fatalf("pod option 1 unexpected: %+v", podOptions[1])
+	}
+}
+
 func TestServiceOpenActionIsURLTarget(t *testing.T) {
 	for _, a := range New().Manifest().Actions {
 		if a.ID == "kubernetes.service.open" {
@@ -180,4 +217,30 @@ func TestServiceOpenActionIsURLTarget(t *testing.T) {
 		}
 	}
 	t.Fatal("kubernetes.service.open action not declared")
+}
+
+func TestOpenRoutesDeclarePortSelectors(t *testing.T) {
+	routes := Routes()
+	for _, routeID := range []string{"kubernetes.service.open", "kubernetes.pod.open"} {
+		var route *plugin.Route
+		for i := range routes {
+			if routes[i].ID == routeID {
+				route = &routes[i]
+				break
+			}
+		}
+		if route == nil || route.Input == nil {
+			t.Fatalf("%s route should declare port input: %+v", routeID, route)
+		}
+		field := route.Input.Groups[0].Fields[0]
+		if field.Type != plugin.FieldSelect || field.OptionsSource == nil {
+			t.Fatalf("%s port field should be sourced select: %+v", routeID, field)
+		}
+		if field.Required {
+			t.Fatalf("%s port field is a URL route param and must not make the GET body schema required", routeID)
+		}
+		if err := route.Input.ValidateValues(map[string]any{}, nil); err != nil {
+			t.Fatalf("%s input should allow fallback port selection: %v", routeID, err)
+		}
+	}
 }

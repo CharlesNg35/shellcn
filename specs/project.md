@@ -254,7 +254,8 @@ The browser must **render** but never **execute**. The core derives a projection
 from the manifest and serves it via `GET /api/plugins` and
 `GET /api/plugins/{name}`. The projection **includes**: identity, category,
 config schema, layout, tabs/tree, resource columns + actions (with `risk` +
-`requiresConfirm`), stream types, panel configs, and route bindings (`RouteID` + params only). It
+`requiresConfirm`), stream types, panel configs, the shared panel-config schema,
+and route bindings (`RouteID` + params only). It
 **excludes**: handler funcs, raw mount paths, permission keys, audit-event names,
 and any server-only route internals. The opaque `RouteID` is the only handle the
 browser holds; the core resolves it to a real URL (§7.1).
@@ -348,7 +349,7 @@ type ActionSuccess struct {
     Navigate  NavigateTarget // move the workbench after success, e.g. "list" — return a deleted resource's detail to its list so it doesn't linger
 }
 
-type StreamKind string // terminal, logs, desktop, metrics, file
+type StreamKind string // terminal, logs, desktop, metrics, file, task
 type Stream struct {
     ID      string // "docker.container.logs"
     Kind    StreamKind
@@ -771,23 +772,31 @@ const (
 //     single/dashboard carry no `v`.
 //   - MetricsConfig drives the metrics panel (stat cards, gauges, time-series)
 //     entirely from declared field keys; the renderer hardcodes none.
-//   - TerminalConfig opts a terminal panel into zoom and/or scrollback search;
-//     both off by default, enabled per-tab from the manifest, generic for any
-//     plugin (SSH, Docker/Podman exec, Telnet, Redis console, Proxmox shells…).
+//   - TerminalConfig opts a terminal panel into zoom and/or scrollback search.
+//     TerminalGridConfig adds a renderer-owned split workspace for protocols that
+//     can safely open one independent terminal channel per pane. Split workspaces
+//     use the same StreamTerminal route; mandatory recording keeps using the
+//     single terminal panel so audit capture is unambiguous.
 
 type PanelType string
 const (
-    PanelTerminal      PanelType = "terminal"       // xterm.js
+    PanelTerminal      PanelType = "terminal"       // single xterm.js terminal
+    PanelTerminalGrid  PanelType = "terminal_grid"  // user-managed split terminal workspace
     PanelFileBrowser   PanelType = "file_browser"
     PanelTable         PanelType = "table"
     PanelMetrics       PanelType = "metrics"
     PanelLogStream     PanelType = "log_stream"
     PanelCodeEditor    PanelType = "code_editor"    // CodeMirror (YAML/JSON/SQL)
+    PanelDiff          PanelType = "diff"           // read-only CodeMirror diff/merge view
     PanelDocument      PanelType = "document"       // JSON/BSON tree editor
     PanelQueryEditor   PanelType = "query_editor"
     PanelRemoteDesktop PanelType = "remote_desktop"
     PanelForm          PanelType = "form"           // schema-rendered
     PanelEnroll        PanelType = "enroll"         // agent install command + live status (§8.4)
+    PanelObjectDetail  PanelType = "object_detail"  // structured property sheet with copy/redaction/raw JSON
+    PanelTimeline      PanelType = "timeline"       // events/tasks/audit trail over a list route
+    PanelTaskProgress  PanelType = "task_progress"  // long-running task stream with progress/cancel/retry
+    PanelSplit         PanelType = "split"          // resizable horizontal/vertical child panel composition
 
     PanelGraph      PanelType = "graph"       // node/edge viz — Neo4j, topology
     PanelTrace      PanelType = "trace"       // span waterfall — Jaeger, Tempo
@@ -923,6 +932,9 @@ by default, so a plugin opts into the review-then-apply workflow deliberately.
 config) are off by default; a plugin must declare them, so data never leaves a
 panel unless the manifest allows it. Export is client-side (the loaded rows) and
 fully generic — every panel that sets the flag gets CSV + JSON for free.
+Graph image export is the exception: `GraphConfig.Exportable` is a pointer, so
+omitted/`null` keeps export enabled, while `false` disables the client-side
+PNG/JPEG/SVG export menu for sensitive graph panels.
 
 **Row-click is automatic; selection is the checkbox.** The renderer learns which
 resource **kinds are navigable** from the projection (those with a detail view)
@@ -1004,17 +1016,27 @@ is allowed for this.
 
 The core validates every route/action/source reference during plugin
 registration. `DataSource.Method`, when declared, must match the referenced
-route. Read panels (`table`, `form`, `document`, `code_editor`, `file_browser`,
-etc.) must source from `GET` routes; streaming panels (`terminal`, `log_stream`,
-`metrics`, `query_editor`, `remote_desktop`, and table/resource watch sources)
-must source from `WS` routes. Table mutation sources (`insert`, `update`,
-`delete`) and editor/form save methods must resolve to write methods (`POST`,
-`PUT`, `PATCH`, or `DELETE`). Dashboard cells are validated recursively with the
-same rules as top-level tabs. The frontend renderer also validates generic panel
-config structure at the `PanelHost` boundary for values that can break generic
-rendering (iterated arrays, route/method fields, params maps, and recursive
-dashboard cells), then renders a panel error instead of mounting a panel with
-malformed config. Semantic manifest validation stays authoritative in Go.
+route. Read panels (`table`, `form`, `document`, `code_editor`, `diff`,
+`file_browser`, `object_detail`, `timeline`, etc.) must source from `GET` routes; streaming
+panels (`terminal`, `terminal_grid`, `log_stream`, `metrics`, `query_editor`,
+`remote_desktop`, `task_progress`, and table/resource watch sources) must source
+from `WS` routes.
+Table mutation sources (`insert`, `update`, `delete`) and editor/form save
+methods must resolve to write methods (`POST`, `PUT`, `PATCH`, or `DELETE`).
+Dashboard and split child panels are validated recursively with the same rules
+as top-level tabs. The core projects a shared panel-config schema derived from
+SDK panel/config definitions; registration, plugin starter tests, marketplace
+ingestion, and the frontend runtime guard all consume that schema so Go and
+TypeScript do not drift. The frontend renders a panel error instead of mounting
+a panel with malformed config.
+
+`sdk/plugin/pluginux` applies renderer UX rules to manifests: destructive and
+privileged actions must confirm; `OpenDock` is reserved for long-lived
+interactive panels; stream route kind must match the panel type; closed-value
+fields use select/radio, suggested custom values use autocomplete; tables
+declare meaningful column types, empty states, and sort/watch/refresh behavior;
+actions declare icons, labels, and useful success behavior. Errors block
+release; warnings are review prompts.
 
 `remote_desktop` routes expose an RFB/VNC byte stream and the browser lazy-loads
 noVNC. VNC plugins stream raw RFB after the gateway authenticates upstream; RDP
@@ -1059,7 +1081,37 @@ the renderer parses the editor text as JSON and sends it under that key, merging
 `SaveExtra` first. This keeps document-store create/upsert flows generic: a
 manifest action can open `PanelCodeEditor` in a dialog with `InitialContent`, then
 save `{"document": {...}}`, `{"item": {...}}`, etc. without frontend
-plugin-specific code.
+plugin-specific code. Writable code editors show a renderer-owned **Diff** button
+only after the loaded buffer changes; it opens a read-only before/after diff of
+the loaded content and the edited buffer. Plugins do not declare custom UI for
+this common review flow.
+
+`PanelDiff` is the route-backed version for preview workflows where a plugin can
+compute both sides, such as Kubernetes dry-run apply, MongoDB document replace,
+Swarm service spec update, or generated DDL preview:
+
+```go
+type DiffMode string
+const (
+    DiffSideBySide DiffMode = "side_by_side"
+    DiffUnified    DiffMode = "unified"
+)
+
+type DiffConfig struct {
+    Language          string   // syntax mode for both sides
+    OriginalField     string   // route response field for the left/original side; default "original"
+    ModifiedField     string   // route response field for the right/modified side; default "modified"
+    OriginalLabel     string
+    ModifiedLabel     string
+    Mode              DiffMode // side_by_side default, or unified
+    CollapseUnchanged bool
+}
+```
+
+The source route returns an object with the configured fields. Values may be
+strings or structured JSON; structured values are pretty-printed before display.
+Do not use `PanelDiff` for current-state inspection; use `PanelObjectDetail` for
+structured objects and `PanelDocument` for rendered documents.
 
 `PanelQueryEditor` sends statements over its declared stream route. It may also
 declare a best-effort cancel route. It is an executable editor/results panel,
@@ -1094,6 +1146,7 @@ type GraphConfig struct {
     ExpandRouteID string // optional; nodes become expandable — the panel fetches a
                          // node's neighbourhood from this read route and merges it
     ExpandParam   string // node-id param name for ExpandRouteID (default "node")
+    Exportable    *bool  // nil/null/default true; false hides PNG/JPEG/SVG export
 }
 
 // The graph payload is plugin-emitted JSON the renderer treats generically:
@@ -1827,7 +1880,8 @@ from the original stream route.
 
 The gateway itself must be observable. Behind interfaces from day one:
 
-- `log/slog` structured logs.
+- `log/slog` structured logs: JSON for production/file sinks; colorized console
+  formatting only for interactive local terminal output.
 - Prometheus metrics: sessions/channels open, action latency, WS connections,
   failed authorizations, secret-access counts.
 - OpenTelemetry traces (optional, additive).
@@ -2094,6 +2148,24 @@ Note: docker.container.exec is privileged risk by default; session uses cfg.Net.
 Tree      = [Nodes, Storage, Network, Datacenter]
 vm.Detail = [Overview(metrics), Console(remote_desktop), Hardware(form),
              Snapshots(table), Backups(table)]
+```
+
+**Kubernetes** — resource catalog rendered by generic panels; raw manifests are
+available, but operational overviews are structured property sheets:
+
+```
+Layout    = LayoutSidebarTree
+Tree      = [Overview, Workloads, Config, Network, Storage, Access Control, Custom Resources]
+Resources = pod{ List:kubernetes.resource.list, Watch:kubernetes.resource.watch,
+              Detail.Tabs:[Overview(object_detail), YAML(code_editor),
+                           Metrics(metrics), Logs(log_stream), Shell(terminal),
+                           Events(timeline)] }
+Workloads = deployment/statefulset/daemonset/replicaset{
+              Detail.Tabs:[Overview(object_detail), YAML(code_editor),
+                           Pods(table), Events(timeline)] }
+Metrics  = cluster/node/pod metrics stream from metrics.k8s.io when available;
+           frames degrade gracefully and still show declared requests/limits
+           where those values come from the resource spec.
 ```
 
 **PostgreSQL** — schema browser as tree, query editor + results as panels:

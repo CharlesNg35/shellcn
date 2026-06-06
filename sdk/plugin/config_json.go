@@ -14,10 +14,16 @@ var panelConfigDecoders = map[PanelType]func(json.RawMessage) (PanelConfig, erro
 	PanelTrace:         func(r json.RawMessage) (PanelConfig, error) { return decode[TraceConfig](r) },
 	PanelKV:            func(r json.RawMessage) (PanelConfig, error) { return decode[KVConfig](r) },
 	PanelTerminal:      func(r json.RawMessage) (PanelConfig, error) { return decode[TerminalConfig](r) },
+	PanelTerminalGrid:  func(r json.RawMessage) (PanelConfig, error) { return decode[TerminalGridConfig](r) },
 	PanelCodeEditor:    func(r json.RawMessage) (PanelConfig, error) { return decode[CodeEditorConfig](r) },
+	PanelDiff:          func(r json.RawMessage) (PanelConfig, error) { return decode[DiffConfig](r) },
 	PanelQueryEditor:   func(r json.RawMessage) (PanelConfig, error) { return decode[QueryEditorConfig](r) },
 	PanelHTTPClient:    func(r json.RawMessage) (PanelConfig, error) { return decode[HTTPClientConfig](r) },
 	PanelRemoteDesktop: func(r json.RawMessage) (PanelConfig, error) { return decode[RemoteDesktopConfig](r) },
+	PanelObjectDetail:  func(r json.RawMessage) (PanelConfig, error) { return decode[ObjectDetailConfig](r) },
+	PanelTimeline:      func(r json.RawMessage) (PanelConfig, error) { return decode[TimelineConfig](r) },
+	PanelTaskProgress:  func(r json.RawMessage) (PanelConfig, error) { return decode[TaskProgressConfig](r) },
+	PanelSplit:         func(r json.RawMessage) (PanelConfig, error) { return decode[SplitConfig](r) },
 }
 
 func decode[T PanelConfig](raw json.RawMessage) (PanelConfig, error) {

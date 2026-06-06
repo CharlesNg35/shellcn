@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import Button from "primevue/button";
 import { prepareStream, resolveParams } from "../../api/dataSource";
 import {
   useDesktopRecorder,
   desktopRecordingSupported,
 } from "../../composables/useDesktopRecorder";
-import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import AppIcon from "../../components/AppIcon.vue";
 import PanelLoader from "../../components/PanelLoader.vue";
 import type { RemoteDesktopPanelConfig } from "../../types/projection";
@@ -31,9 +31,7 @@ let activeRun = 0;
 const remoteConfig = computed(
   () => props.config as Partial<RemoteDesktopPanelConfig> | undefined,
 );
-const descriptor = computed(
-  () => (props.config?._recording as RecordingDescriptor | undefined) ?? null,
-);
+const descriptor = computed(() => props.recording ?? null);
 const recordable = computed(
   () => descriptor.value && descriptor.value.policy !== "disabled",
 );
@@ -198,25 +196,29 @@ onUnmounted(() => {
         />
         REC
       </span>
-      <button
+      <Button
         v-if="!forced && !recorder.recording.value"
         type="button"
         :disabled="unsupported || !loaded"
-        class="inline-flex items-center gap-1.5 rounded-md border border-surface-600 px-2 py-1 text-surface-300 hover:border-rose-300 hover:text-rose-300 disabled:opacity-50"
+        size="small"
+        severity="secondary"
+        outlined
         @click="startDesiredRecording"
       >
-        <span class="h-2 w-2 rounded-full bg-rose-400" />
+        <span class="h-2 w-2 rounded-full bg-rose-400" aria-hidden="true" />
         Record
-      </button>
-      <button
+      </Button>
+      <Button
         v-if="!forced && recorder.recording.value"
         type="button"
-        class="inline-flex items-center gap-1.5 rounded-md border border-surface-600 px-2 py-1 text-surface-300 hover:bg-white/5"
+        size="small"
+        severity="secondary"
+        outlined
         @click="stopDesiredRecording"
       >
         <AppIcon :icon="{ type: 'lucide', value: 'square' }" :size="12" />
         Stop
-      </button>
+      </Button>
       <span v-if="unsupported" class="text-amber-400">
         Recording unavailable in this browser
       </span>

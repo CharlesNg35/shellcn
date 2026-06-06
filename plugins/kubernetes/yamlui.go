@@ -31,11 +31,21 @@ func eventsTab(k kind) plugin.Panel {
 		params["namespace"] = "${resource.namespace}"
 	}
 	return plugin.Panel{
-		Key: "events", Label: "Events", Icon: lucide("bell"), Type: plugin.PanelTable,
+		Key: "events", Label: "Events", Icon: lucide("bell"), Type: plugin.PanelTimeline,
 		Source: &plugin.DataSource{RouteID: "kubernetes.resource.events", Params: params},
-		Config: plugin.TableConfig{Columns: []plugin.Column{
-			col("type", "Type", statusBadge(eventSeverities)), col("reason", "Reason"), col("message", "Message", notSort), col("count", "Count", num), ageCol(),
-		}},
+		Config: eventTimelineConfig(),
+	}
+}
+
+func eventTimelineConfig() plugin.TimelineConfig {
+	return plugin.TimelineConfig{
+		TimestampField:    "createdAt",
+		TitleField:        "reason",
+		BodyField:         "message",
+		SeverityField:     "type",
+		ResourceField:     "object",
+		EmptyText:         "No events.",
+		RefreshIntervalMs: 10000,
 	}
 }
 

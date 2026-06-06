@@ -5,17 +5,23 @@ type PanelType string
 
 const (
 	PanelTerminal      PanelType = "terminal"
+	PanelTerminalGrid  PanelType = "terminal_grid"
 	PanelFileBrowser   PanelType = "file_browser"
 	PanelTable         PanelType = "table"
 	PanelMetrics       PanelType = "metrics"
 	PanelLogStream     PanelType = "log_stream"
 	PanelCodeEditor    PanelType = "code_editor"
+	PanelDiff          PanelType = "diff"
 	PanelDocument      PanelType = "document"
 	PanelQueryEditor   PanelType = "query_editor"
 	PanelRemoteDesktop PanelType = "remote_desktop"
 	PanelForm          PanelType = "form"
 	PanelEnroll        PanelType = "enroll"
 	PanelDashboard     PanelType = "dashboard"
+	PanelObjectDetail  PanelType = "object_detail"
+	PanelTimeline      PanelType = "timeline"
+	PanelTaskProgress  PanelType = "task_progress"
+	PanelSplit         PanelType = "split"
 
 	PanelGraph      PanelType = "graph"
 	PanelTrace      PanelType = "trace"
@@ -36,10 +42,16 @@ func (GraphConfig) panelConfig()         {}
 func (TraceConfig) panelConfig()         {}
 func (KVConfig) panelConfig()            {}
 func (TerminalConfig) panelConfig()      {}
+func (TerminalGridConfig) panelConfig()  {}
 func (CodeEditorConfig) panelConfig()    {}
+func (DiffConfig) panelConfig()          {}
 func (QueryEditorConfig) panelConfig()   {}
 func (HTTPClientConfig) panelConfig()    {}
 func (RemoteDesktopConfig) panelConfig() {}
+func (ObjectDetailConfig) panelConfig()  {}
+func (TimelineConfig) panelConfig()      {}
+func (TaskProgressConfig) panelConfig()  {}
+func (SplitConfig) panelConfig()         {}
 
 // StreamKind tags the long-lived channel a panel binds to.
 type StreamKind string
@@ -50,6 +62,7 @@ const (
 	StreamDesktop  StreamKind = "desktop"
 	StreamMetrics  StreamKind = "metrics"
 	StreamFile     StreamKind = "file"
+	StreamTask     StreamKind = "task"
 )
 
 // DataSource binds a panel to a route by id; params interpolate from the active
@@ -64,15 +77,16 @@ type DataSource struct {
 type ColumnType string
 
 const (
-	ColumnText     ColumnType = "text"
-	ColumnBadge    ColumnType = "badge"
-	ColumnBytes    ColumnType = "bytes"
-	ColumnDateTime ColumnType = "datetime"
-	ColumnNumber   ColumnType = "number"
-	ColumnPercent  ColumnType = "percent"
-	ColumnBool     ColumnType = "bool"
-	ColumnJSON     ColumnType = "json"
-	ColumnIcon     ColumnType = "icon"
+	ColumnText         ColumnType = "text"
+	ColumnBadge        ColumnType = "badge"
+	ColumnBytes        ColumnType = "bytes"
+	ColumnDateTime     ColumnType = "datetime"
+	ColumnRelativeTime ColumnType = "relative_time"
+	ColumnNumber       ColumnType = "number"
+	ColumnPercent      ColumnType = "percent"
+	ColumnBool         ColumnType = "bool"
+	ColumnJSON         ColumnType = "json"
+	ColumnIcon         ColumnType = "icon"
 )
 
 type Column struct {
@@ -175,6 +189,60 @@ type DashboardConfig struct {
 	Cells []Panel `json:"cells,omitempty"`
 }
 
+type ObjectDetailField struct {
+	Key        string              `json:"key"`
+	Label      string              `json:"label,omitempty"`
+	Type       ColumnType          `json:"type,omitempty"`
+	Copy       bool                `json:"copy,omitempty"`
+	Redacted   bool                `json:"redacted,omitempty"`
+	Severities map[string]Severity `json:"severities,omitempty"`
+}
+
+type ObjectDetailSection struct {
+	Title  string              `json:"title,omitempty"`
+	Fields []ObjectDetailField `json:"fields,omitempty"`
+}
+
+type ObjectDetailConfig struct {
+	Sections  []ObjectDetailSection `json:"sections,omitempty"`
+	RawToggle bool                  `json:"rawToggle,omitempty"`
+}
+
+type TimelineConfig struct {
+	TimestampField    string `json:"timestampField,omitempty"`
+	TitleField        string `json:"titleField,omitempty"`
+	BodyField         string `json:"bodyField,omitempty"`
+	SeverityField     string `json:"severityField,omitempty"`
+	IconField         string `json:"iconField,omitempty"`
+	ResourceField     string `json:"resourceField,omitempty"`
+	EmptyText         string `json:"emptyText,omitempty"`
+	RefreshIntervalMs int    `json:"refreshIntervalMs,omitempty"`
+}
+
+type TaskProgressConfig struct {
+	Title         string `json:"title,omitempty"`
+	CancelRouteID string `json:"cancelRouteId,omitempty"`
+	RetryRouteID  string `json:"retryRouteId,omitempty"`
+}
+
+type SplitOrientation string
+
+const (
+	SplitHorizontal SplitOrientation = "horizontal"
+	SplitVertical   SplitOrientation = "vertical"
+)
+
+type SplitPanel struct {
+	Panel
+	Size    int `json:"size,omitempty"`
+	MinSize int `json:"minSize,omitempty"`
+}
+
+type SplitConfig struct {
+	Orientation SplitOrientation `json:"orientation,omitempty"`
+	Panels      []SplitPanel     `json:"panels,omitempty"`
+}
+
 // MetricStat is one KPI number card in the metrics panel.
 type MetricStat struct {
 	Key   string `json:"key"`
@@ -220,6 +288,8 @@ type GraphConfig struct {
 	// ExpandRouteID makes nodes expandable through a read route.
 	ExpandRouteID string `json:"expandRouteId,omitempty"`
 	ExpandParam   string `json:"expandParam,omitempty"`
+	// Exportable controls client-side graph image export. Nil means enabled.
+	Exportable *bool `json:"exportable,omitempty"`
 }
 
 type TraceConfig struct {
@@ -244,6 +314,13 @@ type TerminalConfig struct {
 	Search bool `json:"search,omitempty"` // scrollback find with match navigation
 }
 
+type TerminalGridConfig struct {
+	MaxPanes     int  `json:"maxPanes,omitempty"`
+	DefaultPanes int  `json:"defaultPanes,omitempty"`
+	Zoom         bool `json:"zoom,omitempty"`
+	Search       bool `json:"search,omitempty"`
+}
+
 type CodeEditorConfig struct {
 	Language       string            `json:"language,omitempty"`
 	InitialContent string            `json:"initialContent,omitempty"`
@@ -252,6 +329,23 @@ type CodeEditorConfig struct {
 	SaveParams     map[string]string `json:"saveParams,omitempty"`
 	SaveBodyKey    string            `json:"saveBodyKey,omitempty"`
 	SaveExtra      map[string]any    `json:"saveExtra,omitempty"`
+}
+
+type DiffMode string
+
+const (
+	DiffSideBySide DiffMode = "side_by_side"
+	DiffUnified    DiffMode = "unified"
+)
+
+type DiffConfig struct {
+	Language          string   `json:"language,omitempty"`
+	OriginalField     string   `json:"originalField,omitempty"`
+	ModifiedField     string   `json:"modifiedField,omitempty"`
+	OriginalLabel     string   `json:"originalLabel,omitempty"`
+	ModifiedLabel     string   `json:"modifiedLabel,omitempty"`
+	Mode              DiffMode `json:"mode,omitempty"`
+	CollapseUnchanged bool     `json:"collapseUnchanged,omitempty"`
 }
 
 type QueryEditorConfig struct {

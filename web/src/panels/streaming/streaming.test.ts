@@ -1,9 +1,13 @@
 /* eslint-disable vue/one-component-per-file */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { defineComponent, ref } from "vue";
+import { defineComponent, nextTick, ref } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import PrimeVue from "primevue/config";
+import Dialog from "primevue/dialog";
 import { installFetch } from "../../test/fetchMock";
+import { primeVuePassthrough } from "../../primevue/preset";
+import { useStreamChannelsStore } from "../../stores/streamChannels";
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
@@ -44,9 +48,21 @@ vi.mock("@xterm/addon-webgl", () => ({
 }));
 const mockCodeMirror = vi.hoisted(() => ({
   value: "",
+  onChange: null as ((value: string) => void) | null,
+  diffOptions: null as unknown,
 }));
 vi.mock("../../codemirror", () => ({
-  createCodeMirrorEditor: () => ({ view: { destroy() {} } }),
+  createCodeMirrorEditor: (
+    _parent: HTMLElement,
+    options: { onChange?: (value: string) => void },
+  ) => {
+    mockCodeMirror.onChange = options.onChange ?? null;
+    return { view: { destroy() {} } };
+  },
+  createCodeMirrorDiffView: (_parent: HTMLElement, options: unknown) => {
+    mockCodeMirror.diffOptions = options;
+    return { destroy() {}, syncTheme() {} };
+  },
   editorValue: () => mockCodeMirror.value,
   setEditorValue: () => {},
   setEditorCompletions: () => {},
@@ -99,6 +115,8 @@ import MetricsPanel from "./MetricsPanel.vue";
 import CodeEditorPanel from "./CodeEditorPanel.vue";
 import QueryEditorPanel from "./QueryEditorPanel.vue";
 import RemoteDesktopPanel from "./RemoteDesktopPanel.vue";
+import StreamStatusBar from "./StreamStatusBar.vue";
+import TerminalGridPanel from "./TerminalGridPanel.vue";
 
 const props = {
   connectionId: "c1",
@@ -115,6 +133,8 @@ beforeEach(() => {
   setActivePinia(createPinia());
   FakeWS.instances = [];
   mockCodeMirror.value = "";
+  mockCodeMirror.onChange = null;
+  mockCodeMirror.diffOptions = null;
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.stubGlobal("WebSocket", FakeWS);
   installFetch((url) => {
@@ -123,10 +143,14 @@ beforeEach(() => {
     return { body: { content: "config: true", columns: [], rows: [] } };
   });
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  useStreamChannelsStore().closeForConnection("c1");
+  vi.unstubAllGlobals();
+});
 
 const panels = [
   { name: "terminal", comp: TerminalPanel, status: true },
+  { name: "terminal grid", comp: TerminalGridPanel, status: true },
   { name: "logs", comp: LogStreamPanel, status: true },
   { name: "metrics", comp: MetricsPanel, status: true },
   { name: "remote desktop", comp: RemoteDesktopPanel, status: true },
@@ -146,13 +170,20 @@ describe("streaming stub panels", () => {
   }
 
   it("reuses the open channel on remount (stream survives navigation away/back)", async () => {
-    const first = mount(TerminalPanel, { props });
+    const pinia = createPinia();
+    const first = mount(TerminalPanel, {
+      props,
+      global: { plugins: [pinia] },
+    });
     await flushPromises();
     expect(streamSockets()).toHaveLength(1);
-    streamSockets()[0].emit("open");
+    streamSockets().at(-1)!.emit("open");
     first.unmount(); // navigate away — channel must persist
 
-    const second = mount(TerminalPanel, { props });
+    const second = mount(TerminalPanel, {
+      props,
+      global: { plugins: [pinia] },
+    });
     await flushPromises();
     expect(streamSockets()).toHaveLength(1); // no new socket — resumed
     second.unmount();
@@ -170,6 +201,328 @@ describe("streaming stub panels", () => {
     expect(streamSockets()).toHaveLength(2);
     expect(streamSockets()[0].closed).toBe(true);
     second.unmount();
+  });
+
+  it("opens independent terminal channels for split panes on the same stream route", async () => {
+    const w = mount(TerminalGridPanel, {
+      props: { ...props, config: { maxPanes: 2, zoom: true, search: true } },
+    });
+    await flushPromises();
+    expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(1);
+    expect(streamSockets()).toHaveLength(1);
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Split right"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(2);
+    expect(streamSockets()).toHaveLength(2);
+    expect(new Set(streamSockets().map((ws) => ws.url)).size).toBe(1);
+    expect(
+      w
+        .findAll("button")
+        .filter((button) =>
+          button.attributes("aria-label")?.startsWith("Split active pane"),
+        ),
+    ).toHaveLength(2);
+
+    await w
+      .findAll("button")
+      .find(
+        (button) => button.attributes("aria-label") === "Close active pane",
+      )!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(1);
+    expect(streamSockets().filter((ws) => ws.closed)).toHaveLength(1);
+    w.unmount();
+  });
+
+  it("shows one terminal and disables split controls when terminal recording is mandatory", async () => {
+    const w = mount(TerminalGridPanel, {
+      props: {
+        ...props,
+        recording: {
+          class: "terminal",
+          policy: "auto",
+          authoritative: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(w.text()).not.toContain(
+      "Split terminal workspaces are disabled when terminal recording is mandatory.",
+    );
+    expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(1);
+    expect(w.text()).toContain("REC");
+    expect(
+      w
+        .get('button[aria-label="Split active pane right"]')
+        .attributes("disabled"),
+    ).toBeDefined();
+    expect(streamSockets()).toHaveLength(1);
+    w.unmount();
+  });
+
+  it("auto split chooses the direction that makes panes closest to square", async () => {
+    const w = mount(TerminalGridPanel, {
+      props: { ...props, config: { maxPanes: 3 } },
+    });
+    await flushPromises();
+    const pane = w.get("[data-terminal-grid-pane]").element as HTMLElement;
+    vi.spyOn(pane, "getBoundingClientRect").mockReturnValue({
+      width: 1200,
+      height: 400,
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 1200,
+      bottom: 400,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    await w
+      .findAll("button")
+      .find(
+        (button) =>
+          button.attributes("aria-label") === "Auto split active pane",
+      )!
+      .trigger("click");
+    await flushPromises();
+
+    expect(
+      w
+        .get("[data-terminal-grid-split]")
+        .attributes("data-terminal-grid-split"),
+    ).toBe("horizontal");
+    w.unmount();
+
+    const tall = mount(TerminalGridPanel, {
+      props: { ...props, config: { maxPanes: 3 } },
+    });
+    await flushPromises();
+    const tallPane = tall.get("[data-terminal-grid-pane]")
+      .element as HTMLElement;
+    vi.spyOn(tallPane, "getBoundingClientRect").mockReturnValue({
+      width: 400,
+      height: 1200,
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 400,
+      bottom: 1200,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    await tall
+      .findAll("button")
+      .find(
+        (button) =>
+          button.attributes("aria-label") === "Auto split active pane",
+      )!
+      .trigger("click");
+    await flushPromises();
+
+    expect(
+      tall
+        .get("[data-terminal-grid-split]")
+        .attributes("data-terminal-grid-split"),
+    ).toBe("vertical");
+    tall.unmount();
+  });
+
+  it("keeps repeated same-axis splits evenly distributed", async () => {
+    const horizontal = mount(TerminalGridPanel, {
+      props: { ...props, config: { maxPanes: 4 } },
+    });
+    await flushPromises();
+
+    const splitRight = horizontal
+      .findAll("button")
+      .find(
+        (button) =>
+          button.attributes("aria-label") === "Split active pane right",
+      )!;
+
+    await splitRight.trigger("click");
+    await flushPromises();
+    await splitRight.trigger("click");
+    await flushPromises();
+
+    expect(horizontal.findAll("[data-terminal-grid-pane]")).toHaveLength(3);
+    expect(
+      horizontal
+        .findAll("[data-terminal-grid-panel-size]")
+        .map((panel) => panel.attributes("data-terminal-grid-panel-size")),
+    ).toEqual(["33.3333", "33.3333", "33.3334"]);
+    horizontal.unmount();
+
+    const vertical = mount(TerminalGridPanel, {
+      props: { ...props, config: { maxPanes: 4 } },
+    });
+    await flushPromises();
+
+    const splitDown = vertical
+      .findAll("button")
+      .find(
+        (button) =>
+          button.attributes("aria-label") === "Split active pane down",
+      )!;
+
+    await splitDown.trigger("click");
+    await flushPromises();
+    await splitDown.trigger("click");
+    await flushPromises();
+
+    expect(vertical.findAll("[data-terminal-grid-pane]")).toHaveLength(3);
+    expect(
+      vertical
+        .findAll("[data-terminal-grid-panel-size]")
+        .map((panel) => panel.attributes("data-terminal-grid-panel-size")),
+    ).toEqual(["33.3333", "33.3333", "33.3334"]);
+    vertical.unmount();
+  });
+
+  it("preserves manually resized split sizes", async () => {
+    const w = mount(TerminalGridPanel, {
+      props: { ...props, config: { maxPanes: 2 } },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find(
+        (button) =>
+          button.attributes("aria-label") === "Split active pane right",
+      )!
+      .trigger("click");
+    await flushPromises();
+
+    w.findComponent({ name: "Splitter" }).vm.$emit("resizeend", {
+      originalEvent: new Event("mouseup"),
+      sizes: [30, 70],
+    });
+    await flushPromises();
+
+    expect(
+      w
+        .findAll("[data-terminal-grid-panel-size]")
+        .map((panel) => panel.attributes("data-terminal-grid-panel-size")),
+    ).toEqual(["30", "70"]);
+    w.unmount();
+  });
+
+  it("keeps stream error details controls vertically centered", () => {
+    const w = mount(StreamStatusBar, {
+      props: { status: "disconnected", error: "connection closed" },
+      global: {
+        plugins: [[PrimeVue, { unstyled: true, pt: primeVuePassthrough }]],
+      },
+    });
+
+    const details = w.get('button[aria-label="Show error details"]');
+    expect(details.classes()).toContain("inline-flex");
+    expect(details.classes()).toContain("items-center");
+    expect(details.classes()).toContain("h-7");
+    w.unmount();
+  });
+
+  it("disables split controls while a single terminal pane is recording", async () => {
+    const w = mount(TerminalGridPanel, {
+      props: {
+        ...props,
+        config: { maxPanes: 2 },
+        recording: {
+          class: "terminal",
+          policy: "manual",
+          authoritative: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(
+      w
+        .get('button[aria-label="Split active pane right"]')
+        .attributes("disabled"),
+    ).toBeUndefined();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Record"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain("REC");
+    expect(
+      w
+        .get('button[aria-label="Split active pane right"]')
+        .attributes("disabled"),
+    ).toBeDefined();
+    w.unmount();
+  });
+
+  it("does not show the split recording notice when connection recording is disabled", async () => {
+    const w = mount(TerminalGridPanel, {
+      props: {
+        ...props,
+        config: { maxPanes: 2 },
+        recording: {
+          class: "terminal",
+          policy: "disabled",
+          authoritative: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Split right"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(2);
+    expect(w.text()).not.toContain("Recording disabled for split view");
+    expect(w.text()).not.toContain("Recording off");
+    w.unmount();
+  });
+
+  it("disables terminal recording controls for multi-pane workspaces", async () => {
+    const w = mount(TerminalGridPanel, {
+      props: {
+        ...props,
+        config: { maxPanes: 2 },
+        recording: {
+          class: "terminal",
+          policy: "manual",
+          authoritative: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Split right"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.text()).not.toContain("Recording disabled for split view");
+    expect(w.text()).not.toContain("Recording off");
+    expect(w.text()).not.toContain("Start recording");
+    const recordButtons = w
+      .findAll("button")
+      .filter((button) => button.text().includes("Record"));
+    expect(recordButtons).toHaveLength(1);
+    expect(recordButtons[0].attributes("disabled")).toBeDefined();
+    w.unmount();
   });
 
   it("reconnects a failed stream from the status bar", async () => {
@@ -329,6 +682,26 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
+  it("keeps single terminal recording controls in the existing terminal header", async () => {
+    const w = mount(TerminalPanel, {
+      props: {
+        ...props,
+        recording: {
+          class: "terminal",
+          policy: "manual",
+          authoritative: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(w.find(".border-b").text()).toContain("Record");
+    expect(w.find('[aria-label="Split active pane right"]').exists()).toBe(
+      false,
+    );
+    w.unmount();
+  });
+
   it("shows a loader while the remote desktop engine is connecting", () => {
     const w = mount(RemoteDesktopPanel, { props });
     expect(w.find('[data-test="panel-loader"]').exists()).toBe(true);
@@ -421,6 +794,64 @@ describe("streaming stub panels", () => {
         },
       },
     ]);
+    w.unmount();
+  });
+
+  it("opens a code editor diff only after content changes", async () => {
+    const w = mount(CodeEditorPanel, {
+      props: {
+        connectionId: "c1",
+        config: {
+          language: "yaml",
+          initialContent: "apiVersion: v1\nkind: Pod\n",
+          saveRouteId: "kubernetes.resource.apply",
+          saveMethod: "POST",
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(w.findAll("button").some((button) => button.text() === "Diff")).toBe(
+      false,
+    );
+
+    mockCodeMirror.value = "apiVersion: v1\nkind: Service\n";
+    mockCodeMirror.onChange?.(mockCodeMirror.value);
+    await nextTick();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text() === "Diff")!
+      .trigger("click");
+    await flushPromises();
+
+    expect(mockCodeMirror.diffOptions).toMatchObject({
+      original: "apiVersion: v1\nkind: Pod\n",
+      modified: "apiVersion: v1\nkind: Service\n",
+      language: "yaml",
+      collapseUnchanged: true,
+    });
+    const dialog = w.findComponent(Dialog);
+    const dialogPt = dialog.props("pt") as {
+      root: string;
+      content: string;
+    };
+    expect((dialog.vm.$attrs.style as { width?: string }).width).toBe("88vw");
+    expect(dialog.props("breakpoints")).toMatchObject({
+      "1199px": "94vw",
+      "575px": "100vw",
+    });
+    expect(dialog.props("closeButtonProps")).toMatchObject({
+      "aria-label": "Close diff review",
+      title: "Close diff review",
+    });
+    expect(dialog.props("maximizeButtonProps")).toMatchObject({
+      "aria-label": "Maximize or restore diff review",
+      title: "Maximize or restore diff review",
+    });
+    expect(dialogPt.root).toContain("max-w-6xl");
+    expect(dialogPt.content).toContain("overflow-hidden");
+    expect(dialogPt.content).toContain("p-0");
     w.unmount();
   });
 

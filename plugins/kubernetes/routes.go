@@ -21,6 +21,7 @@ func Routes() []plugin.Route {
 
 		{ID: "kubernetes.resource.list", Method: plugin.MethodGet, Path: "/resources/{kind}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.list", Handle: ListResource},
 		{ID: "kubernetes.resource.get", Method: plugin.MethodGet, Path: "/resources/{kind}/get", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.get", Handle: GetResource},
+		{ID: "kubernetes.resource.overview", Method: plugin.MethodGet, Path: "/resources/{kind}/overview", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.overview", Handle: ResourceOverview},
 		{ID: "kubernetes.resource.columns", Method: plugin.MethodGet, Path: "/resources/{kind}/columns", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.columns", Handle: ColumnsForKind},
 		{ID: "kubernetes.resource.watch", Method: plugin.MethodWS, Path: "/resources/{kind}/watch", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.watch", Stream: WatchResource},
 
@@ -47,6 +48,7 @@ func Routes() []plugin.Route {
 		{ID: "kubernetes.cluster.list", Method: plugin.MethodGet, Path: "/overview", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.cluster.list", Handle: ClusterList},
 		{ID: "kubernetes.cluster.metrics", Method: plugin.MethodWS, Path: "/overview/metrics", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.cluster.metrics", Stream: ClusterMetrics},
 		{ID: "kubernetes.node.metrics", Method: plugin.MethodWS, Path: "/nodes/metrics", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.node.metrics", Stream: NodeMetrics},
+		{ID: "kubernetes.pod.metrics", Method: plugin.MethodWS, Path: "/pods/metrics", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.metrics", Stream: PodMetrics},
 		{ID: "kubernetes.node.pods", Method: plugin.MethodGet, Path: "/nodes/pods", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.node.pods", Handle: NodePods},
 		{ID: "kubernetes.workload.pods", Method: plugin.MethodGet, Path: "/resources/{kind}/pods", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.workload.pods", Handle: WorkloadPods},
 
@@ -54,8 +56,10 @@ func Routes() []plugin.Route {
 		{ID: "kubernetes.helm.releases", Method: plugin.MethodGet, Path: "/helm/releases", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.helm.releases", Handle: HelmReleases},
 		{ID: "kubernetes.helm.release", Method: plugin.MethodGet, Path: "/helm/release", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.helm.release", Handle: HelmRelease},
 
-		{ID: "kubernetes.service.open", Method: plugin.MethodGet, Path: "/services/open", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.service.open", Handle: ServiceProxyURL},
-		{ID: "kubernetes.pod.open", Method: plugin.MethodGet, Path: "/pods/open", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.open", Handle: PodProxyURL},
+		{ID: "kubernetes.service.open", Method: plugin.MethodGet, Path: "/services/open", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.service.open", Input: openPortSchema("kubernetes.service.open.ports"), Handle: ServiceProxyURL},
+		{ID: "kubernetes.service.open.ports", Method: plugin.MethodGet, Path: "/services/open/ports", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.service.open.ports", Handle: ServiceOpenPorts},
+		{ID: "kubernetes.pod.open", Method: plugin.MethodGet, Path: "/pods/open", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.open", Input: openPortSchema("kubernetes.pod.open.ports"), Handle: PodProxyURL},
+		{ID: "kubernetes.pod.open.ports", Method: plugin.MethodGet, Path: "/pods/open/ports", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.open.ports", Handle: PodOpenPorts},
 	}
 }
 

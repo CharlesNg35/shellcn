@@ -34,7 +34,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				ValueTypes: []string{"string", "hash", "list", "set", "zset"},
 			}},
 			{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "redis.terminal", Method: plugin.MethodWS}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
-			{Key: "info", Label: "Info", Icon: icon("file-text"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "redis.info"}},
+			{Key: "info", Label: "Info", Icon: icon("file-text"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "redis.info"}, Config: infoDetailConfig()},
 		},
 		Streams: []plugin.Stream{
 			{ID: "redis.terminal", Kind: plugin.StreamTerminal, RouteID: "redis.terminal"},
@@ -50,6 +50,10 @@ func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.
 
 func icon(name string) plugin.Icon {
 	return plugin.Icon{Type: plugin.IconLucide, Value: name}
+}
+
+func infoDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{RawToggle: true}
 }
 
 func databaseScope() plugin.ScopeFilter {
@@ -68,7 +72,7 @@ func databaseScope() plugin.ScopeFilter {
 // channels into a single at-a-glance grid using the generic dashboard panel.
 func overviewDashboard() plugin.DashboardConfig {
 	return plugin.DashboardConfig{Cells: []plugin.Panel{
-		{Key: "server", Label: "Server", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "redis.overview"}, Span: 2},
+		{Key: "server", Label: "Server", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "redis.overview"}, Config: infoDetailConfig(), Span: 2},
 		{Key: "clients", Label: "Clients", Icon: icon("users"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.clients.list"}, Config: plugin.TableConfig{Columns: clientColumns(), Exportable: true, RowClick: plugin.RowClickDetail}},
 		{Key: "channels", Label: "Channels", Icon: icon("radio-tower"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.channels.list"}, Config: plugin.TableConfig{Columns: channelColumns(), Exportable: true, RowClick: plugin.RowClickDetail}},
 	}}

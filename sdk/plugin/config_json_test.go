@@ -14,6 +14,7 @@ func TestManifestConfigRoundTrip(t *testing.T) {
 		Name:       "demo",
 		Tabs: []plugin.Panel{
 			{Key: "data", Type: plugin.PanelTable, Config: plugin.TableConfig{Editable: true, RowKey: []string{"id"}}},
+			{Key: "diff", Type: plugin.PanelDiff, Config: plugin.DiffConfig{Language: "yaml", OriginalLabel: "Current", ModifiedLabel: "Edited"}},
 			{Key: "logs", Type: plugin.PanelLogStream},
 		},
 		Actions: []plugin.Action{
@@ -33,8 +34,11 @@ func TestManifestConfigRoundTrip(t *testing.T) {
 	if _, ok := got.Tabs[0].Config.(plugin.TableConfig); !ok {
 		t.Fatalf("table config lost its type: %T", got.Tabs[0].Config)
 	}
-	if got.Tabs[1].Config != nil {
-		t.Fatalf("configless panel gained a config: %T", got.Tabs[1].Config)
+	if _, ok := got.Tabs[1].Config.(plugin.DiffConfig); !ok {
+		t.Fatalf("diff config lost its type: %T", got.Tabs[1].Config)
+	}
+	if got.Tabs[2].Config != nil {
+		t.Fatalf("configless panel gained a config: %T", got.Tabs[2].Config)
 	}
 	if _, ok := got.Actions[0].Config.(plugin.CodeEditorConfig); !ok {
 		t.Fatalf("action config lost its type: %T", got.Actions[0].Config)
@@ -46,5 +50,27 @@ func TestManifestConfigRoundTrip(t *testing.T) {
 	}
 	if !bytes.Equal(data, again) {
 		t.Fatalf("round-trip not byte-identical:\n %s\n %s", data, again)
+	}
+}
+
+func TestGraphConfigExportableNullDecodesAsDefault(t *testing.T) {
+	var got plugin.Manifest
+	if err := json.Unmarshal([]byte(`{
+		"apiVersion": 1,
+		"name": "demo",
+		"tabs": [{
+			"key": "graph",
+			"panel": "graph",
+			"config": {"exportable": null}
+		}]
+	}`), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	cfg, ok := got.Tabs[0].Config.(plugin.GraphConfig)
+	if !ok {
+		t.Fatalf("graph config type = %T, want GraphConfig", got.Tabs[0].Config)
+	}
+	if cfg.Exportable != nil {
+		t.Fatalf("exportable = %#v, want nil default", cfg.Exportable)
 	}
 }
