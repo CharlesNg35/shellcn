@@ -191,11 +191,19 @@ describe("streaming stub panels", () => {
     expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(2);
     expect(streamSockets()).toHaveLength(2);
     expect(new Set(streamSockets().map((ws) => ws.url)).size).toBe(1);
+    expect(
+      w
+        .findAll("button")
+        .filter((button) =>
+          button.attributes("aria-label")?.startsWith("Split active pane"),
+        ),
+    ).toHaveLength(2);
 
     await w
       .findAll("button")
-      .filter((button) => button.attributes("aria-label") === "Close pane")
-      .at(1)!
+      .find(
+        (button) => button.attributes("aria-label") === "Close active pane",
+      )!
       .trigger("click");
     await flushPromises();
 
@@ -223,6 +231,75 @@ describe("streaming stub panels", () => {
     expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(0);
     expect(streamSockets()).toHaveLength(0);
     w.unmount();
+  });
+
+  it("auto split chooses the direction that makes panes closest to square", async () => {
+    const w = mount(TerminalGridPanel, {
+      props: { ...props, config: { maxPanes: 3 } },
+    });
+    await flushPromises();
+    const pane = w.get("[data-terminal-grid-pane]").element as HTMLElement;
+    vi.spyOn(pane, "getBoundingClientRect").mockReturnValue({
+      width: 1200,
+      height: 400,
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 1200,
+      bottom: 400,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    await w
+      .findAll("button")
+      .find(
+        (button) =>
+          button.attributes("aria-label") === "Auto split active pane",
+      )!
+      .trigger("click");
+    await flushPromises();
+
+    expect(
+      w
+        .get("[data-terminal-grid-split]")
+        .attributes("data-terminal-grid-split"),
+    ).toBe("horizontal");
+    w.unmount();
+
+    const tall = mount(TerminalGridPanel, {
+      props: { ...props, config: { maxPanes: 3 } },
+    });
+    await flushPromises();
+    const tallPane = tall.get("[data-terminal-grid-pane]")
+      .element as HTMLElement;
+    vi.spyOn(tallPane, "getBoundingClientRect").mockReturnValue({
+      width: 400,
+      height: 1200,
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 400,
+      bottom: 1200,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    await tall
+      .findAll("button")
+      .find(
+        (button) =>
+          button.attributes("aria-label") === "Auto split active pane",
+      )!
+      .trigger("click");
+    await flushPromises();
+
+    expect(
+      tall
+        .get("[data-terminal-grid-split]")
+        .attributes("data-terminal-grid-split"),
+    ).toBe("vertical");
+    tall.unmount();
   });
 
   it("disables terminal recording controls for multi-pane workspaces", async () => {

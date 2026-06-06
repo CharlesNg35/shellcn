@@ -61,6 +61,9 @@ const paneTitles = computed(() =>
     paneIds().map((id, index) => [id, `Terminal ${index + 1}`]),
   ),
 );
+const activePaneLabel = computed(
+  () => paneTitles.value[activePaneId.value] ?? "Terminal",
+);
 const recordingPolicy = computed(() => props.recording?.policy ?? "disabled");
 const blocksRecording = computed(() => recordingPolicy.value === "auto");
 const showsRecordingNotice = computed(
@@ -109,7 +112,15 @@ function paneDirection(paneId: string): TerminalGridDirection {
   );
   if (!el) return "horizontal";
   const rect = el.getBoundingClientRect();
-  return rect.width >= rect.height ? "horizontal" : "vertical";
+  if (rect.width <= 0 || rect.height <= 0) return "horizontal";
+  const horizontalRatio = aspectRatio(rect.width / 2, rect.height);
+  const verticalRatio = aspectRatio(rect.width, rect.height / 2);
+  return horizontalRatio <= verticalRatio ? "horizontal" : "vertical";
+}
+
+function aspectRatio(width: number, height: number): number {
+  const min = Math.max(1, Math.min(width, height));
+  return Math.max(width, height) / min;
 }
 
 function closePaneStream(paneId: string): void {
@@ -171,9 +182,12 @@ onBeforeUnmount(closeAllPaneStreams);
     <div
       class="flex min-h-10 items-center gap-2 border-b border-surface-200 bg-surface-0 px-3 py-1.5 dark:border-surface-800 dark:bg-surface-950"
     >
-      <span class="min-w-0 flex-1 truncate text-sm font-medium">
-        Terminal workspace
-      </span>
+      <div class="min-w-0 flex-1">
+        <div class="truncate text-sm font-medium">{{ activePaneLabel }}</div>
+        <div class="text-xs text-surface-500 dark:text-surface-400">
+          {{ paneCount }} / {{ maxPanes }} panes
+        </div>
+      </div>
       <span
         v-if="showsRecordingNotice"
         class="hidden text-xs text-amber-600 sm:inline dark:text-amber-400"
@@ -185,6 +199,7 @@ onBeforeUnmount(closeAllPaneStreams);
         size="small"
         severity="secondary"
         :disabled="!canSplit"
+        aria-label="Split active pane right"
         @click="splitPane(activePaneId, 'horizontal')"
       >
         <AppIcon
@@ -198,6 +213,7 @@ onBeforeUnmount(closeAllPaneStreams);
         size="small"
         severity="secondary"
         :disabled="!canSplit"
+        aria-label="Split active pane down"
         @click="splitPane(activePaneId, 'vertical')"
       >
         <AppIcon
@@ -211,6 +227,7 @@ onBeforeUnmount(closeAllPaneStreams);
         size="small"
         severity="secondary"
         :disabled="!canSplit"
+        aria-label="Auto split active pane"
         @click="splitPane(activePaneId, 'auto')"
       >
         <AppIcon
@@ -224,6 +241,19 @@ onBeforeUnmount(closeAllPaneStreams);
         size="small"
         severity="secondary"
         outlined
+        aria-label="Close active pane"
+        :disabled="!canClose"
+        @click="closePane(activePaneId)"
+      >
+        <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="14" />
+        Close
+      </Button>
+      <Button
+        type="button"
+        size="small"
+        severity="secondary"
+        text
+        aria-label="Reset terminal workspace"
         @click="resetLayout"
       >
         <AppIcon :icon="{ type: 'lucide', value: 'rotate-ccw' }" :size="14" />
@@ -240,12 +270,7 @@ onBeforeUnmount(closeAllPaneStreams);
         :source="source"
         :resource="resource"
         :terminal-config="terminalConfig"
-        :pane-titles="paneTitles"
-        :can-split="canSplit"
-        :can-close="canClose"
         @focus="activePaneId = $event"
-        @split="splitPane"
-        @close="closePane"
       />
     </div>
   </div>
