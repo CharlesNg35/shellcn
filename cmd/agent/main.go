@@ -305,25 +305,22 @@ func buildHTTPProxy(logger *slog.Logger, target transport.AgentProxyTarget) (*ht
 		tokens = &tokenSource{path: tokenPath}
 	}
 
+	baseTransport := &http.Transport{
+		TLSClientConfig:       tlsConfig,
+		ForceAttemptHTTP2:     false,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: time.Second,
+	}
+
 	rp := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(upstream)
 			pr.Out.Host = upstream.Host
 			pr.Out.Header.Del("Authorization")
-			if tokens != nil {
-				if tok, err := tokens.token(); err == nil && tok != "" {
-					pr.Out.Header.Set("Authorization", "Bearer "+tok)
-				}
-			}
 		},
-		Transport: &http.Transport{
-			TLSClientConfig:       tlsConfig,
-			ForceAttemptHTTP2:     false,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: time.Second,
-		},
+		Transport: bearerTokenTransport{base: baseTransport, tokens: tokens},
 		// Flush immediately so server-push streams (watches, logs) aren't buffered.
 		FlushInterval: -1,
 		ErrorLog:      slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
@@ -333,6 +330,25 @@ func buildHTTPProxy(logger *slog.Logger, target transport.AgentProxyTarget) (*ht
 		},
 	}
 	return rp, nil
+}
+
+type bearerTokenTransport struct {
+	base   http.RoundTripper
+	tokens *tokenSource
+}
+
+func (t bearerTokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if t.tokens != nil {
+		tok, err := t.tokens.token()
+		if err != nil {
+			return nil, fmt.Errorf("read bearer token: %w", err)
+		}
+		if tok != "" {
+			req = req.Clone(req.Context())
+			req.Header.Set("Authorization", "Bearer "+tok)
+		}
+	}
+	return t.base.RoundTrip(req)
 }
 
 func loadCAPool(path string) (*x509.CertPool, error) {
@@ -366,7 +382,10 @@ func (t *tokenSource) token() (string, error) {
 
 	b, err := os.ReadFile(t.path)
 	if err != nil {
-		return t.val, err
+		if t.val != "" {
+			return t.val, nil
+		}
+		return "", err
 	}
 
 	t.val = strings.TrimSpace(string(b))

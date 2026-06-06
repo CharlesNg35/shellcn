@@ -90,6 +90,45 @@ func TestTokenSourceReadsAndCaches(t *testing.T) {
 	}
 }
 
+func TestTokenSourceKeepsLastGoodTokenOnRefreshError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(path, []byte("tok-1"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	ts := &tokenSource{path: path}
+	if got, err := ts.token(); err != nil || got != "tok-1" {
+		t.Fatalf("token() = %q, %v; want tok-1", got, err)
+	}
+	ts.exp = time.Now().Add(-time.Second)
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if got, err := ts.token(); err != nil || got != "tok-1" {
+		t.Fatalf("token() after refresh error = %q, %v; want cached tok-1", got, err)
+	}
+}
+
+func TestBuildHTTPProxyFailsWhenTokenFileUnreadable(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	defer upstream.Close()
+
+	proxy, err := buildHTTPProxy(slog.New(slog.NewTextHandler(io.Discard, nil)),
+		transport.AgentProxyTarget{Mode: transport.AgentModeHTTP, Address: upstream.URL, TokenFile: filepath.Join(t.TempDir(), "missing-token")})
+	if err != nil {
+		t.Fatalf("buildHTTPProxy: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://"+app.AgentInternalHost+"/api", nil)
+	proxy.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d; want %d", rec.Code, http.StatusBadGateway)
+	}
+}
+
 func TestBuildAPIProxyInjectsCredentials(t *testing.T) {
 	var gotAuth, gotPath string
 	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

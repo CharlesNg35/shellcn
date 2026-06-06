@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
+	"github.com/hashicorp/yamux"
 
 	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
 	"github.com/charlesng35/shellcn/internal/ai/modelreg"
@@ -246,6 +248,7 @@ type harness struct {
 	ts             *httptest.Server
 	srv            *server.Server
 	store          *store.Store
+	tunnels        *transport.Registry
 	pluginSessions *session.Manager
 	sessionMgr     *auth.SessionManager
 	sessions       map[string]auth.Session // userID → platform session
@@ -307,7 +310,7 @@ func newHarness(t *testing.T, opts ...func(*server.Deps)) *harness {
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 
-	h := &harness{ts: ts, srv: srv, store: st, pluginSessions: sessMgr, sessionMgr: authMgr, sessions: map[string]auth.Session{}}
+	h := &harness{ts: ts, srv: srv, store: st, tunnels: tunnels, pluginSessions: sessMgr, sessionMgr: authMgr, sessions: map[string]auth.Session{}}
 
 	ctx := context.Background()
 	for _, u := range []struct {
@@ -636,6 +639,54 @@ func TestRejectedAgentConnectIsAudited(t *testing.T) {
 	t.Fatalf("missing denied agent.connect audit row: %+v", rows)
 }
 
+func TestMalformedAgentConnectIsAudited(t *testing.T) {
+	h := newHarness(t)
+	c, resp, err := websocket.Dial(context.Background(), h.wsURL("/api/agent/connect"), nil)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	if err != nil {
+		t.Fatalf("dial agent connect: %v", err)
+	}
+	_ = c.Close(websocket.StatusPolicyViolation, "no hello")
+
+	waitForAudit(t, h, func(row models.AuditEntry) bool {
+		return row.RouteID == "agent.connect" && row.Result == models.AuditDenied && row.Risk == string(plugin.RiskPrivileged)
+	})
+}
+
+func TestReplacingAgentTunnelDoesNotMarkEnrollmentOffline(t *testing.T) {
+	h := newHarness(t)
+	resp := h.do(t, http.MethodPost, "/api/connections/c-op/agent/enrollments", "op", nil)
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create enrollment: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	token := extractAgentToken(t, resp.Body)
+
+	first := dialAgentTunnel(t, h, token, "first")
+	defer first.close()
+	second := dialAgentTunnel(t, h, token, "second")
+	defer second.close()
+	waitForCurrentTunnel(t, h, "c-op", "second")
+
+	first.close()
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		resp = h.do(t, http.MethodGet, "/api/connections/c-op/agent/state", "op", nil)
+		if resp.Status != http.StatusOK {
+			t.Fatalf("agent state: want 200, got %d (%s)", resp.Status, resp.Body)
+		}
+		if strings.Contains(string(resp.Body), `"status":"online"`) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("stale tunnel teardown marked active replacement offline: %s", resp.Body)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestAgentEnrollmentUsesForwardedPublicURL(t *testing.T) {
 	h := newHarness(t)
 	req, err := http.NewRequest(http.MethodPost, h.ts.URL+"/api/connections/c-op/agent/enrollments", nil)
@@ -748,6 +799,138 @@ func TestProjectionEndpoints(t *testing.T) {
 
 func (h *harness) wsURL(path string) string {
 	return "ws" + strings.TrimPrefix(h.ts.URL, "http") + path
+}
+
+func waitForAudit(t *testing.T, h *harness, match func(models.AuditEntry) bool) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		rows, err := h.store.Audit.List(context.Background(), store.AuditFilter{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, row := range rows {
+			if match(row) {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("missing audit row: %+v", rows)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+type testAgentTunnel struct {
+	cancel context.CancelFunc
+	ws     *websocket.Conn
+	sess   *yamux.Session
+}
+
+func (t *testAgentTunnel) close() {
+	if t.sess != nil {
+		_ = t.sess.Close()
+	}
+	if t.ws != nil {
+		_ = t.ws.CloseNow()
+	}
+	if t.cancel != nil {
+		t.cancel()
+	}
+}
+
+func dialAgentTunnel(t *testing.T, h *harness, token, label string) *testAgentTunnel {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	c, resp, err := websocket.Dial(ctx, h.wsURL("/api/agent/connect"), nil)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	if err != nil {
+		cancel()
+		t.Fatalf("dial agent connect: %v", err)
+	}
+	if err := wsjson.Write(ctx, c, transport.AgentHello{Token: token, Forward: true}); err != nil {
+		_ = c.CloseNow()
+		cancel()
+		t.Fatalf("write hello: %v", err)
+	}
+	var agentResp transport.AgentConnectResponse
+	if err := wsjson.Read(ctx, c, &agentResp); err != nil {
+		_ = c.CloseNow()
+		cancel()
+		t.Fatalf("read response: %v", err)
+	}
+	if !agentResp.OK {
+		_ = c.CloseNow()
+		cancel()
+		t.Fatalf("agent rejected: %s", agentResp.Error)
+	}
+	nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
+	cfg := yamux.DefaultConfig()
+	cfg.EnableKeepAlive = true
+	cfg.LogOutput = io.Discard
+	sess, err := yamux.Server(nc, cfg)
+	if err != nil {
+		_ = c.CloseNow()
+		cancel()
+		t.Fatalf("yamux server: %v", err)
+	}
+	go func() {
+		for {
+			stream, err := sess.Accept()
+			if err != nil {
+				return
+			}
+			_, _ = io.WriteString(stream, label)
+			_ = stream.Close()
+		}
+	}()
+	return &testAgentTunnel{cancel: cancel, ws: c, sess: sess}
+}
+
+func waitForCurrentTunnel(t *testing.T, h *harness, connectionID, want string) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		if dial, ok := h.tunnels.Dialer(connectionID); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			conn, err := dial(ctx, "tcp", "127.0.0.1:1")
+			cancel()
+			if err == nil {
+				buf := make([]byte, len(want))
+				_, readErr := io.ReadFull(conn, buf)
+				_ = conn.Close()
+				if readErr == nil && string(buf) == want {
+					return
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("active tunnel did not become %q", want)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func extractAgentToken(t *testing.T, body []byte) string {
+	t.Helper()
+	var resp struct {
+		Artifacts []struct {
+			Command string `json:"command"`
+		} `json:"artifacts"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode enrollment response: %v", err)
+	}
+	re := regexp.MustCompile(`\s([A-Za-z0-9_-]{43})(?:\s|$)`)
+	for _, artifact := range resp.Artifacts {
+		if match := re.FindStringSubmatch(artifact.Command); len(match) == 2 {
+			return match[1]
+		}
+	}
+	t.Fatalf("missing agent token in enrollment response: %s", body)
+	return ""
 }
 
 func (h *harness) dialWS(t *testing.T, userID, path string) (*websocket.Conn, error) {
