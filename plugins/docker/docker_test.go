@@ -33,6 +33,21 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	if len(m.Resources) != 6 {
 		t.Fatalf("resources = %d, want 6", len(m.Resources))
 	}
+	for _, res := range m.Resources {
+		for _, tab := range res.Detail.Tabs {
+			if tab.Type == plugin.PanelTerminalGrid {
+				t.Fatalf("docker should keep exec sessions as single terminal panels: resource=%s tab=%s", res.Kind, tab.Key)
+			}
+			if tab.Key == "inspect" {
+				if tab.Type != plugin.PanelObjectDetail {
+					t.Fatalf("docker inspect should render object details: resource=%s panel=%s", res.Kind, tab.Type)
+				}
+				if cfg, ok := tab.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
+					t.Fatalf("docker inspect config for %s = %#v, want raw-toggle object detail", res.Kind, tab.Config)
+				}
+			}
+		}
+	}
 	var containerRes *plugin.ResourceType
 	for i := range m.Resources {
 		if m.Resources[i].Kind == "container" {
@@ -57,6 +72,14 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	}
 	if containerRes.Detail.Tabs[0].Type != plugin.PanelObjectDetail || containerRes.Detail.Tabs[0].Source.RouteID != "docker.container.overview" {
 		t.Fatalf("container overview should render selected container details, got panel=%s source=%+v", containerRes.Detail.Tabs[0].Type, containerRes.Detail.Tabs[0].Source)
+	}
+	if containerRes.Detail.Tabs[1].Type != plugin.PanelTerminal {
+		t.Fatalf("container terminal panel = %s, want %s", containerRes.Detail.Tabs[1].Type, plugin.PanelTerminal)
+	}
+	if inspect := containerRes.Detail.Tabs[3]; inspect.Type != plugin.PanelObjectDetail || inspect.Source.RouteID != "docker.container.inspect" {
+		t.Fatalf("container inspect should render object details, got panel=%s source=%+v", inspect.Type, inspect.Source)
+	} else if cfg, ok := inspect.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
+		t.Fatalf("container inspect config = %#v, want raw-toggle object detail", inspect.Config)
 	}
 	var composeRes *plugin.ResourceType
 	for i := range m.Resources {

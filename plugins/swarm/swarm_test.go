@@ -41,6 +41,14 @@ func TestManifestDeclaresSwarmWorkspace(t *testing.T) {
 			if tab.Type == plugin.PanelHTTPClient {
 				t.Fatalf("swarm should not expose a raw API panel: resource=%s tab=%s", res.Kind, tab.Key)
 			}
+			if tab.Key == "inspect" {
+				if tab.Type != plugin.PanelObjectDetail {
+					t.Fatalf("swarm inspect should render object details: resource=%s panel=%s", res.Kind, tab.Type)
+				}
+				if cfg, ok := tab.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
+					t.Fatalf("swarm inspect config for %s = %#v, want raw-toggle object detail", res.Kind, tab.Config)
+				}
+			}
 		}
 	}
 	for _, route := range New().Routes() {

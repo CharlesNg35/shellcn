@@ -110,8 +110,9 @@ func tabs() []plugin.Panel {
 					Config: throughputConfig(),
 				},
 				{
-					Key: "system", Label: "System", Type: plugin.PanelDocument, Span: 1,
+					Key: "system", Label: "System", Type: plugin.PanelObjectDetail, Span: 1,
 					Source: &plugin.DataSource{RouteID: "server_monitor.overview"},
+					Config: systemDetailConfig(),
 				},
 				{
 					Key: "disks", Label: "Disks", Type: plugin.PanelTable, Span: 1,
@@ -129,11 +130,15 @@ func tabs() []plugin.Panel {
 		{Key: "sessions", Label: "Sessions", Icon: lucide("users"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.users"}, Config: liveTableConfig(userColumns(), 15000, nil)},
 		{Key: "sensors", Label: "Sensors", Icon: lucide("thermometer"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.sensors"}, Config: liveTableConfig(sensorColumns(), 5000, sortBy("temperature"))},
 		{Key: "cpu", Label: "CPU", Icon: lucide("cpu"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.cpu"}, Config: tableConfig(cpuColumns())},
-		{Key: "system", Label: "System", Icon: lucide("server"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "server_monitor.overview"}},
+		{Key: "system", Label: "System", Icon: lucide("server"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "server_monitor.overview"}, Config: systemDetailConfig()},
 	}
 }
 
 func lucide(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide, Value: name} }
+
+func systemDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{RawToggle: true}
+}
 
 // summaryConfig is the full-width header card: the CPU/Mem/Swap gauges plus the
 // process/load stats. The line charts live in their own cells (below) so they
