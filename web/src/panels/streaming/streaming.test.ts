@@ -191,6 +191,16 @@ describe("streaming stub panels", () => {
     expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(2);
     expect(streamSockets()).toHaveLength(2);
     expect(new Set(streamSockets().map((ws) => ws.url)).size).toBe(1);
+
+    await w
+      .findAll("button")
+      .filter((button) => button.attributes("aria-label") === "Close pane")
+      .at(1)!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(1);
+    expect(streamSockets().filter((ws) => ws.closed)).toHaveLength(1);
     w.unmount();
   });
 

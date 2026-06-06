@@ -772,13 +772,16 @@ const (
 //     single/dashboard carry no `v`.
 //   - MetricsConfig drives the metrics panel (stat cards, gauges, time-series)
 //     entirely from declared field keys; the renderer hardcodes none.
-//   - TerminalConfig opts a terminal panel into zoom and/or scrollback search;
-//     both off by default, enabled per-tab from the manifest, generic for any
-//     plugin (SSH, Docker/Podman exec, Telnet, Redis console, Proxmox shells…).
+//   - TerminalConfig opts a terminal panel into zoom and/or scrollback search.
+//     TerminalGridConfig adds a renderer-owned split workspace for protocols that
+//     can safely open one independent terminal channel per pane. Split workspaces
+//     use the same StreamTerminal route; mandatory recording keeps using the
+//     single terminal panel so audit capture is unambiguous.
 
 type PanelType string
 const (
-    PanelTerminal      PanelType = "terminal"       // xterm.js
+    PanelTerminal      PanelType = "terminal"       // single xterm.js terminal
+    PanelTerminalGrid  PanelType = "terminal_grid"  // user-managed split terminal workspace
     PanelFileBrowser   PanelType = "file_browser"
     PanelTable         PanelType = "table"
     PanelMetrics       PanelType = "metrics"
@@ -1011,8 +1014,9 @@ The core validates every route/action/source reference during plugin
 registration. `DataSource.Method`, when declared, must match the referenced
 route. Read panels (`table`, `form`, `document`, `code_editor`, `file_browser`,
 `object_detail`, `timeline`, etc.) must source from `GET` routes; streaming
-panels (`terminal`, `log_stream`, `metrics`, `query_editor`, `remote_desktop`,
-`task_progress`, and table/resource watch sources) must source from `WS` routes.
+panels (`terminal`, `terminal_grid`, `log_stream`, `metrics`, `query_editor`,
+`remote_desktop`, `task_progress`, and table/resource watch sources) must source
+from `WS` routes.
 Table mutation sources (`insert`, `update`, `delete`) and editor/form save
 methods must resolve to write methods (`POST`, `PUT`, `PATCH`, or `DELETE`).
 Dashboard and split child panels are validated recursively with the same rules

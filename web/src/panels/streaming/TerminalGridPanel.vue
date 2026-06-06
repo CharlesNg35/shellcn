@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import Button from "primevue/button";
 import AppIcon from "../../components/AppIcon.vue";
 import PanelError from "../shared/PanelError.vue";
 import type { PanelProps } from "../core/types";
+import { channelKey } from "../../api/dataSource";
+import { useStreamChannelsStore } from "../../stores/streamChannels";
 import type {
   TerminalGridPanelConfig,
   TerminalPanelConfig,
@@ -14,6 +16,7 @@ import TerminalGridNode, {
 } from "./TerminalGridNode.vue";
 
 const props = defineProps<PanelProps>();
+const streams = useStreamChannelsStore();
 
 const cfg = computed(
   () => (props.config as TerminalGridPanelConfig | undefined) ?? {},
@@ -38,6 +41,7 @@ let seq = 0;
 const layout = ref<TerminalGridLayoutNode>(leaf());
 const activePaneId = ref(layout.value.id);
 const root = ref<HTMLElement | null>(null);
+const initialized = ref(false);
 
 function leaf(): TerminalGridLayoutNode {
   seq += 1;
@@ -108,6 +112,17 @@ function paneDirection(paneId: string): TerminalGridDirection {
   return rect.width >= rect.height ? "horizontal" : "vertical";
 }
 
+function closePaneStream(paneId: string): void {
+  if (!props.source) return;
+  streams.close(
+    `${channelKey(props.connectionId, props.source, { resource: props.resource })}:${paneId}`,
+  );
+}
+
+function closeAllPaneStreams(): void {
+  for (const paneId of paneIds()) closePaneStream(paneId);
+}
+
 function splitPane(
   paneId = activePaneId.value,
   direction: TerminalGridDirection | "auto" = "auto",
@@ -119,6 +134,7 @@ function splitPane(
 
 function closePane(paneId = activePaneId.value): void {
   if (!canClose.value) return;
+  closePaneStream(paneId);
   const next = removeLeaf(layout.value, paneId);
   if (!next) return;
   layout.value = next;
@@ -128,6 +144,7 @@ function closePane(paneId = activePaneId.value): void {
 }
 
 function resetLayout(): void {
+  if (initialized.value) closeAllPaneStreams();
   seq = 0;
   layout.value = leaf();
   activePaneId.value = layout.value.id;
@@ -136,7 +153,12 @@ function resetLayout(): void {
   }
 }
 
-onMounted(resetLayout);
+onMounted(() => {
+  resetLayout();
+  initialized.value = true;
+});
+
+onBeforeUnmount(closeAllPaneStreams);
 </script>
 
 <template>
@@ -211,6 +233,7 @@ onMounted(resetLayout);
 
     <div class="min-h-0 flex-1 bg-surface-200 p-1 dark:bg-surface-900">
       <TerminalGridNode
+        v-if="initialized"
         :node="layout"
         :active-pane-id="activePaneId"
         :connection-id="connectionId"

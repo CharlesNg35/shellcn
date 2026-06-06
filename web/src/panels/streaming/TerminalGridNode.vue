@@ -18,7 +18,7 @@ export type TerminalGridLayoutNode =
 
 defineOptions({ name: "TerminalGridNode" });
 
-const props = defineProps<{
+defineProps<{
   node: TerminalGridLayoutNode;
   activePaneId: string;
   connectionId: string;
