@@ -453,10 +453,11 @@ func deleteEntry(rc *plugin.RequestContext) (any, error) {
 
 func snippetList(protocol string) plugin.Handler {
 	return func(rc *plugin.RequestContext) (any, error) {
-		if rc.Snippets == nil {
+		snippets := newSnippetStore(rc.Storage)
+		if snippets == nil {
 			return nil, plugin.ErrNotSupported
 		}
-		rows, err := rc.Snippets.ListByOwner(rc.Ctx, rc.User.ID, protocol)
+		rows, err := snippets.ListByOwner(rc.Ctx, rc.User.ID, protocol)
 		if err != nil {
 			return nil, err
 		}
@@ -470,7 +471,8 @@ func snippetList(protocol string) plugin.Handler {
 
 func snippetCreate(protocol string) plugin.Handler {
 	return func(rc *plugin.RequestContext) (any, error) {
-		if rc.Snippets == nil {
+		snippets := newSnippetStore(rc.Storage)
+		if snippets == nil {
 			return nil, plugin.ErrNotSupported
 		}
 		var req snippetRequest
@@ -478,7 +480,7 @@ func snippetCreate(protocol string) plugin.Handler {
 			return nil, err
 		}
 		now := time.Now()
-		sn := plugin.Snippet{
+		sn := storedSnippet{
 			ID: uuid.NewString(), OwnerID: rc.User.ID, Protocol: protocol,
 			Name: strings.TrimSpace(req.Name), Body: strings.TrimSpace(req.Body),
 			CreatedAt: now, UpdatedAt: now,
@@ -486,7 +488,7 @@ func snippetCreate(protocol string) plugin.Handler {
 		if sn.Name == "" || sn.Body == "" {
 			return nil, plugin.ErrInvalidInput
 		}
-		if err := rc.Snippets.Create(rc.Ctx, &sn); err != nil {
+		if err := snippets.Create(rc.Ctx, &sn); err != nil {
 			return nil, err
 		}
 		return snippetFromModel(sn), nil
@@ -517,23 +519,28 @@ func snippetDelete(protocol string) plugin.Handler {
 		if err != nil {
 			return nil, err
 		}
-		if err := rc.Snippets.Delete(rc.Ctx, sn.ID); err != nil {
+		snippets := newSnippetStore(rc.Storage)
+		if snippets == nil {
+			return nil, plugin.ErrNotSupported
+		}
+		if err := snippets.Delete(rc.Ctx, rc.User.ID, protocol, sn.ID); err != nil {
 			return nil, err
 		}
 		return map[string]bool{"ok": true}, nil
 	}
 }
 
-func ownedSnippet(rc *plugin.RequestContext, protocol string) (plugin.Snippet, error) {
-	if rc.Snippets == nil {
-		return plugin.Snippet{}, plugin.ErrNotSupported
+func ownedSnippet(rc *plugin.RequestContext, protocol string) (storedSnippet, error) {
+	snippets := newSnippetStore(rc.Storage)
+	if snippets == nil {
+		return storedSnippet{}, plugin.ErrNotSupported
 	}
-	sn, err := rc.Snippets.Get(rc.Ctx, rc.Param("id"))
+	sn, err := snippets.Get(rc.Ctx, rc.User.ID, protocol, rc.Param("id"))
 	if err != nil {
-		return plugin.Snippet{}, err
+		return storedSnippet{}, err
 	}
 	if sn.OwnerID != rc.User.ID || sn.Protocol != protocol {
-		return plugin.Snippet{}, plugin.ErrNotFound
+		return storedSnippet{}, plugin.ErrNotFound
 	}
 	return sn, nil
 }
@@ -576,7 +583,7 @@ func pageEntries(currentPath string, entries []FileEntry, req plugin.PageRequest
 	return FilePage{Items: entries[offset:end], NextCursor: next, Total: &total, Path: currentPath}
 }
 
-func pageSnippets(rows []plugin.Snippet, req plugin.PageRequest) plugin.Page[snippet] {
+func pageSnippets(rows []storedSnippet, req plugin.PageRequest) plugin.Page[snippet] {
 	offset := cursorOffset(req.Cursor)
 	if offset < 0 || offset > len(rows) {
 		offset = 0
@@ -601,7 +608,7 @@ func pageSnippets(rows []plugin.Snippet, req plugin.PageRequest) plugin.Page[sni
 	return plugin.Page[snippet]{Items: items, NextCursor: next, Total: &total}
 }
 
-func snippetFromModel(sn plugin.Snippet) snippet {
+func snippetFromModel(sn storedSnippet) snippet {
 	return snippet{
 		ID: sn.ID,
 		Ref: &plugin.ResourceRef{

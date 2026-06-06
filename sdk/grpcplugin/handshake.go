@@ -6,7 +6,7 @@ import goplugin "github.com/hashicorp/go-plugin"
 
 // ProtocolVersion is the plugin wire-contract version. Bump it on any breaking
 // change to the proto or the manifest JSON shape; the host refuses a mismatch.
-const ProtocolVersion = 1
+const ProtocolVersion = 2
 
 // PluginName is the dispense key under which the Plugin service is served.
 const PluginName = "plugin"

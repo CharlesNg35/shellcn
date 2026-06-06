@@ -92,6 +92,7 @@ func (s *server) Connect(ctx context.Context, req *pluginv1.ConnectRequest) (*pl
 		}
 		host = pluginv1.NewHostClient(cc)
 		cfg.Net = newBrokerTransport(s.broker, host)
+		cfg.Storage = newHostStorage(host)
 	}
 	sess, err := s.impl.Connect(ctx, cfg)
 	if err != nil {
@@ -138,6 +139,7 @@ func (s *server) Invoke(ctx context.Context, req *pluginv1.InvokeRequest) (*plug
 		return nil, status.Error(codes.NotFound, "unknown route")
 	}
 	rc := plugin.NewRequestContext(ctx, actingUser(req.GetUser()), cs.session, req.GetParams(), queryValues(req.GetQuery()), req.GetBody()).
+		WithStorage(newHostStorage(cs.host)).
 		WithAuditHook(cs.auditHook(id)).
 		WithProxyPrefix(req.GetProxyPrefix())
 	res, err := route.Handle(rc)

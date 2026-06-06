@@ -19,7 +19,7 @@ func allModels() []any {
 	return []any{
 		&models.User{}, &models.Connection{}, &models.Credential{}, &models.Grant{},
 		&models.ConnectionFolder{}, &models.ConnectionPlacement{}, &models.CredentialGrant{},
-		&models.AuditEntry{}, &models.Snippet{}, &models.Preference{},
+		&models.AuditEntry{}, &models.PluginStorageItem{}, &models.Preference{},
 		&models.AgentEnrollment{}, &models.PolicyRule{}, &models.Invitation{},
 		&models.Recording{}, &models.ProtocolSetting{}, &models.AIProviderConfig{},
 		&models.AIConversation{}, &models.AIMessage{},
@@ -99,7 +99,7 @@ func newGormStore(db *gorm.DB) *Store {
 		Grants:               &gormGrantStore{db: db},
 		CredentialGrants:     &gormCredentialGrantStore{db: db},
 		Audit:                &gormAuditStore{db: db},
-		Snippets:             &gormSnippetStore{db: db},
+		PluginStorage:        &gormPluginStorageStore{db: db},
 		Preferences:          &gormPreferenceStore{db: db},
 		Enrollments:          &gormEnrollmentStore{db: db},
 		Policies:             &gormPolicyStore{db: db},

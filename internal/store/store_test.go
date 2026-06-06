@@ -68,6 +68,7 @@ func TestStoreSuite(t *testing.T) {
 			t.Run("audit", func(t *testing.T) { testAudit(t, f.open(t)) })
 			t.Run("policies", func(t *testing.T) { testPolicies(t, f.open(t)) })
 			t.Run("recordings", func(t *testing.T) { testRecordings(t, f.open(t)) })
+			t.Run("pluginStorage", func(t *testing.T) { testPluginStorage(t, f.open(t)) })
 		})
 	}
 }
@@ -238,6 +239,124 @@ func testConnections(t *testing.T, s *store.Store) {
 	}
 	if _, err := s.Connections.Get(ctx, "c1"); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("get deleted: want ErrNotFound, got %v", err)
+	}
+}
+
+func testPluginStorage(t *testing.T, s *store.Store) {
+	ctx := context.Background()
+	scope := store.PluginStorageFilter{
+		Namespace:    "snippets",
+		Plugin:       "ssh",
+		Protocol:     "ssh",
+		ConnectionID: "c1",
+		OwnerID:      "u1",
+	}
+	item := &models.PluginStorageItem{
+		Namespace:    scope.Namespace,
+		Plugin:       scope.Plugin,
+		Protocol:     scope.Protocol,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+		ItemKey:      "prod/restart",
+		Value:        []byte("systemctl restart app"),
+		ContentType:  "text/plain",
+		Metadata:     map[string]string{"name": "Restart app"},
+	}
+	if err := s.PluginStorage.Put(ctx, item); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	got, err := s.PluginStorage.Get(ctx, store.PluginStorageFilter{
+		Namespace:    scope.Namespace,
+		Plugin:       scope.Plugin,
+		Protocol:     scope.Protocol,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+		Key:          "prod/restart",
+	})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if string(got.Value) != "systemctl restart app" || got.Metadata["name"] != "Restart app" {
+		t.Fatalf("stored item mismatch: %+v", got)
+	}
+
+	otherOwner := *item
+	otherOwner.OwnerID = "u2"
+	otherOwner.Value = []byte("other")
+	if err := s.PluginStorage.Put(ctx, &otherOwner); err != nil {
+		t.Fatalf("put other owner: %v", err)
+	}
+	if _, err := s.PluginStorage.Get(ctx, store.PluginStorageFilter{
+		Namespace:    scope.Namespace,
+		Plugin:       scope.Plugin,
+		Protocol:     scope.Protocol,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+		Key:          "missing",
+	}); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("get missing: want ErrNotFound, got %v", err)
+	}
+
+	second := *item
+	second.ItemKey = "prod/status"
+	second.Value = []byte("systemctl status app")
+	if err := s.PluginStorage.Put(ctx, &second); err != nil {
+		t.Fatalf("put second: %v", err)
+	}
+	rows, err := s.PluginStorage.List(ctx, store.PluginStorageFilter{
+		Namespace:    scope.Namespace,
+		Plugin:       scope.Plugin,
+		Protocol:     scope.Protocol,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+		Prefix:       "prod/",
+	})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(rows) != 2 || rows[0].ItemKey != "prod/restart" || rows[1].ItemKey != "prod/status" {
+		t.Fatalf("unexpected filtered rows: %+v", rows)
+	}
+
+	item.Value = []byte("updated")
+	item.Metadata = map[string]string{"name": "Updated"}
+	if err := s.PluginStorage.Put(ctx, item); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	got, err = s.PluginStorage.Get(ctx, store.PluginStorageFilter{
+		Namespace:    scope.Namespace,
+		Plugin:       scope.Plugin,
+		Protocol:     scope.Protocol,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+		Key:          "prod/restart",
+	})
+	if err != nil {
+		t.Fatalf("get updated: %v", err)
+	}
+	if string(got.Value) != "updated" || got.Metadata["name"] != "Updated" {
+		t.Fatalf("updated item mismatch: %+v", got)
+	}
+
+	if err := s.PluginStorage.Delete(ctx, store.PluginStorageFilter{
+		Namespace:    scope.Namespace,
+		Plugin:       scope.Plugin,
+		Protocol:     scope.Protocol,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+		Key:          "prod/restart",
+	}); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if _, err := s.PluginStorage.Get(ctx, store.PluginStorageFilter{
+		Namespace:    scope.Namespace,
+		Plugin:       scope.Plugin,
+		Protocol:     scope.Protocol,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+		Key:          "prod/restart",
+	}); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("get deleted: want ErrNotFound, got %v", err)
 	}
 }
 

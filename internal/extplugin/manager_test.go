@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -177,6 +178,45 @@ func TestPluginEgressThroughCore(t *testing.T) {
 	}
 }
 
+func TestPluginStorageThroughCore(t *testing.T) {
+	reg := pluginregistry.New()
+	m := extplugin.NewManager(buildDemo(t))
+	t.Cleanup(m.Close)
+	if err := m.LoadAll(context.Background(), reg); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	p, _ := reg.Get("demo")
+
+	storage := newMemoryPluginStorage()
+	sess, err := p.Connect(context.Background(), plugin.ConnectConfig{
+		ConnectionID: "c1",
+		Transport:    plugin.TransportDirect,
+		Storage:      storage,
+	})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, sess, nil, nil, []byte("persisted"))
+	res, err := routeByID(p, "demo.storage").Handle(rc)
+	if err != nil {
+		t.Fatalf("storage route: %v", err)
+	}
+	got := res.(map[string]any)
+	if got["value"] != "persisted" || got["user"] != "u1" || got["count"] != float64(1) {
+		t.Fatalf("unexpected storage result: %v", got)
+	}
+
+	item, err := storage.Get(context.Background(), plugin.StorageScope{Namespace: "demo"}, "message")
+	if err != nil {
+		t.Fatalf("storage not written through host: %v", err)
+	}
+	if string(item.Value) != "persisted" || item.Metadata["user"] != "u1" {
+		t.Fatalf("stored item mismatch: %+v", item)
+	}
+}
+
 func TestPluginL7ThroughCore(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, "hello-world")
@@ -207,6 +247,77 @@ func TestPluginL7ThroughCore(t *testing.T) {
 	if res.(map[string]any)["body"] != "hello-world" {
 		t.Fatalf("unexpected L7 body: %v", res)
 	}
+}
+
+type memoryStorageKey struct {
+	scope plugin.StorageScope
+	key   string
+}
+
+type memoryPluginStorage struct {
+	mu    sync.Mutex
+	items map[memoryStorageKey]plugin.StorageItem
+}
+
+func newMemoryPluginStorage() *memoryPluginStorage {
+	return &memoryPluginStorage{items: map[memoryStorageKey]plugin.StorageItem{}}
+}
+
+func (s *memoryPluginStorage) Get(_ context.Context, scope plugin.StorageScope, key string) (plugin.StorageItem, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item, ok := s.items[memoryStorageKey{scope: scope, key: key}]
+	if !ok {
+		return plugin.StorageItem{}, plugin.ErrNotFound
+	}
+	return clonePluginStorageItem(item), nil
+}
+
+func (s *memoryPluginStorage) Put(_ context.Context, item plugin.StorageItem) (plugin.StorageItem, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	if item.CreatedAt.IsZero() {
+		item.CreatedAt = now
+	}
+	item.UpdatedAt = now
+	s.items[memoryStorageKey{scope: item.Scope, key: item.Key}] = clonePluginStorageItem(item)
+	return clonePluginStorageItem(item), nil
+}
+
+func (s *memoryPluginStorage) Delete(_ context.Context, scope plugin.StorageScope, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := memoryStorageKey{scope: scope, key: key}
+	if _, ok := s.items[k]; !ok {
+		return plugin.ErrNotFound
+	}
+	delete(s.items, k)
+	return nil
+}
+
+func (s *memoryPluginStorage) List(_ context.Context, scope plugin.StorageScope, prefix string) ([]plugin.StorageItem, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []plugin.StorageItem
+	for k, item := range s.items {
+		if k.scope == scope && strings.HasPrefix(k.key, prefix) {
+			out = append(out, clonePluginStorageItem(item))
+		}
+	}
+	return out, nil
+}
+
+func clonePluginStorageItem(item plugin.StorageItem) plugin.StorageItem {
+	item.Value = append([]byte(nil), item.Value...)
+	if len(item.Metadata) > 0 {
+		metadata := make(map[string]string, len(item.Metadata))
+		for k, v := range item.Metadata {
+			metadata[k] = v
+		}
+		item.Metadata = metadata
+	}
+	return item
 }
 
 func TestPluginAuditForwardsToCore(t *testing.T) {

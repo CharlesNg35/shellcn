@@ -375,7 +375,7 @@ func (s *gormAuditStore) DeleteBefore(ctx context.Context, before time.Time) (in
 	return res.RowsAffected, res.Error
 }
 
-type gormSnippetStore struct{ db *gorm.DB }
+type gormPluginStorageStore struct{ db *gorm.DB }
 
 type gormPolicyStore struct{ db *gorm.DB }
 
@@ -395,38 +395,70 @@ func (s *gormPolicyStore) List(ctx context.Context) ([]models.PolicyRule, error)
 	return list, nil
 }
 
-func (s *gormSnippetStore) Create(ctx context.Context, sn *models.Snippet) error {
-	return s.db.WithContext(ctx).Create(sn).Error
+func (s *gormPluginStorageStore) Get(ctx context.Context, f PluginStorageFilter) (models.PluginStorageItem, error) {
+	var item models.PluginStorageItem
+	if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).First(&item).Error; err != nil {
+		return models.PluginStorageItem{}, normNotFound(err)
+	}
+	return item, nil
 }
 
-func (s *gormSnippetStore) Get(ctx context.Context, id string) (models.Snippet, error) {
-	var sn models.Snippet
-	if err := s.db.WithContext(ctx).First(&sn, "id = ?", id).Error; err != nil {
-		return models.Snippet{}, normNotFound(err)
-	}
-	return sn, nil
+func (s *gormPluginStorageStore) Put(ctx context.Context, item *models.PluginStorageItem) error {
+	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "namespace"},
+			{Name: "plugin"},
+			{Name: "protocol"},
+			{Name: "connection_id"},
+			{Name: "owner_id"},
+			{Name: "shared"},
+			{Name: "item_key"},
+		},
+		DoUpdates: clause.AssignmentColumns([]string{"value", "content_type", "metadata", "updated_at"}),
+	}).Create(item).Error
 }
 
-func (s *gormSnippetStore) ListByOwner(ctx context.Context, ownerID, protocol string) ([]models.Snippet, error) {
-	q := s.db.WithContext(ctx).Where("owner_id = ?", ownerID)
-	if protocol != "" {
-		q = q.Where("protocol = ?", protocol)
-	}
-	var list []models.Snippet
-	if err := q.Order("name").Find(&list).Error; err != nil {
+func (s *gormPluginStorageStore) Delete(ctx context.Context, f PluginStorageFilter) error {
+	res := applyPluginStorageFilter(s.db.WithContext(ctx), f).Delete(&models.PluginStorageItem{})
+	return rowsOrNotFound(res)
+}
+
+func (s *gormPluginStorageStore) List(ctx context.Context, f PluginStorageFilter) ([]models.PluginStorageItem, error) {
+	var list []models.PluginStorageItem
+	if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).
+		Order("namespace ASC, plugin ASC, protocol ASC, connection_id ASC, owner_id ASC, item_key ASC").
+		Find(&list).Error; err != nil {
 		return nil, err
 	}
 	return list, nil
 }
 
-func (s *gormSnippetStore) Update(ctx context.Context, sn *models.Snippet) error {
-	res := s.db.WithContext(ctx).Model(&models.Snippet{}).Where("id = ?", sn.ID).
-		Select("name", "body", "protocol").Updates(sn)
-	return rowsOrNotFound(res)
-}
-
-func (s *gormSnippetStore) Delete(ctx context.Context, id string) error {
-	return s.db.WithContext(ctx).Delete(&models.Snippet{}, "id = ?", id).Error
+func applyPluginStorageFilter(q *gorm.DB, f PluginStorageFilter) *gorm.DB {
+	if f.Namespace != "" {
+		q = q.Where("namespace = ?", f.Namespace)
+	}
+	if f.Plugin != "" {
+		q = q.Where("plugin = ?", f.Plugin)
+	}
+	if f.Protocol != "" {
+		q = q.Where("protocol = ?", f.Protocol)
+	}
+	if f.ConnectionID != "" {
+		q = q.Where("connection_id = ?", f.ConnectionID)
+	}
+	if f.OwnerID != "" {
+		q = q.Where("owner_id = ?", f.OwnerID)
+	}
+	if f.Shared != nil {
+		q = q.Where("shared = ?", *f.Shared)
+	}
+	if f.Key != "" {
+		q = q.Where("item_key = ?", f.Key)
+	}
+	if f.Prefix != "" {
+		q = q.Where("item_key LIKE ?", f.Prefix+"%")
+	}
+	return q
 }
 
 type gormPreferenceStore struct{ db *gorm.DB }

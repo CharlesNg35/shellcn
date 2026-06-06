@@ -21,6 +21,7 @@ type ConnectConfig struct {
 	Transport    Transport
 	Config       map[string]any
 	Net          NetTransport
+	Storage      Storage
 }
 
 // String returns a typed config value, or "" if absent/not a string.

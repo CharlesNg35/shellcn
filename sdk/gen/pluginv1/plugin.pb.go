@@ -1016,6 +1016,382 @@ func (x *AuditRecord) GetError() string {
 	return ""
 }
 
+type StorageScope struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Namespace     string                 `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Plugin        string                 `protobuf:"bytes,2,opt,name=plugin,proto3" json:"plugin,omitempty"`
+	Protocol      string                 `protobuf:"bytes,3,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	ConnectionId  string                 `protobuf:"bytes,4,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	OwnerId       string                 `protobuf:"bytes,5,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
+	Shared        bool                   `protobuf:"varint,6,opt,name=shared,proto3" json:"shared,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StorageScope) Reset() {
+	*x = StorageScope{}
+	mi := &file_pluginv1_plugin_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StorageScope) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StorageScope) ProtoMessage() {}
+
+func (x *StorageScope) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginv1_plugin_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StorageScope.ProtoReflect.Descriptor instead.
+func (*StorageScope) Descriptor() ([]byte, []int) {
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *StorageScope) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *StorageScope) GetPlugin() string {
+	if x != nil {
+		return x.Plugin
+	}
+	return ""
+}
+
+func (x *StorageScope) GetProtocol() string {
+	if x != nil {
+		return x.Protocol
+	}
+	return ""
+}
+
+func (x *StorageScope) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+func (x *StorageScope) GetOwnerId() string {
+	if x != nil {
+		return x.OwnerId
+	}
+	return ""
+}
+
+func (x *StorageScope) GetShared() bool {
+	if x != nil {
+		return x.Shared
+	}
+	return false
+}
+
+type StorageItem struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Scope             *StorageScope          `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	Key               string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	Value             []byte                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	ContentType       string                 `protobuf:"bytes,4,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	Metadata          map[string]string      `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	CreatedAtUnixNano int64                  `protobuf:"varint,6,opt,name=created_at_unix_nano,json=createdAtUnixNano,proto3" json:"created_at_unix_nano,omitempty"`
+	UpdatedAtUnixNano int64                  `protobuf:"varint,7,opt,name=updated_at_unix_nano,json=updatedAtUnixNano,proto3" json:"updated_at_unix_nano,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *StorageItem) Reset() {
+	*x = StorageItem{}
+	mi := &file_pluginv1_plugin_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StorageItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StorageItem) ProtoMessage() {}
+
+func (x *StorageItem) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginv1_plugin_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StorageItem.ProtoReflect.Descriptor instead.
+func (*StorageItem) Descriptor() ([]byte, []int) {
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *StorageItem) GetScope() *StorageScope {
+	if x != nil {
+		return x.Scope
+	}
+	return nil
+}
+
+func (x *StorageItem) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *StorageItem) GetValue() []byte {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+func (x *StorageItem) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *StorageItem) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+func (x *StorageItem) GetCreatedAtUnixNano() int64 {
+	if x != nil {
+		return x.CreatedAtUnixNano
+	}
+	return 0
+}
+
+func (x *StorageItem) GetUpdatedAtUnixNano() int64 {
+	if x != nil {
+		return x.UpdatedAtUnixNano
+	}
+	return 0
+}
+
+type StorageGetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scope         *StorageScope          `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StorageGetRequest) Reset() {
+	*x = StorageGetRequest{}
+	mi := &file_pluginv1_plugin_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StorageGetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StorageGetRequest) ProtoMessage() {}
+
+func (x *StorageGetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginv1_plugin_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StorageGetRequest.ProtoReflect.Descriptor instead.
+func (*StorageGetRequest) Descriptor() ([]byte, []int) {
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *StorageGetRequest) GetScope() *StorageScope {
+	if x != nil {
+		return x.Scope
+	}
+	return nil
+}
+
+func (x *StorageGetRequest) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+type StorageDeleteRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scope         *StorageScope          `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StorageDeleteRequest) Reset() {
+	*x = StorageDeleteRequest{}
+	mi := &file_pluginv1_plugin_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StorageDeleteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StorageDeleteRequest) ProtoMessage() {}
+
+func (x *StorageDeleteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginv1_plugin_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StorageDeleteRequest.ProtoReflect.Descriptor instead.
+func (*StorageDeleteRequest) Descriptor() ([]byte, []int) {
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *StorageDeleteRequest) GetScope() *StorageScope {
+	if x != nil {
+		return x.Scope
+	}
+	return nil
+}
+
+func (x *StorageDeleteRequest) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+type StorageListRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scope         *StorageScope          `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	Prefix        string                 `protobuf:"bytes,2,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StorageListRequest) Reset() {
+	*x = StorageListRequest{}
+	mi := &file_pluginv1_plugin_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StorageListRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StorageListRequest) ProtoMessage() {}
+
+func (x *StorageListRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginv1_plugin_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StorageListRequest.ProtoReflect.Descriptor instead.
+func (*StorageListRequest) Descriptor() ([]byte, []int) {
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *StorageListRequest) GetScope() *StorageScope {
+	if x != nil {
+		return x.Scope
+	}
+	return nil
+}
+
+func (x *StorageListRequest) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+type StorageListResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Items         []*StorageItem         `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StorageListResponse) Reset() {
+	*x = StorageListResponse{}
+	mi := &file_pluginv1_plugin_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StorageListResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StorageListResponse) ProtoMessage() {}
+
+func (x *StorageListResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginv1_plugin_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StorageListResponse.ProtoReflect.Descriptor instead.
+func (*StorageListResponse) Descriptor() ([]byte, []int) {
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *StorageListResponse) GetItems() []*StorageItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
 var File_pluginv1_plugin_proto protoreflect.FileDescriptor
 
 const file_pluginv1_plugin_proto_rawDesc = "" +
@@ -1114,7 +1490,36 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\x05error\x18\x04 \x01(\tR\x05error\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\x97\x04\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb8\x01\n" +
+	"\fStorageScope\x12\x1c\n" +
+	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x16\n" +
+	"\x06plugin\x18\x02 \x01(\tR\x06plugin\x12\x1a\n" +
+	"\bprotocol\x18\x03 \x01(\tR\bprotocol\x12#\n" +
+	"\rconnection_id\x18\x04 \x01(\tR\fconnectionId\x12\x19\n" +
+	"\bowner_id\x18\x05 \x01(\tR\aownerId\x12\x16\n" +
+	"\x06shared\x18\x06 \x01(\bR\x06shared\"\xe6\x02\n" +
+	"\vStorageItem\x12,\n" +
+	"\x05scope\x18\x01 \x01(\v2\x16.pluginv1.StorageScopeR\x05scope\x12\x10\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x03 \x01(\fR\x05value\x12!\n" +
+	"\fcontent_type\x18\x04 \x01(\tR\vcontentType\x12?\n" +
+	"\bmetadata\x18\x05 \x03(\v2#.pluginv1.StorageItem.MetadataEntryR\bmetadata\x12/\n" +
+	"\x14created_at_unix_nano\x18\x06 \x01(\x03R\x11createdAtUnixNano\x12/\n" +
+	"\x14updated_at_unix_nano\x18\a \x01(\x03R\x11updatedAtUnixNano\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"S\n" +
+	"\x11StorageGetRequest\x12,\n" +
+	"\x05scope\x18\x01 \x01(\v2\x16.pluginv1.StorageScopeR\x05scope\x12\x10\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\"V\n" +
+	"\x14StorageDeleteRequest\x12,\n" +
+	"\x05scope\x18\x01 \x01(\v2\x16.pluginv1.StorageScopeR\x05scope\x12\x10\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\"Z\n" +
+	"\x12StorageListRequest\x12,\n" +
+	"\x05scope\x18\x01 \x01(\v2\x16.pluginv1.StorageScopeR\x05scope\x12\x16\n" +
+	"\x06prefix\x18\x02 \x01(\tR\x06prefix\"B\n" +
+	"\x13StorageListResponse\x12+\n" +
+	"\x05items\x18\x01 \x03(\v2\x15.pluginv1.StorageItemR\x05items2\x97\x04\n" +
 	"\x06Plugin\x122\n" +
 	"\vGetManifest\x12\x0f.pluginv1.Empty\x1a\x12.pluginv1.Manifest\x12<\n" +
 	"\aConnect\x12\x18.pluginv1.ConnectRequest\x1a\x17.pluginv1.SessionHandle\x127\n" +
@@ -1127,13 +1532,19 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\rResizeChannel\x12\x17.pluginv1.ChannelResize\x1a\x0f.pluginv1.Empty\x12=\n" +
 	"\x0eServeHTTPProxy\x12\x16.pluginv1.ProxyRequest\x1a\x13.pluginv1.BrokerRef24\n" +
 	"\x04Conn\x12,\n" +
-	"\x04Pipe\x12\x0f.pluginv1.Chunk\x1a\x0f.pluginv1.Chunk(\x010\x012\xf6\x01\n" +
+	"\x04Pipe\x12\x0f.pluginv1.Chunk\x1a\x0f.pluginv1.Chunk(\x010\x012\x82\x04\n" +
 	"\x04Host\x128\n" +
 	"\n" +
 	"DialTarget\x12\x15.pluginv1.DialRequest\x1a\x13.pluginv1.BrokerRef\x12E\n" +
 	"\x11HTTPProxyEndpoint\x12\x17.pluginv1.SessionHandle\x1a\x17.pluginv1.ProxyEndpoint\x12<\n" +
 	"\fOpenHTTPConn\x12\x17.pluginv1.SessionHandle\x1a\x13.pluginv1.BrokerRef\x12/\n" +
-	"\x05Audit\x12\x15.pluginv1.AuditRecord\x1a\x0f.pluginv1.EmptyB\x8c\x01\n" +
+	"\x05Audit\x12\x15.pluginv1.AuditRecord\x1a\x0f.pluginv1.Empty\x12@\n" +
+	"\n" +
+	"StorageGet\x12\x1b.pluginv1.StorageGetRequest\x1a\x15.pluginv1.StorageItem\x12:\n" +
+	"\n" +
+	"StoragePut\x12\x15.pluginv1.StorageItem\x1a\x15.pluginv1.StorageItem\x12@\n" +
+	"\rStorageDelete\x12\x1e.pluginv1.StorageDeleteRequest\x1a\x0f.pluginv1.Empty\x12J\n" +
+	"\vStorageList\x12\x1c.pluginv1.StorageListRequest\x1a\x1d.pluginv1.StorageListResponseB\x8c\x01\n" +
 	"\fcom.pluginv1B\vPluginProtoP\x01Z/github.com/charlesng35/shellcn/sdk/gen/pluginv1\xa2\x02\x03PXX\xaa\x02\bPluginv1\xca\x02\bPluginv1\xe2\x02\x14Pluginv1\\GPBMetadata\xea\x02\bPluginv1b\x06proto3"
 
 var (
@@ -1148,72 +1559,93 @@ func file_pluginv1_plugin_proto_rawDescGZIP() []byte {
 	return file_pluginv1_plugin_proto_rawDescData
 }
 
-var file_pluginv1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_pluginv1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_pluginv1_plugin_proto_goTypes = []any{
-	(*Chunk)(nil),          // 0: pluginv1.Chunk
-	(*Empty)(nil),          // 1: pluginv1.Empty
-	(*Manifest)(nil),       // 2: pluginv1.Manifest
-	(*ConnectRequest)(nil), // 3: pluginv1.ConnectRequest
-	(*SessionHandle)(nil),  // 4: pluginv1.SessionHandle
-	(*ActingUser)(nil),     // 5: pluginv1.ActingUser
-	(*InvokeRequest)(nil),  // 6: pluginv1.InvokeRequest
-	(*InvokeResponse)(nil), // 7: pluginv1.InvokeResponse
-	(*StreamStart)(nil),    // 8: pluginv1.StreamStart
-	(*ChannelRequest)(nil), // 9: pluginv1.ChannelRequest
-	(*ChannelInfo)(nil),    // 10: pluginv1.ChannelInfo
-	(*ChannelResize)(nil),  // 11: pluginv1.ChannelResize
-	(*ProxyRequest)(nil),   // 12: pluginv1.ProxyRequest
-	(*BrokerRef)(nil),      // 13: pluginv1.BrokerRef
-	(*DialRequest)(nil),    // 14: pluginv1.DialRequest
-	(*ProxyEndpoint)(nil),  // 15: pluginv1.ProxyEndpoint
-	(*AuditRecord)(nil),    // 16: pluginv1.AuditRecord
-	nil,                    // 17: pluginv1.InvokeRequest.ParamsEntry
-	nil,                    // 18: pluginv1.InvokeRequest.QueryEntry
-	nil,                    // 19: pluginv1.StreamStart.ParamsEntry
-	nil,                    // 20: pluginv1.ChannelRequest.ParamsEntry
-	nil,                    // 21: pluginv1.AuditRecord.ParamsEntry
+	(*Chunk)(nil),                // 0: pluginv1.Chunk
+	(*Empty)(nil),                // 1: pluginv1.Empty
+	(*Manifest)(nil),             // 2: pluginv1.Manifest
+	(*ConnectRequest)(nil),       // 3: pluginv1.ConnectRequest
+	(*SessionHandle)(nil),        // 4: pluginv1.SessionHandle
+	(*ActingUser)(nil),           // 5: pluginv1.ActingUser
+	(*InvokeRequest)(nil),        // 6: pluginv1.InvokeRequest
+	(*InvokeResponse)(nil),       // 7: pluginv1.InvokeResponse
+	(*StreamStart)(nil),          // 8: pluginv1.StreamStart
+	(*ChannelRequest)(nil),       // 9: pluginv1.ChannelRequest
+	(*ChannelInfo)(nil),          // 10: pluginv1.ChannelInfo
+	(*ChannelResize)(nil),        // 11: pluginv1.ChannelResize
+	(*ProxyRequest)(nil),         // 12: pluginv1.ProxyRequest
+	(*BrokerRef)(nil),            // 13: pluginv1.BrokerRef
+	(*DialRequest)(nil),          // 14: pluginv1.DialRequest
+	(*ProxyEndpoint)(nil),        // 15: pluginv1.ProxyEndpoint
+	(*AuditRecord)(nil),          // 16: pluginv1.AuditRecord
+	(*StorageScope)(nil),         // 17: pluginv1.StorageScope
+	(*StorageItem)(nil),          // 18: pluginv1.StorageItem
+	(*StorageGetRequest)(nil),    // 19: pluginv1.StorageGetRequest
+	(*StorageDeleteRequest)(nil), // 20: pluginv1.StorageDeleteRequest
+	(*StorageListRequest)(nil),   // 21: pluginv1.StorageListRequest
+	(*StorageListResponse)(nil),  // 22: pluginv1.StorageListResponse
+	nil,                          // 23: pluginv1.InvokeRequest.ParamsEntry
+	nil,                          // 24: pluginv1.InvokeRequest.QueryEntry
+	nil,                          // 25: pluginv1.StreamStart.ParamsEntry
+	nil,                          // 26: pluginv1.ChannelRequest.ParamsEntry
+	nil,                          // 27: pluginv1.AuditRecord.ParamsEntry
+	nil,                          // 28: pluginv1.StorageItem.MetadataEntry
 }
 var file_pluginv1_plugin_proto_depIdxs = []int32{
-	17, // 0: pluginv1.InvokeRequest.params:type_name -> pluginv1.InvokeRequest.ParamsEntry
-	18, // 1: pluginv1.InvokeRequest.query:type_name -> pluginv1.InvokeRequest.QueryEntry
+	23, // 0: pluginv1.InvokeRequest.params:type_name -> pluginv1.InvokeRequest.ParamsEntry
+	24, // 1: pluginv1.InvokeRequest.query:type_name -> pluginv1.InvokeRequest.QueryEntry
 	5,  // 2: pluginv1.InvokeRequest.user:type_name -> pluginv1.ActingUser
-	19, // 3: pluginv1.StreamStart.params:type_name -> pluginv1.StreamStart.ParamsEntry
+	25, // 3: pluginv1.StreamStart.params:type_name -> pluginv1.StreamStart.ParamsEntry
 	5,  // 4: pluginv1.StreamStart.user:type_name -> pluginv1.ActingUser
-	20, // 5: pluginv1.ChannelRequest.params:type_name -> pluginv1.ChannelRequest.ParamsEntry
-	21, // 6: pluginv1.AuditRecord.params:type_name -> pluginv1.AuditRecord.ParamsEntry
-	1,  // 7: pluginv1.Plugin.GetManifest:input_type -> pluginv1.Empty
-	3,  // 8: pluginv1.Plugin.Connect:input_type -> pluginv1.ConnectRequest
-	4,  // 9: pluginv1.Plugin.HealthCheck:input_type -> pluginv1.SessionHandle
-	4,  // 10: pluginv1.Plugin.Close:input_type -> pluginv1.SessionHandle
-	6,  // 11: pluginv1.Plugin.Invoke:input_type -> pluginv1.InvokeRequest
-	8,  // 12: pluginv1.Plugin.OpenStream:input_type -> pluginv1.StreamStart
-	9,  // 13: pluginv1.Plugin.OpenChannel:input_type -> pluginv1.ChannelRequest
-	11, // 14: pluginv1.Plugin.ResizeChannel:input_type -> pluginv1.ChannelResize
-	12, // 15: pluginv1.Plugin.ServeHTTPProxy:input_type -> pluginv1.ProxyRequest
-	0,  // 16: pluginv1.Conn.Pipe:input_type -> pluginv1.Chunk
-	14, // 17: pluginv1.Host.DialTarget:input_type -> pluginv1.DialRequest
-	4,  // 18: pluginv1.Host.HTTPProxyEndpoint:input_type -> pluginv1.SessionHandle
-	4,  // 19: pluginv1.Host.OpenHTTPConn:input_type -> pluginv1.SessionHandle
-	16, // 20: pluginv1.Host.Audit:input_type -> pluginv1.AuditRecord
-	2,  // 21: pluginv1.Plugin.GetManifest:output_type -> pluginv1.Manifest
-	4,  // 22: pluginv1.Plugin.Connect:output_type -> pluginv1.SessionHandle
-	1,  // 23: pluginv1.Plugin.HealthCheck:output_type -> pluginv1.Empty
-	1,  // 24: pluginv1.Plugin.Close:output_type -> pluginv1.Empty
-	7,  // 25: pluginv1.Plugin.Invoke:output_type -> pluginv1.InvokeResponse
-	13, // 26: pluginv1.Plugin.OpenStream:output_type -> pluginv1.BrokerRef
-	10, // 27: pluginv1.Plugin.OpenChannel:output_type -> pluginv1.ChannelInfo
-	1,  // 28: pluginv1.Plugin.ResizeChannel:output_type -> pluginv1.Empty
-	13, // 29: pluginv1.Plugin.ServeHTTPProxy:output_type -> pluginv1.BrokerRef
-	0,  // 30: pluginv1.Conn.Pipe:output_type -> pluginv1.Chunk
-	13, // 31: pluginv1.Host.DialTarget:output_type -> pluginv1.BrokerRef
-	15, // 32: pluginv1.Host.HTTPProxyEndpoint:output_type -> pluginv1.ProxyEndpoint
-	13, // 33: pluginv1.Host.OpenHTTPConn:output_type -> pluginv1.BrokerRef
-	1,  // 34: pluginv1.Host.Audit:output_type -> pluginv1.Empty
-	21, // [21:35] is the sub-list for method output_type
-	7,  // [7:21] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	26, // 5: pluginv1.ChannelRequest.params:type_name -> pluginv1.ChannelRequest.ParamsEntry
+	27, // 6: pluginv1.AuditRecord.params:type_name -> pluginv1.AuditRecord.ParamsEntry
+	17, // 7: pluginv1.StorageItem.scope:type_name -> pluginv1.StorageScope
+	28, // 8: pluginv1.StorageItem.metadata:type_name -> pluginv1.StorageItem.MetadataEntry
+	17, // 9: pluginv1.StorageGetRequest.scope:type_name -> pluginv1.StorageScope
+	17, // 10: pluginv1.StorageDeleteRequest.scope:type_name -> pluginv1.StorageScope
+	17, // 11: pluginv1.StorageListRequest.scope:type_name -> pluginv1.StorageScope
+	18, // 12: pluginv1.StorageListResponse.items:type_name -> pluginv1.StorageItem
+	1,  // 13: pluginv1.Plugin.GetManifest:input_type -> pluginv1.Empty
+	3,  // 14: pluginv1.Plugin.Connect:input_type -> pluginv1.ConnectRequest
+	4,  // 15: pluginv1.Plugin.HealthCheck:input_type -> pluginv1.SessionHandle
+	4,  // 16: pluginv1.Plugin.Close:input_type -> pluginv1.SessionHandle
+	6,  // 17: pluginv1.Plugin.Invoke:input_type -> pluginv1.InvokeRequest
+	8,  // 18: pluginv1.Plugin.OpenStream:input_type -> pluginv1.StreamStart
+	9,  // 19: pluginv1.Plugin.OpenChannel:input_type -> pluginv1.ChannelRequest
+	11, // 20: pluginv1.Plugin.ResizeChannel:input_type -> pluginv1.ChannelResize
+	12, // 21: pluginv1.Plugin.ServeHTTPProxy:input_type -> pluginv1.ProxyRequest
+	0,  // 22: pluginv1.Conn.Pipe:input_type -> pluginv1.Chunk
+	14, // 23: pluginv1.Host.DialTarget:input_type -> pluginv1.DialRequest
+	4,  // 24: pluginv1.Host.HTTPProxyEndpoint:input_type -> pluginv1.SessionHandle
+	4,  // 25: pluginv1.Host.OpenHTTPConn:input_type -> pluginv1.SessionHandle
+	16, // 26: pluginv1.Host.Audit:input_type -> pluginv1.AuditRecord
+	19, // 27: pluginv1.Host.StorageGet:input_type -> pluginv1.StorageGetRequest
+	18, // 28: pluginv1.Host.StoragePut:input_type -> pluginv1.StorageItem
+	20, // 29: pluginv1.Host.StorageDelete:input_type -> pluginv1.StorageDeleteRequest
+	21, // 30: pluginv1.Host.StorageList:input_type -> pluginv1.StorageListRequest
+	2,  // 31: pluginv1.Plugin.GetManifest:output_type -> pluginv1.Manifest
+	4,  // 32: pluginv1.Plugin.Connect:output_type -> pluginv1.SessionHandle
+	1,  // 33: pluginv1.Plugin.HealthCheck:output_type -> pluginv1.Empty
+	1,  // 34: pluginv1.Plugin.Close:output_type -> pluginv1.Empty
+	7,  // 35: pluginv1.Plugin.Invoke:output_type -> pluginv1.InvokeResponse
+	13, // 36: pluginv1.Plugin.OpenStream:output_type -> pluginv1.BrokerRef
+	10, // 37: pluginv1.Plugin.OpenChannel:output_type -> pluginv1.ChannelInfo
+	1,  // 38: pluginv1.Plugin.ResizeChannel:output_type -> pluginv1.Empty
+	13, // 39: pluginv1.Plugin.ServeHTTPProxy:output_type -> pluginv1.BrokerRef
+	0,  // 40: pluginv1.Conn.Pipe:output_type -> pluginv1.Chunk
+	13, // 41: pluginv1.Host.DialTarget:output_type -> pluginv1.BrokerRef
+	15, // 42: pluginv1.Host.HTTPProxyEndpoint:output_type -> pluginv1.ProxyEndpoint
+	13, // 43: pluginv1.Host.OpenHTTPConn:output_type -> pluginv1.BrokerRef
+	1,  // 44: pluginv1.Host.Audit:output_type -> pluginv1.Empty
+	18, // 45: pluginv1.Host.StorageGet:output_type -> pluginv1.StorageItem
+	18, // 46: pluginv1.Host.StoragePut:output_type -> pluginv1.StorageItem
+	1,  // 47: pluginv1.Host.StorageDelete:output_type -> pluginv1.Empty
+	22, // 48: pluginv1.Host.StorageList:output_type -> pluginv1.StorageListResponse
+	31, // [31:49] is the sub-list for method output_type
+	13, // [13:31] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_pluginv1_plugin_proto_init() }
@@ -1227,7 +1659,7 @@ func file_pluginv1_plugin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pluginv1_plugin_proto_rawDesc), len(file_pluginv1_plugin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   22,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   3,
 		},
