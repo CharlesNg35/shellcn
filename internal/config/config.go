@@ -194,7 +194,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.addr", ":8081")
 	v.SetDefault("server.log_level", "info")
 	v.SetDefault("server.log_file", "")
-	v.SetDefault("server.access_log", true)
+	v.SetDefault("server.access_log", false)
 	v.SetDefault("auth.session_ttl", "24h")
 	v.SetDefault("auth.jwt_secret", "")
 	v.SetDefault("bootstrap.admin_username", "admin")
