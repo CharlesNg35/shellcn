@@ -339,6 +339,9 @@
               "config": {
                 "type": "object"
               },
+              "icon": {
+                "type": "object"
+              },
               "key": {
                 "type": "string"
               },
@@ -560,6 +563,15 @@
             "properties": {
               "key": {
                 "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "max": {
+                "type": "number"
+              },
+              "unit": {
+                "type": "string"
               }
             },
             "required": [
@@ -577,6 +589,12 @@
             "properties": {
               "key": {
                 "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
               }
             },
             "required": [
@@ -590,6 +608,12 @@
             "type": "object",
             "properties": {
               "key": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "unit": {
                 "type": "string"
               }
             },

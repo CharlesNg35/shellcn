@@ -76,9 +76,9 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 		PanelMetrics: {
 			Type: "object",
 			Properties: props(
-				prop("stats", array(keyedObject())),
-				prop("gauges", array(keyedObject())),
-				prop("series", array(keyedObject())),
+				prop("stats", array(metricItem(false))),
+				prop("gauges", array(metricItem(true))),
+				prop("series", array(metricItem(false))),
 				prop("history", number()),
 			),
 		},
@@ -238,12 +238,16 @@ func dataSource() PanelConfigProperty {
 	}
 }
 
-func keyedObject() PanelConfigProperty {
-	return PanelConfigProperty{
-		Type:       "object",
-		Properties: props(prop("key", stringProp())),
-		Required:   []string{"key"},
+func metricItem(withMax bool) PanelConfigProperty {
+	properties := props(
+		prop("key", stringProp()),
+		prop("label", stringProp()),
+		prop("unit", stringProp()),
+	)
+	if withMax {
+		properties["max"] = number()
 	}
+	return PanelConfigProperty{Type: "object", Properties: properties, Required: []string{"key"}}
 }
 
 func panelObject() PanelConfigProperty {
@@ -252,6 +256,7 @@ func panelObject() PanelConfigProperty {
 		Properties: props(
 			prop("key", stringProp()),
 			prop("label", stringProp()),
+			prop("icon", object()),
 			prop("panel", stringProp()),
 			prop("source", dataSource()),
 			prop("config", object()),
