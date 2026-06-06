@@ -4,13 +4,28 @@ import (
 	"testing"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin/pluginux"
 )
 
-// ValidatePlugin validates the plugin manifest and route contract.
+// ValidatePlugin validates the plugin manifest, route contract, UX contract, and
+// projected panel config shapes.
 func ValidatePlugin(t testing.TB, p plugin.Plugin) {
 	t.Helper()
 	if err := plugin.Validate(p.Manifest(), p.Routes()); err != nil {
 		t.Fatalf("validate plugin manifest: %v", err)
+	}
+	ValidatePluginUX(t, p)
+	ValidateProjectionPanelConfigs(t, plugin.BuildProjection(p.Manifest(), RouteMap(p.Routes())))
+}
+
+// ValidatePluginUX checks release-blocking generic renderer UX rules.
+func ValidatePluginUX(t testing.TB, p plugin.Plugin) {
+	t.Helper()
+	if findings := pluginux.Errors(pluginux.Lint(p.Manifest(), p.Routes())); len(findings) > 0 {
+		for _, finding := range findings {
+			t.Errorf("%s: %s", finding.Path, finding.Message)
+		}
+		t.Fatalf("plugin manifest has UX errors")
 	}
 }
 

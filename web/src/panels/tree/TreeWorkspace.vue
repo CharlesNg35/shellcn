@@ -71,6 +71,11 @@ const activeListSource = computed(() => {
     ? { ...res.list, params: { ...res.list.params, ...params } }
     : res.list;
 });
+const activeListKey = computed(() =>
+  activeView.value
+    ? `${props.connectionId}:${activeView.value.id}:${scopeKey.value}`
+    : `${props.connectionId}:list:${scopeKey.value}`,
+);
 
 const activeColumnsSource = computed(() => {
   const res = activeListResource.value;
@@ -269,7 +274,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
           />
           <PanelHost
             v-else-if="activeListResource && activeListSource"
-            :key="`${connectionId}:${activeView!.id}:${scopeKey}`"
+            :key="activeListKey"
             panel="table"
             :connection-id="connectionId"
             :source="activeListSource"

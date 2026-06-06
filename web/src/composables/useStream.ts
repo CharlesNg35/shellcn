@@ -25,7 +25,9 @@ export function useStream(
   const store = useStreamChannelsStore();
   const live = useConnectionStatusStore();
   const key = ref<string | null>(null);
-  const localError = ref<string | null>(null);
+  const localError = ref<string | null>(
+    source ? null : "No stream route configured.",
+  );
   // Prefer a setup failure (no ticket); otherwise surface the close reason so the
   // status bar can explain *why* the stream dropped — from the channel, and
   // falling back to the connection's last failure (the same source the sidebar
@@ -47,7 +49,10 @@ export function useStream(
   }
 
   async function connect(force = false): Promise<void> {
-    if (!source) return;
+    if (!source) {
+      localError.value = "No stream route configured.";
+      return;
+    }
     try {
       localError.value = null;
       const existing = channelKey(connectionId, source, ctx);
