@@ -90,8 +90,10 @@ type AgentConnectResponse struct {
 // stream and proxies it to the declared target). The connection's dialer is
 // registered for the lifetime of the tunnel and removed when it closes.
 //
-// It blocks until the tunnel is torn down.
-func ServeGatewayTunnel(ctx context.Context, c *websocket.Conn, connectionID string, reg *Registry, forward bool) error {
+// It blocks until the tunnel is torn down. The bool return is true when this
+// tunnel was still the active registration at close; false means it had already
+// been replaced by a newer tunnel.
+func ServeGatewayTunnel(ctx context.Context, c *websocket.Conn, connectionID string, reg *Registry, forward bool) (bool, error) {
 	tunnelCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go func() {
@@ -108,7 +110,7 @@ func ServeGatewayTunnel(ctx context.Context, c *websocket.Conn, connectionID str
 	cfg.LogOutput = io.Discard
 	sess, err := yamux.Client(nc, cfg)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer func() { _ = sess.Close() }()
 
@@ -127,8 +129,7 @@ func ServeGatewayTunnel(ctx context.Context, c *websocket.Conn, connectionID str
 		}
 		return st, nil
 	})
-	defer release()
 
 	<-sess.CloseChan()
-	return nil
+	return release(), nil
 }

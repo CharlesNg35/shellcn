@@ -279,10 +279,10 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 	agentUser := models.User{ID: "agent", Username: app.AgentUsername}
 	s.auditAgentEvent(r.Context(), agentUser, connID, agentConnectEvent, models.AuditAllowed, nil)
 	s.deps.Logger.Info("agent tunnel online", "connection", connID, "mode", proxy.Mode)
-	tunnelErr := transport.ServeGatewayTunnel(r.Context(), c, connID, s.deps.Tunnels, forward)
+	releasedActive, tunnelErr := transport.ServeGatewayTunnel(r.Context(), c, connID, s.deps.Tunnels, forward)
 	teardownCtx, teardownCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
 	defer teardownCancel()
-	if !s.tunnelRegistered(connID) {
+	if releasedActive {
 		s.deps.Enrollments.MarkOffline(teardownCtx, connID)
 	}
 	result := models.AuditAllowed

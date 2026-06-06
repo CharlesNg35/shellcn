@@ -275,18 +275,22 @@ func NewRegistry() *Registry {
 }
 
 // Register binds an agent dialer and returns a release func for this registration.
-func (r *Registry) Register(connectionID string, dial DialFunc) (release func()) {
+// The release func reports whether it removed this registration; false means a
+// newer tunnel replaced it first.
+func (r *Registry) Register(connectionID string, dial DialFunc) (release func() bool) {
 	r.mu.Lock()
 	r.seq++
 	id := r.seq
 	r.dialers[connectionID] = registration{id: id, dial: dial}
 	r.mu.Unlock()
-	return func() {
+	return func() bool {
 		r.mu.Lock()
+		defer r.mu.Unlock()
 		if cur, ok := r.dialers[connectionID]; ok && cur.id == id {
 			delete(r.dialers, connectionID)
+			return true
 		}
-		r.mu.Unlock()
+		return false
 	}
 }
 
