@@ -3,10 +3,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import Tooltip from "primevue/tooltip";
 import AppIcon from "../../components/AppIcon.vue";
+import RecordingControls from "../../components/recordings/RecordingControls.vue";
 import PanelError from "../shared/PanelError.vue";
 import type { PanelProps } from "../core/types";
 import { channelKey } from "../../api/dataSource";
 import { useStreamChannelsStore } from "../../stores/streamChannels";
+import type { ChannelStatus } from "../../stores/streamChannels";
 import type {
   TerminalGridPanelConfig,
   TerminalPanelConfig,
@@ -43,6 +45,8 @@ let seq = 0;
 const layout = ref<TerminalGridLayoutNode>(leaf());
 const activePaneId = ref(layout.value.id);
 const splitSizes = ref<Record<string, number[]>>({});
+const paneStatuses = ref<Record<string, ChannelStatus>>({});
+const recordingActive = ref(false);
 const root = ref<HTMLElement | null>(null);
 const initialized = ref(false);
 
@@ -67,7 +71,7 @@ function splitSpecs(
 }
 
 const paneCount = computed(() => paneIds().length);
-const canSplit = computed(() => paneCount.value < maxPanes.value);
+const singlePane = computed(() => paneCount.value === 1);
 const canClose = computed(() => paneCount.value > 1);
 const paneTitles = computed(() =>
   Object.fromEntries(
@@ -78,10 +82,50 @@ const activePaneLabel = computed(
   () => paneTitles.value[activePaneId.value] ?? "Terminal",
 );
 const recordingPolicy = computed(() => props.recording?.policy ?? "disabled");
-const blocksRecording = computed(() => recordingPolicy.value === "auto");
+const showRecording = computed(
+  () => props.source && props.recording?.policy !== "disabled",
+);
+const recordingBlocksLayout = computed(
+  () => recordingPolicy.value === "auto" || recordingActive.value,
+);
+const canSplit = computed(
+  () => paneCount.value < maxPanes.value && !recordingBlocksLayout.value,
+);
+const recordingDisabledReason = computed(() =>
+  singlePane.value
+    ? null
+    : "Recording is unavailable when multiple terminal panes are open.",
+);
+const activeStreamStatus = computed(
+  () => paneStatuses.value[activePaneId.value],
+);
 
 function buttonTooltip(value: string): { value: string; showDelay: number } {
   return { value, showDelay: 300 };
+}
+
+function splitButtonTooltip(value: string): {
+  value: string;
+  showDelay: number;
+} {
+  return {
+    value: recordingBlocksLayout.value
+      ? "Stop recording before splitting terminal panes."
+      : value,
+    showDelay: 300,
+  };
+}
+
+function layoutButtonTooltip(value: string): {
+  value: string;
+  showDelay: number;
+} {
+  return {
+    value: recordingBlocksLayout.value
+      ? "Stop recording before changing terminal layout."
+      : value,
+    showDelay: 300,
+  };
 }
 
 function splitTree(
@@ -181,9 +225,11 @@ function closePane(paneId = activePaneId.value): void {
   }
 }
 
-function resetLayout(): void {
+function resetLayout(force = false): void {
+  if (!force && recordingBlocksLayout.value) return;
   if (initialized.value) closeAllPaneStreams();
   splitSizes.value = {};
+  paneStatuses.value = {};
   seq = 0;
   layout.value = leaf();
   activePaneId.value = layout.value.id;
@@ -196,8 +242,12 @@ function onResize(splitId: string, sizes: number[]): void {
   splitSizes.value = { ...splitSizes.value, [splitId]: sizes };
 }
 
+function onPaneStatusChange(paneId: string, status: ChannelStatus): void {
+  paneStatuses.value = { ...paneStatuses.value, [paneId]: status };
+}
+
 onMounted(() => {
-  resetLayout();
+  resetLayout(true);
   initialized.value = true;
 });
 
@@ -219,10 +269,6 @@ watch(
 
 <template>
   <PanelError v-if="!source" message="No terminal stream route configured." />
-  <PanelError
-    v-else-if="blocksRecording"
-    message="Split terminal workspaces are disabled when terminal recording is mandatory."
-  />
   <div v-else ref="root" class="flex h-full min-h-0 flex-col bg-surface-950">
     <div
       class="flex min-h-8 items-center gap-2 border-b border-surface-200 bg-surface-0 px-2 py-0.5 dark:border-surface-800 dark:bg-surface-950"
@@ -234,8 +280,23 @@ watch(
         </div>
       </div>
       <div class="flex shrink-0 items-center gap-0.5">
+        <RecordingControls
+          v-if="showRecording && source && recording"
+          :connection-id="connectionId"
+          :source="source"
+          :resource="resource"
+          :descriptor="recording"
+          :disabled-reason="recordingDisabledReason"
+          :stream-status="activeStreamStatus"
+          @recording-change="recordingActive = $event"
+        />
+        <span
+          v-if="showRecording"
+          class="mx-1 h-4 w-px bg-surface-200 dark:bg-surface-800"
+          aria-hidden="true"
+        />
         <Button
-          v-tooltip.bottom="buttonTooltip('Split right')"
+          v-tooltip.bottom="splitButtonTooltip('Split right')"
           type="button"
           size="small"
           severity="secondary"
@@ -253,7 +314,7 @@ watch(
           <span class="sr-only">Split right</span>
         </Button>
         <Button
-          v-tooltip.bottom="buttonTooltip('Split down')"
+          v-tooltip.bottom="splitButtonTooltip('Split down')"
           type="button"
           size="small"
           severity="secondary"
@@ -271,7 +332,7 @@ watch(
           <span class="sr-only">Split down</span>
         </Button>
         <Button
-          v-tooltip.bottom="buttonTooltip('Auto split')"
+          v-tooltip.bottom="splitButtonTooltip('Auto split')"
           type="button"
           size="small"
           severity="secondary"
@@ -304,7 +365,7 @@ watch(
           <span class="sr-only">Close pane</span>
         </Button>
         <Button
-          v-tooltip.bottom="buttonTooltip('Reset layout')"
+          v-tooltip.bottom="layoutButtonTooltip('Reset layout')"
           type="button"
           size="small"
           severity="secondary"
@@ -312,7 +373,8 @@ watch(
           rounded
           class="h-7 w-7 px-0 py-0"
           aria-label="Reset terminal workspace"
-          @click="resetLayout"
+          :disabled="recordingBlocksLayout"
+          @click="resetLayout()"
         >
           <AppIcon :icon="{ type: 'lucide', value: 'rotate-ccw' }" :size="14" />
           <span class="sr-only">Reset layout</span>
@@ -332,6 +394,7 @@ watch(
         :split-sizes="splitSizes"
         @focus="activePaneId = $event"
         @resize="onResize"
+        @stream-status-change="onPaneStatusChange"
       />
     </div>
   </div>

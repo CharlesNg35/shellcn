@@ -151,15 +151,16 @@ describe("streaming stub panels", () => {
   }
 
   it("reuses the open channel on remount (stream survives navigation away/back)", async () => {
+    const baseline = streamSockets().length;
     const first = mount(TerminalPanel, { props });
     await flushPromises();
-    expect(streamSockets()).toHaveLength(1);
-    streamSockets()[0].emit("open");
+    expect(streamSockets()).toHaveLength(baseline + 1);
+    streamSockets().at(-1)!.emit("open");
     first.unmount(); // navigate away — channel must persist
 
     const second = mount(TerminalPanel, { props });
     await flushPromises();
-    expect(streamSockets()).toHaveLength(1); // no new socket — resumed
+    expect(streamSockets()).toHaveLength(baseline + 1); // no new socket — resumed
     second.unmount();
   });
 
@@ -215,7 +216,7 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
-  it("blocks split terminals when terminal recording is mandatory", async () => {
+  it("shows one terminal and disables split controls when terminal recording is mandatory", async () => {
     const w = mount(TerminalGridPanel, {
       props: {
         ...props,
@@ -228,11 +229,17 @@ describe("streaming stub panels", () => {
     });
     await flushPromises();
 
-    expect(w.text()).toContain(
+    expect(w.text()).not.toContain(
       "Split terminal workspaces are disabled when terminal recording is mandatory.",
     );
-    expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(0);
-    expect(streamSockets()).toHaveLength(0);
+    expect(w.findAll("[data-terminal-grid-pane]")).toHaveLength(1);
+    expect(w.text()).toContain("REC");
+    expect(
+      w
+        .get('button[aria-label="Split active pane right"]')
+        .attributes("disabled"),
+    ).toBeDefined();
+    expect(streamSockets()).toHaveLength(1);
     w.unmount();
   });
 
@@ -401,6 +408,41 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
+  it("disables split controls while a single terminal pane is recording", async () => {
+    const w = mount(TerminalGridPanel, {
+      props: {
+        ...props,
+        config: { maxPanes: 2 },
+        recording: {
+          class: "terminal",
+          policy: "manual",
+          authoritative: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(
+      w
+        .get('button[aria-label="Split active pane right"]')
+        .attributes("disabled"),
+    ).toBeUndefined();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Record"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain("REC");
+    expect(
+      w
+        .get('button[aria-label="Split active pane right"]')
+        .attributes("disabled"),
+    ).toBeDefined();
+    w.unmount();
+  });
+
   it("does not show the split recording notice when connection recording is disabled", async () => {
     const w = mount(TerminalGridPanel, {
       props: {
@@ -450,6 +492,11 @@ describe("streaming stub panels", () => {
     expect(w.text()).not.toContain("Recording disabled for split view");
     expect(w.text()).not.toContain("Recording off");
     expect(w.text()).not.toContain("Start recording");
+    const recordButtons = w
+      .findAll("button")
+      .filter((button) => button.text().includes("Record"));
+    expect(recordButtons).toHaveLength(1);
+    expect(recordButtons[0].attributes("disabled")).toBeDefined();
     w.unmount();
   });
 
@@ -607,6 +654,26 @@ describe("streaming stub panels", () => {
     await flushPromises();
 
     expect(w.find('[data-test="panel-loader"]').exists()).toBe(false);
+    w.unmount();
+  });
+
+  it("keeps single terminal recording controls in the existing terminal header", async () => {
+    const w = mount(TerminalPanel, {
+      props: {
+        ...props,
+        recording: {
+          class: "terminal",
+          policy: "manual",
+          authoritative: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(w.find(".border-b").text()).toContain("Record");
+    expect(w.find('[aria-label="Split active pane right"]').exists()).toBe(
+      false,
+    );
     w.unmount();
   });
 

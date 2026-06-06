@@ -3,6 +3,7 @@ import Splitter from "primevue/splitter";
 import type { SplitterResizeEndEvent } from "primevue/splitter";
 import SplitterPanel from "primevue/splitterpanel";
 import type { DataSource, ResourceRef } from "../../types/projection";
+import type { ChannelStatus } from "../../stores/streamChannels";
 import TerminalPanel from "./TerminalPanel.vue";
 
 export type TerminalGridDirection = "horizontal" | "vertical";
@@ -31,6 +32,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   focus: [paneId: string];
   resize: [splitId: string, sizes: number[]];
+  streamStatusChange: [paneId: string, status: ChannelStatus];
 }>();
 
 function evenSizes(count: number): number[] {
@@ -93,6 +95,9 @@ function structureKey(node: TerminalGridLayoutNode): string {
         :split-sizes="splitSizes"
         @focus="emit('focus', $event)"
         @resize="(splitId, sizes) => emit('resize', splitId, sizes)"
+        @stream-status-change="
+          (paneId, status) => emit('streamStatusChange', paneId, status)
+        "
       />
     </SplitterPanel>
   </Splitter>
@@ -117,6 +122,7 @@ function structureKey(node: TerminalGridLayoutNode): string {
       :recording="null"
       :recording-enabled="false"
       :stream-key-suffix="node.id"
+      @stream-status-change="emit('streamStatusChange', node.id, $event)"
     />
   </section>
 </template>

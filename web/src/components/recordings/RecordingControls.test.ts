@@ -87,4 +87,34 @@ describe("RecordingControls", () => {
 
     expect(actions).toEqual(["start", "stop"]);
   });
+
+  it("disables manual recording when a disabled reason is provided", async () => {
+    const calls: unknown[] = [];
+    installFetch((_url, init) => {
+      calls.push(JSON.parse(String(init?.body ?? "{}")) as unknown);
+      return { body: { ok: true } };
+    });
+
+    const w = mount(RecordingControls, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.shell" },
+        descriptor: {
+          class: "terminal",
+          policy: "manual",
+          authoritative: true,
+        },
+        disabledReason:
+          "Recording is unavailable when multiple terminal panes are open.",
+        streamStatus: "open",
+      },
+    });
+
+    const record = w.get("button");
+    expect(record.text()).toContain("Record");
+    expect(record.attributes("disabled")).toBeDefined();
+    await record.trigger("click");
+    await flushPromises();
+    expect(calls).toHaveLength(0);
+  });
 });
