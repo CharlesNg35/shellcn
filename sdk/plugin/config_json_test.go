@@ -52,11 +52,11 @@ func TestManifestConfigRoundTrip(t *testing.T) {
 func TestGraphConfigExportableNullDecodesAsDefault(t *testing.T) {
 	var got plugin.Manifest
 	if err := json.Unmarshal([]byte(`{
-		"apiVersion": "shellcn.io/v1",
+		"apiVersion": 1,
 		"name": "demo",
 		"tabs": [{
 			"key": "graph",
-			"type": "graph",
+			"panel": "graph",
 			"config": {"exportable": null}
 		}]
 	}`), &got); err != nil {

@@ -491,6 +491,9 @@
         "expandRouteId": {
           "type": "string"
         },
+        "exportable": {
+          "type": "boolean"
+        },
         "fitView": {
           "type": "boolean"
         },
