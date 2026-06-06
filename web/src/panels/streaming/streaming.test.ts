@@ -6,6 +6,7 @@ import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
 import { installFetch } from "../../test/fetchMock";
 import { primeVuePassthrough } from "../../primevue/preset";
+import { useStreamChannelsStore } from "../../stores/streamChannels";
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
@@ -127,7 +128,10 @@ beforeEach(() => {
     return { body: { content: "config: true", columns: [], rows: [] } };
   });
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  useStreamChannelsStore().closeForConnection("c1");
+  vi.unstubAllGlobals();
+});
 
 const panels = [
   { name: "terminal", comp: TerminalPanel, status: true },
