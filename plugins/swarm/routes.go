@@ -38,7 +38,8 @@ func Routes() []plugin.Route {
 		{ID: "swarm.service.overview", Method: plugin.MethodGet, Path: "/services/{id}/overview", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.overview", Handle: serviceOverview},
 		{ID: "swarm.service.inspect", Method: plugin.MethodGet, Path: "/services/{id}/inspect", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.inspect", Handle: inspectService},
 		{ID: "swarm.service.tasks", Method: plugin.MethodGet, Path: "/services/{id}/tasks", Permission: "swarm.tasks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.tasks", Handle: serviceTasks},
-		{ID: "swarm.service.open", Method: plugin.MethodGet, Path: "/services/{id}/open", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.open", Handle: serviceProxyURL},
+		{ID: "swarm.service.open", Method: plugin.MethodGet, Path: "/services/{id}/open", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.open", Input: serviceOpenSchema(), Handle: serviceProxyURL},
+		{ID: "swarm.service.open.ports", Method: plugin.MethodGet, Path: "/services/{id}/open/ports", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.open.ports", Handle: serviceOpenPorts},
 		{ID: "swarm.node.overview", Method: plugin.MethodGet, Path: "/nodes/{id}/overview", Permission: "swarm.nodes.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.node.overview", Handle: nodeOverview},
 		{ID: "swarm.node.inspect", Method: plugin.MethodGet, Path: "/nodes/{id}/inspect", Permission: "swarm.nodes.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.node.inspect", Handle: inspectNode},
 		{ID: "swarm.node.tasks", Method: plugin.MethodGet, Path: "/nodes/{id}/tasks", Permission: "swarm.tasks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.node.tasks", Handle: nodeTasks},
@@ -648,11 +649,54 @@ func serviceProxyURL(rc *plugin.RequestContext) (any, error) {
 	return map[string]any{"url": rc.ProxyURL("service", id, portSeg)}, nil
 }
 
+func serviceOpenSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{
+		Name: "Open",
+		Fields: []plugin.Field{{
+			Key:         "port",
+			Label:       "Port",
+			Type:        plugin.FieldSelect,
+			Placeholder: "Select a port",
+			OptionsSource: &plugin.DataSource{
+				RouteID: "swarm.service.open.ports",
+				Params:  map[string]string{"id": "${resource.uid}"},
+			},
+		}},
+	}}}
+}
+
+func serviceOpenPorts(rc *plugin.RequestContext) (any, error) {
+	s, err := dockerengine.Unwrap(rc.Session)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.Client().ServiceInspect(rc.Ctx, rc.Param("id"), dockerclient.ServiceInspectOptions{})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	return plugin.Page[plugin.Option]{Items: servicePortOptions(res.Service.Endpoint.Ports)}, nil
+}
+
 // pickServicePort picks a service's published TCP port to open, preferring ingress
 // (routing-mesh) ports — host-mode ones live only on the task's node, not the
 // manager we dial — and a port that names a web protocol, else the lowest. The
 // segment is the published port; an https-named/443/8443 port proxies over TLS.
 func pickServicePort(ports []swarm.PortConfig) (string, error) {
+	cands := reachableServicePorts(ports)
+	if len(cands) == 0 {
+		return "", fmt.Errorf("%w: service publishes no reachable TCP ports", plugin.ErrInvalidInput)
+	}
+	pick := cands[0]
+	for _, p := range cands {
+		if _, named := webproxy.WebSchemeFromName(p.Name); named {
+			pick = p
+			break
+		}
+	}
+	return servicePortSegment(pick), nil
+}
+
+func reachableServicePorts(ports []swarm.PortConfig) []swarm.PortConfig {
 	var ingress, hostMode []swarm.PortConfig
 	for _, p := range ports {
 		if p.PublishedPort == 0 || strings.ToLower(string(p.Protocol)) != "tcp" {
@@ -668,23 +712,41 @@ func pickServicePort(ports []swarm.PortConfig) (string, error) {
 	if len(cands) == 0 {
 		cands = hostMode
 	}
-	if len(cands) == 0 {
-		return "", fmt.Errorf("%w: service publishes no reachable TCP ports", plugin.ErrInvalidInput)
-	}
 	sort.Slice(cands, func(i, j int) bool { return cands[i].PublishedPort < cands[j].PublishedPort })
+	return cands
+}
 
-	pick := cands[0]
+func servicePortSegment(p swarm.PortConfig) string {
+	seg := strconv.Itoa(int(p.PublishedPort))
+	if scheme, _ := webproxy.WebSchemeFromName(p.Name); scheme == "https" ||
+		webproxy.IsTLSPort(int(p.TargetPort)) ||
+		webproxy.IsTLSPort(int(p.PublishedPort)) {
+		return "https:" + seg
+	}
+	return seg
+}
+
+func servicePortOptions(ports []swarm.PortConfig) []plugin.Option {
+	cands := reachableServicePorts(ports)
+	items := make([]plugin.Option, 0, len(cands))
+	seen := map[string]bool{}
 	for _, p := range cands {
-		if _, named := webproxy.WebSchemeFromName(p.Name); named {
-			pick = p
-			break
+		value := servicePortSegment(p)
+		if seen[value] {
+			continue
 		}
+		seen[value] = true
+		scheme := "HTTP"
+		if strings.HasPrefix(value, "https:") {
+			scheme = "HTTPS"
+		}
+		label := fmt.Sprintf("%s %d->%d/%s", scheme, p.PublishedPort, p.TargetPort, p.Protocol)
+		if p.Name != "" {
+			label = p.Name + " - " + label
+		}
+		items = append(items, plugin.Option{Label: label, Value: value})
 	}
-	seg := strconv.Itoa(int(pick.PublishedPort))
-	if scheme, _ := webproxy.WebSchemeFromName(pick.Name); scheme == "https" || webproxy.IsTLSPort(int(pick.TargetPort)) {
-		return "https:" + seg, nil
-	}
-	return seg, nil
+	return items
 }
 
 func servicePorts(ports []swarm.PortConfig) string {

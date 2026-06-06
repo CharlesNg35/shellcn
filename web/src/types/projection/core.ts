@@ -14,7 +14,13 @@ export interface PluginCategoryInfo {
 
 export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "WS";
 
-export type RiskLevel = "safe" | "write" | "destructive" | "privileged";
+export const RiskLevel = {
+  Safe: "safe",
+  Write: "write",
+  Destructive: "destructive",
+  Privileged: "privileged",
+} as const;
+export type RiskLevel = (typeof RiskLevel)[keyof typeof RiskLevel];
 
 export type Transport = "direct" | "agent";
 

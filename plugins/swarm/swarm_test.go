@@ -47,6 +47,21 @@ func TestManifestDeclaresSwarmWorkspace(t *testing.T) {
 		if route.ID == "swarm.api.execute" {
 			t.Fatal("swarm should not expose a raw API execute route")
 		}
+		if route.ID == "swarm.service.open" {
+			if route.Input == nil {
+				t.Fatal("swarm service open route should declare port input")
+			}
+			field := route.Input.Groups[0].Fields[0]
+			if field.Type != plugin.FieldSelect || field.OptionsSource == nil || field.OptionsSource.RouteID != "swarm.service.open.ports" {
+				t.Fatalf("swarm open port field should be sourced select: %+v", field)
+			}
+			if field.Required {
+				t.Fatal("swarm open port is a URL route param and must not make the GET body schema required")
+			}
+			if err := route.Input.ValidateValues(map[string]any{}, nil); err != nil {
+				t.Fatalf("swarm open route input should allow fallback port selection: %v", err)
+			}
+		}
 	}
 }
 
@@ -106,6 +121,20 @@ func TestRoutesAgainstFakeSwarmDaemon(t *testing.T) {
 }
 
 func u64(v uint64) *uint64 { return &v }
+
+func TestServicePortOptions(t *testing.T) {
+	got := servicePortOptions([]swarm.PortConfig{
+		{Protocol: "tcp", TargetPort: 80, PublishedPort: 8080, PublishMode: swarm.PortConfigPublishModeHost},
+		{Name: "https", Protocol: "tcp", TargetPort: 8443, PublishedPort: 9443, PublishMode: swarm.PortConfigPublishModeIngress},
+		{Protocol: "udp", TargetPort: 53, PublishedPort: 53, PublishMode: swarm.PortConfigPublishModeIngress},
+	})
+	if len(got) != 1 {
+		t.Fatalf("servicePortOptions = %#v", got)
+	}
+	if got[0].Value != "https:9443" || got[0].Label != "https - HTTPS 9443->8443/tcp" {
+		t.Fatalf("servicePortOptions[0] = %+v", got[0])
+	}
+}
 
 func TestParseAvailability(t *testing.T) {
 	for _, in := range []string{"active", "PAUSE", " drain "} {

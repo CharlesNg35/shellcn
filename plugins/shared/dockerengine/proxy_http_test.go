@@ -2,10 +2,13 @@ package dockerengine
 
 import (
 	"net/netip"
+	"reflect"
 	"testing"
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
+
+	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
 func TestSplitProxyPath(t *testing.T) {
@@ -53,6 +56,17 @@ func TestPickWebPort(t *testing.T) {
 		if err != nil || got != c.want {
 			t.Errorf("%s: got %q,%v; want %q", c.name, got, err, c.want)
 		}
+	}
+}
+
+func TestContainerPortOptions(t *testing.T) {
+	got := containerPortOptions([]int{8443, 80, 80})
+	want := []plugin.Option{
+		{Label: "HTTP 80/tcp", Value: "80"},
+		{Label: "HTTPS 8443/tcp", Value: "https:8443"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("containerPortOptions = %#v, want %#v", got, want)
 	}
 }
 

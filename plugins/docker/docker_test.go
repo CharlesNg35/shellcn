@@ -98,6 +98,26 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	if createRoute == nil || createRoute.Input == nil || createRoute.Risk != plugin.RiskWrite {
 		t.Fatalf("create container route mismatch: %+v", createRoute)
 	}
+	var openRoute *plugin.Route
+	for i := range routes {
+		if routes[i].ID == "docker.container.open" {
+			openRoute = &routes[i]
+			break
+		}
+	}
+	if openRoute == nil || openRoute.Input == nil {
+		t.Fatalf("open container route should declare port input: %+v", openRoute)
+	}
+	openPort := openRoute.Input.Groups[0].Fields[0]
+	if openPort.Type != plugin.FieldSelect || openPort.OptionsSource == nil || openPort.OptionsSource.RouteID != "docker.container.open.ports" {
+		t.Fatalf("open port field should be sourced select: %+v", openPort)
+	}
+	if openPort.Required {
+		t.Fatal("open port is a URL route param and must not make the GET body schema required")
+	}
+	if err := openRoute.Input.ValidateValues(map[string]any{}, nil); err != nil {
+		t.Fatalf("open route input should allow fallback port selection: %v", err)
+	}
 	if !contains(m.HeaderActions, "docker.engine.shell") {
 		t.Fatalf("header actions = %#v, want docker shell", m.HeaderActions)
 	}

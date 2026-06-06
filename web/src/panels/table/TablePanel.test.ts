@@ -5,7 +5,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import { installFetch } from "../../test/fetchMock";
 import TablePanel from "./TablePanel.vue";
-import type { Action, Column } from "../../types/projection";
+import { RiskLevel, type Action, type Column } from "../../types/projection";
 
 const columns: Column[] = [
   { key: "name", label: "Name", sortable: true },
@@ -267,7 +267,7 @@ describe("TablePanel", () => {
       label: "New snippet",
       routeId: "ssh.snippet.create",
       method: "POST",
-      risk: "write",
+      risk: RiskLevel.Write,
       requiresConfirm: false,
     };
     const run: Action = {
@@ -276,7 +276,7 @@ describe("TablePanel", () => {
       routeId: "ssh.snippet.run",
       method: "POST",
       params: { id: "${resource.uid}" },
-      risk: "privileged",
+      risk: RiskLevel.Privileged,
       requiresConfirm: true,
       confirmText: "Run it?",
     };

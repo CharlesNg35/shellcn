@@ -54,8 +54,10 @@ func Routes() []plugin.Route {
 		{ID: "kubernetes.helm.releases", Method: plugin.MethodGet, Path: "/helm/releases", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.helm.releases", Handle: HelmReleases},
 		{ID: "kubernetes.helm.release", Method: plugin.MethodGet, Path: "/helm/release", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.helm.release", Handle: HelmRelease},
 
-		{ID: "kubernetes.service.open", Method: plugin.MethodGet, Path: "/services/open", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.service.open", Handle: ServiceProxyURL},
-		{ID: "kubernetes.pod.open", Method: plugin.MethodGet, Path: "/pods/open", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.open", Handle: PodProxyURL},
+		{ID: "kubernetes.service.open", Method: plugin.MethodGet, Path: "/services/open", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.service.open", Input: openPortSchema("kubernetes.service.open.ports"), Handle: ServiceProxyURL},
+		{ID: "kubernetes.service.open.ports", Method: plugin.MethodGet, Path: "/services/open/ports", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.service.open.ports", Handle: ServiceOpenPorts},
+		{ID: "kubernetes.pod.open", Method: plugin.MethodGet, Path: "/pods/open", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.open", Input: openPortSchema("kubernetes.pod.open.ports"), Handle: PodProxyURL},
+		{ID: "kubernetes.pod.open.ports", Method: plugin.MethodGet, Path: "/pods/open/ports", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.open.ports", Handle: PodOpenPorts},
 	}
 }
 

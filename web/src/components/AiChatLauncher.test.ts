@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from "pinia";
 import Drawer from "primevue/drawer";
 import AiChatLauncher from "./AiChatLauncher.vue";
 import { useAiChatStore } from "../stores/aiChat";
+import { RiskLevel } from "../types/projection";
 
 vi.mock("../api/ai", () => ({
   aiApi: {
@@ -50,7 +51,7 @@ describe("AiChatLauncher", () => {
       toolId: "t1",
       toolName: "delete_file",
       routeId: "files.delete",
-      risk: "destructive",
+      risk: RiskLevel.Destructive,
       destructive: true,
       params: {},
       body: {},

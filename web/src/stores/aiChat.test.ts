@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { nextTick } from "vue";
 import type { AiTurnRequest, StreamAiTurnOptions } from "../api/ai";
+import { RiskLevel } from "../types/projection";
 
 const listConversations = vi.fn(async () => [] as unknown[]);
 const getConversation = vi.fn();
@@ -206,7 +207,7 @@ describe("aiChat store", () => {
       toolId: "t1",
       toolName: "demo_delete",
       routeId: "demo.delete",
-      risk: "destructive",
+      risk: RiskLevel.Destructive,
       destructive: true,
       params: {},
       body: {},
@@ -222,7 +223,7 @@ describe("aiChat store", () => {
       toolId: "t2",
       toolName: "demo_create",
       routeId: "demo.create",
-      risk: "write",
+      risk: RiskLevel.Write,
       destructive: false,
       params: {},
       body: {},

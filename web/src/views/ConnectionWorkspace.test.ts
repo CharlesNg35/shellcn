@@ -7,7 +7,7 @@ import { installFetch } from "../test/fetchMock";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useConnectionStatusStore } from "../stores/connectionStatus";
 import type { PluginProjection } from "../types/projection";
-import { Layout } from "../types/projection";
+import { Layout, RiskLevel } from "../types/projection";
 import ConnectionWorkspace from "./ConnectionWorkspace.vue";
 
 const projection: PluginProjection = {
@@ -228,7 +228,7 @@ describe("ConnectionWorkspace", () => {
           icon: { type: "lucide", value: "terminal" },
           routeId: "k.shell",
           method: "GET",
-          risk: "privileged",
+          risk: RiskLevel.Privileged,
           requiresConfirm: false,
           open: "dock",
           panel: "terminal",

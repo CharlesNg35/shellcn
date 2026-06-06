@@ -140,6 +140,39 @@ func (s *Session) proxyPortCandidates(cfg *container.Config, ns *container.Netwo
 	return publishedTCPPorts(ns)
 }
 
+// ContainerOpenSchema asks the renderer to select a reachable port before
+// opening a browser proxy URL.
+func ContainerOpenSchema(optionsRouteID string) *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{
+		Name: "Open",
+		Fields: []plugin.Field{{
+			Key:         "port",
+			Label:       "Port",
+			Type:        plugin.FieldSelect,
+			Placeholder: "Select a port",
+			Help:        "Only TCP ports reachable from the gateway are shown.",
+			OptionsSource: &plugin.DataSource{
+				RouteID: optionsRouteID,
+				Params:  map[string]string{"id": "${resource.uid}"},
+			},
+		}},
+	}}}
+}
+
+// ContainerOpenPorts returns the port choices used by ContainerOpenSchema.
+func ContainerOpenPorts(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.cli.ContainerInspect(rc.Ctx, rc.Param("id"), dockerclient.ContainerInspectOptions{})
+	if err != nil {
+		return nil, DockerErr(err)
+	}
+	items := containerPortOptions(s.proxyPortCandidates(res.Container.Config, res.Container.NetworkSettings))
+	return plugin.Page[plugin.Option]{Items: items, Total: ptr(len(items))}, nil
+}
+
 // containerIP returns a valid network IP of an inspected container (deterministic
 // across its networks).
 func containerIP(ns *container.NetworkSettings) (string, bool) {
@@ -209,6 +242,38 @@ func publishedTCPPorts(ns *container.NetworkSettings) []int {
 	return out
 }
 
+func portSegmentForNumber(port int) string {
+	seg := strconv.Itoa(port)
+	if webproxy.IsTLSPort(port) {
+		return "https:" + seg
+	}
+	return seg
+}
+
+func containerPortOptions(ports []int) []plugin.Option {
+	if len(ports) == 0 {
+		return nil
+	}
+	sort.Ints(ports)
+	items := make([]plugin.Option, 0, len(ports))
+	seen := map[int]bool{}
+	for _, port := range ports {
+		if seen[port] {
+			continue
+		}
+		seen[port] = true
+		scheme := "HTTP"
+		if webproxy.IsTLSPort(port) {
+			scheme = "HTTPS"
+		}
+		items = append(items, plugin.Option{
+			Label: fmt.Sprintf("%s %d/tcp", scheme, port),
+			Value: portSegmentForNumber(port),
+		})
+	}
+	return items
+}
+
 // ContainerProxyURL returns the gateway URL that proxies to a container's web
 // port for an "Open in browser" link, picking a likely web port when none given.
 func ContainerProxyURL(rc *plugin.RequestContext) (any, error) {
@@ -238,9 +303,5 @@ func pickWebPort(ports []int) (string, error) {
 		return "", fmt.Errorf("%w: no reachable TCP ports", plugin.ErrInvalidInput)
 	}
 	sort.Ints(ports)
-	seg := strconv.Itoa(ports[0])
-	if webproxy.IsTLSPort(ports[0]) {
-		return "https:" + seg, nil
-	}
-	return seg, nil
+	return portSegmentForNumber(ports[0]), nil
 }

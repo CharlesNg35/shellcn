@@ -5,14 +5,14 @@ import Dialog from "primevue/dialog";
 import { installFetch } from "../../test/fetchMock";
 import { useDockStore } from "../../stores/dock";
 import ActionBar from "./ActionBar.vue";
-import type { Action } from "../../types/projection";
+import { RiskLevel, type Action } from "../../types/projection";
 
 const stop: Action = {
   id: "stop",
   label: "Stop",
   routeId: "docker.container.stop",
   method: "POST",
-  risk: "destructive",
+  risk: RiskLevel.Destructive,
   requiresConfirm: true,
   confirmText: "Really stop it?",
 };
@@ -21,7 +21,7 @@ const snapshot: Action = {
   label: "Snapshot",
   routeId: "vm.snapshot",
   method: "POST",
-  risk: "write",
+  risk: RiskLevel.Write,
   requiresConfirm: false,
   input: {
     groups: [
@@ -33,16 +33,23 @@ const snapshot: Action = {
   },
 };
 
-let posted: { url: string; body?: unknown }[] = [];
+let posted: { url: string; body?: unknown; method?: string }[] = [];
+let opened: string[] = [];
 beforeEach(() => {
   setActivePinia(createPinia());
   posted = [];
+  opened = [];
+  vi.stubGlobal("open", (url: string) => {
+    opened.push(url);
+    return null;
+  });
   installFetch((url, init) => {
     posted.push({
       url,
+      method: init?.method,
       body: init?.body ? JSON.parse(init.body as string) : undefined,
     });
-    return { body: { ok: true } };
+    return { body: { ok: true, url: "/proxy/opened/" } };
   });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -139,7 +146,7 @@ describe("ActionBar", () => {
       label: "Logs in dock",
       routeId: "docker.container.logs",
       method: "WS",
-      risk: "safe",
+      risk: RiskLevel.Safe,
       requiresConfirm: false,
       open: "dock",
       panel: "log_stream",
@@ -170,7 +177,7 @@ describe("ActionBar", () => {
       label: "Peek logs",
       routeId: "docker.container.logs",
       method: "WS",
-      risk: "safe",
+      risk: RiskLevel.Safe,
       requiresConfirm: false,
       open: "dialog",
       panel: "log_stream",
@@ -197,7 +204,7 @@ describe("ActionBar", () => {
       label: "Start",
       routeId: "docker.container.start",
       method: "POST",
-      risk: "write",
+      risk: RiskLevel.Write,
       requiresConfirm: false,
       params: { id: "${resource.uid}" },
       enabledWhen: { allOf: [{ field: "state", op: "eq", value: "exited" }] },
@@ -244,14 +251,14 @@ describe("ActionBar", () => {
         id: "open",
         label: "Open",
         routeId: "r.open",
-        risk: "safe",
+        risk: RiskLevel.Safe,
         requiresConfirm: false,
       },
       {
         id: "start",
         label: "Start",
         routeId: "r.start",
-        risk: "write",
+        risk: RiskLevel.Write,
         requiresConfirm: false,
         group: "Lifecycle",
       },
@@ -259,7 +266,7 @@ describe("ActionBar", () => {
         id: "stop",
         label: "Stop",
         routeId: "r.stop",
-        risk: "destructive",
+        risk: RiskLevel.Destructive,
         requiresConfirm: false,
         group: "Lifecycle",
       },
@@ -282,7 +289,7 @@ describe("ActionBar", () => {
       id: `a${i}`,
       label: `Act${i}`,
       routeId: `r.a${i}`,
-      risk: "safe" as const,
+      risk: RiskLevel.Safe,
       requiresConfirm: false,
     }));
     const w = mount(ActionBar, {
@@ -320,6 +327,69 @@ describe("ActionBar", () => {
     const url = new URL(posted[0].url, "http://localhost");
     expect(url.searchParams.get("p.node")).toBe("pve1");
     expect(url.searchParams.get("p.vmid")).toBe("101");
+    w.unmount();
+  });
+
+  it("opens URL actions with input through the generic form and sends selected values as params", async () => {
+    const action: Action = {
+      id: "open",
+      label: "Open",
+      routeId: "docker.container.open",
+      method: "GET",
+      risk: RiskLevel.Safe,
+      requiresConfirm: false,
+      open: "url",
+      params: { id: "${resource.uid}" },
+      input: {
+        groups: [
+          {
+            name: "Open",
+            fields: [
+              {
+                key: "port",
+                label: "Port",
+                type: "select",
+                required: true,
+                options: [
+                  { label: "HTTP 80/tcp", value: "80" },
+                  { label: "HTTPS 8443/tcp", value: "https:8443" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [action],
+        resource: { kind: "container", name: "web", uid: "c-1" },
+      },
+    });
+
+    await w.find("button").trigger("click");
+    await flushPromises();
+    expect(posted).toHaveLength(0);
+    expect(document.body.textContent).toContain("Port");
+
+    const form = document.body.querySelector("form") as HTMLFormElement;
+    const select = w.findComponent({ name: "Select" });
+    select.vm.$emit("update:modelValue", "https:8443");
+    await flushPromises();
+    form.dispatchEvent(
+      new Event("submit", { cancelable: true, bubbles: true }),
+    );
+    await flushPromises();
+
+    expect(posted).toHaveLength(1);
+    expect(posted[0].method).toBe("GET");
+    expect(posted[0].body).toBeUndefined();
+    const url = new URL(posted[0].url, "http://localhost");
+    expect(url.searchParams.get("p.id")).toBe("c-1");
+    expect(url.searchParams.get("p.port")).toBe("https:8443");
+    expect(opened).toEqual(["/proxy/opened/"]);
     w.unmount();
   });
 });

@@ -55,6 +55,21 @@ func TestManifestDeclaresPodmanWorkspace(t *testing.T) {
 		if route.ID == "podman.api.execute" {
 			t.Fatal("podman should not expose a raw API execute route")
 		}
+		if route.ID == "podman.container.open" {
+			if route.Input == nil {
+				t.Fatal("podman container open route should declare port input")
+			}
+			field := route.Input.Groups[0].Fields[0]
+			if field.Type != plugin.FieldSelect || field.OptionsSource == nil || field.OptionsSource.RouteID != "podman.container.open.ports" {
+				t.Fatalf("podman open port field should be sourced select: %+v", field)
+			}
+			if field.Required {
+				t.Fatal("podman open port is a URL route param and must not make the GET body schema required")
+			}
+			if err := route.Input.ValidateValues(map[string]any{}, nil); err != nil {
+				t.Fatalf("podman open route input should allow fallback port selection: %v", err)
+			}
+		}
 	}
 }
 
