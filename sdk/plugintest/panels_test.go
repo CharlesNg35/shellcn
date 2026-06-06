@@ -28,7 +28,7 @@ func TestValidateProjectionPanelConfigsAcceptsNestedPanels(t *testing.T) {
 
 func TestValidateConfigObjectRejectsUnknownNestedFields(t *testing.T) {
 	err := validateConfigObject(
-		map[string]any{"stats": []any{map[string]any{"label": "CPU", "unknown": true}}},
+		map[string]any{"stats": []any{map[string]any{"key": "cpu", "label": "CPU", "unknown": true}}},
 		plugin.PanelConfigSchemas()[plugin.PanelMetrics],
 		"config",
 	)

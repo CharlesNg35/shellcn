@@ -207,37 +207,41 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
           ghost-class="opacity-40"
           class="flex w-max min-w-full items-center gap-1 px-2 py-1"
         >
-          <button
+          <div
             v-for="v in tabs"
             :key="v.id"
-            type="button"
-            :title="workbenchTabTitle(v)"
-            :aria-label="workbenchTabTitle(v)"
-            :data-active-tab="v.id === view.activeViewId ? 'true' : undefined"
-            :data-preview-tab="v.preview ? 'true' : undefined"
-            class="group flex max-w-60 shrink-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-2 py-1 text-xs transition-colors active:cursor-pointer"
+            class="group flex shrink-0 cursor-pointer items-center overflow-hidden rounded text-xs transition-colors active:cursor-pointer"
             :class="
               v.id === view.activeViewId
                 ? 'bg-surface-0 text-surface-900 shadow-sm dark:bg-surface-800 dark:text-surface-0'
                 : 'text-surface-500 hover:text-surface-800 dark:hover:text-surface-200'
             "
-            @click="ws.activateView(connectionId, v.id)"
-            @dblclick="ws.pinView(connectionId, v.id)"
           >
-            <AppIcon v-if="v.icon" :icon="v.icon" :size="13" />
-            <span class="flex min-w-0 flex-1 items-baseline gap-1">
-              <span
-                class="truncate font-medium"
-                :class="{ italic: v.preview }"
-                >{{ v.title }}</span
-              >
-              <span
-                v-if="v.subtitle"
-                class="truncate text-[10px] text-surface-400"
-              >
-                {{ v.subtitle }}
+            <button
+              type="button"
+              :title="workbenchTabTitle(v)"
+              :aria-label="workbenchTabTitle(v)"
+              :data-active-tab="v.id === view.activeViewId ? 'true' : undefined"
+              :data-preview-tab="v.preview ? 'true' : undefined"
+              class="flex max-w-60 min-w-0 flex-1 items-center gap-1.5 overflow-hidden px-2 py-1 text-left focus-visible:ring-2 focus-visible:ring-primary-500/35 focus-visible:outline-none focus-visible:ring-inset"
+              @click="ws.activateView(connectionId, v.id)"
+              @dblclick="ws.pinView(connectionId, v.id)"
+            >
+              <AppIcon v-if="v.icon" :icon="v.icon" :size="13" />
+              <span class="flex min-w-0 flex-1 items-baseline gap-1">
+                <span
+                  class="truncate font-medium"
+                  :class="{ italic: v.preview }"
+                  >{{ v.title }}</span
+                >
+                <span
+                  v-if="v.subtitle"
+                  class="truncate text-[10px] text-surface-400"
+                >
+                  {{ v.subtitle }}
+                </span>
               </span>
-            </span>
+            </button>
             <Button
               type="button"
               text
@@ -251,7 +255,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
             >
               <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="12" />
             </Button>
-          </button>
+          </div>
         </VueDraggable>
       </div>
 

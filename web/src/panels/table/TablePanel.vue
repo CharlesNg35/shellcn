@@ -1124,7 +1124,7 @@ onUnmounted(() => {
       class="flex items-center gap-3 border-b border-surface-200 px-4 py-2 dark:border-surface-800"
     >
       <div class="w-56">
-        <input
+        <InputText
           v-model="filterText"
           type="search"
           placeholder="Filter…"
