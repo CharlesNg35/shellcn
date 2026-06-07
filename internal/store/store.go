@@ -132,13 +132,23 @@ type AuditFilter struct {
 	Offset       int
 }
 
-// SnippetStore persists saved command/query snippets.
-type SnippetStore interface {
-	Create(ctx context.Context, s *models.Snippet) error
-	Get(ctx context.Context, id string) (models.Snippet, error)
-	ListByOwner(ctx context.Context, ownerID, protocol string) ([]models.Snippet, error)
-	Update(ctx context.Context, s *models.Snippet) error
-	Delete(ctx context.Context, id string) error
+// PluginStorageFilter narrows generic plugin storage access. Collection,
+// Plugin, and OwnerID are required for all operations. ConnectionID is optional
+// for user-scoped reads/lists/deletes across the current user's connection rows.
+type PluginStorageFilter struct {
+	Collection   string
+	Plugin       string
+	ConnectionID string
+	OwnerID      string
+	Key          string
+}
+
+// PluginStorageStore persists scoped plugin-owned platform objects.
+type PluginStorageStore interface {
+	Get(ctx context.Context, f PluginStorageFilter) (models.PluginStorageItem, error)
+	Put(ctx context.Context, item *models.PluginStorageItem) error
+	Delete(ctx context.Context, f PluginStorageFilter) error
+	List(ctx context.Context, f PluginStorageFilter) ([]models.PluginStorageItem, error)
 }
 
 // PreferenceStore persists per-user key/value preferences.
@@ -228,7 +238,7 @@ type Store struct {
 	Grants               GrantStore
 	CredentialGrants     CredentialGrantStore
 	Audit                AuditStore
-	Snippets             SnippetStore
+	PluginStorage        PluginStorageStore
 	Preferences          PreferenceStore
 	Enrollments          EnrollmentStore
 	Policies             PolicyStore

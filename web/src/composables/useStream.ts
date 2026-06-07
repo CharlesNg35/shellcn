@@ -33,6 +33,7 @@ export function useStream(
   const localError = ref<string | null>(
     source ? null : "No stream route configured.",
   );
+  let pendingConnect: Promise<void> | null = null;
   // Prefer a setup failure (no ticket); otherwise surface the close reason so the
   // status bar can explain *why* the stream dropped — from the channel, and
   // falling back to the connection's last failure (the same source the sidebar
@@ -45,6 +46,7 @@ export function useStream(
       null,
   );
   let unsub: (() => void) | undefined;
+  let connectGeneration = 0;
 
   function scopedKey(base: string): string {
     return options.keySuffix ? `${base}:${options.keySuffix}` : base;
@@ -58,6 +60,21 @@ export function useStream(
   }
 
   async function connect(force = false): Promise<void> {
+    if (!force && pendingConnect) return pendingConnect;
+    const generation = ++connectGeneration;
+    const run = connectOnce(force, generation);
+    pendingConnect = run;
+    try {
+      await run;
+    } finally {
+      if (pendingConnect === run) pendingConnect = null;
+    }
+  }
+
+  async function connectOnce(
+    force = false,
+    generation = connectGeneration,
+  ): Promise<void> {
     if (!source) {
       localError.value = "No stream route configured.";
       return;
@@ -80,6 +97,7 @@ export function useStream(
         store.close(existing);
       }
       const handle = await prepareStream(connectionId, source, ctx);
+      if (generation !== connectGeneration) return;
       const handleKey = scopedKey(handle.key);
       store.ensure(handleKey, () => new WebSocket(handle.url) as never);
       attach(handleKey);

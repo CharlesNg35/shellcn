@@ -216,6 +216,7 @@ func (s *Server) acquireSession(ctx context.Context, res resolved) (*session.Han
 		if err != nil {
 			return nil, err
 		}
+		cfg.Storage = s.pluginStorage(res)
 		return plg.Connect(ctx, cfg)
 	})
 }
@@ -340,7 +341,7 @@ func (s *Server) InvokeRoute(ctx context.Context, user models.User, connID, rout
 		return nil, err
 	}
 	rc := plugin.NewRequestContext(ctx, toPluginUser(user), handle, res.params, nil, body).
-		WithSnippets(s.snippetStore()).
+		WithStorage(s.pluginStorage(res)).
 		WithProxyPrefix(connProxyPrefix(res.conn.ID))
 	return s.invoke(ctx, res, rc)
 }
@@ -493,7 +494,7 @@ func (s *Server) bindRequest(w http.ResponseWriter, r *http.Request, res resolve
 			}
 		}
 		return plugin.NewMultipartRequestContext(r.Context(), toPluginUser(res.user), sess, res.params, r.URL.Query(), r.MultipartForm.Value, files).
-			WithSnippets(s.snippetStore()).
+			WithStorage(s.pluginStorage(res)).
 			WithProxyPrefix(connProxyPrefix(res.conn.ID)), cleanup, nil
 	}
 
@@ -502,7 +503,7 @@ func (s *Server) bindRequest(w http.ResponseWriter, r *http.Request, res resolve
 		return nil, func() {}, plugin.ErrInvalidInput
 	}
 	return plugin.NewRequestContext(r.Context(), toPluginUser(res.user), sess, res.params, r.URL.Query(), body).
-		WithSnippets(s.snippetStore()).
+		WithStorage(s.pluginStorage(res)).
 		WithProxyPrefix(connProxyPrefix(res.conn.ID)), func() {}, nil
 }
 
@@ -512,11 +513,16 @@ func connProxyPrefix(connID string) string {
 	return "/api/connections/" + url.PathEscape(connID) + "/proxy"
 }
 
-func (s *Server) snippetStore() plugin.SnippetStore {
-	if s.deps.Store == nil {
+func (s *Server) pluginStorage(res resolved) plugin.Storage {
+	if s.deps.Store == nil || s.deps.Store.PluginStorage == nil {
 		return nil
 	}
-	return snippetBridge{inner: s.deps.Store.Snippets}
+	return storageBridge{
+		inner:        s.deps.Store.PluginStorage,
+		pluginID:     res.conn.Protocol,
+		connectionID: res.conn.ID,
+		ownerID:      res.user.ID,
+	}
 }
 
 func isMultipart(r *http.Request) bool {

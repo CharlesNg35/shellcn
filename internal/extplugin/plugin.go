@@ -61,9 +61,9 @@ func (g *grpcPlugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plu
 	}
 	// Serve a per-connection Host service backed by the core's transport so the
 	// plugin reaches its target through the gateway, not on its own.
-	if broker != nil && cfg.Net != nil {
+	if broker != nil && (cfg.Net != nil || cfg.Storage != nil) {
 		id := broker.NextId()
-		host := newHostServer(cfg.Net, broker, g.audit)
+		host := newHostServer(cfg.Net, cfg.Storage, broker, g.audit)
 		go broker.AcceptAndServe(id, func(opts []grpc.ServerOption) *grpc.Server {
 			s := grpc.NewServer(opts...)
 			pluginv1.RegisterHostServer(s, host)

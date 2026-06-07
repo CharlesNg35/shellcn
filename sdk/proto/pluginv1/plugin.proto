@@ -54,6 +54,11 @@ service Host {
   rpc OpenHTTPConn(SessionHandle) returns (BrokerRef);
   // Audit records one stream-internal operation against the core audit log.
   rpc Audit(AuditRecord) returns (Empty);
+  // Storage persists plugin-owned platform objects through the core.
+  rpc StorageGet(StorageGetRequest) returns (StorageItem);
+  rpc StoragePut(StoragePutRequest) returns (StorageItem);
+  rpc StorageDelete(StorageDeleteRequest) returns (Empty);
+  rpc StorageList(StorageListRequest) returns (StorageListResponse);
 }
 
 message Empty {}
@@ -154,4 +159,41 @@ message AuditRecord {
   string result = 2;          // "allowed" | "denied" | "error"
   map<string, string> params = 3;
   string error = 4;
+}
+
+message StorageScope {
+  string collection = 1;
+  string level = 2;
+}
+
+message StorageItem {
+  string key = 1;
+  bytes value = 2;
+  string content_type = 3;
+  map<string, string> metadata = 4;
+  int64 created_at_unix_nano = 5;
+  int64 updated_at_unix_nano = 6;
+}
+
+message StorageGetRequest {
+  StorageScope scope = 1;
+  string key = 2;
+}
+
+message StoragePutRequest {
+  string collection = 1;
+  StorageItem item = 2;
+}
+
+message StorageDeleteRequest {
+  StorageScope scope = 1;
+  string key = 2;
+}
+
+message StorageListRequest {
+  StorageScope scope = 1;
+}
+
+message StorageListResponse {
+  repeated StorageItem items = 1;
 }

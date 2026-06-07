@@ -563,6 +563,10 @@ const (
 	Host_HTTPProxyEndpoint_FullMethodName = "/pluginv1.Host/HTTPProxyEndpoint"
 	Host_OpenHTTPConn_FullMethodName      = "/pluginv1.Host/OpenHTTPConn"
 	Host_Audit_FullMethodName             = "/pluginv1.Host/Audit"
+	Host_StorageGet_FullMethodName        = "/pluginv1.Host/StorageGet"
+	Host_StoragePut_FullMethodName        = "/pluginv1.Host/StoragePut"
+	Host_StorageDelete_FullMethodName     = "/pluginv1.Host/StorageDelete"
+	Host_StorageList_FullMethodName       = "/pluginv1.Host/StorageList"
 )
 
 // HostClient is the client API for Host service.
@@ -583,6 +587,11 @@ type HostClient interface {
 	OpenHTTPConn(ctx context.Context, in *SessionHandle, opts ...grpc.CallOption) (*BrokerRef, error)
 	// Audit records one stream-internal operation against the core audit log.
 	Audit(ctx context.Context, in *AuditRecord, opts ...grpc.CallOption) (*Empty, error)
+	// Storage persists plugin-owned platform objects through the core.
+	StorageGet(ctx context.Context, in *StorageGetRequest, opts ...grpc.CallOption) (*StorageItem, error)
+	StoragePut(ctx context.Context, in *StoragePutRequest, opts ...grpc.CallOption) (*StorageItem, error)
+	StorageDelete(ctx context.Context, in *StorageDeleteRequest, opts ...grpc.CallOption) (*Empty, error)
+	StorageList(ctx context.Context, in *StorageListRequest, opts ...grpc.CallOption) (*StorageListResponse, error)
 }
 
 type hostClient struct {
@@ -633,6 +642,46 @@ func (c *hostClient) Audit(ctx context.Context, in *AuditRecord, opts ...grpc.Ca
 	return out, nil
 }
 
+func (c *hostClient) StorageGet(ctx context.Context, in *StorageGetRequest, opts ...grpc.CallOption) (*StorageItem, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StorageItem)
+	err := c.cc.Invoke(ctx, Host_StorageGet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostClient) StoragePut(ctx context.Context, in *StoragePutRequest, opts ...grpc.CallOption) (*StorageItem, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StorageItem)
+	err := c.cc.Invoke(ctx, Host_StoragePut_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostClient) StorageDelete(ctx context.Context, in *StorageDeleteRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Host_StorageDelete_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostClient) StorageList(ctx context.Context, in *StorageListRequest, opts ...grpc.CallOption) (*StorageListResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StorageListResponse)
+	err := c.cc.Invoke(ctx, Host_StorageList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HostServer is the server API for Host service.
 // All implementations must embed UnimplementedHostServer
 // for forward compatibility.
@@ -651,6 +700,11 @@ type HostServer interface {
 	OpenHTTPConn(context.Context, *SessionHandle) (*BrokerRef, error)
 	// Audit records one stream-internal operation against the core audit log.
 	Audit(context.Context, *AuditRecord) (*Empty, error)
+	// Storage persists plugin-owned platform objects through the core.
+	StorageGet(context.Context, *StorageGetRequest) (*StorageItem, error)
+	StoragePut(context.Context, *StoragePutRequest) (*StorageItem, error)
+	StorageDelete(context.Context, *StorageDeleteRequest) (*Empty, error)
+	StorageList(context.Context, *StorageListRequest) (*StorageListResponse, error)
 	mustEmbedUnimplementedHostServer()
 }
 
@@ -672,6 +726,18 @@ func (UnimplementedHostServer) OpenHTTPConn(context.Context, *SessionHandle) (*B
 }
 func (UnimplementedHostServer) Audit(context.Context, *AuditRecord) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method Audit not implemented")
+}
+func (UnimplementedHostServer) StorageGet(context.Context, *StorageGetRequest) (*StorageItem, error) {
+	return nil, status.Error(codes.Unimplemented, "method StorageGet not implemented")
+}
+func (UnimplementedHostServer) StoragePut(context.Context, *StoragePutRequest) (*StorageItem, error) {
+	return nil, status.Error(codes.Unimplemented, "method StoragePut not implemented")
+}
+func (UnimplementedHostServer) StorageDelete(context.Context, *StorageDeleteRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method StorageDelete not implemented")
+}
+func (UnimplementedHostServer) StorageList(context.Context, *StorageListRequest) (*StorageListResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StorageList not implemented")
 }
 func (UnimplementedHostServer) mustEmbedUnimplementedHostServer() {}
 func (UnimplementedHostServer) testEmbeddedByValue()              {}
@@ -766,6 +832,78 @@ func _Host_Audit_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Host_StorageGet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StorageGetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServer).StorageGet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Host_StorageGet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServer).StorageGet(ctx, req.(*StorageGetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Host_StoragePut_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StoragePutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServer).StoragePut(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Host_StoragePut_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServer).StoragePut(ctx, req.(*StoragePutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Host_StorageDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StorageDeleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServer).StorageDelete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Host_StorageDelete_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServer).StorageDelete(ctx, req.(*StorageDeleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Host_StorageList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StorageListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServer).StorageList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Host_StorageList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServer).StorageList(ctx, req.(*StorageListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Host_ServiceDesc is the grpc.ServiceDesc for Host service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -788,6 +926,22 @@ var Host_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Audit",
 			Handler:    _Host_Audit_Handler,
+		},
+		{
+			MethodName: "StorageGet",
+			Handler:    _Host_StorageGet_Handler,
+		},
+		{
+			MethodName: "StoragePut",
+			Handler:    _Host_StoragePut_Handler,
+		},
+		{
+			MethodName: "StorageDelete",
+			Handler:    _Host_StorageDelete_Handler,
+		},
+		{
+			MethodName: "StorageList",
+			Handler:    _Host_StorageList_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

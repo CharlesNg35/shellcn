@@ -375,7 +375,7 @@ func (s *gormAuditStore) DeleteBefore(ctx context.Context, before time.Time) (in
 	return res.RowsAffected, res.Error
 }
 
-type gormSnippetStore struct{ db *gorm.DB }
+type gormPluginStorageStore struct{ db *gorm.DB }
 
 type gormPolicyStore struct{ db *gorm.DB }
 
@@ -395,38 +395,98 @@ func (s *gormPolicyStore) List(ctx context.Context) ([]models.PolicyRule, error)
 	return list, nil
 }
 
-func (s *gormSnippetStore) Create(ctx context.Context, sn *models.Snippet) error {
-	return s.db.WithContext(ctx).Create(sn).Error
+func (s *gormPluginStorageStore) Get(ctx context.Context, f PluginStorageFilter) (models.PluginStorageItem, error) {
+	if err := validatePluginStorageFilter(f, pluginStorageFilterRead); err != nil {
+		return models.PluginStorageItem{}, err
+	}
+	if pluginStorageKeyNeedsUniqueConnection(f) {
+		var list []models.PluginStorageItem
+		if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).Limit(2).Find(&list).Error; err != nil {
+			return models.PluginStorageItem{}, err
+		}
+		switch len(list) {
+		case 0:
+			return models.PluginStorageItem{}, ErrNotFound
+		case 1:
+			return list[0], nil
+		default:
+			return models.PluginStorageItem{}, models.ErrConflict
+		}
+	}
+	var item models.PluginStorageItem
+	if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).First(&item).Error; err != nil {
+		return models.PluginStorageItem{}, normNotFound(err)
+	}
+	return item, nil
 }
 
-func (s *gormSnippetStore) Get(ctx context.Context, id string) (models.Snippet, error) {
-	var sn models.Snippet
-	if err := s.db.WithContext(ctx).First(&sn, "id = ?", id).Error; err != nil {
-		return models.Snippet{}, normNotFound(err)
+func (s *gormPluginStorageStore) Put(ctx context.Context, item *models.PluginStorageItem) error {
+	if err := validatePluginStoragePut(item); err != nil {
+		return err
 	}
-	return sn, nil
+	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "collection"},
+			{Name: "plugin"},
+			{Name: "connection_id"},
+			{Name: "owner_id"},
+			{Name: "item_key"},
+		},
+		DoUpdates: clause.AssignmentColumns([]string{"value", "content_type", "metadata", "updated_at"}),
+	}).Create(item).Error
 }
 
-func (s *gormSnippetStore) ListByOwner(ctx context.Context, ownerID, protocol string) ([]models.Snippet, error) {
-	q := s.db.WithContext(ctx).Where("owner_id = ?", ownerID)
-	if protocol != "" {
-		q = q.Where("protocol = ?", protocol)
+func (s *gormPluginStorageStore) Delete(ctx context.Context, f PluginStorageFilter) error {
+	if err := validatePluginStorageFilter(f, pluginStorageFilterListOrDelete); err != nil {
+		return err
 	}
-	var list []models.Snippet
-	if err := q.Order("name").Find(&list).Error; err != nil {
+	if pluginStorageKeyNeedsUniqueConnection(f) {
+		var list []models.PluginStorageItem
+		if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).Limit(2).Find(&list).Error; err != nil {
+			return err
+		}
+		switch len(list) {
+		case 0:
+			return ErrNotFound
+		case 1:
+		default:
+			return models.ErrConflict
+		}
+	}
+	res := applyPluginStorageFilter(s.db.WithContext(ctx), f).Delete(&models.PluginStorageItem{})
+	return rowsOrNotFound(res)
+}
+
+func (s *gormPluginStorageStore) List(ctx context.Context, f PluginStorageFilter) ([]models.PluginStorageItem, error) {
+	if err := validatePluginStorageFilter(f, pluginStorageFilterListOrDelete); err != nil {
+		return nil, err
+	}
+	var list []models.PluginStorageItem
+	if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).
+		Order("collection ASC, plugin ASC, connection_id ASC, owner_id ASC, item_key ASC").
+		Find(&list).Error; err != nil {
 		return nil, err
 	}
 	return list, nil
 }
 
-func (s *gormSnippetStore) Update(ctx context.Context, sn *models.Snippet) error {
-	res := s.db.WithContext(ctx).Model(&models.Snippet{}).Where("id = ?", sn.ID).
-		Select("name", "body", "protocol").Updates(sn)
-	return rowsOrNotFound(res)
-}
-
-func (s *gormSnippetStore) Delete(ctx context.Context, id string) error {
-	return s.db.WithContext(ctx).Delete(&models.Snippet{}, "id = ?", id).Error
+func applyPluginStorageFilter(q *gorm.DB, f PluginStorageFilter) *gorm.DB {
+	if f.Collection != "" {
+		q = q.Where("collection = ?", f.Collection)
+	}
+	if f.Plugin != "" {
+		q = q.Where("plugin = ?", f.Plugin)
+	}
+	if f.ConnectionID != "" {
+		q = q.Where("connection_id = ?", f.ConnectionID)
+	}
+	if f.OwnerID != "" {
+		q = q.Where("owner_id = ?", f.OwnerID)
+	}
+	if f.Key != "" {
+		q = q.Where("item_key = ?", f.Key)
+	}
+	return q
 }
 
 type gormPreferenceStore struct{ db *gorm.DB }

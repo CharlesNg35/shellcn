@@ -8,6 +8,7 @@ import Dialog from "primevue/dialog";
 import { installFetch } from "../../test/fetchMock";
 import { primeVuePassthrough } from "../../primevue/preset";
 import { useStreamChannelsStore } from "../../stores/streamChannels";
+import { useStream } from "../../composables/useStream";
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
@@ -90,6 +91,7 @@ vi.stubGlobal("ResizeObserver", FakeResizeObserver);
 
 class FakeWS {
   static instances: FakeWS[] = [];
+  readyState = 0;
   closed = false;
   readonly url: string;
   private handlers: Record<string, ((ev: unknown) => void)[]> = {};
@@ -99,12 +101,16 @@ class FakeWS {
   }
   send() {}
   close() {
+    this.readyState = 3;
     this.closed = true;
   }
   addEventListener(type: string, fn: (ev: unknown) => void) {
     (this.handlers[type] ??= []).push(fn);
   }
   emit(type: string, ev?: unknown) {
+    if (type === "open") this.readyState = 1;
+    if (type === "error") this.readyState = 3;
+    if (type === "close") this.readyState = 3;
     for (const fn of this.handlers[type] ?? []) fn(ev);
   }
 }
@@ -129,8 +135,12 @@ function streamSockets(): FakeWS[] {
   );
 }
 
+let pinia: ReturnType<typeof createPinia>;
+
 beforeEach(() => {
-  setActivePinia(createPinia());
+  pinia = createPinia();
+  setActivePinia(pinia);
+  useStreamChannelsStore().closeForConnection("c1");
   FakeWS.instances = [];
   mockCodeMirror.value = "";
   mockCodeMirror.onChange = null;
@@ -161,7 +171,7 @@ const panels = [
 describe("streaming stub panels", () => {
   for (const p of panels) {
     it(`${p.name} mounts and unmounts without throwing`, async () => {
-      const w = mount(p.comp, { props });
+      const w = mount(p.comp, { props, global: { plugins: [pinia] } });
       await flushPromises();
       expect(w.text()).not.toContain("Stub panel");
       if (p.status) expect(w.text()).toContain("Connecting");
@@ -170,7 +180,6 @@ describe("streaming stub panels", () => {
   }
 
   it("reuses the open channel on remount (stream survives navigation away/back)", async () => {
-    const pinia = createPinia();
     const first = mount(TerminalPanel, {
       props,
       global: { plugins: [pinia] },
@@ -540,6 +549,51 @@ describe("streaming stub panels", () => {
 
     expect(streamSockets()).toHaveLength(2);
     expect(streamSockets()[0].closed).toBe(true);
+    w.unmount();
+  });
+
+  it("ignores a stale pending ticket when reconnect is forced", async () => {
+    const ticketResolvers: ((ticket: string) => void)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/tickets")) {
+          const ticket = await new Promise<string>((resolve) =>
+            ticketResolvers.push(resolve),
+          );
+          return new Response(JSON.stringify({ ticket }), {
+            status: 201,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({}), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+    const Host = defineComponent({
+      setup() {
+        const stream = useStream("c1", props.source, {});
+        return { reconnect: stream.reconnect };
+      },
+      template: '<button type="button" @click="reconnect">Reconnect</button>',
+    });
+    const w = mount(Host, { global: { plugins: [pinia] } });
+    await nextTick();
+    expect(ticketResolvers).toHaveLength(1);
+
+    await w.get("button").trigger("click");
+    expect(ticketResolvers).toHaveLength(2);
+
+    ticketResolvers[0]("stale");
+    await flushPromises();
+    expect(streamSockets()).toHaveLength(0);
+
+    ticketResolvers[1]("fresh");
+    await flushPromises();
+    expect(streamSockets()).toHaveLength(1);
+    expect(streamSockets()[0].url).toContain("ticket=fresh");
     w.unmount();
   });
 

@@ -31,7 +31,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 // statusFor maps a sentinel error to an HTTP status (the boundary normalization).
 func statusFor(err error) int {
 	switch {
-	case errors.Is(err, plugin.ErrInvalidInput):
+	case errors.Is(err, plugin.ErrInvalidInput), errors.Is(err, models.ErrInvalidInput):
 		return http.StatusBadRequest
 	case errors.Is(err, plugin.ErrUnauthorized), errors.Is(err, auth.ErrInvalidCredentials):
 		return http.StatusUnauthorized

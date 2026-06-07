@@ -98,10 +98,10 @@ func Routes(prefix, protocol string, includeShell bool) []plugin.Route {
 			AuditEvent: protocol + ".shell", Input: terminalSchema(), Stream: shell,
 		}}, routes...)
 		routes = append(routes,
-			plugin.Route{ID: prefix + ".snippet.list", Method: plugin.MethodGet, Path: "/snippets", Permission: protocol + ".snippets.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".snippet.list", Handle: snippetList(protocol)},
-			plugin.Route{ID: prefix + ".snippet.create", Method: plugin.MethodPost, Path: "/snippets", Permission: protocol + ".snippets.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".snippet.create", Input: snippetSchema(), Handle: snippetCreate(protocol)},
-			plugin.Route{ID: prefix + ".snippet.run", Method: plugin.MethodPost, Path: "/snippets/{id}/run", Permission: protocol + ".snippets.run", Risk: plugin.RiskPrivileged, AuditEvent: protocol + ".snippet.run", Timeout: 30 * time.Second, Handle: snippetRun(protocol)},
-			plugin.Route{ID: prefix + ".snippet.delete", Method: plugin.MethodDelete, Path: "/snippets/{id}", Permission: protocol + ".snippets.delete", Risk: plugin.RiskDestructive, AuditEvent: protocol + ".snippet.delete", Handle: snippetDelete(protocol)},
+			plugin.Route{ID: prefix + ".snippet.list", Method: plugin.MethodGet, Path: "/snippets", Permission: protocol + ".snippets.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".snippet.list", Handle: snippetList()},
+			plugin.Route{ID: prefix + ".snippet.create", Method: plugin.MethodPost, Path: "/snippets", Permission: protocol + ".snippets.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".snippet.create", Input: snippetSchema(), Handle: snippetCreate()},
+			plugin.Route{ID: prefix + ".snippet.run", Method: plugin.MethodPost, Path: "/snippets/{id}/run", Permission: protocol + ".snippets.run", Risk: plugin.RiskPrivileged, AuditEvent: protocol + ".snippet.run", Timeout: 30 * time.Second, Handle: snippetRun()},
+			plugin.Route{ID: prefix + ".snippet.delete", Method: plugin.MethodDelete, Path: "/snippets/{id}", Permission: protocol + ".snippets.delete", Risk: plugin.RiskDestructive, AuditEvent: protocol + ".snippet.delete", Handle: snippetDelete()},
 		)
 	}
 	return routes
@@ -451,12 +451,13 @@ func deleteEntry(rc *plugin.RequestContext) (any, error) {
 	return map[string]bool{"ok": true}, nil
 }
 
-func snippetList(protocol string) plugin.Handler {
+func snippetList() plugin.Handler {
 	return func(rc *plugin.RequestContext) (any, error) {
-		if rc.Snippets == nil {
+		snippets := newSnippetStore(rc.Storage)
+		if snippets == nil {
 			return nil, plugin.ErrNotSupported
 		}
-		rows, err := rc.Snippets.ListByOwner(rc.Ctx, rc.User.ID, protocol)
+		rows, err := snippets.List(rc.Ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -468,9 +469,10 @@ func snippetList(protocol string) plugin.Handler {
 	}
 }
 
-func snippetCreate(protocol string) plugin.Handler {
+func snippetCreate() plugin.Handler {
 	return func(rc *plugin.RequestContext) (any, error) {
-		if rc.Snippets == nil {
+		snippets := newSnippetStore(rc.Storage)
+		if snippets == nil {
 			return nil, plugin.ErrNotSupported
 		}
 		var req snippetRequest
@@ -478,24 +480,25 @@ func snippetCreate(protocol string) plugin.Handler {
 			return nil, err
 		}
 		now := time.Now()
-		sn := plugin.Snippet{
-			ID: uuid.NewString(), OwnerID: rc.User.ID, Protocol: protocol,
-			Name: strings.TrimSpace(req.Name), Body: strings.TrimSpace(req.Body),
+		sn := storedSnippet{
+			ID:        uuid.NewString(),
+			Name:      strings.TrimSpace(req.Name),
+			Body:      strings.TrimSpace(req.Body),
 			CreatedAt: now, UpdatedAt: now,
 		}
 		if sn.Name == "" || sn.Body == "" {
 			return nil, plugin.ErrInvalidInput
 		}
-		if err := rc.Snippets.Create(rc.Ctx, &sn); err != nil {
+		if err := snippets.Create(rc.Ctx, &sn); err != nil {
 			return nil, err
 		}
 		return snippetFromModel(sn), nil
 	}
 }
 
-func snippetRun(protocol string) plugin.Handler {
+func snippetRun() plugin.Handler {
 	return func(rc *plugin.RequestContext) (any, error) {
-		sn, err := ownedSnippet(rc, protocol)
+		sn, err := ownedSnippet(rc)
 		if err != nil {
 			return nil, err
 		}
@@ -511,31 +514,29 @@ func snippetRun(protocol string) plugin.Handler {
 	}
 }
 
-func snippetDelete(protocol string) plugin.Handler {
+func snippetDelete() plugin.Handler {
 	return func(rc *plugin.RequestContext) (any, error) {
-		sn, err := ownedSnippet(rc, protocol)
+		sn, err := ownedSnippet(rc)
 		if err != nil {
 			return nil, err
 		}
-		if err := rc.Snippets.Delete(rc.Ctx, sn.ID); err != nil {
+		snippets := newSnippetStore(rc.Storage)
+		if snippets == nil {
+			return nil, plugin.ErrNotSupported
+		}
+		if err := snippets.Delete(rc.Ctx, sn.ID); err != nil {
 			return nil, err
 		}
 		return map[string]bool{"ok": true}, nil
 	}
 }
 
-func ownedSnippet(rc *plugin.RequestContext, protocol string) (plugin.Snippet, error) {
-	if rc.Snippets == nil {
-		return plugin.Snippet{}, plugin.ErrNotSupported
+func ownedSnippet(rc *plugin.RequestContext) (storedSnippet, error) {
+	snippets := newSnippetStore(rc.Storage)
+	if snippets == nil {
+		return storedSnippet{}, plugin.ErrNotSupported
 	}
-	sn, err := rc.Snippets.Get(rc.Ctx, rc.Param("id"))
-	if err != nil {
-		return plugin.Snippet{}, err
-	}
-	if sn.OwnerID != rc.User.ID || sn.Protocol != protocol {
-		return plugin.Snippet{}, plugin.ErrNotFound
-	}
-	return sn, nil
+	return snippets.Get(rc.Ctx, rc.Param("id"))
 }
 
 func fileEntry(p string, info os.FileInfo) FileEntry {
@@ -576,7 +577,7 @@ func pageEntries(currentPath string, entries []FileEntry, req plugin.PageRequest
 	return FilePage{Items: entries[offset:end], NextCursor: next, Total: &total, Path: currentPath}
 }
 
-func pageSnippets(rows []plugin.Snippet, req plugin.PageRequest) plugin.Page[snippet] {
+func pageSnippets(rows []storedSnippet, req plugin.PageRequest) plugin.Page[snippet] {
 	offset := cursorOffset(req.Cursor)
 	if offset < 0 || offset > len(rows) {
 		offset = 0
@@ -601,7 +602,7 @@ func pageSnippets(rows []plugin.Snippet, req plugin.PageRequest) plugin.Page[sni
 	return plugin.Page[snippet]{Items: items, NextCursor: next, Total: &total}
 }
 
-func snippetFromModel(sn plugin.Snippet) snippet {
+func snippetFromModel(sn storedSnippet) snippet {
 	return snippet{
 		ID: sn.ID,
 		Ref: &plugin.ResourceRef{

@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -34,18 +33,6 @@ const (
 	AuditDenied  AuditResult = "denied"
 	AuditError   AuditResult = "error"
 )
-
-// Snippet is a user-owned, per-protocol saved command exposed through the
-// generic snippet routes.
-type Snippet struct {
-	ID        string
-	OwnerID   string
-	Protocol  string
-	Name      string
-	Body      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
 
 // Pagination defaults applied when a request omits or over-asks for a limit.
 const (
@@ -84,16 +71,6 @@ type Page[T any] struct {
 // such as one query submitted over a WebSocket stream.
 type AuditHook func(ctx context.Context, result AuditResult, params map[string]string, err error)
 
-// SnippetStore is the small platform store surface exposed for generic snippet
-// routes. It keeps plugins from depending on the concrete store package.
-type SnippetStore interface {
-	Create(ctx context.Context, s *Snippet) error
-	Get(ctx context.Context, id string) (Snippet, error)
-	ListByOwner(ctx context.Context, ownerID, protocol string) ([]Snippet, error)
-	Update(ctx context.Context, s *Snippet) error
-	Delete(ctx context.Context, id string) error
-}
-
 // UploadedFile is a multipart file part made available to route handlers. The
 // file bytes are opened lazily so the audit/logging path never materializes them.
 type UploadedFile struct {
@@ -130,11 +107,11 @@ var validate = validator.New(validator.WithRequiredStructEnabled())
 // touching http internals. Bind decodes + validates into a struct, so handlers
 // never do panic-prone map[string]any assertions.
 type RequestContext struct {
-	Ctx      context.Context
-	User     User
-	Session  Session
-	Snippets SnippetStore
-	audit    AuditHook
+	Ctx     context.Context
+	User    User
+	Session Session
+	Storage Storage
+	audit   AuditHook
 
 	params map[string]string
 	query  url.Values
@@ -145,9 +122,9 @@ type RequestContext struct {
 	proxyPrefix string
 }
 
-// WithSnippets attaches the platform snippet store to a request context.
-func (rc *RequestContext) WithSnippets(snippets SnippetStore) *RequestContext {
-	rc.Snippets = snippets
+// WithStorage attaches the platform storage surface to a request context.
+func (rc *RequestContext) WithStorage(storage Storage) *RequestContext {
+	rc.Storage = storage
 	return rc
 }
 

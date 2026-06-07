@@ -91,19 +91,6 @@ type Grant struct {
 
 func (Grant) TableName() string { return "grants" }
 
-// Snippet is a saved command/query body scoped to a protocol and owner.
-type Snippet struct {
-	ID        string `gorm:"primaryKey"`
-	OwnerID   string `gorm:"index"`
-	Protocol  string `gorm:"index"`
-	Name      string
-	Body      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-func (Snippet) TableName() string { return "snippets" }
-
 // AgentEnrollmentStatus tracks the lifecycle of an agent enrollment.
 type AgentEnrollmentStatus string
 

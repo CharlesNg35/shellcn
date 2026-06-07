@@ -20,7 +20,7 @@ func NewMemory() *Store {
 		Grants:               &memGrantStore{m: map[string]models.Grant{}},
 		CredentialGrants:     &memCredentialGrantStore{m: map[string]models.CredentialGrant{}},
 		Audit:                &memAuditStore{},
-		Snippets:             &memSnippetStore{m: map[string]models.Snippet{}},
+		PluginStorage:        &memPluginStorageStore{m: map[pluginStorageKey]models.PluginStorageItem{}},
 		Preferences:          &memPreferenceStore{m: map[string]models.Preference{}},
 		Enrollments:          &memEnrollmentStore{m: map[string]models.AgentEnrollment{}},
 		Policies:             &memPolicyStore{m: map[string]models.PolicyRule{}},
@@ -788,9 +788,17 @@ func (s *memAuditStore) DeleteBefore(_ context.Context, before time.Time) (int64
 	return removed, nil
 }
 
-type memSnippetStore struct {
+type pluginStorageKey struct {
+	collection   string
+	plugin       string
+	connectionID string
+	ownerID      string
+	key          string
+}
+
+type memPluginStorageStore struct {
 	mu sync.RWMutex
-	m  map[string]models.Snippet
+	m  map[pluginStorageKey]models.PluginStorageItem
 }
 
 type memPolicyStore struct {
@@ -828,51 +836,132 @@ func (s *memPolicyStore) List(_ context.Context) ([]models.PolicyRule, error) {
 	return out, nil
 }
 
-func (s *memSnippetStore) Create(_ context.Context, sn *models.Snippet) error {
+func (s *memPluginStorageStore) Get(_ context.Context, f PluginStorageFilter) (models.PluginStorageItem, error) {
+	if err := validatePluginStorageFilter(f, pluginStorageFilterRead); err != nil {
+		return models.PluginStorageItem{}, err
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var found *models.PluginStorageItem
+	for _, item := range s.m {
+		if pluginStorageMatches(item, f) {
+			if pluginStorageKeyNeedsUniqueConnection(f) {
+				if found != nil {
+					return models.PluginStorageItem{}, models.ErrConflict
+				}
+				cp := item
+				found = &cp
+				continue
+			}
+			return item, nil
+		}
+	}
+	if found != nil {
+		return *found, nil
+	}
+	return models.PluginStorageItem{}, ErrNotFound
+}
+
+func (s *memPluginStorageStore) Put(_ context.Context, item *models.PluginStorageItem) error {
+	if err := validatePluginStoragePut(item); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.m[sn.ID] = *sn
+	s.m[pluginStorageKeyOf(*item)] = *item
 	return nil
 }
 
-func (s *memSnippetStore) Get(_ context.Context, id string) (models.Snippet, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	sn, ok := s.m[id]
-	if !ok {
-		return models.Snippet{}, ErrNotFound
+func (s *memPluginStorageStore) Delete(_ context.Context, f PluginStorageFilter) error {
+	if err := validatePluginStorageFilter(f, pluginStorageFilterListOrDelete); err != nil {
+		return err
 	}
-	return sn, nil
-}
-
-func (s *memSnippetStore) ListByOwner(_ context.Context, ownerID, protocol string) ([]models.Snippet, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	var out []models.Snippet
-	for _, sn := range s.m {
-		if sn.OwnerID == ownerID && (protocol == "" || sn.Protocol == protocol) {
-			out = append(out, sn)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if pluginStorageKeyNeedsUniqueConnection(f) {
+		matches := 0
+		for _, item := range s.m {
+			if pluginStorageMatches(item, f) {
+				matches++
+				if matches > 1 {
+					return models.ErrConflict
+				}
+			}
+		}
+		if matches == 0 {
+			return ErrNotFound
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	deleted := false
+	for key, item := range s.m {
+		if pluginStorageMatches(item, f) {
+			delete(s.m, key)
+			deleted = true
+		}
+	}
+	if !deleted {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *memPluginStorageStore) List(_ context.Context, f PluginStorageFilter) ([]models.PluginStorageItem, error) {
+	if err := validatePluginStorageFilter(f, pluginStorageFilterListOrDelete); err != nil {
+		return nil, err
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []models.PluginStorageItem
+	for _, item := range s.m {
+		if pluginStorageMatches(item, f) {
+			out = append(out, item)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Collection != out[j].Collection {
+			return out[i].Collection < out[j].Collection
+		}
+		if out[i].Plugin != out[j].Plugin {
+			return out[i].Plugin < out[j].Plugin
+		}
+		if out[i].ConnectionID != out[j].ConnectionID {
+			return out[i].ConnectionID < out[j].ConnectionID
+		}
+		if out[i].OwnerID != out[j].OwnerID {
+			return out[i].OwnerID < out[j].OwnerID
+		}
+		return out[i].ItemKey < out[j].ItemKey
+	})
 	return out, nil
 }
 
-func (s *memSnippetStore) Update(_ context.Context, sn *models.Snippet) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, ok := s.m[sn.ID]; !ok {
-		return ErrNotFound
+func pluginStorageKeyOf(item models.PluginStorageItem) pluginStorageKey {
+	return pluginStorageKey{
+		collection:   item.Collection,
+		plugin:       item.Plugin,
+		connectionID: item.ConnectionID,
+		ownerID:      item.OwnerID,
+		key:          item.ItemKey,
 	}
-	s.m[sn.ID] = *sn
-	return nil
 }
 
-func (s *memSnippetStore) Delete(_ context.Context, id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.m, id)
-	return nil
+func pluginStorageMatches(item models.PluginStorageItem, f PluginStorageFilter) bool {
+	if f.Collection != "" && item.Collection != f.Collection {
+		return false
+	}
+	if f.Plugin != "" && item.Plugin != f.Plugin {
+		return false
+	}
+	if f.ConnectionID != "" && item.ConnectionID != f.ConnectionID {
+		return false
+	}
+	if f.OwnerID != "" && item.OwnerID != f.OwnerID {
+		return false
+	}
+	if f.Key != "" && item.ItemKey != f.Key {
+		return false
+	}
+	return true
 }
 
 type memPreferenceStore struct {

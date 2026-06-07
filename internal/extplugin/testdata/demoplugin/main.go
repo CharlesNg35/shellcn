@@ -63,6 +63,11 @@ func (demo) Routes() []plugin.Route {
 			},
 		},
 		{
+			ID: "demo.storage", Method: plugin.MethodPost, Path: "/storage",
+			Permission: "demo.read", Risk: plugin.RiskSafe, AuditEvent: "demo.storage",
+			Handle: storage,
+		},
+		{
 			ID: "demo.stream", Method: plugin.MethodWS, Path: "/stream",
 			Permission: "demo.read", Risk: plugin.RiskSafe, AuditEvent: "demo.stream",
 			Stream: func(_ *plugin.RequestContext, c plugin.ClientStream) error {
@@ -117,6 +122,30 @@ func echo(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	return map[string]any{"echo": string(buf)}, nil
+}
+
+func storage(rc *plugin.RequestContext) (any, error) {
+	if rc.Storage == nil {
+		return nil, fmt.Errorf("%w: no storage", plugin.ErrUnavailable)
+	}
+	scope := plugin.StorageScope{Collection: "demo"}
+	if _, err := rc.Storage.Put(rc.Ctx, "demo", plugin.StorageItem{
+		Key:         "message",
+		Value:       rc.Body(),
+		ContentType: "text/plain",
+		Metadata:    map[string]string{"user": rc.User.ID},
+	}); err != nil {
+		return nil, err
+	}
+	got, err := rc.Storage.Get(rc.Ctx, scope, "message")
+	if err != nil {
+		return nil, err
+	}
+	rows, err := rc.Storage.List(rc.Ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"value": string(got.Value), "user": got.Metadata["user"], "count": len(rows)}, nil
 }
 
 func (demo) Connect(_ context.Context, cfg plugin.ConnectConfig) (plugin.Session, error) {

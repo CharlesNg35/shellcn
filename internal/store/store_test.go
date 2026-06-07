@@ -68,6 +68,7 @@ func TestStoreSuite(t *testing.T) {
 			t.Run("audit", func(t *testing.T) { testAudit(t, f.open(t)) })
 			t.Run("policies", func(t *testing.T) { testPolicies(t, f.open(t)) })
 			t.Run("recordings", func(t *testing.T) { testRecordings(t, f.open(t)) })
+			t.Run("pluginStorage", func(t *testing.T) { testPluginStorage(t, f.open(t)) })
 		})
 	}
 }
@@ -238,6 +239,220 @@ func testConnections(t *testing.T, s *store.Store) {
 	}
 	if _, err := s.Connections.Get(ctx, "c1"); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("get deleted: want ErrNotFound, got %v", err)
+	}
+}
+
+func testPluginStorage(t *testing.T, s *store.Store) {
+	ctx := context.Background()
+	scope := store.PluginStorageFilter{
+		Collection:   "snippets",
+		Plugin:       "ssh",
+		OwnerID:      "u1",
+		ConnectionID: "c1",
+	}
+	item := &models.PluginStorageItem{
+		Collection:   scope.Collection,
+		Plugin:       scope.Plugin,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+		ItemKey:      "prod/restart",
+		Value:        []byte("systemctl restart app"),
+		ContentType:  "text/plain",
+		Metadata:     map[string]string{"name": "Restart app"},
+	}
+	if err := s.PluginStorage.Put(ctx, nil); !errors.Is(err, models.ErrInvalidInput) {
+		t.Fatalf("put nil: want ErrInvalidInput, got %v", err)
+	}
+	for _, tc := range []struct {
+		name   string
+		mutate func(*models.PluginStorageItem)
+	}{
+		{name: "collection", mutate: func(i *models.PluginStorageItem) { i.Collection = "" }},
+		{name: "plugin", mutate: func(i *models.PluginStorageItem) { i.Plugin = "" }},
+		{name: "connection", mutate: func(i *models.PluginStorageItem) { i.ConnectionID = "" }},
+		{name: "owner", mutate: func(i *models.PluginStorageItem) { i.OwnerID = "" }},
+		{name: "key", mutate: func(i *models.PluginStorageItem) { i.ItemKey = "" }},
+	} {
+		t.Run("invalid_"+tc.name, func(t *testing.T) {
+			invalid := *item
+			tc.mutate(&invalid)
+			if err := s.PluginStorage.Put(ctx, &invalid); !errors.Is(err, models.ErrInvalidInput) {
+				t.Fatalf("put invalid %s: want ErrInvalidInput, got %v", tc.name, err)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		name   string
+		filter store.PluginStorageFilter
+	}{
+		{name: "empty", filter: store.PluginStorageFilter{}},
+		{name: "collection", filter: store.PluginStorageFilter{Plugin: scope.Plugin, OwnerID: scope.OwnerID}},
+		{name: "plugin", filter: store.PluginStorageFilter{Collection: scope.Collection, OwnerID: scope.OwnerID}},
+		{name: "owner", filter: store.PluginStorageFilter{Collection: scope.Collection, Plugin: scope.Plugin}},
+		{name: "get_key", filter: store.PluginStorageFilter{Collection: scope.Collection, Plugin: scope.Plugin, OwnerID: scope.OwnerID}},
+	} {
+		t.Run("invalid_filter_"+tc.name, func(t *testing.T) {
+			if _, err := s.PluginStorage.Get(ctx, tc.filter); !errors.Is(err, models.ErrInvalidInput) {
+				t.Fatalf("get invalid filter %s: want ErrInvalidInput, got %v", tc.name, err)
+			}
+			if tc.name != "get_key" {
+				if _, err := s.PluginStorage.List(ctx, tc.filter); !errors.Is(err, models.ErrInvalidInput) {
+					t.Fatalf("list invalid filter %s: want ErrInvalidInput, got %v", tc.name, err)
+				}
+				if err := s.PluginStorage.Delete(ctx, tc.filter); !errors.Is(err, models.ErrInvalidInput) {
+					t.Fatalf("delete invalid filter %s: want ErrInvalidInput, got %v", tc.name, err)
+				}
+			}
+		})
+	}
+	if err := s.PluginStorage.Put(ctx, item); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	got, err := s.PluginStorage.Get(ctx, store.PluginStorageFilter{
+		Collection:   scope.Collection,
+		Plugin:       scope.Plugin,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+		Key:          "prod/restart",
+	})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if string(got.Value) != "systemctl restart app" || got.Metadata["name"] != "Restart app" {
+		t.Fatalf("stored item mismatch: %+v", got)
+	}
+
+	otherOwner := *item
+	otherOwner.OwnerID = "u2"
+	otherOwner.Value = []byte("other")
+	if err := s.PluginStorage.Put(ctx, &otherOwner); err != nil {
+		t.Fatalf("put other owner: %v", err)
+	}
+	if _, err := s.PluginStorage.Get(ctx, store.PluginStorageFilter{
+		Collection:   scope.Collection,
+		Plugin:       scope.Plugin,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+		Key:          "missing",
+	}); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("get missing: want ErrNotFound, got %v", err)
+	}
+
+	second := *item
+	second.ItemKey = "prod/status"
+	second.Value = []byte("systemctl status app")
+	if err := s.PluginStorage.Put(ctx, &second); err != nil {
+		t.Fatalf("put second: %v", err)
+	}
+	rows, err := s.PluginStorage.List(ctx, store.PluginStorageFilter{
+		Collection:   scope.Collection,
+		Plugin:       scope.Plugin,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+	})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(rows) != 2 || rows[0].ItemKey != "prod/restart" || rows[1].ItemKey != "prod/status" {
+		t.Fatalf("unexpected filtered rows: %+v", rows)
+	}
+
+	item.Value = []byte("updated")
+	item.Metadata = map[string]string{"name": "Updated"}
+	if err := s.PluginStorage.Put(ctx, item); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	got, err = s.PluginStorage.Get(ctx, store.PluginStorageFilter{
+		Collection:   scope.Collection,
+		Plugin:       scope.Plugin,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+		Key:          "prod/restart",
+	})
+	if err != nil {
+		t.Fatalf("get updated: %v", err)
+	}
+	if string(got.Value) != "updated" || got.Metadata["name"] != "Updated" {
+		t.Fatalf("updated item mismatch: %+v", got)
+	}
+
+	if err := s.PluginStorage.Delete(ctx, store.PluginStorageFilter{
+		Collection:   scope.Collection,
+		Plugin:       scope.Plugin,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+		Key:          "prod/restart",
+	}); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if _, err := s.PluginStorage.Get(ctx, store.PluginStorageFilter{
+		Collection:   scope.Collection,
+		Plugin:       scope.Plugin,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+		Key:          "prod/restart",
+	}); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("get deleted: want ErrNotFound, got %v", err)
+	}
+	if err := s.PluginStorage.Delete(ctx, store.PluginStorageFilter{
+		Collection:   scope.Collection,
+		Plugin:       scope.Plugin,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+	}); err != nil {
+		t.Fatalf("delete remaining scope: %v", err)
+	}
+	rows, err = s.PluginStorage.List(ctx, store.PluginStorageFilter{
+		Collection:   scope.Collection,
+		Plugin:       scope.Plugin,
+		ConnectionID: scope.ConnectionID,
+		OwnerID:      scope.OwnerID,
+	})
+	if err != nil {
+		t.Fatalf("list after scope delete: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("scope delete left rows: %+v", rows)
+	}
+
+	shared := &models.PluginStorageItem{
+		Collection:   scope.Collection,
+		Plugin:       scope.Plugin,
+		ConnectionID: "c2",
+		OwnerID:      scope.OwnerID,
+		ItemKey:      "global/profile",
+		Value:        []byte("shared"),
+	}
+	if err := s.PluginStorage.Put(ctx, shared); err != nil {
+		t.Fatalf("put user-scoped: %v", err)
+	}
+	rows, err = s.PluginStorage.List(ctx, store.PluginStorageFilter{
+		Collection: scope.Collection,
+		Plugin:     scope.Plugin,
+		OwnerID:    scope.OwnerID,
+	})
+	if err != nil {
+		t.Fatalf("list user-scoped: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ItemKey != "global/profile" {
+		t.Fatalf("user-scoped filter should cross connection dimension: %+v", rows)
+	}
+	duplicate := *shared
+	duplicate.ConnectionID = "c3"
+	if err := s.PluginStorage.Put(ctx, &duplicate); err != nil {
+		t.Fatalf("put duplicate user-scoped key: %v", err)
+	}
+	userKey := store.PluginStorageFilter{
+		Collection: scope.Collection,
+		Plugin:     scope.Plugin,
+		OwnerID:    scope.OwnerID,
+		Key:        "global/profile",
+	}
+	if _, err := s.PluginStorage.Get(ctx, userKey); !errors.Is(err, models.ErrConflict) {
+		t.Fatalf("ambiguous user-scoped get: want ErrConflict, got %v", err)
+	}
+	if err := s.PluginStorage.Delete(ctx, userKey); !errors.Is(err, models.ErrConflict) {
+		t.Fatalf("ambiguous user-scoped delete: want ErrConflict, got %v", err)
 	}
 }
 
