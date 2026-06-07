@@ -214,6 +214,23 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("panels", array(splitPanelObject())),
 			),
 		},
+		PanelCanvas: {
+			Type: "object",
+			Properties: props(
+				prop("width", number()),
+				prop("height", number()),
+				prop("hidpi", boolProp()),
+				prop("interactive", boolProp()),
+				prop("keyboard", boolProp()),
+				prop("pointer", boolProp()),
+				prop("wheel", boolProp()),
+				prop("resizeEvents", boolProp()),
+				prop("background", stringProp()),
+				prop("focusOnPointer", boolProp()),
+				prop("ariaLabel", stringProp()),
+				prop("instructions", stringProp()),
+			),
+		},
 	}
 }
 

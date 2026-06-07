@@ -28,6 +28,33 @@ if (!window.matchMedia) {
   }));
 }
 
+Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+  configurable: true,
+  value: () => ({
+    setTransform() {},
+    clearRect() {},
+    fillRect() {},
+    beginPath() {},
+    rect() {},
+    roundRect() {},
+    moveTo() {},
+    lineTo() {},
+    closePath() {},
+    arc() {},
+    ellipse() {},
+    fill() {},
+    stroke() {},
+    save() {},
+    restore() {},
+    translate() {},
+    scale() {},
+    rotate() {},
+    fillText() {},
+    strokeText() {},
+    drawImage() {},
+  }),
+});
+
 // Register the PrimeVue plugin (+ Toast/Confirmation services) for every mounted
 // component so PrimeVue widgets and useToast/useConfirm resolve in unit tests.
 config.global.plugins = [

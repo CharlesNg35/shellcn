@@ -19,6 +19,7 @@ export const KNOWN_PANEL_TYPES = [
   "timeline",
   "task_progress",
   "split",
+  "canvas",
   "graph",
   "trace",
   "kv",
@@ -36,7 +37,8 @@ export type StreamKind =
   | "desktop"
   | "metrics"
   | "file"
-  | "task";
+  | "task"
+  | "canvas";
 
 export type ColumnType =
   | "text"
@@ -278,6 +280,21 @@ export interface SplitChildPanel extends DashboardCell {
 export interface SplitPanelConfig {
   orientation?: "horizontal" | "vertical";
   panels?: SplitChildPanel[];
+}
+
+export interface CanvasPanelConfig {
+  width?: number;
+  height?: number;
+  hidpi?: boolean;
+  interactive?: boolean;
+  keyboard?: boolean;
+  pointer?: boolean;
+  wheel?: boolean;
+  resizeEvents?: boolean;
+  background?: string;
+  focusOnPointer?: boolean;
+  ariaLabel?: string;
+  instructions?: string;
 }
 
 export interface Badge {

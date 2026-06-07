@@ -14,6 +14,7 @@ func TestStreamKindHasContinuousClientReader(t *testing.T) {
 	}{
 		{name: "terminal", kind: plugin.StreamTerminal, want: true},
 		{name: "desktop", kind: plugin.StreamDesktop, want: true},
+		{name: "canvas", kind: plugin.StreamCanvas, want: true},
 		{name: "logs", kind: plugin.StreamLogs, want: false},
 		{name: "metrics", kind: plugin.StreamMetrics, want: false},
 		{name: "file", kind: plugin.StreamFile, want: false},

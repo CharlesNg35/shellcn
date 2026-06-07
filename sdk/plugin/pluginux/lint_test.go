@@ -120,3 +120,28 @@ func TestLintAcceptsTaskProgressTaskStream(t *testing.T) {
 		t.Fatalf("unexpected UX errors: %#v", findings)
 	}
 }
+
+func TestLintAcceptsCanvasStream(t *testing.T) {
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "x",
+		Title:      "X",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		Tabs: []plugin.Panel{{
+			Key:    "canvas",
+			Label:  "Canvas",
+			Type:   plugin.PanelCanvas,
+			Source: &plugin.DataSource{RouteID: "x.canvas", Method: plugin.MethodWS},
+			Config: plugin.CanvasConfig{Interactive: true, Keyboard: true, Pointer: true},
+		}},
+		Streams: []plugin.Stream{{ID: "x.canvas", Kind: plugin.StreamCanvas, RouteID: "x.canvas"}},
+	}
+	routes := []plugin.Route{{
+		ID: "x.canvas", Method: plugin.MethodWS, Permission: "x.canvas",
+		Risk: plugin.RiskSafe, Stream: stream,
+	}}
+	if findings := pluginux.Errors(pluginux.Lint(m, routes)); len(findings) != 0 {
+		t.Fatalf("unexpected UX errors: %#v", findings)
+	}
+}

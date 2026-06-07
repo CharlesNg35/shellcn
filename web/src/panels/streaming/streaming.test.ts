@@ -93,13 +93,16 @@ class FakeWS {
   static instances: FakeWS[] = [];
   readyState = 0;
   closed = false;
+  sent: string[] = [];
   readonly url: string;
   private handlers: Record<string, ((ev: unknown) => void)[]> = {};
   constructor(url: string) {
     this.url = url;
     FakeWS.instances.push(this);
   }
-  send() {}
+  send(data: string) {
+    this.sent.push(data);
+  }
   close() {
     this.readyState = 3;
     this.closed = true;
@@ -123,6 +126,7 @@ import QueryEditorPanel from "./QueryEditorPanel.vue";
 import RemoteDesktopPanel from "./RemoteDesktopPanel.vue";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import TerminalGridPanel from "./TerminalGridPanel.vue";
+import CanvasPanel from "./CanvasPanel.vue";
 
 const props = {
   connectionId: "c1",
@@ -136,6 +140,7 @@ function streamSockets(): FakeWS[] {
 }
 
 let pinia: ReturnType<typeof createPinia>;
+let canvasOps: string[];
 
 beforeEach(() => {
   pinia = createPinia();
@@ -145,6 +150,28 @@ beforeEach(() => {
   mockCodeMirror.value = "";
   mockCodeMirror.onChange = null;
   mockCodeMirror.diffOptions = null;
+  canvasOps = [];
+  const canvasContext = {
+    setTransform: () => canvasOps.push("setTransform"),
+    clearRect: () => canvasOps.push("clearRect"),
+    fillRect: () => canvasOps.push("fillRect"),
+    beginPath: () => canvasOps.push("beginPath"),
+    rect: () => canvasOps.push("rect"),
+    fill: () => canvasOps.push("fill"),
+    stroke: () => canvasOps.push("stroke"),
+    save: () => canvasOps.push("save"),
+    restore: () => canvasOps.push("restore"),
+    fillText: () => canvasOps.push("fillText"),
+  };
+  Object.defineProperty(canvasContext, "textAlign", {
+    set: (value) => canvasOps.push(`textAlign:${value}`),
+  });
+  Object.defineProperty(canvasContext, "textBaseline", {
+    set: (value) => canvasOps.push(`textBaseline:${value}`),
+  });
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+    canvasContext as unknown as CanvasRenderingContext2D,
+  );
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.stubGlobal("WebSocket", FakeWS);
   installFetch((url) => {
@@ -155,6 +182,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   useStreamChannelsStore().closeForConnection("c1");
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -165,6 +193,7 @@ const panels = [
   { name: "metrics", comp: MetricsPanel, status: true },
   { name: "remote desktop", comp: RemoteDesktopPanel, status: true },
   { name: "query editor", comp: QueryEditorPanel, status: true },
+  { name: "canvas", comp: CanvasPanel, status: true },
   { name: "code editor", comp: CodeEditorPanel, status: false },
 ];
 
@@ -210,6 +239,79 @@ describe("streaming stub panels", () => {
     expect(streamSockets()).toHaveLength(2);
     expect(streamSockets()[0].closed).toBe(true);
     second.unmount();
+  });
+
+  it("renders canvas frames and sends pointer input", async () => {
+    const w = mount(CanvasPanel, {
+      props: {
+        ...props,
+        config: { interactive: true, pointer: true, keyboard: true },
+      },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const socket = streamSockets()[0];
+    socket.emit("open");
+    socket.emit("message", {
+      data: JSON.stringify({
+        commands: [
+          { type: "clear", color: "#000" },
+          { type: "rect", x: 1, y: 2, width: 3, height: 4, fill: "#fff" },
+          {
+            type: "text",
+            x: 50,
+            y: 20,
+            text: "centered",
+            textAlign: "center",
+            textBaseline: "middle",
+          },
+          { type: "text", x: 10, y: 40, text: "normal" },
+        ],
+        regions: [{ id: "button", x: 0, y: 0, width: 100, height: 100 }],
+      }),
+    });
+    await nextTick();
+    expect(canvasOps).toContain("rect");
+    expect(canvasOps.filter((op) => op.startsWith("textAlign:"))).toStrictEqual(
+      ["textAlign:start", "textAlign:center", "textAlign:start"],
+    );
+    expect(
+      canvasOps.filter((op) => op.startsWith("textBaseline:")),
+    ).toStrictEqual([
+      "textBaseline:alphabetic",
+      "textBaseline:middle",
+      "textBaseline:alphabetic",
+    ]);
+
+    const canvas = w.get('[data-test="canvas-panel-canvas"]');
+    vi.spyOn(canvas.element, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 100,
+      height: 100,
+      right: 100,
+      bottom: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    canvas.element.dispatchEvent(
+      new MouseEvent("pointerdown", {
+        clientX: 10,
+        clientY: 10,
+        button: 0,
+        buttons: 1,
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+    expect(socket.sent.some((msg) => msg.includes('"type":"pointer"'))).toBe(
+      true,
+    );
+    expect(socket.sent.some((msg) => msg.includes('"regionId":"button"'))).toBe(
+      true,
+    );
+    w.unmount();
   });
 
   it("opens independent terminal channels for split panes on the same stream route", async () => {

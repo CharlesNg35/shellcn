@@ -32,6 +32,7 @@ func TestPanelConfigSchemasCoverConfigJSONFields(t *testing.T) {
 		{plugin.PanelTimeline, reflect.TypeOf(plugin.TimelineConfig{})},
 		{plugin.PanelTaskProgress, reflect.TypeOf(plugin.TaskProgressConfig{})},
 		{plugin.PanelSplit, reflect.TypeOf(plugin.SplitConfig{})},
+		{plugin.PanelCanvas, reflect.TypeOf(plugin.CanvasConfig{})},
 	}
 
 	schemas := plugin.PanelConfigSchemas()

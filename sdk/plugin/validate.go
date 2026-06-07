@@ -477,7 +477,7 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 	}
 	checkPanelSource := func(ctx string, panel PanelType, ds *DataSource) {
 		switch panel {
-		case PanelTerminal, PanelTerminalGrid, PanelLogStream, PanelMetrics, PanelQueryEditor, PanelRemoteDesktop, PanelTaskProgress:
+		case PanelTerminal, PanelTerminalGrid, PanelLogStream, PanelMetrics, PanelQueryEditor, PanelRemoteDesktop, PanelTaskProgress, PanelCanvas:
 			checkStreamSource(ctx, ds)
 		default:
 			if ds != nil {

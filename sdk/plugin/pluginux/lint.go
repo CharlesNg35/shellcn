@@ -131,7 +131,7 @@ func fieldsHaveRequired(fields []plugin.Field) bool {
 
 func longLivedPanel(panel plugin.PanelType) bool {
 	switch panel {
-	case plugin.PanelTerminal, plugin.PanelTerminalGrid, plugin.PanelRemoteDesktop, plugin.PanelLogStream, plugin.PanelMetrics, plugin.PanelTaskProgress:
+	case plugin.PanelTerminal, plugin.PanelTerminalGrid, plugin.PanelRemoteDesktop, plugin.PanelLogStream, plugin.PanelMetrics, plugin.PanelTaskProgress, plugin.PanelCanvas:
 		return true
 	default:
 		return false
@@ -250,6 +250,8 @@ func expectedStreamKind(panel plugin.PanelType) (plugin.StreamKind, bool) {
 		return plugin.StreamMetrics, true
 	case plugin.PanelTaskProgress:
 		return plugin.StreamTask, true
+	case plugin.PanelCanvas:
+		return plugin.StreamCanvas, true
 	default:
 		return "", false
 	}

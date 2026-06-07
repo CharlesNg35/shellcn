@@ -29,6 +29,7 @@ export const panelRegistry: Record<string, Component> = {
   timeline: lazy(() => import("../specialized/TimelinePanel.vue")),
   task_progress: lazy(() => import("../streaming/TaskProgressPanel.vue")),
   split: lazy(() => import("../specialized/SplitPanel.vue")),
+  canvas: lazy(() => import("../streaming/CanvasPanel.vue")),
   terminal: lazy(() => import("../streaming/TerminalPanel.vue")),
   terminal_grid: lazy(() => import("../streaming/TerminalGridPanel.vue")),
   log_stream: lazy(() => import("../streaming/LogStreamPanel.vue")),

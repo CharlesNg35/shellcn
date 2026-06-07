@@ -22,6 +22,7 @@ const (
 	PanelTimeline      PanelType = "timeline"
 	PanelTaskProgress  PanelType = "task_progress"
 	PanelSplit         PanelType = "split"
+	PanelCanvas        PanelType = "canvas"
 
 	PanelGraph      PanelType = "graph"
 	PanelTrace      PanelType = "trace"
@@ -52,6 +53,7 @@ func (ObjectDetailConfig) panelConfig()  {}
 func (TimelineConfig) panelConfig()      {}
 func (TaskProgressConfig) panelConfig()  {}
 func (SplitConfig) panelConfig()         {}
+func (CanvasConfig) panelConfig()        {}
 
 // StreamKind tags the long-lived channel a panel binds to.
 type StreamKind string
@@ -63,6 +65,7 @@ const (
 	StreamMetrics  StreamKind = "metrics"
 	StreamFile     StreamKind = "file"
 	StreamTask     StreamKind = "task"
+	StreamCanvas   StreamKind = "canvas"
 )
 
 // DataSource binds a panel to a route by id; params interpolate from the active
@@ -241,6 +244,21 @@ type SplitPanel struct {
 type SplitConfig struct {
 	Orientation SplitOrientation `json:"orientation,omitempty"`
 	Panels      []SplitPanel     `json:"panels,omitempty"`
+}
+
+type CanvasConfig struct {
+	Width          int    `json:"width,omitempty"`
+	Height         int    `json:"height,omitempty"`
+	HiDPI          bool   `json:"hidpi,omitempty"`
+	Interactive    bool   `json:"interactive,omitempty"`
+	Keyboard       bool   `json:"keyboard,omitempty"`
+	Pointer        bool   `json:"pointer,omitempty"`
+	Wheel          bool   `json:"wheel,omitempty"`
+	ResizeEvents   bool   `json:"resizeEvents,omitempty"`
+	Background     string `json:"background,omitempty"`
+	FocusOnPointer bool   `json:"focusOnPointer,omitempty"`
+	AriaLabel      string `json:"ariaLabel,omitempty"`
+	Instructions   string `json:"instructions,omitempty"`
 }
 
 // MetricStat is one KPI number card in the metrics panel.

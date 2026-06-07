@@ -805,6 +805,7 @@ const (
     PanelTimeline      PanelType = "timeline"       // events/tasks/audit trail over a list route
     PanelTaskProgress  PanelType = "task_progress"  // long-running task stream with progress/cancel/retry
     PanelSplit         PanelType = "split"          // resizable horizontal/vertical child panel composition
+    PanelCanvas        PanelType = "canvas"         // plugin-driven draw/input protocol over a WS stream
 
     PanelGraph      PanelType = "graph"       // node/edge viz — Neo4j, topology
     PanelTrace      PanelType = "trace"       // span waterfall — Jaeger, Tempo
@@ -1027,8 +1028,11 @@ registration. `DataSource.Method`, when declared, must match the referenced
 route. Read panels (`table`, `form`, `document`, `code_editor`, `diff`,
 `file_browser`, `object_detail`, `timeline`, etc.) must source from `GET` routes; streaming
 panels (`terminal`, `terminal_grid`, `log_stream`, `metrics`, `query_editor`,
-`remote_desktop`, `task_progress`, and table/resource watch sources) must source
+`remote_desktop`, `task_progress`, `canvas`, and table/resource watch sources) must source
 from `WS` routes.
+Canvas streams use a JSON wire protocol, but plugin code should use the SDK's
+typed canvas structs (`CanvasFrame`, `CanvasCommand`, `CanvasRegion`,
+`CanvasPointerEvent`, etc.) rather than hand-built maps.
 Table mutation sources (`insert`, `update`, `delete`) and editor/form save
 methods must resolve to write methods (`POST`, `PUT`, `PATCH`, or `DELETE`).
 Dashboard and split child panels are validated recursively with the same rules
