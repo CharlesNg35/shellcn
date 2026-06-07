@@ -18,26 +18,42 @@ const (
 	CanvasCommandTranslate      CanvasCommandType = "translate"
 	CanvasCommandScale          CanvasCommandType = "scale"
 	CanvasCommandRotate         CanvasCommandType = "rotate"
+	CanvasCommandTransform      CanvasCommandType = "transform"
 	CanvasCommandStyle          CanvasCommandType = "style"
+	CanvasCommandResetStyle     CanvasCommandType = "resetStyle"
+	CanvasCommandLineDash       CanvasCommandType = "lineDash"
+	CanvasCommandShadow         CanvasCommandType = "shadow"
+	CanvasCommandGradient       CanvasCommandType = "gradient"
+	CanvasCommandPattern        CanvasCommandType = "pattern"
+	CanvasCommandClip           CanvasCommandType = "clip"
 	CanvasCommandRect           CanvasCommandType = "rect"
 	CanvasCommandLine           CanvasCommandType = "line"
 	CanvasCommandPolyline       CanvasCommandType = "polyline"
 	CanvasCommandPolygon        CanvasCommandType = "polygon"
+	CanvasCommandArc            CanvasCommandType = "arc"
+	CanvasCommandQuadraticCurve CanvasCommandType = "quadraticCurve"
+	CanvasCommandBezierCurve    CanvasCommandType = "bezierCurve"
 	CanvasCommandCircle         CanvasCommandType = "circle"
 	CanvasCommandEllipse        CanvasCommandType = "ellipse"
 	CanvasCommandPath           CanvasCommandType = "path"
 	CanvasCommandText           CanvasCommandType = "text"
+	CanvasCommandTextBox        CanvasCommandType = "textBox"
+	CanvasCommandMeasureText    CanvasCommandType = "measureText"
 	CanvasCommandImage          CanvasCommandType = "image"
+	CanvasCommandImageData      CanvasCommandType = "imageData"
+	CanvasCommandSnapshot       CanvasCommandType = "snapshot"
 )
 
 type CanvasEventType string
 
 const (
-	CanvasEventReady   CanvasEventType = "ready"
-	CanvasEventResize  CanvasEventType = "resize"
-	CanvasEventPointer CanvasEventType = "pointer"
-	CanvasEventWheel   CanvasEventType = "wheel"
-	CanvasEventKey     CanvasEventType = "key"
+	CanvasEventReady    CanvasEventType = "ready"
+	CanvasEventResize   CanvasEventType = "resize"
+	CanvasEventPointer  CanvasEventType = "pointer"
+	CanvasEventWheel    CanvasEventType = "wheel"
+	CanvasEventKey      CanvasEventType = "key"
+	CanvasEventMetrics  CanvasEventType = "textMetrics"
+	CanvasEventSnapshot CanvasEventType = "snapshot"
 )
 
 type CanvasLineCap string
@@ -122,14 +138,28 @@ type CanvasPoint struct {
 	Y float64 `json:"y"`
 }
 
+type CanvasRegionShape string
+
+const (
+	CanvasRegionRect    CanvasRegionShape = "rect"
+	CanvasRegionCircle  CanvasRegionShape = "circle"
+	CanvasRegionPolygon CanvasRegionShape = "polygon"
+	CanvasRegionPath    CanvasRegionShape = "path"
+)
+
 type CanvasRegion struct {
-	ID     string  `json:"id"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	Width  float64 `json:"width"`
-	Height float64 `json:"height"`
-	Cursor string  `json:"cursor,omitempty"`
-	Label  string  `json:"label,omitempty"`
+	ID             string            `json:"id"`
+	Shape          CanvasRegionShape `json:"shape,omitempty"`
+	X              float64           `json:"x"`
+	Y              float64           `json:"y"`
+	Width          float64           `json:"width,omitempty"`
+	Height         float64           `json:"height,omitempty"`
+	Radius         float64           `json:"radius,omitempty"`
+	Points         []CanvasPoint     `json:"points,omitempty"`
+	D              string            `json:"d,omitempty"`
+	Cursor         string            `json:"cursor,omitempty"`
+	Label          string            `json:"label,omitempty"`
+	CapturePointer bool              `json:"capturePointer,omitempty"`
 }
 
 type CanvasFrame struct {
@@ -177,6 +207,12 @@ func ParseCanvasEvent(data []byte) (CanvasEvent, error) {
 	case CanvasEventKey:
 		var ev CanvasKeyEvent
 		return &ev, json.Unmarshal(data, &ev)
+	case CanvasEventMetrics:
+		var ev CanvasTextMetricsEvent
+		return &ev, json.Unmarshal(data, &ev)
+	case CanvasEventSnapshot:
+		var ev CanvasSnapshotEvent
+		return &ev, json.Unmarshal(data, &ev)
 	default:
 		return nil, fmt.Errorf("%w: unknown canvas event type %q", ErrInvalidInput, header.Type)
 	}
@@ -193,6 +229,11 @@ type CanvasPaint struct {
 	LineJoin     CanvasLineJoin           `json:"lineJoin,omitempty"`
 	TextAlign    CanvasTextAlign          `json:"textAlign,omitempty"`
 	TextBaseline CanvasTextBaseline       `json:"textBaseline,omitempty"`
+	FillID       string                   `json:"fillId,omitempty"`
+	StrokeID     string                   `json:"strokeId,omitempty"`
+	Filter       string                   `json:"filter,omitempty"`
+	Direction    string                   `json:"direction,omitempty"`
+	MiterLimit   *float64                 `json:"miterLimit,omitempty"`
 
 	NoFill   bool `json:"-"`
 	NoStroke bool `json:"-"`
@@ -232,8 +273,77 @@ type CanvasRotate struct {
 	Angle float64 `json:"angle,omitempty"`
 }
 
+type CanvasTransform struct {
+	A float64 `json:"a"`
+	B float64 `json:"b"`
+	C float64 `json:"c"`
+	D float64 `json:"d"`
+	E float64 `json:"e"`
+	F float64 `json:"f"`
+}
+
 type CanvasStyle struct {
 	CanvasPaint
+}
+
+type CanvasResetStyle struct{}
+
+type CanvasLineDash struct {
+	Segments []float64 `json:"segments,omitempty"`
+	Offset   float64   `json:"offset,omitempty"`
+}
+
+type CanvasShadow struct {
+	Color   string  `json:"color,omitempty"`
+	Blur    float64 `json:"blur,omitempty"`
+	OffsetX float64 `json:"offsetX,omitempty"`
+	OffsetY float64 `json:"offsetY,omitempty"`
+}
+
+type CanvasGradientKind string
+
+const (
+	CanvasGradientLinear CanvasGradientKind = "linear"
+	CanvasGradientRadial CanvasGradientKind = "radial"
+	CanvasGradientConic  CanvasGradientKind = "conic"
+)
+
+type CanvasGradientStop struct {
+	Offset float64 `json:"offset"`
+	Color  string  `json:"color"`
+}
+
+type CanvasGradient struct {
+	ID         string               `json:"id"`
+	Kind       CanvasGradientKind   `json:"kind"`
+	X0         float64              `json:"x0,omitempty"`
+	Y0         float64              `json:"y0,omitempty"`
+	X1         float64              `json:"x1,omitempty"`
+	Y1         float64              `json:"y1,omitempty"`
+	R0         float64              `json:"r0,omitempty"`
+	R1         float64              `json:"r1,omitempty"`
+	X          float64              `json:"x,omitempty"`
+	Y          float64              `json:"y,omitempty"`
+	StartAngle float64              `json:"startAngle,omitempty"`
+	Stops      []CanvasGradientStop `json:"stops,omitempty"`
+}
+
+type CanvasPattern struct {
+	ID         string `json:"id"`
+	Src        string `json:"src"`
+	Repetition string `json:"repetition,omitempty"`
+}
+
+type CanvasClip struct {
+	Shape    CanvasRegionShape `json:"shape,omitempty"`
+	D        string            `json:"d,omitempty"`
+	X        float64           `json:"x,omitempty"`
+	Y        float64           `json:"y,omitempty"`
+	Width    float64           `json:"width,omitempty"`
+	Height   float64           `json:"height,omitempty"`
+	Radius   float64           `json:"radius,omitempty"`
+	Points   []CanvasPoint     `json:"points,omitempty"`
+	FillRule string            `json:"fillRule,omitempty"`
 }
 
 type CanvasRect struct {
@@ -251,6 +361,38 @@ type CanvasLine struct {
 	Y1 float64 `json:"y1,omitempty"`
 	X2 float64 `json:"x2,omitempty"`
 	Y2 float64 `json:"y2,omitempty"`
+}
+
+type CanvasArc struct {
+	CanvasPaint
+	X                float64 `json:"x,omitempty"`
+	Y                float64 `json:"y,omitempty"`
+	Radius           float64 `json:"radius,omitempty"`
+	StartAngle       float64 `json:"startAngle,omitempty"`
+	EndAngle         float64 `json:"endAngle,omitempty"`
+	CounterClockwise bool    `json:"counterclockwise,omitempty"`
+}
+
+type CanvasQuadraticCurve struct {
+	CanvasPaint
+	X0  float64 `json:"x0,omitempty"`
+	Y0  float64 `json:"y0,omitempty"`
+	CPX float64 `json:"cpx,omitempty"`
+	CPY float64 `json:"cpy,omitempty"`
+	X   float64 `json:"x,omitempty"`
+	Y   float64 `json:"y,omitempty"`
+}
+
+type CanvasBezierCurve struct {
+	CanvasPaint
+	X0   float64 `json:"x0,omitempty"`
+	Y0   float64 `json:"y0,omitempty"`
+	CP1X float64 `json:"cp1x,omitempty"`
+	CP1Y float64 `json:"cp1y,omitempty"`
+	CP2X float64 `json:"cp2x,omitempty"`
+	CP2Y float64 `json:"cp2y,omitempty"`
+	X    float64 `json:"x,omitempty"`
+	Y    float64 `json:"y,omitempty"`
 }
 
 type CanvasPolyline struct {
@@ -292,13 +434,47 @@ type CanvasText struct {
 	MaxWidth *float64 `json:"maxWidth,omitempty"`
 }
 
+type CanvasTextBox struct {
+	CanvasPaint
+	X          float64 `json:"x,omitempty"`
+	Y          float64 `json:"y,omitempty"`
+	Width      float64 `json:"width,omitempty"`
+	LineHeight float64 `json:"lineHeight,omitempty"`
+	Text       string  `json:"text,omitempty"`
+}
+
+type CanvasMeasureText struct {
+	RequestID string `json:"requestId,omitempty"`
+	Text      string `json:"text,omitempty"`
+	Font      string `json:"font,omitempty"`
+}
+
 type CanvasImage struct {
 	CanvasPaint
-	Src    string  `json:"src,omitempty"`
+	Src          string  `json:"src,omitempty"`
+	X            float64 `json:"x,omitempty"`
+	Y            float64 `json:"y,omitempty"`
+	Width        float64 `json:"width,omitempty"`
+	Height       float64 `json:"height,omitempty"`
+	SourceX      float64 `json:"sourceX,omitempty"`
+	SourceY      float64 `json:"sourceY,omitempty"`
+	SourceWidth  float64 `json:"sourceWidth,omitempty"`
+	SourceHeight float64 `json:"sourceHeight,omitempty"`
+	Smoothing    *bool   `json:"smoothing,omitempty"`
+}
+
+type CanvasImageData struct {
 	X      float64 `json:"x,omitempty"`
 	Y      float64 `json:"y,omitempty"`
-	Width  float64 `json:"width,omitempty"`
-	Height float64 `json:"height,omitempty"`
+	Width  int     `json:"width,omitempty"`
+	Height int     `json:"height,omitempty"`
+	Data   []int   `json:"data,omitempty"`
+}
+
+type CanvasSnapshot struct {
+	RequestID string  `json:"requestId,omitempty"`
+	MIME      string  `json:"mime,omitempty"`
+	Quality   float64 `json:"quality,omitempty"`
 }
 
 func (CanvasClear) canvasCommand()          {}
@@ -311,16 +487,30 @@ func (CanvasResetTransform) canvasCommand() {}
 func (CanvasTranslate) canvasCommand()      {}
 func (CanvasScale) canvasCommand()          {}
 func (CanvasRotate) canvasCommand()         {}
+func (CanvasTransform) canvasCommand()      {}
 func (CanvasStyle) canvasCommand()          {}
+func (CanvasResetStyle) canvasCommand()     {}
+func (CanvasLineDash) canvasCommand()       {}
+func (CanvasShadow) canvasCommand()         {}
+func (CanvasGradient) canvasCommand()       {}
+func (CanvasPattern) canvasCommand()        {}
+func (CanvasClip) canvasCommand()           {}
 func (CanvasRect) canvasCommand()           {}
 func (CanvasLine) canvasCommand()           {}
+func (CanvasArc) canvasCommand()            {}
+func (CanvasQuadraticCurve) canvasCommand() {}
+func (CanvasBezierCurve) canvasCommand()    {}
 func (CanvasPolyline) canvasCommand()       {}
 func (CanvasPolygon) canvasCommand()        {}
 func (CanvasCircle) canvasCommand()         {}
 func (CanvasEllipse) canvasCommand()        {}
 func (CanvasPath) canvasCommand()           {}
 func (CanvasText) canvasCommand()           {}
+func (CanvasTextBox) canvasCommand()        {}
+func (CanvasMeasureText) canvasCommand()    {}
 func (CanvasImage) canvasCommand()          {}
+func (CanvasImageData) canvasCommand()      {}
+func (CanvasSnapshot) canvasCommand()       {}
 
 func (c CanvasClear) MarshalJSON() ([]byte, error) {
 	type payload CanvasClear
@@ -376,9 +566,44 @@ func (c CanvasRotate) MarshalJSON() ([]byte, error) {
 	return marshalCanvasCommand(CanvasCommandRotate, payload(c), nil)
 }
 
+func (c CanvasTransform) MarshalJSON() ([]byte, error) {
+	type payload CanvasTransform
+	return marshalCanvasCommand(CanvasCommandTransform, payload(c), nil)
+}
+
 func (c CanvasStyle) MarshalJSON() ([]byte, error) {
 	type payload CanvasStyle
 	return marshalCanvasCommand(CanvasCommandStyle, payload(c), &c.CanvasPaint)
+}
+
+func (c CanvasResetStyle) MarshalJSON() ([]byte, error) {
+	type payload CanvasResetStyle
+	return marshalCanvasCommand(CanvasCommandResetStyle, payload(c), nil)
+}
+
+func (c CanvasLineDash) MarshalJSON() ([]byte, error) {
+	type payload CanvasLineDash
+	return marshalCanvasCommand(CanvasCommandLineDash, payload(c), nil)
+}
+
+func (c CanvasShadow) MarshalJSON() ([]byte, error) {
+	type payload CanvasShadow
+	return marshalCanvasCommand(CanvasCommandShadow, payload(c), nil)
+}
+
+func (c CanvasGradient) MarshalJSON() ([]byte, error) {
+	type payload CanvasGradient
+	return marshalCanvasCommand(CanvasCommandGradient, payload(c), nil)
+}
+
+func (c CanvasPattern) MarshalJSON() ([]byte, error) {
+	type payload CanvasPattern
+	return marshalCanvasCommand(CanvasCommandPattern, payload(c), nil)
+}
+
+func (c CanvasClip) MarshalJSON() ([]byte, error) {
+	type payload CanvasClip
+	return marshalCanvasCommand(CanvasCommandClip, payload(c), nil)
 }
 
 func (c CanvasRect) MarshalJSON() ([]byte, error) {
@@ -389,6 +614,21 @@ func (c CanvasRect) MarshalJSON() ([]byte, error) {
 func (c CanvasLine) MarshalJSON() ([]byte, error) {
 	type payload CanvasLine
 	return marshalCanvasCommand(CanvasCommandLine, payload(c), &c.CanvasPaint)
+}
+
+func (c CanvasArc) MarshalJSON() ([]byte, error) {
+	type payload CanvasArc
+	return marshalCanvasCommand(CanvasCommandArc, payload(c), &c.CanvasPaint)
+}
+
+func (c CanvasQuadraticCurve) MarshalJSON() ([]byte, error) {
+	type payload CanvasQuadraticCurve
+	return marshalCanvasCommand(CanvasCommandQuadraticCurve, payload(c), &c.CanvasPaint)
+}
+
+func (c CanvasBezierCurve) MarshalJSON() ([]byte, error) {
+	type payload CanvasBezierCurve
+	return marshalCanvasCommand(CanvasCommandBezierCurve, payload(c), &c.CanvasPaint)
 }
 
 func (c CanvasPolyline) MarshalJSON() ([]byte, error) {
@@ -421,9 +661,29 @@ func (c CanvasText) MarshalJSON() ([]byte, error) {
 	return marshalCanvasCommand(CanvasCommandText, payload(c), &c.CanvasPaint)
 }
 
+func (c CanvasTextBox) MarshalJSON() ([]byte, error) {
+	type payload CanvasTextBox
+	return marshalCanvasCommand(CanvasCommandTextBox, payload(c), &c.CanvasPaint)
+}
+
+func (c CanvasMeasureText) MarshalJSON() ([]byte, error) {
+	type payload CanvasMeasureText
+	return marshalCanvasCommand(CanvasCommandMeasureText, payload(c), nil)
+}
+
 func (c CanvasImage) MarshalJSON() ([]byte, error) {
 	type payload CanvasImage
 	return marshalCanvasCommand(CanvasCommandImage, payload(c), &c.CanvasPaint)
+}
+
+func (c CanvasImageData) MarshalJSON() ([]byte, error) {
+	type payload CanvasImageData
+	return marshalCanvasCommand(CanvasCommandImageData, payload(c), nil)
+}
+
+func (c CanvasSnapshot) MarshalJSON() ([]byte, error) {
+	type payload CanvasSnapshot
+	return marshalCanvasCommand(CanvasCommandSnapshot, payload(c), nil)
 }
 
 func marshalCanvasCommand(commandType CanvasCommandType, payload any, paint *CanvasPaint) ([]byte, error) {
@@ -527,4 +787,41 @@ type CanvasKeyEvent struct {
 func (CanvasKeyEvent) canvasEvent() {}
 func (CanvasKeyEvent) EventType() CanvasEventType {
 	return CanvasEventKey
+}
+
+type CanvasTextMetricsEvent struct {
+	Type                     CanvasEventType `json:"type"`
+	RequestID                string          `json:"requestId,omitempty"`
+	Text                     string          `json:"text,omitempty"`
+	Width                    float64         `json:"width"`
+	ActualBoundingBoxLeft    float64         `json:"actualBoundingBoxLeft,omitempty"`
+	ActualBoundingBoxRight   float64         `json:"actualBoundingBoxRight,omitempty"`
+	ActualBoundingBoxAscent  float64         `json:"actualBoundingBoxAscent,omitempty"`
+	ActualBoundingBoxDescent float64         `json:"actualBoundingBoxDescent,omitempty"`
+	FontBoundingBoxAscent    float64         `json:"fontBoundingBoxAscent,omitempty"`
+	FontBoundingBoxDescent   float64         `json:"fontBoundingBoxDescent,omitempty"`
+	EmHeightAscent           float64         `json:"emHeightAscent,omitempty"`
+	EmHeightDescent          float64         `json:"emHeightDescent,omitempty"`
+	HangingBaseline          float64         `json:"hangingBaseline,omitempty"`
+	AlphabeticBaseline       float64         `json:"alphabeticBaseline,omitempty"`
+	IdeographicBaseline      float64         `json:"ideographicBaseline,omitempty"`
+}
+
+func (CanvasTextMetricsEvent) canvasEvent() {}
+func (CanvasTextMetricsEvent) EventType() CanvasEventType {
+	return CanvasEventMetrics
+}
+
+type CanvasSnapshotEvent struct {
+	Type      CanvasEventType `json:"type"`
+	RequestID string          `json:"requestId,omitempty"`
+	MIME      string          `json:"mime,omitempty"`
+	DataURL   string          `json:"dataUrl,omitempty"`
+	Width     float64         `json:"width,omitempty"`
+	Height    float64         `json:"height,omitempty"`
+}
+
+func (CanvasSnapshotEvent) canvasEvent() {}
+func (CanvasSnapshotEvent) EventType() CanvasEventType {
+	return CanvasEventSnapshot
 }

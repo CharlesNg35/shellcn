@@ -89,6 +89,16 @@ class FakeResizeObserver {
 }
 vi.stubGlobal("ResizeObserver", FakeResizeObserver);
 
+class FakePath2D {
+  constructor() {}
+  rect() {}
+  roundRect() {}
+  moveTo() {}
+  lineTo() {}
+  arc() {}
+  closePath() {}
+}
+
 class FakeWS {
   static instances: FakeWS[] = [];
   readyState = 0;
@@ -151,17 +161,53 @@ beforeEach(() => {
   mockCodeMirror.onChange = null;
   mockCodeMirror.diffOptions = null;
   canvasOps = [];
+  const gradient = {
+    addColorStop: (offset: number, color: string) =>
+      canvasOps.push(`colorStop:${offset}:${color}`),
+  };
   const canvasContext = {
     setTransform: () => canvasOps.push("setTransform"),
+    transform: () => canvasOps.push("transform"),
     clearRect: () => canvasOps.push("clearRect"),
     fillRect: () => canvasOps.push("fillRect"),
     beginPath: () => canvasOps.push("beginPath"),
     rect: () => canvasOps.push("rect"),
+    roundRect: () => canvasOps.push("roundRect"),
+    moveTo: () => canvasOps.push("moveTo"),
+    lineTo: () => canvasOps.push("lineTo"),
+    arc: () => canvasOps.push("arc"),
+    ellipse: () => canvasOps.push("ellipse"),
+    quadraticCurveTo: () => canvasOps.push("quadraticCurveTo"),
+    bezierCurveTo: () => canvasOps.push("bezierCurveTo"),
+    closePath: () => canvasOps.push("closePath"),
+    clip: () => canvasOps.push("clip"),
     fill: () => canvasOps.push("fill"),
     stroke: () => canvasOps.push("stroke"),
     save: () => canvasOps.push("save"),
     restore: () => canvasOps.push("restore"),
     fillText: () => canvasOps.push("fillText"),
+    strokeText: () => canvasOps.push("strokeText"),
+    drawImage: () => canvasOps.push("drawImage"),
+    putImageData: () => canvasOps.push("putImageData"),
+    setLineDash: (segments: number[]) =>
+      canvasOps.push(`lineDash:${segments.join(",")}`),
+    createLinearGradient: () => {
+      canvasOps.push("linearGradient");
+      return gradient;
+    },
+    createRadialGradient: () => {
+      canvasOps.push("radialGradient");
+      return gradient;
+    },
+    createConicGradient: () => {
+      canvasOps.push("conicGradient");
+      return gradient;
+    },
+    measureText: (text: string) => {
+      canvasOps.push(`measureText:${text}`);
+      return { width: text.length * 8 };
+    },
+    isPointInPath: () => true,
   };
   Object.defineProperty(canvasContext, "textAlign", {
     set: (value) => canvasOps.push(`textAlign:${value}`),
@@ -169,10 +215,14 @@ beforeEach(() => {
   Object.defineProperty(canvasContext, "textBaseline", {
     set: (value) => canvasOps.push(`textBaseline:${value}`),
   });
+  vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+    "data:image/png;base64,test",
+  );
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
     canvasContext as unknown as CanvasRenderingContext2D,
   );
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+  vi.stubGlobal("Path2D", FakePath2D);
   vi.stubGlobal("WebSocket", FakeWS);
   installFetch((url) => {
     if (url.includes("/tickets"))
@@ -309,6 +359,132 @@ describe("streaming stub panels", () => {
       true,
     );
     expect(socket.sent.some((msg) => msg.includes('"regionId":"button"'))).toBe(
+      true,
+    );
+    w.unmount();
+  });
+
+  it("renders expanded canvas 2d commands and sends renderer responses", async () => {
+    vi.stubGlobal(
+      "ImageData",
+      class {
+        data: Uint8ClampedArray;
+        width: number;
+        height: number;
+        constructor(data: Uint8ClampedArray, width: number, height: number) {
+          this.data = data;
+          this.width = width;
+          this.height = height;
+        }
+      },
+    );
+    const w = mount(CanvasPanel, {
+      props: {
+        ...props,
+        config: { interactive: true, pointer: true, keyboard: true },
+      },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const socket = streamSockets()[0];
+    socket.emit("open");
+    socket.emit("message", {
+      data: JSON.stringify({
+        commands: [
+          {
+            type: "gradient",
+            id: "g1",
+            kind: "linear",
+            x0: 0,
+            y0: 0,
+            x1: 100,
+            y1: 0,
+            stops: [
+              { offset: 0, color: "#000" },
+              { offset: 1, color: "#fff" },
+            ],
+          },
+          { type: "style", fillId: "g1", stroke: "#fff", lineWidth: 2 },
+          { type: "lineDash", segments: [4, 2], offset: 1 },
+          { type: "shadow", color: "#000", blur: 8, offsetX: 2, offsetY: 3 },
+          { type: "clip", shape: "rect", x: 0, y: 0, width: 200, height: 120 },
+          {
+            type: "arc",
+            x: 50,
+            y: 50,
+            radius: 20,
+            startAngle: 0,
+            endAngle: Math.PI,
+          },
+          {
+            type: "quadraticCurve",
+            x0: 0,
+            y0: 0,
+            cpx: 20,
+            cpy: 60,
+            x: 80,
+            y: 10,
+            stroke: "#fff",
+            fill: false,
+          },
+          {
+            type: "bezierCurve",
+            x0: 0,
+            y0: 0,
+            cp1x: 10,
+            cp1y: 20,
+            cp2x: 40,
+            cp2y: 30,
+            x: 80,
+            y: 20,
+            stroke: "#fff",
+            fill: false,
+          },
+          {
+            type: "textBox",
+            x: 10,
+            y: 10,
+            width: 80,
+            text: "Wrapped canvas label",
+            lineHeight: 16,
+          },
+          { type: "measureText", requestId: "m1", text: "Measure me" },
+          {
+            type: "imageData",
+            x: 1,
+            y: 1,
+            width: 1,
+            height: 1,
+            data: [255, 0, 0, 255],
+          },
+          { type: "snapshot", requestId: "s1", mime: "image/png" },
+        ],
+      }),
+    });
+    await nextTick();
+
+    for (const op of [
+      "linearGradient",
+      "lineDash:4,2",
+      "clip",
+      "arc",
+      "quadraticCurveTo",
+      "bezierCurveTo",
+      "measureText:Measure me",
+      "putImageData",
+    ]) {
+      expect(canvasOps).toContain(op);
+    }
+    expect(
+      socket.sent.some((msg) => msg.includes('"type":"textMetrics"')),
+    ).toBe(true);
+    expect(socket.sent.some((msg) => msg.includes('"requestId":"m1"'))).toBe(
+      true,
+    );
+    expect(socket.sent.some((msg) => msg.includes('"type":"snapshot"'))).toBe(
+      true,
+    );
+    expect(socket.sent.some((msg) => msg.includes('"requestId":"s1"'))).toBe(
       true,
     );
     w.unmount();

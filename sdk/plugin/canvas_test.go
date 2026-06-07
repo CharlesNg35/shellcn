@@ -106,6 +106,51 @@ func TestCanvasRawCommandMarshal(t *testing.T) {
 	}
 }
 
+func TestCanvasExpandedCommandsMarshal(t *testing.T) {
+	quality := 0.82
+	smoothing := false
+	data, err := json.Marshal(plugin.CanvasFrame{Commands: []plugin.CanvasCommand{
+		plugin.CanvasGradient{
+			ID: "brand", Kind: plugin.CanvasGradientLinear, X0: 0, Y0: 0, X1: 100, Y1: 0,
+			Stops: []plugin.CanvasGradientStop{{Offset: 0, Color: "#000"}, {Offset: 1, Color: "#fff"}},
+		},
+		plugin.CanvasLineDash{Segments: []float64{6, 3}, Offset: 2},
+		plugin.CanvasShadow{Color: "#000", Blur: 10, OffsetX: 2, OffsetY: 4},
+		plugin.CanvasClip{Shape: plugin.CanvasRegionCircle, X: 40, Y: 40, Radius: 20},
+		plugin.CanvasArc{CanvasPaint: plugin.CanvasPaint{StrokeID: "brand", NoFill: true}, X: 40, Y: 40, Radius: 20, EndAngle: 3.14},
+		plugin.CanvasQuadraticCurve{CanvasPaint: plugin.CanvasPaint{Stroke: "#fff", NoFill: true}, X0: 0, Y0: 0, CPX: 20, CPY: 50, X: 90, Y: 10},
+		plugin.CanvasBezierCurve{CanvasPaint: plugin.CanvasPaint{Stroke: "#fff", NoFill: true}, X0: 0, Y0: 0, CP1X: 20, CP1Y: 50, CP2X: 70, CP2Y: 50, X: 90, Y: 10},
+		plugin.CanvasTextBox{CanvasPaint: plugin.CanvasPaint{FillID: "brand"}, X: 10, Y: 10, Width: 180, Text: "wrapped text"},
+		plugin.CanvasMeasureText{RequestID: "m1", Text: "measure", Font: "16px sans-serif"},
+		plugin.CanvasImage{Src: "data:image/png;base64,", X: 0, Y: 0, SourceX: 2, SourceY: 3, SourceWidth: 10, SourceHeight: 11, Smoothing: &smoothing},
+		plugin.CanvasImageData{X: 0, Y: 0, Width: 1, Height: 1, Data: []int{255, 0, 0, 255}},
+		plugin.CanvasSnapshot{RequestID: "s1", MIME: "image/png", Quality: quality},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`"type":"gradient"`,
+		`"type":"lineDash"`,
+		`"type":"shadow"`,
+		`"type":"clip"`,
+		`"type":"arc"`,
+		`"type":"quadraticCurve"`,
+		`"type":"bezierCurve"`,
+		`"type":"textBox"`,
+		`"type":"measureText"`,
+		`"type":"imageData"`,
+		`"type":"snapshot"`,
+		`"strokeId":"brand"`,
+		`"fillId":"brand"`,
+		`"fill":false`,
+	} {
+		if !bytes.Contains(data, []byte(want)) {
+			t.Fatalf("expanded command frame missing %s:\n%s", want, data)
+		}
+	}
+}
+
 func TestParseCanvasEvent(t *testing.T) {
 	ev, err := plugin.ParseCanvasEvent([]byte(`{
 		"type":"pointer",
@@ -128,6 +173,24 @@ func TestParseCanvasEvent(t *testing.T) {
 	}
 	if pointer.EventType() != plugin.CanvasEventPointer || pointer.RegionID != "open" || !pointer.Modifiers.Shift {
 		t.Fatalf("decoded pointer event incorrectly: %#v", pointer)
+	}
+}
+
+func TestParseCanvasRendererEvents(t *testing.T) {
+	metrics, err := plugin.ParseCanvasEvent([]byte(`{"type":"textMetrics","requestId":"m1","text":"abc","width":24}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ev, ok := metrics.(*plugin.CanvasTextMetricsEvent); !ok || ev.RequestID != "m1" || ev.Width != 24 {
+		t.Fatalf("metrics event decoded incorrectly: %#v", metrics)
+	}
+
+	snapshot, err := plugin.ParseCanvasEvent([]byte(`{"type":"snapshot","requestId":"s1","mime":"image/png","dataUrl":"data:image/png;base64,test","width":100,"height":50}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ev, ok := snapshot.(*plugin.CanvasSnapshotEvent); !ok || ev.RequestID != "s1" || ev.Width != 100 {
+		t.Fatalf("snapshot event decoded incorrectly: %#v", snapshot)
 	}
 }
 
