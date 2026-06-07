@@ -46,6 +46,7 @@ export function useStream(
       null,
   );
   let unsub: (() => void) | undefined;
+  let connectGeneration = 0;
 
   function scopedKey(base: string): string {
     return options.keySuffix ? `${base}:${options.keySuffix}` : base;
@@ -60,7 +61,8 @@ export function useStream(
 
   async function connect(force = false): Promise<void> {
     if (!force && pendingConnect) return pendingConnect;
-    const run = connectOnce(force);
+    const generation = ++connectGeneration;
+    const run = connectOnce(force, generation);
     pendingConnect = run;
     try {
       await run;
@@ -69,7 +71,10 @@ export function useStream(
     }
   }
 
-  async function connectOnce(force = false): Promise<void> {
+  async function connectOnce(
+    force = false,
+    generation = connectGeneration,
+  ): Promise<void> {
     if (!source) {
       localError.value = "No stream route configured.";
       return;
@@ -92,6 +97,7 @@ export function useStream(
         store.close(existing);
       }
       const handle = await prepareStream(connectionId, source, ctx);
+      if (generation !== connectGeneration) return;
       const handleKey = scopedKey(handle.key);
       store.ensure(handleKey, () => new WebSocket(handle.url) as never);
       attach(handleKey);

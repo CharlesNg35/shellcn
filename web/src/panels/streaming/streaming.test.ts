@@ -8,6 +8,7 @@ import Dialog from "primevue/dialog";
 import { installFetch } from "../../test/fetchMock";
 import { primeVuePassthrough } from "../../primevue/preset";
 import { useStreamChannelsStore } from "../../stores/streamChannels";
+import { useStream } from "../../composables/useStream";
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
@@ -548,6 +549,51 @@ describe("streaming stub panels", () => {
 
     expect(streamSockets()).toHaveLength(2);
     expect(streamSockets()[0].closed).toBe(true);
+    w.unmount();
+  });
+
+  it("ignores a stale pending ticket when reconnect is forced", async () => {
+    const ticketResolvers: ((ticket: string) => void)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/tickets")) {
+          const ticket = await new Promise<string>((resolve) =>
+            ticketResolvers.push(resolve),
+          );
+          return new Response(JSON.stringify({ ticket }), {
+            status: 201,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({}), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+    const Host = defineComponent({
+      setup() {
+        const stream = useStream("c1", props.source, {});
+        return { reconnect: stream.reconnect };
+      },
+      template: '<button type="button" @click="reconnect">Reconnect</button>',
+    });
+    const w = mount(Host, { global: { plugins: [pinia] } });
+    await nextTick();
+    expect(ticketResolvers).toHaveLength(1);
+
+    await w.get("button").trigger("click");
+    expect(ticketResolvers).toHaveLength(2);
+
+    ticketResolvers[0]("stale");
+    await flushPromises();
+    expect(streamSockets()).toHaveLength(0);
+
+    ticketResolvers[1]("fresh");
+    await flushPromises();
+    expect(streamSockets()).toHaveLength(1);
+    expect(streamSockets()[0].url).toContain("ticket=fresh");
     w.unmount();
   });
 
