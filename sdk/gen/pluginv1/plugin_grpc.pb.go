@@ -587,7 +587,7 @@ type HostClient interface {
 	OpenHTTPConn(ctx context.Context, in *SessionHandle, opts ...grpc.CallOption) (*BrokerRef, error)
 	// Audit records one stream-internal operation against the core audit log.
 	Audit(ctx context.Context, in *AuditRecord, opts ...grpc.CallOption) (*Empty, error)
-	// Storage persists plugin-owned or shared platform objects through the core.
+	// Storage persists plugin-owned platform objects through the core.
 	StorageGet(ctx context.Context, in *StorageGetRequest, opts ...grpc.CallOption) (*StorageItem, error)
 	StoragePut(ctx context.Context, in *StorageItem, opts ...grpc.CallOption) (*StorageItem, error)
 	StorageDelete(ctx context.Context, in *StorageDeleteRequest, opts ...grpc.CallOption) (*Empty, error)
@@ -700,7 +700,7 @@ type HostServer interface {
 	OpenHTTPConn(context.Context, *SessionHandle) (*BrokerRef, error)
 	// Audit records one stream-internal operation against the core audit log.
 	Audit(context.Context, *AuditRecord) (*Empty, error)
-	// Storage persists plugin-owned or shared platform objects through the core.
+	// Storage persists plugin-owned platform objects through the core.
 	StorageGet(context.Context, *StorageGetRequest) (*StorageItem, error)
 	StoragePut(context.Context, *StorageItem) (*StorageItem, error)
 	StorageDelete(context.Context, *StorageDeleteRequest) (*Empty, error)

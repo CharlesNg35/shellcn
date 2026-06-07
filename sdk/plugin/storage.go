@@ -5,18 +5,13 @@ import (
 	"time"
 )
 
-// StorageScope selects a namespaced storage collection. Core enforces the
-// platform boundaries. When Shared is false, core may default empty Plugin,
-// ConnectionID, and OwnerID to the current request context. Shared namespaces
-// opt out of those defaults so multiple plugins can intentionally share a
-// namespace while still using OwnerID, Protocol, or other scope fields.
+// StorageScope selects a namespaced storage collection. Core resolves and
+// enforces plugin, connection, and user identity; plugins declare only the
+// logical namespace and whether data is connection-local or user-scoped across
+// this plugin's connections.
 type StorageScope struct {
-	Namespace    string
-	Plugin       string
-	Protocol     string
-	ConnectionID string
-	OwnerID      string
-	Shared       bool
+	Namespace  string
+	UserScoped bool
 }
 
 // StorageItem is one plugin storage record. Value is opaque to core; Metadata is

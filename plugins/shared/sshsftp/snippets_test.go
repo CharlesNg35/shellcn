@@ -41,11 +41,7 @@ func TestSnippetStoreUsesGenericPluginStorage(t *testing.T) {
 		t.Fatalf("snippets should sort case-insensitively by name: %+v", rows)
 	}
 
-	if _, err := snippets.Get(ctx, "u2", "ssh", "a"); !errors.Is(err, plugin.ErrNotFound) {
-		t.Fatalf("snippet leaked across owners: %v", err)
-	}
-
-	if err := snippets.Delete(ctx, "u1", "ssh", "a"); err != nil {
+	if err := snippets.Delete(ctx, "a"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 	if _, err := snippets.Get(ctx, "u1", "ssh", "a"); !errors.Is(err, plugin.ErrNotFound) {

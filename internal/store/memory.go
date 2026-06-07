@@ -795,7 +795,7 @@ type pluginStorageKey struct {
 	protocol     string
 	connectionID string
 	ownerID      string
-	shared       bool
+	userScoped   bool
 	key          string
 }
 
@@ -894,7 +894,7 @@ func pluginStorageKeyOf(item models.PluginStorageItem) pluginStorageKey {
 		protocol:     item.Protocol,
 		connectionID: item.ConnectionID,
 		ownerID:      item.OwnerID,
-		shared:       item.Shared,
+		userScoped:   item.UserScoped,
 		key:          item.ItemKey,
 	}
 }
@@ -915,7 +915,7 @@ func pluginStorageMatches(item models.PluginStorageItem, f PluginStorageFilter) 
 	if f.OwnerID != "" && item.OwnerID != f.OwnerID {
 		return false
 	}
-	if f.Shared != nil && item.Shared != *f.Shared {
+	if f.UserScoped != nil && item.UserScoped != *f.UserScoped {
 		return false
 	}
 	if f.Key != "" && item.ItemKey != f.Key {

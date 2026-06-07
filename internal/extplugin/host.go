@@ -127,23 +127,15 @@ func pluginStorageScope(scope *pluginv1.StorageScope) plugin.StorageScope {
 		return plugin.StorageScope{}
 	}
 	return plugin.StorageScope{
-		Namespace:    scope.GetNamespace(),
-		Plugin:       scope.GetPlugin(),
-		Protocol:     scope.GetProtocol(),
-		ConnectionID: scope.GetConnectionId(),
-		OwnerID:      scope.GetOwnerId(),
-		Shared:       scope.GetShared(),
+		Namespace:  scope.GetNamespace(),
+		UserScoped: scope.GetUserScoped(),
 	}
 }
 
 func wireStorageScope(scope plugin.StorageScope) *pluginv1.StorageScope {
 	return &pluginv1.StorageScope{
-		Namespace:    scope.Namespace,
-		Plugin:       scope.Plugin,
-		Protocol:     scope.Protocol,
-		ConnectionId: scope.ConnectionID,
-		OwnerId:      scope.OwnerID,
-		Shared:       scope.Shared,
+		Namespace:  scope.Namespace,
+		UserScoped: scope.UserScoped,
 	}
 }
 

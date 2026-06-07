@@ -57,7 +57,7 @@ func (b storageBridge) Put(ctx context.Context, item plugin.StorageItem) (plugin
 	row.Protocol = scope.Protocol
 	row.ConnectionID = scope.ConnectionID
 	row.OwnerID = scope.OwnerID
-	row.Shared = scope.Shared
+	row.UserScoped = scope.UserScoped
 	if row.CreatedAt.IsZero() {
 		row.CreatedAt = now
 	}
@@ -106,54 +106,56 @@ func (b storageBridge) filter(scope plugin.StorageScope, key, prefix string) (st
 		Protocol:     normalized.Protocol,
 		ConnectionID: normalized.ConnectionID,
 		OwnerID:      normalized.OwnerID,
-		Shared:       &normalized.Shared,
+		UserScoped:   &normalized.UserScoped,
 		Key:          key,
 		Prefix:       prefix,
 	}, nil
 }
 
-func (b storageBridge) scope(scope plugin.StorageScope) (plugin.StorageScope, error) {
+type resolvedStorageScope struct {
+	Namespace    string
+	Plugin       string
+	Protocol     string
+	ConnectionID string
+	OwnerID      string
+	UserScoped   bool
+}
+
+func (b storageBridge) scope(scope plugin.StorageScope) (resolvedStorageScope, error) {
 	if scope.Namespace == "" {
-		return plugin.StorageScope{}, fmt.Errorf("%w: storage namespace is required", plugin.ErrInvalidInput)
+		return resolvedStorageScope{}, fmt.Errorf("%w: storage namespace is required", plugin.ErrInvalidInput)
 	}
-	if scope.Plugin == "" && !scope.Shared {
-		scope.Plugin = b.pluginName
+	out := resolvedStorageScope{
+		Namespace:  scope.Namespace,
+		Plugin:     b.pluginName,
+		Protocol:   b.pluginName,
+		OwnerID:    b.ownerID,
+		UserScoped: scope.UserScoped,
 	}
-	if scope.ConnectionID == "" && !scope.Shared {
-		scope.ConnectionID = b.connectionID
+	if !scope.UserScoped {
+		out.ConnectionID = b.connectionID
 	}
-	if scope.OwnerID == "" && !scope.Shared {
-		scope.OwnerID = b.ownerID
-	}
-	return scope, nil
+	return out, nil
 }
 
 func toModelStorageItem(item plugin.StorageItem) models.PluginStorageItem {
 	return models.PluginStorageItem{
-		Namespace:    item.Scope.Namespace,
-		Plugin:       item.Scope.Plugin,
-		Protocol:     item.Scope.Protocol,
-		ConnectionID: item.Scope.ConnectionID,
-		OwnerID:      item.Scope.OwnerID,
-		Shared:       item.Scope.Shared,
-		ItemKey:      item.Key,
-		Value:        append([]byte(nil), item.Value...),
-		ContentType:  item.ContentType,
-		Metadata:     cloneMap(item.Metadata),
-		CreatedAt:    item.CreatedAt,
-		UpdatedAt:    item.UpdatedAt,
+		Namespace:   item.Scope.Namespace,
+		UserScoped:  item.Scope.UserScoped,
+		ItemKey:     item.Key,
+		Value:       append([]byte(nil), item.Value...),
+		ContentType: item.ContentType,
+		Metadata:    cloneMap(item.Metadata),
+		CreatedAt:   item.CreatedAt,
+		UpdatedAt:   item.UpdatedAt,
 	}
 }
 
 func toPluginStorageItem(item models.PluginStorageItem) plugin.StorageItem {
 	return plugin.StorageItem{
 		Scope: plugin.StorageScope{
-			Namespace:    item.Namespace,
-			Plugin:       item.Plugin,
-			Protocol:     item.Protocol,
-			ConnectionID: item.ConnectionID,
-			OwnerID:      item.OwnerID,
-			Shared:       item.Shared,
+			Namespace:  item.Namespace,
+			UserScoped: item.UserScoped,
 		},
 		Key:         item.ItemKey,
 		Value:       append([]byte(nil), item.Value...),

@@ -1019,11 +1019,7 @@ func (x *AuditRecord) GetError() string {
 type StorageScope struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Namespace     string                 `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
-	Plugin        string                 `protobuf:"bytes,2,opt,name=plugin,proto3" json:"plugin,omitempty"`
-	Protocol      string                 `protobuf:"bytes,3,opt,name=protocol,proto3" json:"protocol,omitempty"`
-	ConnectionId  string                 `protobuf:"bytes,4,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
-	OwnerId       string                 `protobuf:"bytes,5,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
-	Shared        bool                   `protobuf:"varint,6,opt,name=shared,proto3" json:"shared,omitempty"`
+	UserScoped    bool                   `protobuf:"varint,2,opt,name=user_scoped,json=userScoped,proto3" json:"user_scoped,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1065,37 +1061,9 @@ func (x *StorageScope) GetNamespace() string {
 	return ""
 }
 
-func (x *StorageScope) GetPlugin() string {
+func (x *StorageScope) GetUserScoped() bool {
 	if x != nil {
-		return x.Plugin
-	}
-	return ""
-}
-
-func (x *StorageScope) GetProtocol() string {
-	if x != nil {
-		return x.Protocol
-	}
-	return ""
-}
-
-func (x *StorageScope) GetConnectionId() string {
-	if x != nil {
-		return x.ConnectionId
-	}
-	return ""
-}
-
-func (x *StorageScope) GetOwnerId() string {
-	if x != nil {
-		return x.OwnerId
-	}
-	return ""
-}
-
-func (x *StorageScope) GetShared() bool {
-	if x != nil {
-		return x.Shared
+		return x.UserScoped
 	}
 	return false
 }
@@ -1490,14 +1458,11 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\x05error\x18\x04 \x01(\tR\x05error\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb8\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"M\n" +
 	"\fStorageScope\x12\x1c\n" +
-	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x16\n" +
-	"\x06plugin\x18\x02 \x01(\tR\x06plugin\x12\x1a\n" +
-	"\bprotocol\x18\x03 \x01(\tR\bprotocol\x12#\n" +
-	"\rconnection_id\x18\x04 \x01(\tR\fconnectionId\x12\x19\n" +
-	"\bowner_id\x18\x05 \x01(\tR\aownerId\x12\x16\n" +
-	"\x06shared\x18\x06 \x01(\bR\x06shared\"\xe6\x02\n" +
+	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x1f\n" +
+	"\vuser_scoped\x18\x02 \x01(\bR\n" +
+	"userScoped\"\xe6\x02\n" +
 	"\vStorageItem\x12,\n" +
 	"\x05scope\x18\x01 \x01(\v2\x16.pluginv1.StorageScopeR\x05scope\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +

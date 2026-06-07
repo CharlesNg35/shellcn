@@ -140,12 +140,12 @@ type PluginStorageFilter struct {
 	Protocol     string
 	ConnectionID string
 	OwnerID      string
-	Shared       *bool
+	UserScoped   *bool
 	Key          string
 	Prefix       string
 }
 
-// PluginStorageStore persists scoped plugin-owned and shared platform objects.
+// PluginStorageStore persists scoped plugin-owned platform objects.
 type PluginStorageStore interface {
 	Get(ctx context.Context, f PluginStorageFilter) (models.PluginStorageItem, error)
 	Put(ctx context.Context, item *models.PluginStorageItem) error

@@ -523,7 +523,7 @@ func snippetDelete(protocol string) plugin.Handler {
 		if snippets == nil {
 			return nil, plugin.ErrNotSupported
 		}
-		if err := snippets.Delete(rc.Ctx, rc.User.ID, protocol, sn.ID); err != nil {
+		if err := snippets.Delete(rc.Ctx, sn.ID); err != nil {
 			return nil, err
 		}
 		return map[string]bool{"ok": true}, nil

@@ -54,7 +54,7 @@ service Host {
   rpc OpenHTTPConn(SessionHandle) returns (BrokerRef);
   // Audit records one stream-internal operation against the core audit log.
   rpc Audit(AuditRecord) returns (Empty);
-  // Storage persists plugin-owned or shared platform objects through the core.
+  // Storage persists plugin-owned platform objects through the core.
   rpc StorageGet(StorageGetRequest) returns (StorageItem);
   rpc StoragePut(StorageItem) returns (StorageItem);
   rpc StorageDelete(StorageDeleteRequest) returns (Empty);
@@ -163,11 +163,7 @@ message AuditRecord {
 
 message StorageScope {
   string namespace = 1;
-  string plugin = 2;
-  string protocol = 3;
-  string connection_id = 4;
-  string owner_id = 5;
-  bool shared = 6;
+  bool user_scoped = 2;
 }
 
 message StorageItem {

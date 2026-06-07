@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-// PluginStorageItem is generic plugin-owned or shared platform object storage.
+// PluginStorageItem is generic plugin-owned platform object storage.
 // Core owns the scope columns so plugins never receive raw database access.
 type PluginStorageItem struct {
 	Namespace    string `gorm:"primaryKey"`
@@ -10,7 +10,7 @@ type PluginStorageItem struct {
 	Protocol     string `gorm:"primaryKey"`
 	ConnectionID string `gorm:"primaryKey"`
 	OwnerID      string `gorm:"primaryKey"`
-	Shared       bool   `gorm:"primaryKey"`
+	UserScoped   bool   `gorm:"primaryKey"`
 	ItemKey      string `gorm:"primaryKey"`
 
 	Value       []byte

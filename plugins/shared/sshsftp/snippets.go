@@ -42,26 +42,26 @@ func (s *snippetStore) Create(ctx context.Context, sn *storedSnippet) error {
 	if err != nil {
 		return err
 	}
-	*sn = snippetFromStorageItem(stored)
+	*sn = snippetFromStorageItem(stored, sn.OwnerID, sn.Protocol)
 	return nil
 }
 
 func (s *snippetStore) Get(ctx context.Context, ownerID, protocol, id string) (storedSnippet, error) {
-	item, err := s.storage.Get(ctx, snippetStorageScope(ownerID, protocol), id)
+	item, err := s.storage.Get(ctx, snippetStorageScope(), id)
 	if err != nil {
 		return storedSnippet{}, err
 	}
-	return snippetFromStorageItem(item), nil
+	return snippetFromStorageItem(item, ownerID, protocol), nil
 }
 
 func (s *snippetStore) ListByOwner(ctx context.Context, ownerID, protocol string) ([]storedSnippet, error) {
-	rows, err := s.storage.List(ctx, snippetStorageScope(ownerID, protocol), "")
+	rows, err := s.storage.List(ctx, snippetStorageScope(), "")
 	if err != nil {
 		return nil, err
 	}
 	out := make([]storedSnippet, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, snippetFromStorageItem(row))
+		out = append(out, snippetFromStorageItem(row, ownerID, protocol))
 	}
 	sort.Slice(out, func(i, j int) bool {
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
@@ -69,16 +69,14 @@ func (s *snippetStore) ListByOwner(ctx context.Context, ownerID, protocol string
 	return out, nil
 }
 
-func (s *snippetStore) Delete(ctx context.Context, ownerID, protocol, id string) error {
-	return s.storage.Delete(ctx, snippetStorageScope(ownerID, protocol), id)
+func (s *snippetStore) Delete(ctx context.Context, id string) error {
+	return s.storage.Delete(ctx, snippetStorageScope(), id)
 }
 
-func snippetStorageScope(ownerID, protocol string) plugin.StorageScope {
+func snippetStorageScope() plugin.StorageScope {
 	return plugin.StorageScope{
-		Namespace: snippetStorageNamespace,
-		Protocol:  protocol,
-		OwnerID:   ownerID,
-		Shared:    true,
+		Namespace:  snippetStorageNamespace,
+		UserScoped: true,
 	}
 }
 
@@ -93,7 +91,7 @@ func snippetToStorageItem(sn storedSnippet) (plugin.StorageItem, error) {
 		return plugin.StorageItem{}, err
 	}
 	return plugin.StorageItem{
-		Scope:       snippetStorageScope(sn.OwnerID, sn.Protocol),
+		Scope:       snippetStorageScope(),
 		Key:         sn.ID,
 		Value:       body,
 		ContentType: "application/vnd.shellcn.snippet+json",
@@ -103,7 +101,7 @@ func snippetToStorageItem(sn storedSnippet) (plugin.StorageItem, error) {
 	}, nil
 }
 
-func snippetFromStorageItem(item plugin.StorageItem) storedSnippet {
+func snippetFromStorageItem(item plugin.StorageItem, ownerID, protocol string) storedSnippet {
 	var value snippetValue
 	_ = json.Unmarshal(item.Value, &value)
 	if value.Name == "" {
@@ -111,8 +109,8 @@ func snippetFromStorageItem(item plugin.StorageItem) storedSnippet {
 	}
 	return storedSnippet{
 		ID:        item.Key,
-		OwnerID:   item.Scope.OwnerID,
-		Protocol:  item.Scope.Protocol,
+		OwnerID:   ownerID,
+		Protocol:  protocol,
 		Name:      value.Name,
 		Body:      value.Body,
 		CreatedAt: item.CreatedAt,
