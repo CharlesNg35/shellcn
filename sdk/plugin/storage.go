@@ -12,20 +12,20 @@ const (
 	StorageScopeUser       StorageScopeLevel = "user"
 )
 
-func ConnectionStorage(namespace string) StorageScope {
-	return StorageScope{Namespace: namespace, Level: StorageScopeConnection}
+func ConnectionStorage(collection string) StorageScope {
+	return StorageScope{Collection: collection, Level: StorageScopeConnection}
 }
 
-func UserStorage(namespace string) StorageScope {
-	return StorageScope{Namespace: namespace, Level: StorageScopeUser}
+func UserStorage(collection string) StorageScope {
+	return StorageScope{Collection: collection, Level: StorageScopeUser}
 }
 
-// StorageScope filters a namespaced storage collection. Empty Level defaults to
+// StorageScope filters a storage collection. Empty Level defaults to
 // StorageScopeConnection. Core resolves and enforces plugin, connection, and
-// user identity; plugins declare only the logical namespace and filter level.
+// user identity; plugins declare only the logical collection and filter level.
 type StorageScope struct {
-	Namespace string
-	Level     StorageScopeLevel
+	Collection string
+	Level      StorageScopeLevel
 }
 
 // StorageItem is one plugin storage record. Value is opaque to core; Metadata is
@@ -43,7 +43,7 @@ type StorageItem struct {
 // Implementations must scope access; plugins never receive raw database access.
 type Storage interface {
 	Get(ctx context.Context, scope StorageScope, key string) (StorageItem, error)
-	Put(ctx context.Context, namespace string, item StorageItem) (StorageItem, error)
+	Put(ctx context.Context, collection string, item StorageItem) (StorageItem, error)
 	Delete(ctx context.Context, scope StorageScope, key string) error
 	List(ctx context.Context, scope StorageScope) ([]StorageItem, error)
 }

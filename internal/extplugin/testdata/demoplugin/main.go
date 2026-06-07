@@ -128,7 +128,7 @@ func storage(rc *plugin.RequestContext) (any, error) {
 	if rc.Storage == nil {
 		return nil, fmt.Errorf("%w: no storage", plugin.ErrUnavailable)
 	}
-	scope := plugin.StorageScope{Namespace: "demo"}
+	scope := plugin.StorageScope{Collection: "demo"}
 	if _, err := rc.Storage.Put(rc.Ctx, "demo", plugin.StorageItem{
 		Key:         "message",
 		Value:       rc.Body(),

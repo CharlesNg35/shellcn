@@ -10,7 +10,7 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-const snippetStorageNamespace = "snippets"
+const snippetStorageCollection = "snippets"
 
 type storedSnippet struct {
 	ID        string
@@ -36,7 +36,7 @@ func (s *snippetStore) Create(ctx context.Context, sn *storedSnippet) error {
 	if err != nil {
 		return err
 	}
-	stored, err := s.storage.Put(ctx, snippetStorageNamespace, item)
+	stored, err := s.storage.Put(ctx, snippetStorageCollection, item)
 	if err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func (s *snippetStore) Delete(ctx context.Context, id string) error {
 }
 
 func snippetStorageScope() plugin.StorageScope {
-	return plugin.UserStorage(snippetStorageNamespace)
+	return plugin.UserStorage(snippetStorageCollection)
 }
 
 type snippetValue struct {

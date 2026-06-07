@@ -27,8 +27,8 @@ func (s hostStorage) Get(ctx context.Context, scope plugin.StorageScope, key str
 	return pluginStorageItem(item), nil
 }
 
-func (s hostStorage) Put(ctx context.Context, namespace string, item plugin.StorageItem) (plugin.StorageItem, error) {
-	stored, err := s.host.StoragePut(ctx, &pluginv1.StoragePutRequest{Namespace: namespace, Item: wireStorageItem(item)})
+func (s hostStorage) Put(ctx context.Context, collection string, item plugin.StorageItem) (plugin.StorageItem, error) {
+	stored, err := s.host.StoragePut(ctx, &pluginv1.StoragePutRequest{Collection: collection, Item: wireStorageItem(item)})
 	if err != nil {
 		return plugin.StorageItem{}, ErrorFromStatus(err)
 	}
@@ -54,8 +54,8 @@ func (s hostStorage) List(ctx context.Context, scope plugin.StorageScope) ([]plu
 
 func wireStorageScope(scope plugin.StorageScope) *pluginv1.StorageScope {
 	return &pluginv1.StorageScope{
-		Namespace: scope.Namespace,
-		Level:     string(normalizeStorageScopeLevel(scope.Level)),
+		Collection: scope.Collection,
+		Level:      string(normalizeStorageScopeLevel(scope.Level)),
 	}
 }
 

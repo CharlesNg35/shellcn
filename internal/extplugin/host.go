@@ -90,7 +90,7 @@ func (h *hostServer) StoragePut(ctx context.Context, req *pluginv1.StoragePutReq
 	if h.storage == nil {
 		return nil, status.Error(codes.Unavailable, "plugin storage unavailable")
 	}
-	item, err := h.storage.Put(ctx, req.GetNamespace(), pluginStorageItem(req.GetItem()))
+	item, err := h.storage.Put(ctx, req.GetCollection(), pluginStorageItem(req.GetItem()))
 	if err != nil {
 		return nil, grpcplugin.StatusFromError(err)
 	}
@@ -127,8 +127,8 @@ func pluginStorageScope(scope *pluginv1.StorageScope) plugin.StorageScope {
 		return plugin.StorageScope{}
 	}
 	return plugin.StorageScope{
-		Namespace: scope.GetNamespace(),
-		Level:     normalizeStorageScopeLevel(plugin.StorageScopeLevel(scope.GetLevel())),
+		Collection: scope.GetCollection(),
+		Level:      normalizeStorageScopeLevel(plugin.StorageScopeLevel(scope.GetLevel())),
 	}
 }
 

@@ -245,13 +245,13 @@ func testConnections(t *testing.T, s *store.Store) {
 func testPluginStorage(t *testing.T, s *store.Store) {
 	ctx := context.Background()
 	scope := store.PluginStorageFilter{
-		Namespace:    "snippets",
+		Collection:   "snippets",
 		Plugin:       "ssh",
 		OwnerID:      "u1",
 		ConnectionID: "c1",
 	}
 	item := &models.PluginStorageItem{
-		Namespace:    scope.Namespace,
+		Collection:   scope.Collection,
 		Plugin:       scope.Plugin,
 		ConnectionID: scope.ConnectionID,
 		OwnerID:      scope.OwnerID,
@@ -267,7 +267,7 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		name   string
 		mutate func(*models.PluginStorageItem)
 	}{
-		{name: "namespace", mutate: func(i *models.PluginStorageItem) { i.Namespace = "" }},
+		{name: "collection", mutate: func(i *models.PluginStorageItem) { i.Collection = "" }},
 		{name: "plugin", mutate: func(i *models.PluginStorageItem) { i.Plugin = "" }},
 		{name: "connection", mutate: func(i *models.PluginStorageItem) { i.ConnectionID = "" }},
 		{name: "owner", mutate: func(i *models.PluginStorageItem) { i.OwnerID = "" }},
@@ -285,7 +285,7 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		t.Fatalf("put: %v", err)
 	}
 	got, err := s.PluginStorage.Get(ctx, store.PluginStorageFilter{
-		Namespace:    scope.Namespace,
+		Collection:   scope.Collection,
 		Plugin:       scope.Plugin,
 		ConnectionID: scope.ConnectionID,
 		OwnerID:      scope.OwnerID,
@@ -305,7 +305,7 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		t.Fatalf("put other owner: %v", err)
 	}
 	if _, err := s.PluginStorage.Get(ctx, store.PluginStorageFilter{
-		Namespace:    scope.Namespace,
+		Collection:   scope.Collection,
 		Plugin:       scope.Plugin,
 		ConnectionID: scope.ConnectionID,
 		OwnerID:      scope.OwnerID,
@@ -321,7 +321,7 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		t.Fatalf("put second: %v", err)
 	}
 	rows, err := s.PluginStorage.List(ctx, store.PluginStorageFilter{
-		Namespace:    scope.Namespace,
+		Collection:   scope.Collection,
 		Plugin:       scope.Plugin,
 		ConnectionID: scope.ConnectionID,
 		OwnerID:      scope.OwnerID,
@@ -339,7 +339,7 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		t.Fatalf("update: %v", err)
 	}
 	got, err = s.PluginStorage.Get(ctx, store.PluginStorageFilter{
-		Namespace:    scope.Namespace,
+		Collection:   scope.Collection,
 		Plugin:       scope.Plugin,
 		ConnectionID: scope.ConnectionID,
 		OwnerID:      scope.OwnerID,
@@ -353,7 +353,7 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 	}
 
 	if err := s.PluginStorage.Delete(ctx, store.PluginStorageFilter{
-		Namespace:    scope.Namespace,
+		Collection:   scope.Collection,
 		Plugin:       scope.Plugin,
 		ConnectionID: scope.ConnectionID,
 		OwnerID:      scope.OwnerID,
@@ -362,7 +362,7 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		t.Fatalf("delete: %v", err)
 	}
 	if _, err := s.PluginStorage.Get(ctx, store.PluginStorageFilter{
-		Namespace:    scope.Namespace,
+		Collection:   scope.Collection,
 		Plugin:       scope.Plugin,
 		ConnectionID: scope.ConnectionID,
 		OwnerID:      scope.OwnerID,
@@ -371,7 +371,7 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		t.Fatalf("get deleted: want ErrNotFound, got %v", err)
 	}
 	if err := s.PluginStorage.Delete(ctx, store.PluginStorageFilter{
-		Namespace:    scope.Namespace,
+		Collection:   scope.Collection,
 		Plugin:       scope.Plugin,
 		ConnectionID: scope.ConnectionID,
 		OwnerID:      scope.OwnerID,
@@ -379,7 +379,7 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		t.Fatalf("delete remaining scope: %v", err)
 	}
 	rows, err = s.PluginStorage.List(ctx, store.PluginStorageFilter{
-		Namespace:    scope.Namespace,
+		Collection:   scope.Collection,
 		Plugin:       scope.Plugin,
 		ConnectionID: scope.ConnectionID,
 		OwnerID:      scope.OwnerID,
@@ -392,7 +392,7 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 	}
 
 	shared := &models.PluginStorageItem{
-		Namespace:    scope.Namespace,
+		Collection:   scope.Collection,
 		Plugin:       scope.Plugin,
 		ConnectionID: "c2",
 		OwnerID:      scope.OwnerID,
@@ -403,9 +403,9 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		t.Fatalf("put user-scoped: %v", err)
 	}
 	rows, err = s.PluginStorage.List(ctx, store.PluginStorageFilter{
-		Namespace: scope.Namespace,
-		Plugin:    scope.Plugin,
-		OwnerID:   scope.OwnerID,
+		Collection: scope.Collection,
+		Plugin:     scope.Plugin,
+		OwnerID:    scope.OwnerID,
 	})
 	if err != nil {
 		t.Fatalf("list user-scoped: %v", err)
@@ -419,10 +419,10 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		t.Fatalf("put duplicate user-scoped key: %v", err)
 	}
 	userKey := store.PluginStorageFilter{
-		Namespace: scope.Namespace,
-		Plugin:    scope.Plugin,
-		OwnerID:   scope.OwnerID,
-		Key:       "global/profile",
+		Collection: scope.Collection,
+		Plugin:     scope.Plugin,
+		OwnerID:    scope.OwnerID,
+		Key:        "global/profile",
 	}
 	if _, err := s.PluginStorage.Get(ctx, userKey); !errors.Is(err, models.ErrConflict) {
 		t.Fatalf("ambiguous user-scoped get: want ErrConflict, got %v", err)

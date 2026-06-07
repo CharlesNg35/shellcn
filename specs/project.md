@@ -119,11 +119,11 @@ A plugin handler **never** sees `http.ResponseWriter`, status codes, headers,
 cookies, or auth. It receives a typed `RequestContext` and returns `(any, error)`.
 
 Plugin storage is also core-owned. A plugin may persist small plugin-owned
-objects through `rc.Storage`, but it only supplies a logical namespace plus the
+objects through `rc.Storage`, but it only supplies a logical collection plus the
 record key/value. Core resolves and persists the plugin ID, authenticated owner
 ID, and current connection ID. `Put` always creates or updates the resolved
 connection-owned row; scope is only a read/list/delete filter. Empty storage
-scope level means current connection scope, while `UserStorage(namespace)` reads
+scope level means current connection scope, while `UserStorage(collection)` reads
 across that user's rows for the current plugin.
 
 ---

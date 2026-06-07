@@ -162,7 +162,7 @@ message AuditRecord {
 }
 
 message StorageScope {
-  string namespace = 1;
+  string collection = 1;
   string level = 2;
 }
 
@@ -181,7 +181,7 @@ message StorageGetRequest {
 }
 
 message StoragePutRequest {
-  string namespace = 1;
+  string collection = 1;
   StorageItem item = 2;
 }
 

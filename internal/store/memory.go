@@ -789,7 +789,7 @@ func (s *memAuditStore) DeleteBefore(_ context.Context, before time.Time) (int64
 }
 
 type pluginStorageKey struct {
-	namespace    string
+	collection   string
 	plugin       string
 	connectionID string
 	ownerID      string
@@ -909,8 +909,8 @@ func (s *memPluginStorageStore) List(_ context.Context, f PluginStorageFilter) (
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].Namespace != out[j].Namespace {
-			return out[i].Namespace < out[j].Namespace
+		if out[i].Collection != out[j].Collection {
+			return out[i].Collection < out[j].Collection
 		}
 		if out[i].Plugin != out[j].Plugin {
 			return out[i].Plugin < out[j].Plugin
@@ -928,7 +928,7 @@ func (s *memPluginStorageStore) List(_ context.Context, f PluginStorageFilter) (
 
 func pluginStorageKeyOf(item models.PluginStorageItem) pluginStorageKey {
 	return pluginStorageKey{
-		namespace:    item.Namespace,
+		collection:   item.Collection,
 		plugin:       item.Plugin,
 		connectionID: item.ConnectionID,
 		ownerID:      item.OwnerID,
@@ -937,7 +937,7 @@ func pluginStorageKeyOf(item models.PluginStorageItem) pluginStorageKey {
 }
 
 func pluginStorageMatches(item models.PluginStorageItem, f PluginStorageFilter) bool {
-	if f.Namespace != "" && item.Namespace != f.Namespace {
+	if f.Collection != "" && item.Collection != f.Collection {
 		return false
 	}
 	if f.Plugin != "" && item.Plugin != f.Plugin {

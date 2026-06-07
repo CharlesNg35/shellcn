@@ -21,7 +21,7 @@ func TestStorageBridgeLocksPrivateScopeToCurrentContext(t *testing.T) {
 	if item.Key != "k" || string(item.Value) != "v" {
 		t.Fatalf("unexpected stored item: %+v", item)
 	}
-	if st.item.Namespace != "private" || st.item.Plugin != "ssh" || st.item.ConnectionID != "c1" || st.item.OwnerID != "u1" {
+	if st.item.Collection != "private" || st.item.Plugin != "ssh" || st.item.ConnectionID != "c1" || st.item.OwnerID != "u1" {
 		t.Fatalf("private storage was not locked to current context: %+v", st.item)
 	}
 }
@@ -30,7 +30,7 @@ func TestStorageBridgeUserScopeFiltersByPluginAndOwner(t *testing.T) {
 	st := &capturePluginStorage{}
 	bridge := storageBridge{inner: st, pluginID: "ssh", connectionID: "c1", ownerID: "u1"}
 	st.item = models.PluginStorageItem{
-		Namespace: "snippets", Plugin: "ssh", ConnectionID: "other-connection", OwnerID: "u1",
+		Collection: "snippets", Plugin: "ssh", ConnectionID: "other-connection", OwnerID: "u1",
 		ItemKey: "snippet-1", Value: []byte("whoami"),
 	}
 
@@ -62,46 +62,46 @@ func TestStorageBridgeMapsStoreErrors(t *testing.T) {
 
 func TestStorageBridgePutRequiresResolvedContext(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		bridge    storageBridge
-		namespace string
-		item      plugin.StorageItem
+		name       string
+		bridge     storageBridge
+		collection string
+		item       plugin.StorageItem
 	}{
 		{
-			name:      "namespace",
-			bridge:    storageBridge{pluginID: "ssh", connectionID: "c1", ownerID: "u1"},
-			namespace: "",
-			item:      plugin.StorageItem{Key: "k"},
+			name:       "collection",
+			bridge:     storageBridge{pluginID: "ssh", connectionID: "c1", ownerID: "u1"},
+			collection: "",
+			item:       plugin.StorageItem{Key: "k"},
 		},
 		{
-			name:      "plugin",
-			bridge:    storageBridge{connectionID: "c1", ownerID: "u1"},
-			namespace: "snippets",
-			item:      plugin.StorageItem{Key: "k"},
+			name:       "plugin",
+			bridge:     storageBridge{connectionID: "c1", ownerID: "u1"},
+			collection: "snippets",
+			item:       plugin.StorageItem{Key: "k"},
 		},
 		{
-			name:      "connection",
-			bridge:    storageBridge{pluginID: "ssh", ownerID: "u1"},
-			namespace: "snippets",
-			item:      plugin.StorageItem{Key: "k"},
+			name:       "connection",
+			bridge:     storageBridge{pluginID: "ssh", ownerID: "u1"},
+			collection: "snippets",
+			item:       plugin.StorageItem{Key: "k"},
 		},
 		{
-			name:      "owner",
-			bridge:    storageBridge{pluginID: "ssh", connectionID: "c1"},
-			namespace: "snippets",
-			item:      plugin.StorageItem{Key: "k"},
+			name:       "owner",
+			bridge:     storageBridge{pluginID: "ssh", connectionID: "c1"},
+			collection: "snippets",
+			item:       plugin.StorageItem{Key: "k"},
 		},
 		{
-			name:      "key",
-			bridge:    storageBridge{pluginID: "ssh", connectionID: "c1", ownerID: "u1"},
-			namespace: "snippets",
-			item:      plugin.StorageItem{},
+			name:       "key",
+			bridge:     storageBridge{pluginID: "ssh", connectionID: "c1", ownerID: "u1"},
+			collection: "snippets",
+			item:       plugin.StorageItem{},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			st := &capturePluginStorage{}
 			tc.bridge.inner = st
-			if _, err := tc.bridge.Put(context.Background(), tc.namespace, tc.item); !errors.Is(err, plugin.ErrInvalidInput) {
+			if _, err := tc.bridge.Put(context.Background(), tc.collection, tc.item); !errors.Is(err, plugin.ErrInvalidInput) {
 				t.Fatalf("put invalid %s: want ErrInvalidInput, got %v", tc.name, err)
 			}
 			if st.putCalls != 0 {
@@ -123,7 +123,7 @@ func (s *capturePluginStorage) Get(_ context.Context, f store.PluginStorageFilte
 	if s.getErr != nil {
 		return models.PluginStorageItem{}, s.getErr
 	}
-	if s.item.Namespace != f.Namespace || s.item.Plugin != f.Plugin || s.item.OwnerID != f.OwnerID || s.item.ItemKey != f.Key {
+	if s.item.Collection != f.Collection || s.item.Plugin != f.Plugin || s.item.OwnerID != f.OwnerID || s.item.ItemKey != f.Key {
 		return models.PluginStorageItem{}, store.ErrNotFound
 	}
 	if f.ConnectionID != "" && s.item.ConnectionID != f.ConnectionID {

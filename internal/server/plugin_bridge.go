@@ -44,10 +44,10 @@ func (b storageBridge) Get(ctx context.Context, scope plugin.StorageScope, key s
 	return toPluginStorageItem(item), nil
 }
 
-func (b storageBridge) Put(ctx context.Context, namespace string, item plugin.StorageItem) (plugin.StorageItem, error) {
+func (b storageBridge) Put(ctx context.Context, collection string, item plugin.StorageItem) (plugin.StorageItem, error) {
 	now := time.Now()
 	row := toModelStorageItem(item)
-	row.Namespace = namespace
+	row.Collection = collection
 	row.Plugin = b.pluginID
 	row.ConnectionID = b.connectionID
 	row.OwnerID = b.ownerID
@@ -97,7 +97,7 @@ func (b storageBridge) filter(scope plugin.StorageScope, key string) (store.Plug
 		return store.PluginStorageFilter{}, err
 	}
 	return store.PluginStorageFilter{
-		Namespace:    normalized.Namespace,
+		Collection:   normalized.Collection,
 		Plugin:       normalized.Plugin,
 		ConnectionID: normalized.ConnectionID,
 		OwnerID:      normalized.OwnerID,
@@ -106,15 +106,15 @@ func (b storageBridge) filter(scope plugin.StorageScope, key string) (store.Plug
 }
 
 type resolvedStorageScope struct {
-	Namespace    string
+	Collection   string
 	Plugin       string
 	ConnectionID string
 	OwnerID      string
 }
 
 func (b storageBridge) scope(scope plugin.StorageScope) (resolvedStorageScope, error) {
-	if scope.Namespace == "" {
-		return resolvedStorageScope{}, fmt.Errorf("%w: storage namespace is required", plugin.ErrInvalidInput)
+	if scope.Collection == "" {
+		return resolvedStorageScope{}, fmt.Errorf("%w: storage collection is required", plugin.ErrInvalidInput)
 	}
 	if b.pluginID == "" {
 		return resolvedStorageScope{}, fmt.Errorf("%w: storage plugin scope is unavailable", plugin.ErrInvalidInput)
@@ -123,9 +123,9 @@ func (b storageBridge) scope(scope plugin.StorageScope) (resolvedStorageScope, e
 		return resolvedStorageScope{}, fmt.Errorf("%w: storage owner scope is unavailable", plugin.ErrInvalidInput)
 	}
 	out := resolvedStorageScope{
-		Namespace: scope.Namespace,
-		Plugin:    b.pluginID,
-		OwnerID:   b.ownerID,
+		Collection: scope.Collection,
+		Plugin:     b.pluginID,
+		OwnerID:    b.ownerID,
 	}
 	switch normalizeStorageScopeLevel(scope.Level) {
 	case plugin.StorageScopeConnection:

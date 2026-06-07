@@ -423,7 +423,7 @@ func (s *gormPluginStorageStore) Put(ctx context.Context, item *models.PluginSto
 	}
 	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{
-			{Name: "namespace"},
+			{Name: "collection"},
 			{Name: "plugin"},
 			{Name: "connection_id"},
 			{Name: "owner_id"},
@@ -454,7 +454,7 @@ func (s *gormPluginStorageStore) Delete(ctx context.Context, f PluginStorageFilt
 func (s *gormPluginStorageStore) List(ctx context.Context, f PluginStorageFilter) ([]models.PluginStorageItem, error) {
 	var list []models.PluginStorageItem
 	if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).
-		Order("namespace ASC, plugin ASC, connection_id ASC, owner_id ASC, item_key ASC").
+		Order("collection ASC, plugin ASC, connection_id ASC, owner_id ASC, item_key ASC").
 		Find(&list).Error; err != nil {
 		return nil, err
 	}
@@ -462,8 +462,8 @@ func (s *gormPluginStorageStore) List(ctx context.Context, f PluginStorageFilter
 }
 
 func applyPluginStorageFilter(q *gorm.DB, f PluginStorageFilter) *gorm.DB {
-	if f.Namespace != "" {
-		q = q.Where("namespace = ?", f.Namespace)
+	if f.Collection != "" {
+		q = q.Where("collection = ?", f.Collection)
 	}
 	if f.Plugin != "" {
 		q = q.Where("plugin = ?", f.Plugin)

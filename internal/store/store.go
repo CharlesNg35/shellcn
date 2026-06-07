@@ -133,9 +133,9 @@ type AuditFilter struct {
 }
 
 // PluginStorageFilter narrows generic plugin storage access. Empty fields are
-// ignored except Namespace, which is required by callers before reaching stores.
+// ignored except Collection, which is required by callers before reaching stores.
 type PluginStorageFilter struct {
-	Namespace    string
+	Collection   string
 	Plugin       string
 	ConnectionID string
 	OwnerID      string

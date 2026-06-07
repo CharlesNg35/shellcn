@@ -1018,7 +1018,7 @@ func (x *AuditRecord) GetError() string {
 
 type StorageScope struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Namespace     string                 `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Collection    string                 `protobuf:"bytes,1,opt,name=collection,proto3" json:"collection,omitempty"`
 	Level         string                 `protobuf:"bytes,2,opt,name=level,proto3" json:"level,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1054,9 +1054,9 @@ func (*StorageScope) Descriptor() ([]byte, []int) {
 	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{17}
 }
 
-func (x *StorageScope) GetNamespace() string {
+func (x *StorageScope) GetCollection() string {
 	if x != nil {
-		return x.Namespace
+		return x.Collection
 	}
 	return ""
 }
@@ -1206,7 +1206,7 @@ func (x *StorageGetRequest) GetKey() string {
 
 type StoragePutRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Namespace     string                 `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Collection    string                 `protobuf:"bytes,1,opt,name=collection,proto3" json:"collection,omitempty"`
 	Item          *StorageItem           `protobuf:"bytes,2,opt,name=item,proto3" json:"item,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1242,9 +1242,9 @@ func (*StoragePutRequest) Descriptor() ([]byte, []int) {
 	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{20}
 }
 
-func (x *StoragePutRequest) GetNamespace() string {
+func (x *StoragePutRequest) GetCollection() string {
 	if x != nil {
-		return x.Namespace
+		return x.Collection
 	}
 	return ""
 }
@@ -1494,9 +1494,11 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\x05error\x18\x04 \x01(\tR\x05error\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"B\n" +
-	"\fStorageScope\x12\x1c\n" +
-	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"D\n" +
+	"\fStorageScope\x12\x1e\n" +
+	"\n" +
+	"collection\x18\x01 \x01(\tR\n" +
+	"collection\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\tR\x05level\"\xb8\x02\n" +
 	"\vStorageItem\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
@@ -1510,9 +1512,11 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"S\n" +
 	"\x11StorageGetRequest\x12,\n" +
 	"\x05scope\x18\x01 \x01(\v2\x16.pluginv1.StorageScopeR\x05scope\x12\x10\n" +
-	"\x03key\x18\x02 \x01(\tR\x03key\"\\\n" +
-	"\x11StoragePutRequest\x12\x1c\n" +
-	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12)\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\"^\n" +
+	"\x11StoragePutRequest\x12\x1e\n" +
+	"\n" +
+	"collection\x18\x01 \x01(\tR\n" +
+	"collection\x12)\n" +
 	"\x04item\x18\x02 \x01(\v2\x15.pluginv1.StorageItemR\x04item\"V\n" +
 	"\x14StorageDeleteRequest\x12,\n" +
 	"\x05scope\x18\x01 \x01(\v2\x16.pluginv1.StorageScopeR\x05scope\x12\x10\n" +

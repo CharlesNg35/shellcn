@@ -8,7 +8,7 @@ import (
 // PluginStorageItem is generic plugin-owned platform object storage.
 // Core owns the scope columns so plugins never receive raw database access.
 type PluginStorageItem struct {
-	Namespace    string `gorm:"primaryKey;not null;check:plugin_storage_namespace_required,namespace <> ''"`
+	Collection   string `gorm:"primaryKey;not null;check:plugin_storage_collection_required,collection <> ''"`
 	Plugin       string `gorm:"primaryKey;not null;check:plugin_storage_plugin_required,plugin <> ''"`
 	ConnectionID string `gorm:"primaryKey;not null;check:plugin_storage_connection_required,connection_id <> ''"`
 	OwnerID      string `gorm:"primaryKey;not null;check:plugin_storage_owner_required,owner_id <> ''"`
@@ -25,8 +25,8 @@ func (PluginStorageItem) TableName() string { return "plugin_storage_items" }
 
 func (i PluginStorageItem) Validate() error {
 	switch {
-	case i.Namespace == "":
-		return fmt.Errorf("%w: plugin storage namespace is required", ErrInvalidInput)
+	case i.Collection == "":
+		return fmt.Errorf("%w: plugin storage collection is required", ErrInvalidInput)
 	case i.Plugin == "":
 		return fmt.Errorf("%w: plugin storage plugin is required", ErrInvalidInput)
 	case i.ConnectionID == "":
