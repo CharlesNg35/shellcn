@@ -134,8 +134,11 @@ function streamSockets(): FakeWS[] {
   );
 }
 
+let pinia: ReturnType<typeof createPinia>;
+
 beforeEach(() => {
-  setActivePinia(createPinia());
+  pinia = createPinia();
+  setActivePinia(pinia);
   useStreamChannelsStore().closeForConnection("c1");
   FakeWS.instances = [];
   mockCodeMirror.value = "";
@@ -167,7 +170,7 @@ const panels = [
 describe("streaming stub panels", () => {
   for (const p of panels) {
     it(`${p.name} mounts and unmounts without throwing`, async () => {
-      const w = mount(p.comp, { props });
+      const w = mount(p.comp, { props, global: { plugins: [pinia] } });
       await flushPromises();
       expect(w.text()).not.toContain("Stub panel");
       if (p.status) expect(w.text()).toContain("Connecting");
@@ -176,7 +179,6 @@ describe("streaming stub panels", () => {
   }
 
   it("reuses the open channel on remount (stream survives navigation away/back)", async () => {
-    const pinia = createPinia();
     const first = mount(TerminalPanel, {
       props,
       global: { plugins: [pinia] },
