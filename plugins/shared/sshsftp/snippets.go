@@ -14,8 +14,6 @@ const snippetStorageNamespace = "snippets"
 
 type storedSnippet struct {
 	ID        string
-	OwnerID   string
-	Protocol  string
 	Name      string
 	Body      string
 	CreatedAt time.Time
@@ -42,26 +40,26 @@ func (s *snippetStore) Create(ctx context.Context, sn *storedSnippet) error {
 	if err != nil {
 		return err
 	}
-	*sn = snippetFromStorageItem(stored, sn.OwnerID, sn.Protocol)
+	*sn = snippetFromStorageItem(stored)
 	return nil
 }
 
-func (s *snippetStore) Get(ctx context.Context, ownerID, protocol, id string) (storedSnippet, error) {
+func (s *snippetStore) Get(ctx context.Context, id string) (storedSnippet, error) {
 	item, err := s.storage.Get(ctx, snippetStorageScope(), id)
 	if err != nil {
 		return storedSnippet{}, err
 	}
-	return snippetFromStorageItem(item, ownerID, protocol), nil
+	return snippetFromStorageItem(item), nil
 }
 
-func (s *snippetStore) ListByOwner(ctx context.Context, ownerID, protocol string) ([]storedSnippet, error) {
+func (s *snippetStore) List(ctx context.Context) ([]storedSnippet, error) {
 	rows, err := s.storage.List(ctx, snippetStorageScope(), "")
 	if err != nil {
 		return nil, err
 	}
 	out := make([]storedSnippet, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, snippetFromStorageItem(row, ownerID, protocol))
+		out = append(out, snippetFromStorageItem(row))
 	}
 	sort.Slice(out, func(i, j int) bool {
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
@@ -101,7 +99,7 @@ func snippetToStorageItem(sn storedSnippet) (plugin.StorageItem, error) {
 	}, nil
 }
 
-func snippetFromStorageItem(item plugin.StorageItem, ownerID, protocol string) storedSnippet {
+func snippetFromStorageItem(item plugin.StorageItem) storedSnippet {
 	var value snippetValue
 	_ = json.Unmarshal(item.Value, &value)
 	if value.Name == "" {
@@ -109,8 +107,6 @@ func snippetFromStorageItem(item plugin.StorageItem, ownerID, protocol string) s
 	}
 	return storedSnippet{
 		ID:        item.Key,
-		OwnerID:   ownerID,
-		Protocol:  protocol,
 		Name:      value.Name,
 		Body:      value.Body,
 		CreatedAt: item.CreatedAt,

@@ -98,7 +98,7 @@ func Routes(prefix, protocol string, includeShell bool) []plugin.Route {
 			AuditEvent: protocol + ".shell", Input: terminalSchema(), Stream: shell,
 		}}, routes...)
 		routes = append(routes,
-			plugin.Route{ID: prefix + ".snippet.list", Method: plugin.MethodGet, Path: "/snippets", Permission: protocol + ".snippets.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".snippet.list", Handle: snippetList(protocol)},
+			plugin.Route{ID: prefix + ".snippet.list", Method: plugin.MethodGet, Path: "/snippets", Permission: protocol + ".snippets.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".snippet.list", Handle: snippetList()},
 			plugin.Route{ID: prefix + ".snippet.create", Method: plugin.MethodPost, Path: "/snippets", Permission: protocol + ".snippets.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".snippet.create", Input: snippetSchema(), Handle: snippetCreate(protocol)},
 			plugin.Route{ID: prefix + ".snippet.run", Method: plugin.MethodPost, Path: "/snippets/{id}/run", Permission: protocol + ".snippets.run", Risk: plugin.RiskPrivileged, AuditEvent: protocol + ".snippet.run", Timeout: 30 * time.Second, Handle: snippetRun(protocol)},
 			plugin.Route{ID: prefix + ".snippet.delete", Method: plugin.MethodDelete, Path: "/snippets/{id}", Permission: protocol + ".snippets.delete", Risk: plugin.RiskDestructive, AuditEvent: protocol + ".snippet.delete", Handle: snippetDelete(protocol)},
@@ -451,13 +451,13 @@ func deleteEntry(rc *plugin.RequestContext) (any, error) {
 	return map[string]bool{"ok": true}, nil
 }
 
-func snippetList(protocol string) plugin.Handler {
+func snippetList() plugin.Handler {
 	return func(rc *plugin.RequestContext) (any, error) {
 		snippets := newSnippetStore(rc.Storage)
 		if snippets == nil {
 			return nil, plugin.ErrNotSupported
 		}
-		rows, err := snippets.ListByOwner(rc.Ctx, rc.User.ID, protocol)
+		rows, err := snippets.List(rc.Ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -469,7 +469,7 @@ func snippetList(protocol string) plugin.Handler {
 	}
 }
 
-func snippetCreate(protocol string) plugin.Handler {
+func snippetCreate(_ string) plugin.Handler {
 	return func(rc *plugin.RequestContext) (any, error) {
 		snippets := newSnippetStore(rc.Storage)
 		if snippets == nil {
@@ -481,8 +481,9 @@ func snippetCreate(protocol string) plugin.Handler {
 		}
 		now := time.Now()
 		sn := storedSnippet{
-			ID: uuid.NewString(), OwnerID: rc.User.ID, Protocol: protocol,
-			Name: strings.TrimSpace(req.Name), Body: strings.TrimSpace(req.Body),
+			ID:        uuid.NewString(),
+			Name:      strings.TrimSpace(req.Name),
+			Body:      strings.TrimSpace(req.Body),
 			CreatedAt: now, UpdatedAt: now,
 		}
 		if sn.Name == "" || sn.Body == "" {
@@ -495,9 +496,9 @@ func snippetCreate(protocol string) plugin.Handler {
 	}
 }
 
-func snippetRun(protocol string) plugin.Handler {
+func snippetRun(_ string) plugin.Handler {
 	return func(rc *plugin.RequestContext) (any, error) {
-		sn, err := ownedSnippet(rc, protocol)
+		sn, err := ownedSnippet(rc)
 		if err != nil {
 			return nil, err
 		}
@@ -513,9 +514,9 @@ func snippetRun(protocol string) plugin.Handler {
 	}
 }
 
-func snippetDelete(protocol string) plugin.Handler {
+func snippetDelete(_ string) plugin.Handler {
 	return func(rc *plugin.RequestContext) (any, error) {
-		sn, err := ownedSnippet(rc, protocol)
+		sn, err := ownedSnippet(rc)
 		if err != nil {
 			return nil, err
 		}
@@ -530,19 +531,12 @@ func snippetDelete(protocol string) plugin.Handler {
 	}
 }
 
-func ownedSnippet(rc *plugin.RequestContext, protocol string) (storedSnippet, error) {
+func ownedSnippet(rc *plugin.RequestContext) (storedSnippet, error) {
 	snippets := newSnippetStore(rc.Storage)
 	if snippets == nil {
 		return storedSnippet{}, plugin.ErrNotSupported
 	}
-	sn, err := snippets.Get(rc.Ctx, rc.User.ID, protocol, rc.Param("id"))
-	if err != nil {
-		return storedSnippet{}, err
-	}
-	if sn.OwnerID != rc.User.ID || sn.Protocol != protocol {
-		return storedSnippet{}, plugin.ErrNotFound
-	}
-	return sn, nil
+	return snippets.Get(rc.Ctx, rc.Param("id"))
 }
 
 func fileEntry(p string, info os.FileInfo) FileEntry {

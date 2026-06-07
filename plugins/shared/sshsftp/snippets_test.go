@@ -15,8 +15,8 @@ func TestSnippetStoreUsesGenericPluginStorage(t *testing.T) {
 	snippets := newSnippetStore(storage)
 	ctx := context.Background()
 
-	first := &storedSnippet{ID: "b", OwnerID: "u1", Protocol: "ssh", Name: "Beta", Body: "echo beta"}
-	second := &storedSnippet{ID: "a", OwnerID: "u1", Protocol: "ssh", Name: "alpha", Body: "echo alpha"}
+	first := &storedSnippet{ID: "b", Name: "Beta", Body: "echo beta"}
+	second := &storedSnippet{ID: "a", Name: "alpha", Body: "echo alpha"}
 	if err := snippets.Create(ctx, first); err != nil {
 		t.Fatalf("create first: %v", err)
 	}
@@ -24,15 +24,15 @@ func TestSnippetStoreUsesGenericPluginStorage(t *testing.T) {
 		t.Fatalf("create second: %v", err)
 	}
 
-	got, err := snippets.Get(ctx, "u1", "ssh", "a")
+	got, err := snippets.Get(ctx, "a")
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if got.Name != "alpha" || got.Body != "echo alpha" || got.OwnerID != "u1" || got.Protocol != "ssh" {
+	if got.Name != "alpha" || got.Body != "echo alpha" {
 		t.Fatalf("unexpected snippet: %+v", got)
 	}
 
-	rows, err := snippets.ListByOwner(ctx, "u1", "ssh")
+	rows, err := snippets.List(ctx)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestSnippetStoreUsesGenericPluginStorage(t *testing.T) {
 	if err := snippets.Delete(ctx, "a"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if _, err := snippets.Get(ctx, "u1", "ssh", "a"); !errors.Is(err, plugin.ErrNotFound) {
+	if _, err := snippets.Get(ctx, "a"); !errors.Is(err, plugin.ErrNotFound) {
 		t.Fatalf("get deleted: want ErrNotFound, got %v", err)
 	}
 }
