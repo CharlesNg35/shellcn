@@ -99,9 +99,9 @@ func Routes(prefix, protocol string, includeShell bool) []plugin.Route {
 		}}, routes...)
 		routes = append(routes,
 			plugin.Route{ID: prefix + ".snippet.list", Method: plugin.MethodGet, Path: "/snippets", Permission: protocol + ".snippets.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".snippet.list", Handle: snippetList()},
-			plugin.Route{ID: prefix + ".snippet.create", Method: plugin.MethodPost, Path: "/snippets", Permission: protocol + ".snippets.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".snippet.create", Input: snippetSchema(), Handle: snippetCreate(protocol)},
-			plugin.Route{ID: prefix + ".snippet.run", Method: plugin.MethodPost, Path: "/snippets/{id}/run", Permission: protocol + ".snippets.run", Risk: plugin.RiskPrivileged, AuditEvent: protocol + ".snippet.run", Timeout: 30 * time.Second, Handle: snippetRun(protocol)},
-			plugin.Route{ID: prefix + ".snippet.delete", Method: plugin.MethodDelete, Path: "/snippets/{id}", Permission: protocol + ".snippets.delete", Risk: plugin.RiskDestructive, AuditEvent: protocol + ".snippet.delete", Handle: snippetDelete(protocol)},
+			plugin.Route{ID: prefix + ".snippet.create", Method: plugin.MethodPost, Path: "/snippets", Permission: protocol + ".snippets.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".snippet.create", Input: snippetSchema(), Handle: snippetCreate()},
+			plugin.Route{ID: prefix + ".snippet.run", Method: plugin.MethodPost, Path: "/snippets/{id}/run", Permission: protocol + ".snippets.run", Risk: plugin.RiskPrivileged, AuditEvent: protocol + ".snippet.run", Timeout: 30 * time.Second, Handle: snippetRun()},
+			plugin.Route{ID: prefix + ".snippet.delete", Method: plugin.MethodDelete, Path: "/snippets/{id}", Permission: protocol + ".snippets.delete", Risk: plugin.RiskDestructive, AuditEvent: protocol + ".snippet.delete", Handle: snippetDelete()},
 		)
 	}
 	return routes
@@ -469,7 +469,7 @@ func snippetList() plugin.Handler {
 	}
 }
 
-func snippetCreate(_ string) plugin.Handler {
+func snippetCreate() plugin.Handler {
 	return func(rc *plugin.RequestContext) (any, error) {
 		snippets := newSnippetStore(rc.Storage)
 		if snippets == nil {
@@ -496,7 +496,7 @@ func snippetCreate(_ string) plugin.Handler {
 	}
 }
 
-func snippetRun(_ string) plugin.Handler {
+func snippetRun() plugin.Handler {
 	return func(rc *plugin.RequestContext) (any, error) {
 		sn, err := ownedSnippet(rc)
 		if err != nil {
@@ -514,7 +514,7 @@ func snippetRun(_ string) plugin.Handler {
 	}
 }
 
-func snippetDelete(_ string) plugin.Handler {
+func snippetDelete() plugin.Handler {
 	return func(rc *plugin.RequestContext) (any, error) {
 		sn, err := ownedSnippet(rc)
 		if err != nil {
