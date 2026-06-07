@@ -11,51 +11,51 @@ import (
 
 func TestStorageBridgeLocksPrivateScopeToCurrentContext(t *testing.T) {
 	st := &capturePluginStorage{}
-	bridge := storageBridge{inner: st, pluginName: "ssh", connectionID: "c1", ownerID: "u1"}
+	bridge := storageBridge{inner: st, pluginID: "ssh", connectionID: "c1", ownerID: "u1"}
 
-	item, err := bridge.Put(context.Background(), plugin.StorageItem{
-		Scope: plugin.StorageScope{Namespace: "private"},
-		Key:   "k",
-		Value: []byte("v"),
-	})
+	item, err := bridge.Put(context.Background(), "private", plugin.StorageItem{Key: "k", Value: []byte("v")})
 	if err != nil {
 		t.Fatalf("put: %v", err)
 	}
-	if item.Scope.Namespace != "private" || item.Scope.UserScoped {
-		t.Fatalf("private SDK scope leaked core fields: %+v", item.Scope)
+	if item.Key != "k" || string(item.Value) != "v" {
+		t.Fatalf("unexpected stored item: %+v", item)
 	}
-	if st.item.Plugin != "ssh" || st.item.Protocol != "ssh" || st.item.ConnectionID != "c1" || st.item.OwnerID != "u1" || st.item.UserScoped {
+	if st.item.Namespace != "private" || st.item.Plugin != "ssh" || st.item.ConnectionID != "c1" || st.item.OwnerID != "u1" {
 		t.Fatalf("private storage was not locked to current context: %+v", st.item)
 	}
 }
 
-func TestStorageBridgeUserScopeIsPluginAndOwnerBound(t *testing.T) {
+func TestStorageBridgeUserScopeFiltersByPluginAndOwner(t *testing.T) {
 	st := &capturePluginStorage{}
-	bridge := storageBridge{inner: st, pluginName: "ssh", connectionID: "c1", ownerID: "u1"}
+	bridge := storageBridge{inner: st, pluginID: "ssh", connectionID: "c1", ownerID: "u1"}
+	st.item = models.PluginStorageItem{
+		Namespace: "snippets", Plugin: "ssh", ConnectionID: "other-connection", OwnerID: "u1",
+		ItemKey: "snippet-1", Value: []byte("whoami"),
+	}
 
-	item, err := bridge.Put(context.Background(), plugin.StorageItem{
-		Scope: plugin.StorageScope{Namespace: "snippets", UserScoped: true},
-		Key:   "snippet-1",
-		Value: []byte("whoami"),
-	})
+	item, err := bridge.Get(context.Background(), plugin.UserStorage("snippets"), "snippet-1")
 	if err != nil {
-		t.Fatalf("put user-scoped: %v", err)
+		t.Fatalf("get user-scoped: %v", err)
 	}
-	if item.Scope.Namespace != "snippets" || !item.Scope.UserScoped {
-		t.Fatalf("user-scoped SDK scope not preserved: %+v", item.Scope)
+	if string(item.Value) != "whoami" {
+		t.Fatalf("unexpected user-scoped item: %+v", item)
 	}
-	if st.item.Plugin != "ssh" || st.item.Protocol != "ssh" || st.item.ConnectionID != "" || st.item.OwnerID != "u1" || !st.item.UserScoped {
-		t.Fatalf("user-scoped storage was not locked to plugin and owner: %+v", st.item)
+	if st.lastFilter.ConnectionID != "" {
+		t.Fatalf("user storage should not filter by connection: %+v", st.lastFilter)
 	}
 }
 
 type capturePluginStorage struct {
-	item models.PluginStorageItem
+	item       models.PluginStorageItem
+	lastFilter store.PluginStorageFilter
 }
 
 func (s *capturePluginStorage) Get(_ context.Context, f store.PluginStorageFilter) (models.PluginStorageItem, error) {
-	if s.item.Namespace != f.Namespace || s.item.Plugin != f.Plugin || s.item.ConnectionID != f.ConnectionID ||
-		s.item.OwnerID != f.OwnerID || s.item.UserScoped != boolValue(f.UserScoped) || s.item.ItemKey != f.Key {
+	s.lastFilter = f
+	if s.item.Namespace != f.Namespace || s.item.Plugin != f.Plugin || s.item.OwnerID != f.OwnerID || s.item.ItemKey != f.Key {
+		return models.PluginStorageItem{}, store.ErrNotFound
+	}
+	if f.ConnectionID != "" && s.item.ConnectionID != f.ConnectionID {
 		return models.PluginStorageItem{}, store.ErrNotFound
 	}
 	return s.item, nil
@@ -73,8 +73,4 @@ func (s *capturePluginStorage) Delete(context.Context, store.PluginStorageFilter
 
 func (s *capturePluginStorage) List(context.Context, store.PluginStorageFilter) ([]models.PluginStorageItem, error) {
 	return []models.PluginStorageItem{s.item}, nil
-}
-
-func boolValue(v *bool) bool {
-	return v != nil && *v
 }

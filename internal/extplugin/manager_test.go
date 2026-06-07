@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -250,8 +249,8 @@ func TestPluginL7ThroughCore(t *testing.T) {
 }
 
 type memoryStorageKey struct {
-	scope plugin.StorageScope
-	key   string
+	namespace string
+	key       string
 }
 
 type memoryPluginStorage struct {
@@ -266,14 +265,14 @@ func newMemoryPluginStorage() *memoryPluginStorage {
 func (s *memoryPluginStorage) Get(_ context.Context, scope plugin.StorageScope, key string) (plugin.StorageItem, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	item, ok := s.items[memoryStorageKey{scope: scope, key: key}]
+	item, ok := s.items[memoryStorageKey{namespace: scope.Namespace, key: key}]
 	if !ok {
 		return plugin.StorageItem{}, plugin.ErrNotFound
 	}
 	return clonePluginStorageItem(item), nil
 }
 
-func (s *memoryPluginStorage) Put(_ context.Context, item plugin.StorageItem) (plugin.StorageItem, error) {
+func (s *memoryPluginStorage) Put(_ context.Context, namespace string, item plugin.StorageItem) (plugin.StorageItem, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
@@ -281,14 +280,14 @@ func (s *memoryPluginStorage) Put(_ context.Context, item plugin.StorageItem) (p
 		item.CreatedAt = now
 	}
 	item.UpdatedAt = now
-	s.items[memoryStorageKey{scope: item.Scope, key: item.Key}] = clonePluginStorageItem(item)
+	s.items[memoryStorageKey{namespace: namespace, key: item.Key}] = clonePluginStorageItem(item)
 	return clonePluginStorageItem(item), nil
 }
 
 func (s *memoryPluginStorage) Delete(_ context.Context, scope plugin.StorageScope, key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	k := memoryStorageKey{scope: scope, key: key}
+	k := memoryStorageKey{namespace: scope.Namespace, key: key}
 	if _, ok := s.items[k]; !ok {
 		return plugin.ErrNotFound
 	}
@@ -296,12 +295,12 @@ func (s *memoryPluginStorage) Delete(_ context.Context, scope plugin.StorageScop
 	return nil
 }
 
-func (s *memoryPluginStorage) List(_ context.Context, scope plugin.StorageScope, prefix string) ([]plugin.StorageItem, error) {
+func (s *memoryPluginStorage) List(_ context.Context, scope plugin.StorageScope) ([]plugin.StorageItem, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var out []plugin.StorageItem
 	for k, item := range s.items {
-		if k.scope == scope && strings.HasPrefix(k.key, prefix) {
+		if k.namespace == scope.Namespace {
 			out = append(out, clonePluginStorageItem(item))
 		}
 	}

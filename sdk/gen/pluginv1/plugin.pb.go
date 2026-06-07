@@ -1019,7 +1019,7 @@ func (x *AuditRecord) GetError() string {
 type StorageScope struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Namespace     string                 `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
-	UserScoped    bool                   `protobuf:"varint,2,opt,name=user_scoped,json=userScoped,proto3" json:"user_scoped,omitempty"`
+	Level         string                 `protobuf:"bytes,2,opt,name=level,proto3" json:"level,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1061,22 +1061,21 @@ func (x *StorageScope) GetNamespace() string {
 	return ""
 }
 
-func (x *StorageScope) GetUserScoped() bool {
+func (x *StorageScope) GetLevel() string {
 	if x != nil {
-		return x.UserScoped
+		return x.Level
 	}
-	return false
+	return ""
 }
 
 type StorageItem struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
-	Scope             *StorageScope          `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
-	Key               string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
-	Value             []byte                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
-	ContentType       string                 `protobuf:"bytes,4,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
-	Metadata          map[string]string      `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	CreatedAtUnixNano int64                  `protobuf:"varint,6,opt,name=created_at_unix_nano,json=createdAtUnixNano,proto3" json:"created_at_unix_nano,omitempty"`
-	UpdatedAtUnixNano int64                  `protobuf:"varint,7,opt,name=updated_at_unix_nano,json=updatedAtUnixNano,proto3" json:"updated_at_unix_nano,omitempty"`
+	Key               string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Value             []byte                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	ContentType       string                 `protobuf:"bytes,3,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	Metadata          map[string]string      `protobuf:"bytes,4,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	CreatedAtUnixNano int64                  `protobuf:"varint,5,opt,name=created_at_unix_nano,json=createdAtUnixNano,proto3" json:"created_at_unix_nano,omitempty"`
+	UpdatedAtUnixNano int64                  `protobuf:"varint,6,opt,name=updated_at_unix_nano,json=updatedAtUnixNano,proto3" json:"updated_at_unix_nano,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -1109,13 +1108,6 @@ func (x *StorageItem) ProtoReflect() protoreflect.Message {
 // Deprecated: Use StorageItem.ProtoReflect.Descriptor instead.
 func (*StorageItem) Descriptor() ([]byte, []int) {
 	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{18}
-}
-
-func (x *StorageItem) GetScope() *StorageScope {
-	if x != nil {
-		return x.Scope
-	}
-	return nil
 }
 
 func (x *StorageItem) GetKey() string {
@@ -1212,6 +1204,58 @@ func (x *StorageGetRequest) GetKey() string {
 	return ""
 }
 
+type StoragePutRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Namespace     string                 `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Item          *StorageItem           `protobuf:"bytes,2,opt,name=item,proto3" json:"item,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StoragePutRequest) Reset() {
+	*x = StoragePutRequest{}
+	mi := &file_pluginv1_plugin_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StoragePutRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StoragePutRequest) ProtoMessage() {}
+
+func (x *StoragePutRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginv1_plugin_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StoragePutRequest.ProtoReflect.Descriptor instead.
+func (*StoragePutRequest) Descriptor() ([]byte, []int) {
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *StoragePutRequest) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *StoragePutRequest) GetItem() *StorageItem {
+	if x != nil {
+		return x.Item
+	}
+	return nil
+}
+
 type StorageDeleteRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Scope         *StorageScope          `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
@@ -1222,7 +1266,7 @@ type StorageDeleteRequest struct {
 
 func (x *StorageDeleteRequest) Reset() {
 	*x = StorageDeleteRequest{}
-	mi := &file_pluginv1_plugin_proto_msgTypes[20]
+	mi := &file_pluginv1_plugin_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1234,7 +1278,7 @@ func (x *StorageDeleteRequest) String() string {
 func (*StorageDeleteRequest) ProtoMessage() {}
 
 func (x *StorageDeleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginv1_plugin_proto_msgTypes[20]
+	mi := &file_pluginv1_plugin_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1247,7 +1291,7 @@ func (x *StorageDeleteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StorageDeleteRequest.ProtoReflect.Descriptor instead.
 func (*StorageDeleteRequest) Descriptor() ([]byte, []int) {
-	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{20}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *StorageDeleteRequest) GetScope() *StorageScope {
@@ -1267,14 +1311,13 @@ func (x *StorageDeleteRequest) GetKey() string {
 type StorageListRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Scope         *StorageScope          `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
-	Prefix        string                 `protobuf:"bytes,2,opt,name=prefix,proto3" json:"prefix,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StorageListRequest) Reset() {
 	*x = StorageListRequest{}
-	mi := &file_pluginv1_plugin_proto_msgTypes[21]
+	mi := &file_pluginv1_plugin_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1286,7 +1329,7 @@ func (x *StorageListRequest) String() string {
 func (*StorageListRequest) ProtoMessage() {}
 
 func (x *StorageListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginv1_plugin_proto_msgTypes[21]
+	mi := &file_pluginv1_plugin_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1299,7 +1342,7 @@ func (x *StorageListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StorageListRequest.ProtoReflect.Descriptor instead.
 func (*StorageListRequest) Descriptor() ([]byte, []int) {
-	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{21}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *StorageListRequest) GetScope() *StorageScope {
@@ -1307,13 +1350,6 @@ func (x *StorageListRequest) GetScope() *StorageScope {
 		return x.Scope
 	}
 	return nil
-}
-
-func (x *StorageListRequest) GetPrefix() string {
-	if x != nil {
-		return x.Prefix
-	}
-	return ""
 }
 
 type StorageListResponse struct {
@@ -1325,7 +1361,7 @@ type StorageListResponse struct {
 
 func (x *StorageListResponse) Reset() {
 	*x = StorageListResponse{}
-	mi := &file_pluginv1_plugin_proto_msgTypes[22]
+	mi := &file_pluginv1_plugin_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1337,7 +1373,7 @@ func (x *StorageListResponse) String() string {
 func (*StorageListResponse) ProtoMessage() {}
 
 func (x *StorageListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginv1_plugin_proto_msgTypes[22]
+	mi := &file_pluginv1_plugin_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1350,7 +1386,7 @@ func (x *StorageListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StorageListResponse.ProtoReflect.Descriptor instead.
 func (*StorageListResponse) Descriptor() ([]byte, []int) {
-	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{22}
+	return file_pluginv1_plugin_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *StorageListResponse) GetItems() []*StorageItem {
@@ -1458,31 +1494,31 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\x05error\x18\x04 \x01(\tR\x05error\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"M\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"B\n" +
 	"\fStorageScope\x12\x1c\n" +
-	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x1f\n" +
-	"\vuser_scoped\x18\x02 \x01(\bR\n" +
-	"userScoped\"\xe6\x02\n" +
-	"\vStorageItem\x12,\n" +
-	"\x05scope\x18\x01 \x01(\v2\x16.pluginv1.StorageScopeR\x05scope\x12\x10\n" +
-	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x03 \x01(\fR\x05value\x12!\n" +
-	"\fcontent_type\x18\x04 \x01(\tR\vcontentType\x12?\n" +
-	"\bmetadata\x18\x05 \x03(\v2#.pluginv1.StorageItem.MetadataEntryR\bmetadata\x12/\n" +
-	"\x14created_at_unix_nano\x18\x06 \x01(\x03R\x11createdAtUnixNano\x12/\n" +
-	"\x14updated_at_unix_nano\x18\a \x01(\x03R\x11updatedAtUnixNano\x1a;\n" +
+	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x14\n" +
+	"\x05level\x18\x02 \x01(\tR\x05level\"\xb8\x02\n" +
+	"\vStorageItem\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value\x12!\n" +
+	"\fcontent_type\x18\x03 \x01(\tR\vcontentType\x12?\n" +
+	"\bmetadata\x18\x04 \x03(\v2#.pluginv1.StorageItem.MetadataEntryR\bmetadata\x12/\n" +
+	"\x14created_at_unix_nano\x18\x05 \x01(\x03R\x11createdAtUnixNano\x12/\n" +
+	"\x14updated_at_unix_nano\x18\x06 \x01(\x03R\x11updatedAtUnixNano\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"S\n" +
 	"\x11StorageGetRequest\x12,\n" +
 	"\x05scope\x18\x01 \x01(\v2\x16.pluginv1.StorageScopeR\x05scope\x12\x10\n" +
-	"\x03key\x18\x02 \x01(\tR\x03key\"V\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\"\\\n" +
+	"\x11StoragePutRequest\x12\x1c\n" +
+	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12)\n" +
+	"\x04item\x18\x02 \x01(\v2\x15.pluginv1.StorageItemR\x04item\"V\n" +
 	"\x14StorageDeleteRequest\x12,\n" +
 	"\x05scope\x18\x01 \x01(\v2\x16.pluginv1.StorageScopeR\x05scope\x12\x10\n" +
-	"\x03key\x18\x02 \x01(\tR\x03key\"Z\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\"B\n" +
 	"\x12StorageListRequest\x12,\n" +
-	"\x05scope\x18\x01 \x01(\v2\x16.pluginv1.StorageScopeR\x05scope\x12\x16\n" +
-	"\x06prefix\x18\x02 \x01(\tR\x06prefix\"B\n" +
+	"\x05scope\x18\x01 \x01(\v2\x16.pluginv1.StorageScopeR\x05scope\"B\n" +
 	"\x13StorageListResponse\x12+\n" +
 	"\x05items\x18\x01 \x03(\v2\x15.pluginv1.StorageItemR\x05items2\x97\x04\n" +
 	"\x06Plugin\x122\n" +
@@ -1497,7 +1533,7 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\rResizeChannel\x12\x17.pluginv1.ChannelResize\x1a\x0f.pluginv1.Empty\x12=\n" +
 	"\x0eServeHTTPProxy\x12\x16.pluginv1.ProxyRequest\x1a\x13.pluginv1.BrokerRef24\n" +
 	"\x04Conn\x12,\n" +
-	"\x04Pipe\x12\x0f.pluginv1.Chunk\x1a\x0f.pluginv1.Chunk(\x010\x012\x82\x04\n" +
+	"\x04Pipe\x12\x0f.pluginv1.Chunk\x1a\x0f.pluginv1.Chunk(\x010\x012\x88\x04\n" +
 	"\x04Host\x128\n" +
 	"\n" +
 	"DialTarget\x12\x15.pluginv1.DialRequest\x1a\x13.pluginv1.BrokerRef\x12E\n" +
@@ -1505,9 +1541,9 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\fOpenHTTPConn\x12\x17.pluginv1.SessionHandle\x1a\x13.pluginv1.BrokerRef\x12/\n" +
 	"\x05Audit\x12\x15.pluginv1.AuditRecord\x1a\x0f.pluginv1.Empty\x12@\n" +
 	"\n" +
-	"StorageGet\x12\x1b.pluginv1.StorageGetRequest\x1a\x15.pluginv1.StorageItem\x12:\n" +
+	"StorageGet\x12\x1b.pluginv1.StorageGetRequest\x1a\x15.pluginv1.StorageItem\x12@\n" +
 	"\n" +
-	"StoragePut\x12\x15.pluginv1.StorageItem\x1a\x15.pluginv1.StorageItem\x12@\n" +
+	"StoragePut\x12\x1b.pluginv1.StoragePutRequest\x1a\x15.pluginv1.StorageItem\x12@\n" +
 	"\rStorageDelete\x12\x1e.pluginv1.StorageDeleteRequest\x1a\x0f.pluginv1.Empty\x12J\n" +
 	"\vStorageList\x12\x1c.pluginv1.StorageListRequest\x1a\x1d.pluginv1.StorageListResponseB\x8c\x01\n" +
 	"\fcom.pluginv1B\vPluginProtoP\x01Z/github.com/charlesng35/shellcn/sdk/gen/pluginv1\xa2\x02\x03PXX\xaa\x02\bPluginv1\xca\x02\bPluginv1\xe2\x02\x14Pluginv1\\GPBMetadata\xea\x02\bPluginv1b\x06proto3"
@@ -1524,7 +1560,7 @@ func file_pluginv1_plugin_proto_rawDescGZIP() []byte {
 	return file_pluginv1_plugin_proto_rawDescData
 }
 
-var file_pluginv1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_pluginv1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_pluginv1_plugin_proto_goTypes = []any{
 	(*Chunk)(nil),                // 0: pluginv1.Chunk
 	(*Empty)(nil),                // 1: pluginv1.Empty
@@ -1546,27 +1582,28 @@ var file_pluginv1_plugin_proto_goTypes = []any{
 	(*StorageScope)(nil),         // 17: pluginv1.StorageScope
 	(*StorageItem)(nil),          // 18: pluginv1.StorageItem
 	(*StorageGetRequest)(nil),    // 19: pluginv1.StorageGetRequest
-	(*StorageDeleteRequest)(nil), // 20: pluginv1.StorageDeleteRequest
-	(*StorageListRequest)(nil),   // 21: pluginv1.StorageListRequest
-	(*StorageListResponse)(nil),  // 22: pluginv1.StorageListResponse
-	nil,                          // 23: pluginv1.InvokeRequest.ParamsEntry
-	nil,                          // 24: pluginv1.InvokeRequest.QueryEntry
-	nil,                          // 25: pluginv1.StreamStart.ParamsEntry
-	nil,                          // 26: pluginv1.ChannelRequest.ParamsEntry
-	nil,                          // 27: pluginv1.AuditRecord.ParamsEntry
-	nil,                          // 28: pluginv1.StorageItem.MetadataEntry
+	(*StoragePutRequest)(nil),    // 20: pluginv1.StoragePutRequest
+	(*StorageDeleteRequest)(nil), // 21: pluginv1.StorageDeleteRequest
+	(*StorageListRequest)(nil),   // 22: pluginv1.StorageListRequest
+	(*StorageListResponse)(nil),  // 23: pluginv1.StorageListResponse
+	nil,                          // 24: pluginv1.InvokeRequest.ParamsEntry
+	nil,                          // 25: pluginv1.InvokeRequest.QueryEntry
+	nil,                          // 26: pluginv1.StreamStart.ParamsEntry
+	nil,                          // 27: pluginv1.ChannelRequest.ParamsEntry
+	nil,                          // 28: pluginv1.AuditRecord.ParamsEntry
+	nil,                          // 29: pluginv1.StorageItem.MetadataEntry
 }
 var file_pluginv1_plugin_proto_depIdxs = []int32{
-	23, // 0: pluginv1.InvokeRequest.params:type_name -> pluginv1.InvokeRequest.ParamsEntry
-	24, // 1: pluginv1.InvokeRequest.query:type_name -> pluginv1.InvokeRequest.QueryEntry
+	24, // 0: pluginv1.InvokeRequest.params:type_name -> pluginv1.InvokeRequest.ParamsEntry
+	25, // 1: pluginv1.InvokeRequest.query:type_name -> pluginv1.InvokeRequest.QueryEntry
 	5,  // 2: pluginv1.InvokeRequest.user:type_name -> pluginv1.ActingUser
-	25, // 3: pluginv1.StreamStart.params:type_name -> pluginv1.StreamStart.ParamsEntry
+	26, // 3: pluginv1.StreamStart.params:type_name -> pluginv1.StreamStart.ParamsEntry
 	5,  // 4: pluginv1.StreamStart.user:type_name -> pluginv1.ActingUser
-	26, // 5: pluginv1.ChannelRequest.params:type_name -> pluginv1.ChannelRequest.ParamsEntry
-	27, // 6: pluginv1.AuditRecord.params:type_name -> pluginv1.AuditRecord.ParamsEntry
-	17, // 7: pluginv1.StorageItem.scope:type_name -> pluginv1.StorageScope
-	28, // 8: pluginv1.StorageItem.metadata:type_name -> pluginv1.StorageItem.MetadataEntry
-	17, // 9: pluginv1.StorageGetRequest.scope:type_name -> pluginv1.StorageScope
+	27, // 5: pluginv1.ChannelRequest.params:type_name -> pluginv1.ChannelRequest.ParamsEntry
+	28, // 6: pluginv1.AuditRecord.params:type_name -> pluginv1.AuditRecord.ParamsEntry
+	29, // 7: pluginv1.StorageItem.metadata:type_name -> pluginv1.StorageItem.MetadataEntry
+	17, // 8: pluginv1.StorageGetRequest.scope:type_name -> pluginv1.StorageScope
+	18, // 9: pluginv1.StoragePutRequest.item:type_name -> pluginv1.StorageItem
 	17, // 10: pluginv1.StorageDeleteRequest.scope:type_name -> pluginv1.StorageScope
 	17, // 11: pluginv1.StorageListRequest.scope:type_name -> pluginv1.StorageScope
 	18, // 12: pluginv1.StorageListResponse.items:type_name -> pluginv1.StorageItem
@@ -1585,9 +1622,9 @@ var file_pluginv1_plugin_proto_depIdxs = []int32{
 	4,  // 25: pluginv1.Host.OpenHTTPConn:input_type -> pluginv1.SessionHandle
 	16, // 26: pluginv1.Host.Audit:input_type -> pluginv1.AuditRecord
 	19, // 27: pluginv1.Host.StorageGet:input_type -> pluginv1.StorageGetRequest
-	18, // 28: pluginv1.Host.StoragePut:input_type -> pluginv1.StorageItem
-	20, // 29: pluginv1.Host.StorageDelete:input_type -> pluginv1.StorageDeleteRequest
-	21, // 30: pluginv1.Host.StorageList:input_type -> pluginv1.StorageListRequest
+	20, // 28: pluginv1.Host.StoragePut:input_type -> pluginv1.StoragePutRequest
+	21, // 29: pluginv1.Host.StorageDelete:input_type -> pluginv1.StorageDeleteRequest
+	22, // 30: pluginv1.Host.StorageList:input_type -> pluginv1.StorageListRequest
 	2,  // 31: pluginv1.Plugin.GetManifest:output_type -> pluginv1.Manifest
 	4,  // 32: pluginv1.Plugin.Connect:output_type -> pluginv1.SessionHandle
 	1,  // 33: pluginv1.Plugin.HealthCheck:output_type -> pluginv1.Empty
@@ -1605,7 +1642,7 @@ var file_pluginv1_plugin_proto_depIdxs = []int32{
 	18, // 45: pluginv1.Host.StorageGet:output_type -> pluginv1.StorageItem
 	18, // 46: pluginv1.Host.StoragePut:output_type -> pluginv1.StorageItem
 	1,  // 47: pluginv1.Host.StorageDelete:output_type -> pluginv1.Empty
-	22, // 48: pluginv1.Host.StorageList:output_type -> pluginv1.StorageListResponse
+	23, // 48: pluginv1.Host.StorageList:output_type -> pluginv1.StorageListResponse
 	31, // [31:49] is the sub-list for method output_type
 	13, // [13:31] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name
@@ -1624,7 +1661,7 @@ func file_pluginv1_plugin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pluginv1_plugin_proto_rawDesc), len(file_pluginv1_plugin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   29,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   3,
 		},

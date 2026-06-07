@@ -408,10 +408,8 @@ func (s *gormPluginStorageStore) Put(ctx context.Context, item *models.PluginSto
 		Columns: []clause.Column{
 			{Name: "namespace"},
 			{Name: "plugin"},
-			{Name: "protocol"},
 			{Name: "connection_id"},
 			{Name: "owner_id"},
-			{Name: "user_scoped"},
 			{Name: "item_key"},
 		},
 		DoUpdates: clause.AssignmentColumns([]string{"value", "content_type", "metadata", "updated_at"}),
@@ -426,7 +424,7 @@ func (s *gormPluginStorageStore) Delete(ctx context.Context, f PluginStorageFilt
 func (s *gormPluginStorageStore) List(ctx context.Context, f PluginStorageFilter) ([]models.PluginStorageItem, error) {
 	var list []models.PluginStorageItem
 	if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).
-		Order("namespace ASC, plugin ASC, protocol ASC, connection_id ASC, owner_id ASC, user_scoped ASC, item_key ASC").
+		Order("namespace ASC, plugin ASC, connection_id ASC, owner_id ASC, item_key ASC").
 		Find(&list).Error; err != nil {
 		return nil, err
 	}
@@ -440,23 +438,14 @@ func applyPluginStorageFilter(q *gorm.DB, f PluginStorageFilter) *gorm.DB {
 	if f.Plugin != "" {
 		q = q.Where("plugin = ?", f.Plugin)
 	}
-	if f.Protocol != "" {
-		q = q.Where("protocol = ?", f.Protocol)
-	}
 	if f.ConnectionID != "" {
 		q = q.Where("connection_id = ?", f.ConnectionID)
 	}
 	if f.OwnerID != "" {
 		q = q.Where("owner_id = ?", f.OwnerID)
 	}
-	if f.UserScoped != nil {
-		q = q.Where("user_scoped = ?", *f.UserScoped)
-	}
 	if f.Key != "" {
 		q = q.Where("item_key = ?", f.Key)
-	}
-	if f.Prefix != "" {
-		q = q.Where("item_key LIKE ?", f.Prefix+"%")
 	}
 	return q
 }

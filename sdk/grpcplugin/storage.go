@@ -27,8 +27,8 @@ func (s hostStorage) Get(ctx context.Context, scope plugin.StorageScope, key str
 	return pluginStorageItem(item), nil
 }
 
-func (s hostStorage) Put(ctx context.Context, item plugin.StorageItem) (plugin.StorageItem, error) {
-	stored, err := s.host.StoragePut(ctx, wireStorageItem(item))
+func (s hostStorage) Put(ctx context.Context, namespace string, item plugin.StorageItem) (plugin.StorageItem, error) {
+	stored, err := s.host.StoragePut(ctx, &pluginv1.StoragePutRequest{Namespace: namespace, Item: wireStorageItem(item)})
 	if err != nil {
 		return plugin.StorageItem{}, ErrorFromStatus(err)
 	}
@@ -40,8 +40,8 @@ func (s hostStorage) Delete(ctx context.Context, scope plugin.StorageScope, key 
 	return ErrorFromStatus(err)
 }
 
-func (s hostStorage) List(ctx context.Context, scope plugin.StorageScope, prefix string) ([]plugin.StorageItem, error) {
-	resp, err := s.host.StorageList(ctx, &pluginv1.StorageListRequest{Scope: wireStorageScope(scope), Prefix: prefix})
+func (s hostStorage) List(ctx context.Context, scope plugin.StorageScope) ([]plugin.StorageItem, error) {
+	resp, err := s.host.StorageList(ctx, &pluginv1.StorageListRequest{Scope: wireStorageScope(scope)})
 	if err != nil {
 		return nil, ErrorFromStatus(err)
 	}
@@ -54,24 +54,20 @@ func (s hostStorage) List(ctx context.Context, scope plugin.StorageScope, prefix
 
 func wireStorageScope(scope plugin.StorageScope) *pluginv1.StorageScope {
 	return &pluginv1.StorageScope{
-		Namespace:  scope.Namespace,
-		UserScoped: scope.UserScoped,
+		Namespace: scope.Namespace,
+		Level:     string(normalizeStorageScopeLevel(scope.Level)),
 	}
 }
 
-func pluginStorageScope(scope *pluginv1.StorageScope) plugin.StorageScope {
-	if scope == nil {
-		return plugin.StorageScope{}
+func normalizeStorageScopeLevel(level plugin.StorageScopeLevel) plugin.StorageScopeLevel {
+	if level == "" {
+		return plugin.StorageScopeConnection
 	}
-	return plugin.StorageScope{
-		Namespace:  scope.GetNamespace(),
-		UserScoped: scope.GetUserScoped(),
-	}
+	return level
 }
 
 func wireStorageItem(item plugin.StorageItem) *pluginv1.StorageItem {
 	return &pluginv1.StorageItem{
-		Scope:             wireStorageScope(item.Scope),
 		Key:               item.Key,
 		Value:             append([]byte(nil), item.Value...),
 		ContentType:       item.ContentType,
@@ -86,7 +82,6 @@ func pluginStorageItem(item *pluginv1.StorageItem) plugin.StorageItem {
 		return plugin.StorageItem{}
 	}
 	return plugin.StorageItem{
-		Scope:       pluginStorageScope(item.GetScope()),
 		Key:         item.GetKey(),
 		Value:       append([]byte(nil), item.GetValue()...),
 		ContentType: item.GetContentType(),

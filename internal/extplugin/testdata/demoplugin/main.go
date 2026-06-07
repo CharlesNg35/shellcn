@@ -129,8 +129,7 @@ func storage(rc *plugin.RequestContext) (any, error) {
 		return nil, fmt.Errorf("%w: no storage", plugin.ErrUnavailable)
 	}
 	scope := plugin.StorageScope{Namespace: "demo"}
-	if _, err := rc.Storage.Put(rc.Ctx, plugin.StorageItem{
-		Scope:       scope,
+	if _, err := rc.Storage.Put(rc.Ctx, "demo", plugin.StorageItem{
 		Key:         "message",
 		Value:       rc.Body(),
 		ContentType: "text/plain",
@@ -142,7 +141,7 @@ func storage(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := rc.Storage.List(rc.Ctx, scope, "")
+	rows, err := rc.Storage.List(rc.Ctx, scope)
 	if err != nil {
 		return nil, err
 	}

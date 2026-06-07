@@ -36,7 +36,7 @@ func (s *snippetStore) Create(ctx context.Context, sn *storedSnippet) error {
 	if err != nil {
 		return err
 	}
-	stored, err := s.storage.Put(ctx, item)
+	stored, err := s.storage.Put(ctx, snippetStorageNamespace, item)
 	if err != nil {
 		return err
 	}
@@ -53,7 +53,7 @@ func (s *snippetStore) Get(ctx context.Context, id string) (storedSnippet, error
 }
 
 func (s *snippetStore) List(ctx context.Context) ([]storedSnippet, error) {
-	rows, err := s.storage.List(ctx, snippetStorageScope(), "")
+	rows, err := s.storage.List(ctx, snippetStorageScope())
 	if err != nil {
 		return nil, err
 	}
@@ -72,10 +72,7 @@ func (s *snippetStore) Delete(ctx context.Context, id string) error {
 }
 
 func snippetStorageScope() plugin.StorageScope {
-	return plugin.StorageScope{
-		Namespace:  snippetStorageNamespace,
-		UserScoped: true,
-	}
+	return plugin.UserStorage(snippetStorageNamespace)
 }
 
 type snippetValue struct {
@@ -89,7 +86,6 @@ func snippetToStorageItem(sn storedSnippet) (plugin.StorageItem, error) {
 		return plugin.StorageItem{}, err
 	}
 	return plugin.StorageItem{
-		Scope:       snippetStorageScope(),
 		Key:         sn.ID,
 		Value:       body,
 		ContentType: "application/vnd.shellcn.snippet+json",

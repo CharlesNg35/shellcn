@@ -86,11 +86,11 @@ func (h *hostServer) StorageGet(ctx context.Context, req *pluginv1.StorageGetReq
 	return wireStorageItem(item), nil
 }
 
-func (h *hostServer) StoragePut(ctx context.Context, req *pluginv1.StorageItem) (*pluginv1.StorageItem, error) {
+func (h *hostServer) StoragePut(ctx context.Context, req *pluginv1.StoragePutRequest) (*pluginv1.StorageItem, error) {
 	if h.storage == nil {
 		return nil, status.Error(codes.Unavailable, "plugin storage unavailable")
 	}
-	item, err := h.storage.Put(ctx, pluginStorageItem(req))
+	item, err := h.storage.Put(ctx, req.GetNamespace(), pluginStorageItem(req.GetItem()))
 	if err != nil {
 		return nil, grpcplugin.StatusFromError(err)
 	}
@@ -111,7 +111,7 @@ func (h *hostServer) StorageList(ctx context.Context, req *pluginv1.StorageListR
 	if h.storage == nil {
 		return nil, status.Error(codes.Unavailable, "plugin storage unavailable")
 	}
-	items, err := h.storage.List(ctx, pluginStorageScope(req.GetScope()), req.GetPrefix())
+	items, err := h.storage.List(ctx, pluginStorageScope(req.GetScope()))
 	if err != nil {
 		return nil, grpcplugin.StatusFromError(err)
 	}
@@ -127,16 +127,16 @@ func pluginStorageScope(scope *pluginv1.StorageScope) plugin.StorageScope {
 		return plugin.StorageScope{}
 	}
 	return plugin.StorageScope{
-		Namespace:  scope.GetNamespace(),
-		UserScoped: scope.GetUserScoped(),
+		Namespace: scope.GetNamespace(),
+		Level:     normalizeStorageScopeLevel(plugin.StorageScopeLevel(scope.GetLevel())),
 	}
 }
 
-func wireStorageScope(scope plugin.StorageScope) *pluginv1.StorageScope {
-	return &pluginv1.StorageScope{
-		Namespace:  scope.Namespace,
-		UserScoped: scope.UserScoped,
+func normalizeStorageScopeLevel(level plugin.StorageScopeLevel) plugin.StorageScopeLevel {
+	if level == "" {
+		return plugin.StorageScopeConnection
 	}
+	return level
 }
 
 func pluginStorageItem(item *pluginv1.StorageItem) plugin.StorageItem {
@@ -144,7 +144,6 @@ func pluginStorageItem(item *pluginv1.StorageItem) plugin.StorageItem {
 		return plugin.StorageItem{}
 	}
 	return plugin.StorageItem{
-		Scope:       pluginStorageScope(item.GetScope()),
 		Key:         item.GetKey(),
 		Value:       append([]byte(nil), item.GetValue()...),
 		ContentType: item.GetContentType(),
@@ -156,7 +155,6 @@ func pluginStorageItem(item *pluginv1.StorageItem) plugin.StorageItem {
 
 func wireStorageItem(item plugin.StorageItem) *pluginv1.StorageItem {
 	return &pluginv1.StorageItem{
-		Scope:             wireStorageScope(item.Scope),
 		Key:               item.Key,
 		Value:             append([]byte(nil), item.Value...),
 		ContentType:       item.ContentType,

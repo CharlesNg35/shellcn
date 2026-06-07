@@ -7,10 +7,8 @@ import "time"
 type PluginStorageItem struct {
 	Namespace    string `gorm:"primaryKey"`
 	Plugin       string `gorm:"primaryKey"`
-	Protocol     string `gorm:"primaryKey"`
 	ConnectionID string `gorm:"primaryKey"`
 	OwnerID      string `gorm:"primaryKey"`
-	UserScoped   bool   `gorm:"primaryKey"`
 	ItemKey      string `gorm:"primaryKey"`
 
 	Value       []byte

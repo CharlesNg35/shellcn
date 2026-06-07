@@ -22,7 +22,7 @@ func toPluginUser(u models.User) plugin.User {
 
 type storageBridge struct {
 	inner        store.PluginStorageStore
-	pluginName   string
+	pluginID     string
 	connectionID string
 	ownerID      string
 }
@@ -31,7 +31,7 @@ func (b storageBridge) Get(ctx context.Context, scope plugin.StorageScope, key s
 	if key == "" {
 		return plugin.StorageItem{}, fmt.Errorf("%w: storage key is required", plugin.ErrInvalidInput)
 	}
-	f, err := b.filter(scope, key, "")
+	f, err := b.filter(scope, key)
 	if err != nil {
 		return plugin.StorageItem{}, err
 	}
@@ -42,22 +42,22 @@ func (b storageBridge) Get(ctx context.Context, scope plugin.StorageScope, key s
 	return toPluginStorageItem(item), nil
 }
 
-func (b storageBridge) Put(ctx context.Context, item plugin.StorageItem) (plugin.StorageItem, error) {
+func (b storageBridge) Put(ctx context.Context, namespace string, item plugin.StorageItem) (plugin.StorageItem, error) {
 	if item.Key == "" {
 		return plugin.StorageItem{}, fmt.Errorf("%w: storage key is required", plugin.ErrInvalidInput)
 	}
-	scope, err := b.scope(item.Scope)
-	if err != nil {
-		return plugin.StorageItem{}, err
+	if namespace == "" {
+		return plugin.StorageItem{}, fmt.Errorf("%w: storage namespace is required", plugin.ErrInvalidInput)
+	}
+	if b.connectionID == "" {
+		return plugin.StorageItem{}, fmt.Errorf("%w: storage connection scope is unavailable", plugin.ErrInvalidInput)
 	}
 	now := time.Now()
 	row := toModelStorageItem(item)
-	row.Namespace = scope.Namespace
-	row.Plugin = scope.Plugin
-	row.Protocol = scope.Protocol
-	row.ConnectionID = scope.ConnectionID
-	row.OwnerID = scope.OwnerID
-	row.UserScoped = scope.UserScoped
+	row.Namespace = namespace
+	row.Plugin = b.pluginID
+	row.ConnectionID = b.connectionID
+	row.OwnerID = b.ownerID
 	if row.CreatedAt.IsZero() {
 		row.CreatedAt = now
 	}
@@ -72,15 +72,15 @@ func (b storageBridge) Delete(ctx context.Context, scope plugin.StorageScope, ke
 	if key == "" {
 		return fmt.Errorf("%w: storage key is required", plugin.ErrInvalidInput)
 	}
-	f, err := b.filter(scope, key, "")
+	f, err := b.filter(scope, key)
 	if err != nil {
 		return err
 	}
 	return b.inner.Delete(ctx, f)
 }
 
-func (b storageBridge) List(ctx context.Context, scope plugin.StorageScope, prefix string) ([]plugin.StorageItem, error) {
-	f, err := b.filter(scope, "", prefix)
+func (b storageBridge) List(ctx context.Context, scope plugin.StorageScope) ([]plugin.StorageItem, error) {
+	f, err := b.filter(scope, "")
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (b storageBridge) List(ctx context.Context, scope plugin.StorageScope, pref
 	return out, nil
 }
 
-func (b storageBridge) filter(scope plugin.StorageScope, key, prefix string) (store.PluginStorageFilter, error) {
+func (b storageBridge) filter(scope plugin.StorageScope, key string) (store.PluginStorageFilter, error) {
 	normalized, err := b.scope(scope)
 	if err != nil {
 		return store.PluginStorageFilter{}, err
@@ -103,22 +103,17 @@ func (b storageBridge) filter(scope plugin.StorageScope, key, prefix string) (st
 	return store.PluginStorageFilter{
 		Namespace:    normalized.Namespace,
 		Plugin:       normalized.Plugin,
-		Protocol:     normalized.Protocol,
 		ConnectionID: normalized.ConnectionID,
 		OwnerID:      normalized.OwnerID,
-		UserScoped:   &normalized.UserScoped,
 		Key:          key,
-		Prefix:       prefix,
 	}, nil
 }
 
 type resolvedStorageScope struct {
 	Namespace    string
 	Plugin       string
-	Protocol     string
 	ConnectionID string
 	OwnerID      string
-	UserScoped   bool
 }
 
 func (b storageBridge) scope(scope plugin.StorageScope) (resolvedStorageScope, error) {
@@ -126,22 +121,32 @@ func (b storageBridge) scope(scope plugin.StorageScope) (resolvedStorageScope, e
 		return resolvedStorageScope{}, fmt.Errorf("%w: storage namespace is required", plugin.ErrInvalidInput)
 	}
 	out := resolvedStorageScope{
-		Namespace:  scope.Namespace,
-		Plugin:     b.pluginName,
-		Protocol:   b.pluginName,
-		OwnerID:    b.ownerID,
-		UserScoped: scope.UserScoped,
+		Namespace: scope.Namespace,
+		Plugin:    b.pluginID,
+		OwnerID:   b.ownerID,
 	}
-	if !scope.UserScoped {
+	switch normalizeStorageScopeLevel(scope.Level) {
+	case plugin.StorageScopeConnection:
 		out.ConnectionID = b.connectionID
+	case plugin.StorageScopeUser:
+	default:
+		return resolvedStorageScope{}, fmt.Errorf("%w: storage scope level is required", plugin.ErrInvalidInput)
+	}
+	if normalizeStorageScopeLevel(scope.Level) == plugin.StorageScopeConnection && out.ConnectionID == "" {
+		return resolvedStorageScope{}, fmt.Errorf("%w: storage connection scope is unavailable", plugin.ErrInvalidInput)
 	}
 	return out, nil
 }
 
+func normalizeStorageScopeLevel(level plugin.StorageScopeLevel) plugin.StorageScopeLevel {
+	if level == "" {
+		return plugin.StorageScopeConnection
+	}
+	return level
+}
+
 func toModelStorageItem(item plugin.StorageItem) models.PluginStorageItem {
 	return models.PluginStorageItem{
-		Namespace:   item.Scope.Namespace,
-		UserScoped:  item.Scope.UserScoped,
 		ItemKey:     item.Key,
 		Value:       append([]byte(nil), item.Value...),
 		ContentType: item.ContentType,
@@ -153,10 +158,6 @@ func toModelStorageItem(item plugin.StorageItem) models.PluginStorageItem {
 
 func toPluginStorageItem(item models.PluginStorageItem) plugin.StorageItem {
 	return plugin.StorageItem{
-		Scope: plugin.StorageScope{
-			Namespace:  item.Namespace,
-			UserScoped: item.UserScoped,
-		},
 		Key:         item.ItemKey,
 		Value:       append([]byte(nil), item.Value...),
 		ContentType: item.ContentType,

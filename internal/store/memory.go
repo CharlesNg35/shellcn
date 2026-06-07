@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -792,10 +791,8 @@ func (s *memAuditStore) DeleteBefore(_ context.Context, before time.Time) (int64
 type pluginStorageKey struct {
 	namespace    string
 	plugin       string
-	protocol     string
 	connectionID string
 	ownerID      string
-	userScoped   bool
 	key          string
 }
 
@@ -860,13 +857,17 @@ func (s *memPluginStorageStore) Put(_ context.Context, item *models.PluginStorag
 func (s *memPluginStorageStore) Delete(_ context.Context, f PluginStorageFilter) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	deleted := false
 	for key, item := range s.m {
 		if pluginStorageMatches(item, f) {
 			delete(s.m, key)
-			return nil
+			deleted = true
 		}
 	}
-	return ErrNotFound
+	if !deleted {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *memPluginStorageStore) List(_ context.Context, f PluginStorageFilter) ([]models.PluginStorageItem, error) {
@@ -882,6 +883,15 @@ func (s *memPluginStorageStore) List(_ context.Context, f PluginStorageFilter) (
 		if out[i].Namespace != out[j].Namespace {
 			return out[i].Namespace < out[j].Namespace
 		}
+		if out[i].Plugin != out[j].Plugin {
+			return out[i].Plugin < out[j].Plugin
+		}
+		if out[i].ConnectionID != out[j].ConnectionID {
+			return out[i].ConnectionID < out[j].ConnectionID
+		}
+		if out[i].OwnerID != out[j].OwnerID {
+			return out[i].OwnerID < out[j].OwnerID
+		}
 		return out[i].ItemKey < out[j].ItemKey
 	})
 	return out, nil
@@ -891,10 +901,8 @@ func pluginStorageKeyOf(item models.PluginStorageItem) pluginStorageKey {
 	return pluginStorageKey{
 		namespace:    item.Namespace,
 		plugin:       item.Plugin,
-		protocol:     item.Protocol,
 		connectionID: item.ConnectionID,
 		ownerID:      item.OwnerID,
-		userScoped:   item.UserScoped,
 		key:          item.ItemKey,
 	}
 }
@@ -906,22 +914,13 @@ func pluginStorageMatches(item models.PluginStorageItem, f PluginStorageFilter) 
 	if f.Plugin != "" && item.Plugin != f.Plugin {
 		return false
 	}
-	if f.Protocol != "" && item.Protocol != f.Protocol {
-		return false
-	}
 	if f.ConnectionID != "" && item.ConnectionID != f.ConnectionID {
 		return false
 	}
 	if f.OwnerID != "" && item.OwnerID != f.OwnerID {
 		return false
 	}
-	if f.UserScoped != nil && item.UserScoped != *f.UserScoped {
-		return false
-	}
 	if f.Key != "" && item.ItemKey != f.Key {
-		return false
-	}
-	if f.Prefix != "" && !strings.HasPrefix(item.ItemKey, f.Prefix) {
 		return false
 	}
 	return true

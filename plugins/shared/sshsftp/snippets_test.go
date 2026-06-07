@@ -50,8 +50,8 @@ func TestSnippetStoreUsesGenericPluginStorage(t *testing.T) {
 }
 
 type testStorageKey struct {
-	scope plugin.StorageScope
-	key   string
+	namespace string
+	key       string
 }
 
 type testPluginStorage struct {
@@ -63,25 +63,25 @@ func newTestPluginStorage() *testPluginStorage {
 }
 
 func (s *testPluginStorage) Get(_ context.Context, scope plugin.StorageScope, key string) (plugin.StorageItem, error) {
-	item, ok := s.items[testStorageKey{scope: scope, key: key}]
+	item, ok := s.items[testStorageKey{namespace: scope.Namespace, key: key}]
 	if !ok {
 		return plugin.StorageItem{}, plugin.ErrNotFound
 	}
 	return cloneStorageItem(item), nil
 }
 
-func (s *testPluginStorage) Put(_ context.Context, item plugin.StorageItem) (plugin.StorageItem, error) {
+func (s *testPluginStorage) Put(_ context.Context, namespace string, item plugin.StorageItem) (plugin.StorageItem, error) {
 	now := time.Now()
 	if item.CreatedAt.IsZero() {
 		item.CreatedAt = now
 	}
 	item.UpdatedAt = now
-	s.items[testStorageKey{scope: item.Scope, key: item.Key}] = cloneStorageItem(item)
+	s.items[testStorageKey{namespace: namespace, key: item.Key}] = cloneStorageItem(item)
 	return cloneStorageItem(item), nil
 }
 
 func (s *testPluginStorage) Delete(_ context.Context, scope plugin.StorageScope, key string) error {
-	k := testStorageKey{scope: scope, key: key}
+	k := testStorageKey{namespace: scope.Namespace, key: key}
 	if _, ok := s.items[k]; !ok {
 		return plugin.ErrNotFound
 	}
@@ -89,10 +89,10 @@ func (s *testPluginStorage) Delete(_ context.Context, scope plugin.StorageScope,
 	return nil
 }
 
-func (s *testPluginStorage) List(_ context.Context, scope plugin.StorageScope, _ string) ([]plugin.StorageItem, error) {
+func (s *testPluginStorage) List(_ context.Context, scope plugin.StorageScope) ([]plugin.StorageItem, error) {
 	var out []plugin.StorageItem
 	for k, item := range s.items {
-		if k.scope == scope {
+		if k.namespace == scope.Namespace {
 			out = append(out, cloneStorageItem(item))
 		}
 	}

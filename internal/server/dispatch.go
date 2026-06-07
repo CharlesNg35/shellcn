@@ -519,7 +519,7 @@ func (s *Server) pluginStorage(res resolved) plugin.Storage {
 	}
 	return storageBridge{
 		inner:        s.deps.Store.PluginStorage,
-		pluginName:   res.conn.Protocol,
+		pluginID:     res.conn.Protocol,
 		connectionID: res.conn.ID,
 		ownerID:      res.user.ID,
 	}

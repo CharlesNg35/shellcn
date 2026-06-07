@@ -137,12 +137,9 @@ type AuditFilter struct {
 type PluginStorageFilter struct {
 	Namespace    string
 	Plugin       string
-	Protocol     string
 	ConnectionID string
 	OwnerID      string
-	UserScoped   *bool
 	Key          string
-	Prefix       string
 }
 
 // PluginStorageStore persists scoped plugin-owned platform objects.

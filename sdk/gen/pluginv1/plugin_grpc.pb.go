@@ -589,7 +589,7 @@ type HostClient interface {
 	Audit(ctx context.Context, in *AuditRecord, opts ...grpc.CallOption) (*Empty, error)
 	// Storage persists plugin-owned platform objects through the core.
 	StorageGet(ctx context.Context, in *StorageGetRequest, opts ...grpc.CallOption) (*StorageItem, error)
-	StoragePut(ctx context.Context, in *StorageItem, opts ...grpc.CallOption) (*StorageItem, error)
+	StoragePut(ctx context.Context, in *StoragePutRequest, opts ...grpc.CallOption) (*StorageItem, error)
 	StorageDelete(ctx context.Context, in *StorageDeleteRequest, opts ...grpc.CallOption) (*Empty, error)
 	StorageList(ctx context.Context, in *StorageListRequest, opts ...grpc.CallOption) (*StorageListResponse, error)
 }
@@ -652,7 +652,7 @@ func (c *hostClient) StorageGet(ctx context.Context, in *StorageGetRequest, opts
 	return out, nil
 }
 
-func (c *hostClient) StoragePut(ctx context.Context, in *StorageItem, opts ...grpc.CallOption) (*StorageItem, error) {
+func (c *hostClient) StoragePut(ctx context.Context, in *StoragePutRequest, opts ...grpc.CallOption) (*StorageItem, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StorageItem)
 	err := c.cc.Invoke(ctx, Host_StoragePut_FullMethodName, in, out, cOpts...)
@@ -702,7 +702,7 @@ type HostServer interface {
 	Audit(context.Context, *AuditRecord) (*Empty, error)
 	// Storage persists plugin-owned platform objects through the core.
 	StorageGet(context.Context, *StorageGetRequest) (*StorageItem, error)
-	StoragePut(context.Context, *StorageItem) (*StorageItem, error)
+	StoragePut(context.Context, *StoragePutRequest) (*StorageItem, error)
 	StorageDelete(context.Context, *StorageDeleteRequest) (*Empty, error)
 	StorageList(context.Context, *StorageListRequest) (*StorageListResponse, error)
 	mustEmbedUnimplementedHostServer()
@@ -730,7 +730,7 @@ func (UnimplementedHostServer) Audit(context.Context, *AuditRecord) (*Empty, err
 func (UnimplementedHostServer) StorageGet(context.Context, *StorageGetRequest) (*StorageItem, error) {
 	return nil, status.Error(codes.Unimplemented, "method StorageGet not implemented")
 }
-func (UnimplementedHostServer) StoragePut(context.Context, *StorageItem) (*StorageItem, error) {
+func (UnimplementedHostServer) StoragePut(context.Context, *StoragePutRequest) (*StorageItem, error) {
 	return nil, status.Error(codes.Unimplemented, "method StoragePut not implemented")
 }
 func (UnimplementedHostServer) StorageDelete(context.Context, *StorageDeleteRequest) (*Empty, error) {
@@ -851,7 +851,7 @@ func _Host_StorageGet_Handler(srv interface{}, ctx context.Context, dec func(int
 }
 
 func _Host_StoragePut_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StorageItem)
+	in := new(StoragePutRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -863,7 +863,7 @@ func _Host_StoragePut_Handler(srv interface{}, ctx context.Context, dec func(int
 		FullMethod: Host_StoragePut_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HostServer).StoragePut(ctx, req.(*StorageItem))
+		return srv.(HostServer).StoragePut(ctx, req.(*StoragePutRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
