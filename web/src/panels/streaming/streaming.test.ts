@@ -90,6 +90,7 @@ vi.stubGlobal("ResizeObserver", FakeResizeObserver);
 
 class FakeWS {
   static instances: FakeWS[] = [];
+  readyState = 0;
   closed = false;
   readonly url: string;
   private handlers: Record<string, ((ev: unknown) => void)[]> = {};
@@ -99,12 +100,16 @@ class FakeWS {
   }
   send() {}
   close() {
+    this.readyState = 3;
     this.closed = true;
   }
   addEventListener(type: string, fn: (ev: unknown) => void) {
     (this.handlers[type] ??= []).push(fn);
   }
   emit(type: string, ev?: unknown) {
+    if (type === "open") this.readyState = 1;
+    if (type === "error") this.readyState = 3;
+    if (type === "close") this.readyState = 3;
     for (const fn of this.handlers[type] ?? []) fn(ev);
   }
 }
@@ -131,6 +136,7 @@ function streamSockets(): FakeWS[] {
 
 beforeEach(() => {
   setActivePinia(createPinia());
+  useStreamChannelsStore().closeForConnection("c1");
   FakeWS.instances = [];
   mockCodeMirror.value = "";
   mockCodeMirror.onChange = null;

@@ -33,6 +33,7 @@ export function useStream(
   const localError = ref<string | null>(
     source ? null : "No stream route configured.",
   );
+  let pendingConnect: Promise<void> | null = null;
   // Prefer a setup failure (no ticket); otherwise surface the close reason so the
   // status bar can explain *why* the stream dropped — from the channel, and
   // falling back to the connection's last failure (the same source the sidebar
@@ -58,6 +59,17 @@ export function useStream(
   }
 
   async function connect(force = false): Promise<void> {
+    if (!force && pendingConnect) return pendingConnect;
+    const run = connectOnce(force);
+    pendingConnect = run;
+    try {
+      await run;
+    } finally {
+      if (pendingConnect === run) pendingConnect = null;
+    }
+  }
+
+  async function connectOnce(force = false): Promise<void> {
     if (!source) {
       localError.value = "No stream route configured.";
       return;
