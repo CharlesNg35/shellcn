@@ -51,9 +51,7 @@ func (b storageBridge) Put(ctx context.Context, collection string, item plugin.S
 	row.Plugin = b.pluginID
 	row.ConnectionID = b.connectionID
 	row.OwnerID = b.ownerID
-	if row.CreatedAt.IsZero() {
-		row.CreatedAt = now
-	}
+	row.CreatedAt = now
 	row.UpdatedAt = now
 	if err := row.Validate(); err != nil {
 		return plugin.StorageItem{}, pluginStorageError(err)

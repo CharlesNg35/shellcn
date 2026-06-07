@@ -132,8 +132,9 @@ type AuditFilter struct {
 	Offset       int
 }
 
-// PluginStorageFilter narrows generic plugin storage access. Empty fields are
-// ignored except Collection, which is required by callers before reaching stores.
+// PluginStorageFilter narrows generic plugin storage access. Collection,
+// Plugin, and OwnerID are required for all operations. ConnectionID is optional
+// for user-scoped reads/lists/deletes across the current user's connection rows.
 type PluginStorageFilter struct {
 	Collection   string
 	Plugin       string

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/store"
@@ -23,6 +24,27 @@ func TestStorageBridgeLocksPrivateScopeToCurrentContext(t *testing.T) {
 	}
 	if st.item.Collection != "private" || st.item.Plugin != "ssh" || st.item.ConnectionID != "c1" || st.item.OwnerID != "u1" {
 		t.Fatalf("private storage was not locked to current context: %+v", st.item)
+	}
+}
+
+func TestStorageBridgeOwnsWriteTimestamps(t *testing.T) {
+	st := &capturePluginStorage{}
+	bridge := storageBridge{inner: st, pluginID: "ssh", connectionID: "c1", ownerID: "u1"}
+	old := time.Date(2001, 2, 3, 4, 5, 6, 7, time.UTC)
+
+	item, err := bridge.Put(context.Background(), "snippets", plugin.StorageItem{
+		Key:       "k",
+		CreatedAt: old,
+		UpdatedAt: old,
+	})
+	if err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	if !st.item.CreatedAt.After(old) || !st.item.UpdatedAt.After(old) {
+		t.Fatalf("storage bridge should own timestamps, got created=%s updated=%s", st.item.CreatedAt, st.item.UpdatedAt)
+	}
+	if !item.CreatedAt.Equal(st.item.CreatedAt) || !item.UpdatedAt.Equal(st.item.UpdatedAt) {
+		t.Fatalf("returned timestamps should match stored row: item=%+v stored=%+v", item, st.item)
 	}
 }
 

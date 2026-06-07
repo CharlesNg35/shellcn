@@ -837,6 +837,9 @@ func (s *memPolicyStore) List(_ context.Context) ([]models.PolicyRule, error) {
 }
 
 func (s *memPluginStorageStore) Get(_ context.Context, f PluginStorageFilter) (models.PluginStorageItem, error) {
+	if err := validatePluginStorageFilter(f, pluginStorageFilterRead); err != nil {
+		return models.PluginStorageItem{}, err
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var found *models.PluginStorageItem
@@ -870,6 +873,9 @@ func (s *memPluginStorageStore) Put(_ context.Context, item *models.PluginStorag
 }
 
 func (s *memPluginStorageStore) Delete(_ context.Context, f PluginStorageFilter) error {
+	if err := validatePluginStorageFilter(f, pluginStorageFilterListOrDelete); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if pluginStorageKeyNeedsUniqueConnection(f) {
@@ -900,6 +906,9 @@ func (s *memPluginStorageStore) Delete(_ context.Context, f PluginStorageFilter)
 }
 
 func (s *memPluginStorageStore) List(_ context.Context, f PluginStorageFilter) ([]models.PluginStorageItem, error) {
+	if err := validatePluginStorageFilter(f, pluginStorageFilterListOrDelete); err != nil {
+		return nil, err
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var out []models.PluginStorageItem

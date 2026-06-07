@@ -396,6 +396,9 @@ func (s *gormPolicyStore) List(ctx context.Context) ([]models.PolicyRule, error)
 }
 
 func (s *gormPluginStorageStore) Get(ctx context.Context, f PluginStorageFilter) (models.PluginStorageItem, error) {
+	if err := validatePluginStorageFilter(f, pluginStorageFilterRead); err != nil {
+		return models.PluginStorageItem{}, err
+	}
 	if pluginStorageKeyNeedsUniqueConnection(f) {
 		var list []models.PluginStorageItem
 		if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).Limit(2).Find(&list).Error; err != nil {
@@ -434,6 +437,9 @@ func (s *gormPluginStorageStore) Put(ctx context.Context, item *models.PluginSto
 }
 
 func (s *gormPluginStorageStore) Delete(ctx context.Context, f PluginStorageFilter) error {
+	if err := validatePluginStorageFilter(f, pluginStorageFilterListOrDelete); err != nil {
+		return err
+	}
 	if pluginStorageKeyNeedsUniqueConnection(f) {
 		var list []models.PluginStorageItem
 		if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).Limit(2).Find(&list).Error; err != nil {
@@ -452,6 +458,9 @@ func (s *gormPluginStorageStore) Delete(ctx context.Context, f PluginStorageFilt
 }
 
 func (s *gormPluginStorageStore) List(ctx context.Context, f PluginStorageFilter) ([]models.PluginStorageItem, error) {
+	if err := validatePluginStorageFilter(f, pluginStorageFilterListOrDelete); err != nil {
+		return nil, err
+	}
 	var list []models.PluginStorageItem
 	if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).
 		Order("collection ASC, plugin ASC, connection_id ASC, owner_id ASC, item_key ASC").

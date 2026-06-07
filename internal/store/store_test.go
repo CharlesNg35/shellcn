@@ -281,6 +281,30 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 			}
 		})
 	}
+	for _, tc := range []struct {
+		name   string
+		filter store.PluginStorageFilter
+	}{
+		{name: "empty", filter: store.PluginStorageFilter{}},
+		{name: "collection", filter: store.PluginStorageFilter{Plugin: scope.Plugin, OwnerID: scope.OwnerID}},
+		{name: "plugin", filter: store.PluginStorageFilter{Collection: scope.Collection, OwnerID: scope.OwnerID}},
+		{name: "owner", filter: store.PluginStorageFilter{Collection: scope.Collection, Plugin: scope.Plugin}},
+		{name: "get_key", filter: store.PluginStorageFilter{Collection: scope.Collection, Plugin: scope.Plugin, OwnerID: scope.OwnerID}},
+	} {
+		t.Run("invalid_filter_"+tc.name, func(t *testing.T) {
+			if _, err := s.PluginStorage.Get(ctx, tc.filter); !errors.Is(err, models.ErrInvalidInput) {
+				t.Fatalf("get invalid filter %s: want ErrInvalidInput, got %v", tc.name, err)
+			}
+			if tc.name != "get_key" {
+				if _, err := s.PluginStorage.List(ctx, tc.filter); !errors.Is(err, models.ErrInvalidInput) {
+					t.Fatalf("list invalid filter %s: want ErrInvalidInput, got %v", tc.name, err)
+				}
+				if err := s.PluginStorage.Delete(ctx, tc.filter); !errors.Is(err, models.ErrInvalidInput) {
+					t.Fatalf("delete invalid filter %s: want ErrInvalidInput, got %v", tc.name, err)
+				}
+			}
+		})
+	}
 	if err := s.PluginStorage.Put(ctx, item); err != nil {
 		t.Fatalf("put: %v", err)
 	}
