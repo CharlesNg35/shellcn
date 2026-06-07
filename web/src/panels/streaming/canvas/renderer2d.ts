@@ -16,6 +16,9 @@ export class Canvas2DRenderer {
   private imageCache = new Map<string, HTMLImageElement>();
   private resources = new Map<string, CanvasGradient | CanvasPattern>();
   private regions: CanvasRegion[] = [];
+  private lastFrame: CanvasFrame | null = null;
+  private lastBackground: string | undefined;
+  private frameVersion = 0;
   private width = 800;
   private height = 450;
   private dpr = 1;
@@ -58,7 +61,20 @@ export class Canvas2DRenderer {
   }
 
   render(frame: CanvasFrame, background?: string): void {
-    for (const command of frame.commands) this.run(command, background);
+    this.lastFrame = frame;
+    this.lastBackground = background;
+    this.frameVersion++;
+    this.paint(frame, background, this.frameVersion);
+  }
+
+  private paint(
+    frame: CanvasFrame,
+    background: string | undefined,
+    version: number,
+  ): void {
+    this.resetFrameState();
+    for (const command of frame.commands)
+      this.run(command, background, version);
     if (frame.regions) this.regions = frame.regions;
   }
 
@@ -78,7 +94,11 @@ export class Canvas2DRenderer {
       .find((region) => this.regionContains(region, point));
   }
 
-  private run(command: CanvasCommand, background?: string): void {
+  private run(
+    command: CanvasCommand,
+    background: string | undefined,
+    version: number,
+  ): void {
     const ctx = this.ctx;
     if (!ctx) return;
     switch (command.type) {
@@ -146,7 +166,7 @@ export class Canvas2DRenderer {
         this.defineGradient(command);
         break;
       case "pattern":
-        this.definePattern(command);
+        this.definePattern(command, version);
         break;
       case "clip":
         this.clip(command);
@@ -189,7 +209,7 @@ export class Canvas2DRenderer {
         this.measureText(command);
         break;
       case "image":
-        this.drawImage(command);
+        this.drawImage(command, version);
         break;
       case "imageData":
         this.drawImageData(command);
@@ -212,12 +232,22 @@ export class Canvas2DRenderer {
     const height = num(rect?.height, this.height);
     ctx.save();
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.filter = "none";
     ctx.clearRect(x, y, width, height);
     if (color) {
       ctx.fillStyle = color;
       ctx.fillRect(x, y, width, height);
     }
     ctx.restore();
+  }
+
+  private resetFrameState(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.resetStyle();
   }
 
   private resetStyle(): void {
@@ -311,11 +341,12 @@ export class Canvas2DRenderer {
 
   private definePattern(
     command: Extract<CanvasCommand, { type: "pattern" }>,
+    version: number,
   ): void {
     const ctx = this.ctx;
     if (!ctx || !command.id || !command.src) return;
     const image = this.loadImage(command.src, () =>
-      this.definePattern(command),
+      this.rerenderIfCurrent(version),
     );
     if (!image?.complete) return;
     const pattern = ctx.createPattern(image, command.repetition || "repeat");
@@ -332,6 +363,7 @@ export class Canvas2DRenderer {
   private drawRect(command: Extract<CanvasCommand, { type: "rect" }>): void {
     const ctx = this.ctx;
     if (!ctx) return;
+    ctx.save();
     this.applyStyle(command);
     ctx.beginPath();
     addRectPath(
@@ -343,21 +375,25 @@ export class Canvas2DRenderer {
       num(command.radius),
     );
     this.fillStroke(command);
+    ctx.restore();
   }
 
   private drawLine(command: Extract<CanvasCommand, { type: "line" }>): void {
     const ctx = this.ctx;
     if (!ctx) return;
+    ctx.save();
     this.applyStyle(command);
     ctx.beginPath();
     ctx.moveTo(num(command.x1), num(command.y1));
     ctx.lineTo(num(command.x2), num(command.y2));
     ctx.stroke();
+    ctx.restore();
   }
 
   private drawArc(command: Extract<CanvasCommand, { type: "arc" }>): void {
     const ctx = this.ctx;
     if (!ctx) return;
+    ctx.save();
     this.applyStyle(command);
     ctx.beginPath();
     ctx.arc(
@@ -369,6 +405,7 @@ export class Canvas2DRenderer {
       command.counterclockwise,
     );
     this.fillStroke(command);
+    ctx.restore();
   }
 
   private drawQuadratic(
@@ -376,6 +413,7 @@ export class Canvas2DRenderer {
   ): void {
     const ctx = this.ctx;
     if (!ctx) return;
+    ctx.save();
     this.applyStyle(command);
     ctx.beginPath();
     ctx.moveTo(num(command.x0), num(command.y0));
@@ -386,6 +424,7 @@ export class Canvas2DRenderer {
       num(command.y),
     );
     this.fillStroke(command, true);
+    ctx.restore();
   }
 
   private drawBezier(
@@ -393,6 +432,7 @@ export class Canvas2DRenderer {
   ): void {
     const ctx = this.ctx;
     if (!ctx) return;
+    ctx.save();
     this.applyStyle(command);
     ctx.beginPath();
     ctx.moveTo(num(command.x0), num(command.y0));
@@ -405,6 +445,7 @@ export class Canvas2DRenderer {
       num(command.y),
     );
     this.fillStroke(command, true);
+    ctx.restore();
   }
 
   private drawPolyline(
@@ -414,12 +455,14 @@ export class Canvas2DRenderer {
     const ctx = this.ctx;
     const points = command.points ?? [];
     if (!ctx || points.length === 0) return;
+    ctx.save();
     this.applyStyle(command);
     ctx.beginPath();
     ctx.moveTo(num(points[0].x), num(points[0].y));
     for (const p of points.slice(1)) ctx.lineTo(num(p.x), num(p.y));
     if (close) ctx.closePath();
     this.fillStroke(command, !close);
+    ctx.restore();
   }
 
   private drawCircle(
@@ -427,6 +470,7 @@ export class Canvas2DRenderer {
   ): void {
     const ctx = this.ctx;
     if (!ctx) return;
+    ctx.save();
     this.applyStyle(command);
     ctx.beginPath();
     ctx.arc(
@@ -437,6 +481,7 @@ export class Canvas2DRenderer {
       Math.PI * 2,
     );
     this.fillStroke(command);
+    ctx.restore();
   }
 
   private drawEllipse(
@@ -444,6 +489,7 @@ export class Canvas2DRenderer {
   ): void {
     const ctx = this.ctx;
     if (!ctx) return;
+    ctx.save();
     this.applyStyle(command);
     ctx.beginPath();
     ctx.ellipse(
@@ -456,20 +502,25 @@ export class Canvas2DRenderer {
       Math.PI * 2,
     );
     this.fillStroke(command);
+    ctx.restore();
   }
 
   private drawPath(command: Extract<CanvasCommand, { type: "path" }>): void {
     const ctx = this.ctx;
     if (!ctx || !command.d) return;
+    const path = pathFromData(command.d);
+    if (!path) return;
+    ctx.save();
     this.applyStyle(command);
-    const path = new Path2D(command.d);
     if (command.fill !== false) ctx.fill(path, command.fillRule || "nonzero");
     if (command.stroke !== false) ctx.stroke(path);
+    ctx.restore();
   }
 
   private drawText(command: Extract<CanvasCommand, { type: "text" }>): void {
     const ctx = this.ctx;
     if (!ctx) return;
+    ctx.save();
     ctx.textAlign = "start";
     ctx.textBaseline = "alphabetic";
     this.applyStyle(command);
@@ -480,6 +531,7 @@ export class Canvas2DRenderer {
       typeof command.maxWidth === "number" ? command.maxWidth : undefined;
     if (command.stroke) ctx.strokeText(text, x, y, maxWidth);
     if (command.fill !== false) ctx.fillText(text, x, y, maxWidth);
+    ctx.restore();
   }
 
   private drawTextBox(
@@ -487,16 +539,23 @@ export class Canvas2DRenderer {
   ): void {
     const ctx = this.ctx;
     if (!ctx) return;
+    ctx.save();
     ctx.textAlign = "start";
     ctx.textBaseline = "alphabetic";
     this.applyStyle(command);
     const lines = wrapText(ctx, str(command.text), num(command.width, 240));
     const lineHeight = num(command.lineHeight, 18);
+    const x = textBoxAnchorX(
+      num(command.x),
+      num(command.width, 240),
+      ctx.textAlign,
+    );
     lines.forEach((line, index) => {
       const y = num(command.y) + index * lineHeight;
-      if (command.stroke) ctx.strokeText(line, num(command.x), y);
-      if (command.fill !== false) ctx.fillText(line, num(command.x), y);
+      if (command.stroke) ctx.strokeText(line, x, y);
+      if (command.fill !== false) ctx.fillText(line, x, y);
     });
+    ctx.restore();
   }
 
   private measureText(
@@ -525,10 +584,15 @@ export class Canvas2DRenderer {
     });
   }
 
-  private drawImage(command: Extract<CanvasCommand, { type: "image" }>): void {
+  private drawImage(
+    command: Extract<CanvasCommand, { type: "image" }>,
+    version: number,
+  ): void {
     const ctx = this.ctx;
     if (!ctx || !command.src) return;
-    const image = this.loadImage(command.src, () => this.drawImage(command));
+    const image = this.loadImage(command.src, () =>
+      this.rerenderIfCurrent(version),
+    );
     if (!image?.complete) return;
     ctx.save();
     this.applyStyle(command);
@@ -617,7 +681,7 @@ export class Canvas2DRenderer {
     points?: CanvasPoint[];
   }): Path2D | undefined {
     const path = new Path2D();
-    if (shape.d) return new Path2D(shape.d);
+    if (shape.d) return pathFromData(shape.d);
     if (shape.shape === "circle") {
       path.arc(num(shape.x), num(shape.y), num(shape.radius), 0, Math.PI * 2);
       return path;
@@ -649,7 +713,7 @@ export class Canvas2DRenderer {
     if (region.shape === "polygon" && region.points?.length)
       return pointInPolygon(point, region.points);
     if ((region.shape === "path" || region.d) && this.ctx && region.d)
-      return this.ctx.isPointInPath(new Path2D(region.d), point.x, point.y);
+      return this.isPointInPath(region.d, point);
     return (
       point.x >= region.x &&
       point.x <= region.x + num(region.width) &&
@@ -667,10 +731,22 @@ export class Canvas2DRenderer {
       image = new Image();
       image.crossOrigin = "anonymous";
       image.onload = onload;
+      image.onerror = () => this.imageCache.delete(src);
       image.src = src;
       this.imageCache.set(src, image);
     }
     return image;
+  }
+
+  private rerenderIfCurrent(version: number): void {
+    if (version !== this.frameVersion || !this.lastFrame) return;
+    this.paint(this.lastFrame, this.lastBackground, version);
+  }
+
+  private isPointInPath(d: string, point: CanvasPoint): boolean {
+    if (!this.ctx) return false;
+    const path = pathFromData(d);
+    return path ? this.ctx.isPointInPath(path, point.x, point.y) : false;
   }
 }
 
@@ -685,6 +761,14 @@ function addRectPath(
   if (radius > 0 && "roundRect" in path)
     path.roundRect(x, y, width, height, radius);
   else path.rect(x, y, width, height);
+}
+
+function pathFromData(d: string): Path2D | undefined {
+  try {
+    return new Path2D(d);
+  } catch {
+    return undefined;
+  }
 }
 
 function wrapText(
@@ -706,6 +790,16 @@ function wrapText(
   }
   if (current) lines.push(current);
   return lines.length ? lines : [""];
+}
+
+function textBoxAnchorX(
+  x: number,
+  width: number,
+  align: CanvasTextAlign,
+): number {
+  if (align === "center") return x + width / 2;
+  if (align === "right" || align === "end") return x + width;
+  return x;
 }
 
 function pointInPolygon(point: CanvasPoint, polygon: CanvasPoint[]): boolean {

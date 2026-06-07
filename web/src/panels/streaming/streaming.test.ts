@@ -90,7 +90,9 @@ class FakeResizeObserver {
 vi.stubGlobal("ResizeObserver", FakeResizeObserver);
 
 class FakePath2D {
-  constructor() {}
+  constructor(path?: string) {
+    if (path === "bad path") throw new Error("invalid path");
+  }
   rect() {}
   roundRect() {}
   moveTo() {}
@@ -165,6 +167,7 @@ beforeEach(() => {
     addColorStop: (offset: number, color: string) =>
       canvasOps.push(`colorStop:${offset}:${color}`),
   };
+  let textAlign: CanvasTextAlign = "start";
   const canvasContext = {
     setTransform: () => canvasOps.push("setTransform"),
     transform: () => canvasOps.push("transform"),
@@ -185,8 +188,10 @@ beforeEach(() => {
     stroke: () => canvasOps.push("stroke"),
     save: () => canvasOps.push("save"),
     restore: () => canvasOps.push("restore"),
-    fillText: () => canvasOps.push("fillText"),
-    strokeText: () => canvasOps.push("strokeText"),
+    fillText: (text: string, x: number, y: number) =>
+      canvasOps.push(`fillText:${text}:${x}:${y}`),
+    strokeText: (text: string, x: number, y: number) =>
+      canvasOps.push(`strokeText:${text}:${x}:${y}`),
     drawImage: () => canvasOps.push("drawImage"),
     putImageData: () => canvasOps.push("putImageData"),
     setLineDash: (segments: number[]) =>
@@ -210,10 +215,23 @@ beforeEach(() => {
     isPointInPath: () => true,
   };
   Object.defineProperty(canvasContext, "textAlign", {
-    set: (value) => canvasOps.push(`textAlign:${value}`),
+    get: () => textAlign,
+    set: (value: CanvasTextAlign) => {
+      textAlign = value;
+      canvasOps.push(`textAlign:${value}`);
+    },
   });
   Object.defineProperty(canvasContext, "textBaseline", {
     set: (value) => canvasOps.push(`textBaseline:${value}`),
+  });
+  Object.defineProperty(canvasContext, "globalAlpha", {
+    set: (value) => canvasOps.push(`globalAlpha:${value}`),
+  });
+  Object.defineProperty(canvasContext, "globalCompositeOperation", {
+    set: (value) => canvasOps.push(`composite:${value}`),
+  });
+  Object.defineProperty(canvasContext, "filter", {
+    set: (value) => canvasOps.push(`filter:${value}`),
   });
   vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
     "data:image/png;base64,test",
@@ -322,16 +340,10 @@ describe("streaming stub panels", () => {
     });
     await nextTick();
     expect(canvasOps).toContain("rect");
-    expect(canvasOps.filter((op) => op.startsWith("textAlign:"))).toStrictEqual(
-      ["textAlign:start", "textAlign:center", "textAlign:start"],
-    );
-    expect(
-      canvasOps.filter((op) => op.startsWith("textBaseline:")),
-    ).toStrictEqual([
-      "textBaseline:alphabetic",
+    expect(canvasOps).toContain("textAlign:center");
+    expect(canvasOps.filter((op) => op.startsWith("textBaseline:"))).toContain(
       "textBaseline:middle",
-      "textBaseline:alphabetic",
-    ]);
+    );
 
     const canvas = w.get('[data-test="canvas-panel-canvas"]');
     vi.spyOn(canvas.element, "getBoundingClientRect").mockReturnValue({
@@ -361,6 +373,113 @@ describe("streaming stub panels", () => {
     expect(socket.sent.some((msg) => msg.includes('"regionId":"button"'))).toBe(
       true,
     );
+    w.unmount();
+  });
+
+  it("does not leak canvas alpha between frames", async () => {
+    const w = mount(CanvasPanel, {
+      props: {
+        ...props,
+        config: { interactive: true },
+      },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const socket = streamSockets()[0];
+    socket.emit("open");
+    socket.emit("message", {
+      data: JSON.stringify({
+        commands: [
+          { type: "clear", color: "#020617" },
+          { type: "circle", x: 10, y: 10, radius: 5, fill: "#fff", alpha: 0.2 },
+        ],
+      }),
+    });
+    socket.emit("message", {
+      data: JSON.stringify({
+        commands: [
+          { type: "clear", color: "#020617" },
+          { type: "rect", x: 1, y: 1, width: 10, height: 10, fill: "#fff" },
+        ],
+      }),
+    });
+    await nextTick();
+    const alphaOps = canvasOps.filter((op) => op.startsWith("globalAlpha:"));
+    expect(alphaOps).toContain("globalAlpha:0.2");
+    expect(alphaOps.at(-1)).toBe("globalAlpha:1");
+    w.unmount();
+  });
+
+  it("ignores invalid canvas paths without breaking later commands", async () => {
+    const w = mount(CanvasPanel, {
+      props: { ...props, config: { interactive: true } },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const socket = streamSockets()[0];
+    socket.emit("open");
+    expect(() =>
+      socket.emit("message", {
+        data: JSON.stringify({
+          commands: [
+            { type: "path", d: "bad path", fill: "#fff" },
+            { type: "rect", x: 1, y: 1, width: 10, height: 10, fill: "#fff" },
+          ],
+          regions: [{ id: "bad", shape: "path", d: "bad path" }],
+        }),
+      }),
+    ).not.toThrow();
+    await nextTick();
+    expect(canvasOps).toContain("rect");
+    w.unmount();
+  });
+
+  it("rerenders the latest canvas frame when an image finishes loading", async () => {
+    let imageComplete = false;
+    let imageOnload: (() => void) | undefined;
+    vi.stubGlobal(
+      "Image",
+      class {
+        get complete() {
+          return imageComplete;
+        }
+        naturalWidth = 16;
+        naturalHeight = 16;
+        width = 16;
+        height = 16;
+        get onload() {
+          return imageOnload;
+        }
+        set onload(fn: (() => void) | undefined) {
+          imageOnload = fn;
+        }
+        onerror?: () => void;
+        crossOrigin = "";
+        src = "";
+      },
+    );
+    const w = mount(CanvasPanel, {
+      props: { ...props, config: { interactive: true } },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const socket = streamSockets()[0];
+    socket.emit("open");
+    socket.emit("message", {
+      data: JSON.stringify({
+        commands: [
+          { type: "clear", color: "#020617" },
+          { type: "image", src: "https://example.test/image.png", x: 4, y: 5 },
+        ],
+      }),
+    });
+    await nextTick();
+    expect(canvasOps).not.toContain("drawImage");
+    expect(imageOnload).toBeDefined();
+    imageComplete = true;
+    imageOnload?.();
+    await nextTick();
+    expect(canvasOps).toContain("drawImage");
     w.unmount();
   });
 
@@ -448,6 +567,14 @@ describe("streaming stub panels", () => {
             text: "Wrapped canvas label",
             lineHeight: 16,
           },
+          {
+            type: "textBox",
+            x: 20,
+            y: 60,
+            width: 160,
+            text: "Centered",
+            textAlign: "center",
+          },
           { type: "measureText", requestId: "m1", text: "Measure me" },
           {
             type: "imageData",
@@ -471,6 +598,7 @@ describe("streaming stub panels", () => {
       "quadraticCurveTo",
       "bezierCurveTo",
       "measureText:Measure me",
+      "fillText:Centered:100:60",
       "putImageData",
     ]) {
       expect(canvasOps).toContain(op);
