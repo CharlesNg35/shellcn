@@ -260,6 +260,27 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		ContentType:  "text/plain",
 		Metadata:     map[string]string{"name": "Restart app"},
 	}
+	if err := s.PluginStorage.Put(ctx, nil); !errors.Is(err, models.ErrInvalidInput) {
+		t.Fatalf("put nil: want ErrInvalidInput, got %v", err)
+	}
+	for _, tc := range []struct {
+		name   string
+		mutate func(*models.PluginStorageItem)
+	}{
+		{name: "namespace", mutate: func(i *models.PluginStorageItem) { i.Namespace = "" }},
+		{name: "plugin", mutate: func(i *models.PluginStorageItem) { i.Plugin = "" }},
+		{name: "connection", mutate: func(i *models.PluginStorageItem) { i.ConnectionID = "" }},
+		{name: "owner", mutate: func(i *models.PluginStorageItem) { i.OwnerID = "" }},
+		{name: "key", mutate: func(i *models.PluginStorageItem) { i.ItemKey = "" }},
+	} {
+		t.Run("invalid_"+tc.name, func(t *testing.T) {
+			invalid := *item
+			tc.mutate(&invalid)
+			if err := s.PluginStorage.Put(ctx, &invalid); !errors.Is(err, models.ErrInvalidInput) {
+				t.Fatalf("put invalid %s: want ErrInvalidInput, got %v", tc.name, err)
+			}
+		})
+	}
 	if err := s.PluginStorage.Put(ctx, item); err != nil {
 		t.Fatalf("put: %v", err)
 	}
@@ -390,7 +411,24 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		t.Fatalf("list user-scoped: %v", err)
 	}
 	if len(rows) != 1 || rows[0].ItemKey != "global/profile" {
-		t.Fatalf("owner-scoped filter should cross connection dimension: %+v", rows)
+		t.Fatalf("user-scoped filter should cross connection dimension: %+v", rows)
+	}
+	duplicate := *shared
+	duplicate.ConnectionID = "c3"
+	if err := s.PluginStorage.Put(ctx, &duplicate); err != nil {
+		t.Fatalf("put duplicate user-scoped key: %v", err)
+	}
+	userKey := store.PluginStorageFilter{
+		Namespace: scope.Namespace,
+		Plugin:    scope.Plugin,
+		OwnerID:   scope.OwnerID,
+		Key:       "global/profile",
+	}
+	if _, err := s.PluginStorage.Get(ctx, userKey); !errors.Is(err, models.ErrConflict) {
+		t.Fatalf("ambiguous user-scoped get: want ErrConflict, got %v", err)
+	}
+	if err := s.PluginStorage.Delete(ctx, userKey); !errors.Is(err, models.ErrConflict) {
+		t.Fatalf("ambiguous user-scoped delete: want ErrConflict, got %v", err)
 	}
 }
 

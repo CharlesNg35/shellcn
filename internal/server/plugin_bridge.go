@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/models"
@@ -37,21 +39,12 @@ func (b storageBridge) Get(ctx context.Context, scope plugin.StorageScope, key s
 	}
 	item, err := b.inner.Get(ctx, f)
 	if err != nil {
-		return plugin.StorageItem{}, err
+		return plugin.StorageItem{}, pluginStorageError(err)
 	}
 	return toPluginStorageItem(item), nil
 }
 
 func (b storageBridge) Put(ctx context.Context, namespace string, item plugin.StorageItem) (plugin.StorageItem, error) {
-	if item.Key == "" {
-		return plugin.StorageItem{}, fmt.Errorf("%w: storage key is required", plugin.ErrInvalidInput)
-	}
-	if namespace == "" {
-		return plugin.StorageItem{}, fmt.Errorf("%w: storage namespace is required", plugin.ErrInvalidInput)
-	}
-	if b.connectionID == "" {
-		return plugin.StorageItem{}, fmt.Errorf("%w: storage connection scope is unavailable", plugin.ErrInvalidInput)
-	}
 	now := time.Now()
 	row := toModelStorageItem(item)
 	row.Namespace = namespace
@@ -62,8 +55,11 @@ func (b storageBridge) Put(ctx context.Context, namespace string, item plugin.St
 		row.CreatedAt = now
 	}
 	row.UpdatedAt = now
+	if err := row.Validate(); err != nil {
+		return plugin.StorageItem{}, pluginStorageError(err)
+	}
 	if err := b.inner.Put(ctx, &row); err != nil {
-		return plugin.StorageItem{}, err
+		return plugin.StorageItem{}, pluginStorageError(err)
 	}
 	return toPluginStorageItem(row), nil
 }
@@ -76,7 +72,7 @@ func (b storageBridge) Delete(ctx context.Context, scope plugin.StorageScope, ke
 	if err != nil {
 		return err
 	}
-	return b.inner.Delete(ctx, f)
+	return pluginStorageError(b.inner.Delete(ctx, f))
 }
 
 func (b storageBridge) List(ctx context.Context, scope plugin.StorageScope) ([]plugin.StorageItem, error) {
@@ -86,7 +82,7 @@ func (b storageBridge) List(ctx context.Context, scope plugin.StorageScope) ([]p
 	}
 	rows, err := b.inner.List(ctx, f)
 	if err != nil {
-		return nil, err
+		return nil, pluginStorageError(err)
 	}
 	out := make([]plugin.StorageItem, len(rows))
 	for i, row := range rows {
@@ -120,6 +116,12 @@ func (b storageBridge) scope(scope plugin.StorageScope) (resolvedStorageScope, e
 	if scope.Namespace == "" {
 		return resolvedStorageScope{}, fmt.Errorf("%w: storage namespace is required", plugin.ErrInvalidInput)
 	}
+	if b.pluginID == "" {
+		return resolvedStorageScope{}, fmt.Errorf("%w: storage plugin scope is unavailable", plugin.ErrInvalidInput)
+	}
+	if b.ownerID == "" {
+		return resolvedStorageScope{}, fmt.Errorf("%w: storage owner scope is unavailable", plugin.ErrInvalidInput)
+	}
 	out := resolvedStorageScope{
 		Namespace: scope.Namespace,
 		Plugin:    b.pluginID,
@@ -143,6 +145,25 @@ func normalizeStorageScopeLevel(level plugin.StorageScopeLevel) plugin.StorageSc
 		return plugin.StorageScopeConnection
 	}
 	return level
+}
+
+func pluginStorageError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, store.ErrNotFound):
+		return plugin.ErrNotFound
+	case errors.Is(err, models.ErrInvalidInput):
+		return fmt.Errorf("%w: %s", plugin.ErrInvalidInput, storageErrorDetail(err, models.ErrInvalidInput))
+	case errors.Is(err, models.ErrConflict):
+		return plugin.ErrConflict
+	default:
+		return err
+	}
+}
+
+func storageErrorDetail(err, sentinel error) string {
+	return strings.TrimPrefix(err.Error(), sentinel.Error()+": ")
 }
 
 func toModelStorageItem(item plugin.StorageItem) models.PluginStorageItem {

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/charlesng35/shellcn/internal/models"
@@ -45,13 +46,83 @@ func TestStorageBridgeUserScopeFiltersByPluginAndOwner(t *testing.T) {
 	}
 }
 
+func TestStorageBridgeMapsStoreErrors(t *testing.T) {
+	st := &capturePluginStorage{getErr: models.ErrConflict}
+	bridge := storageBridge{inner: st, pluginID: "ssh", connectionID: "c1", ownerID: "u1"}
+
+	if _, err := bridge.Get(context.Background(), plugin.UserStorage("snippets"), "snippet-1"); !errors.Is(err, plugin.ErrConflict) {
+		t.Fatalf("get conflict: want plugin.ErrConflict, got %v", err)
+	}
+
+	st.getErr = store.ErrNotFound
+	if _, err := bridge.Get(context.Background(), plugin.UserStorage("snippets"), "snippet-1"); !errors.Is(err, plugin.ErrNotFound) {
+		t.Fatalf("get missing: want plugin.ErrNotFound, got %v", err)
+	}
+}
+
+func TestStorageBridgePutRequiresResolvedContext(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		bridge    storageBridge
+		namespace string
+		item      plugin.StorageItem
+	}{
+		{
+			name:      "namespace",
+			bridge:    storageBridge{pluginID: "ssh", connectionID: "c1", ownerID: "u1"},
+			namespace: "",
+			item:      plugin.StorageItem{Key: "k"},
+		},
+		{
+			name:      "plugin",
+			bridge:    storageBridge{connectionID: "c1", ownerID: "u1"},
+			namespace: "snippets",
+			item:      plugin.StorageItem{Key: "k"},
+		},
+		{
+			name:      "connection",
+			bridge:    storageBridge{pluginID: "ssh", ownerID: "u1"},
+			namespace: "snippets",
+			item:      plugin.StorageItem{Key: "k"},
+		},
+		{
+			name:      "owner",
+			bridge:    storageBridge{pluginID: "ssh", connectionID: "c1"},
+			namespace: "snippets",
+			item:      plugin.StorageItem{Key: "k"},
+		},
+		{
+			name:      "key",
+			bridge:    storageBridge{pluginID: "ssh", connectionID: "c1", ownerID: "u1"},
+			namespace: "snippets",
+			item:      plugin.StorageItem{},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st := &capturePluginStorage{}
+			tc.bridge.inner = st
+			if _, err := tc.bridge.Put(context.Background(), tc.namespace, tc.item); !errors.Is(err, plugin.ErrInvalidInput) {
+				t.Fatalf("put invalid %s: want ErrInvalidInput, got %v", tc.name, err)
+			}
+			if st.putCalls != 0 {
+				t.Fatalf("storage put should not be called for invalid %s", tc.name)
+			}
+		})
+	}
+}
+
 type capturePluginStorage struct {
 	item       models.PluginStorageItem
 	lastFilter store.PluginStorageFilter
+	getErr     error
+	putCalls   int
 }
 
 func (s *capturePluginStorage) Get(_ context.Context, f store.PluginStorageFilter) (models.PluginStorageItem, error) {
 	s.lastFilter = f
+	if s.getErr != nil {
+		return models.PluginStorageItem{}, s.getErr
+	}
 	if s.item.Namespace != f.Namespace || s.item.Plugin != f.Plugin || s.item.OwnerID != f.OwnerID || s.item.ItemKey != f.Key {
 		return models.PluginStorageItem{}, store.ErrNotFound
 	}
@@ -62,6 +133,7 @@ func (s *capturePluginStorage) Get(_ context.Context, f store.PluginStorageFilte
 }
 
 func (s *capturePluginStorage) Put(_ context.Context, item *models.PluginStorageItem) error {
+	s.putCalls++
 	s.item = *item
 	s.item.Value = append([]byte(nil), item.Value...)
 	return nil

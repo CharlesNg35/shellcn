@@ -839,15 +839,30 @@ func (s *memPolicyStore) List(_ context.Context) ([]models.PolicyRule, error) {
 func (s *memPluginStorageStore) Get(_ context.Context, f PluginStorageFilter) (models.PluginStorageItem, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	var found *models.PluginStorageItem
 	for _, item := range s.m {
 		if pluginStorageMatches(item, f) {
+			if pluginStorageKeyNeedsUniqueConnection(f) {
+				if found != nil {
+					return models.PluginStorageItem{}, models.ErrConflict
+				}
+				cp := item
+				found = &cp
+				continue
+			}
 			return item, nil
 		}
+	}
+	if found != nil {
+		return *found, nil
 	}
 	return models.PluginStorageItem{}, ErrNotFound
 }
 
 func (s *memPluginStorageStore) Put(_ context.Context, item *models.PluginStorageItem) error {
+	if err := validatePluginStoragePut(item); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.m[pluginStorageKeyOf(*item)] = *item
@@ -857,6 +872,20 @@ func (s *memPluginStorageStore) Put(_ context.Context, item *models.PluginStorag
 func (s *memPluginStorageStore) Delete(_ context.Context, f PluginStorageFilter) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if pluginStorageKeyNeedsUniqueConnection(f) {
+		matches := 0
+		for _, item := range s.m {
+			if pluginStorageMatches(item, f) {
+				matches++
+				if matches > 1 {
+					return models.ErrConflict
+				}
+			}
+		}
+		if matches == 0 {
+			return ErrNotFound
+		}
+	}
 	deleted := false
 	for key, item := range s.m {
 		if pluginStorageMatches(item, f) {

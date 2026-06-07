@@ -396,6 +396,20 @@ func (s *gormPolicyStore) List(ctx context.Context) ([]models.PolicyRule, error)
 }
 
 func (s *gormPluginStorageStore) Get(ctx context.Context, f PluginStorageFilter) (models.PluginStorageItem, error) {
+	if pluginStorageKeyNeedsUniqueConnection(f) {
+		var list []models.PluginStorageItem
+		if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).Limit(2).Find(&list).Error; err != nil {
+			return models.PluginStorageItem{}, err
+		}
+		switch len(list) {
+		case 0:
+			return models.PluginStorageItem{}, ErrNotFound
+		case 1:
+			return list[0], nil
+		default:
+			return models.PluginStorageItem{}, models.ErrConflict
+		}
+	}
 	var item models.PluginStorageItem
 	if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).First(&item).Error; err != nil {
 		return models.PluginStorageItem{}, normNotFound(err)
@@ -404,6 +418,9 @@ func (s *gormPluginStorageStore) Get(ctx context.Context, f PluginStorageFilter)
 }
 
 func (s *gormPluginStorageStore) Put(ctx context.Context, item *models.PluginStorageItem) error {
+	if err := validatePluginStoragePut(item); err != nil {
+		return err
+	}
 	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{
 			{Name: "namespace"},
@@ -417,6 +434,19 @@ func (s *gormPluginStorageStore) Put(ctx context.Context, item *models.PluginSto
 }
 
 func (s *gormPluginStorageStore) Delete(ctx context.Context, f PluginStorageFilter) error {
+	if pluginStorageKeyNeedsUniqueConnection(f) {
+		var list []models.PluginStorageItem
+		if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).Limit(2).Find(&list).Error; err != nil {
+			return err
+		}
+		switch len(list) {
+		case 0:
+			return ErrNotFound
+		case 1:
+		default:
+			return models.ErrConflict
+		}
+	}
 	res := applyPluginStorageFilter(s.db.WithContext(ctx), f).Delete(&models.PluginStorageItem{})
 	return rowsOrNotFound(res)
 }
