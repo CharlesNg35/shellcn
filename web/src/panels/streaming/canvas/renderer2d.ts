@@ -8,6 +8,8 @@ import type {
 } from "./types";
 
 type EmitEvent = (event: CanvasOutgoingEvent) => void;
+const MAX_PATH_CACHE = 256;
+const MAX_TEXT_WRAP_CACHE = 256;
 
 export class Canvas2DRenderer {
   private canvas: HTMLCanvasElement | null = null;
@@ -16,6 +18,8 @@ export class Canvas2DRenderer {
   private imageCache = new Map<string, HTMLImageElement>();
   private resources = new Map<string, CanvasGradient | CanvasPattern>();
   private snapshotTimes = new Map<string, number>();
+  private pathCache = new Map<string, Path2D | null>();
+  private textWrapCache = new Map<string, string[]>();
   private regions: CanvasRegion[] = [];
   private lastFrame: CanvasFrame | null = null;
   private lastBackground: string | undefined;
@@ -50,10 +54,23 @@ export class Canvas2DRenderer {
       Math.round(Math.max(rect.height || this.height, content?.height || 0)),
     );
     this.dpr = hidpi ? window.devicePixelRatio || 1 : 1;
-    this.canvas.width = Math.round(this.width * this.dpr);
-    this.canvas.height = Math.round(this.height * this.dpr);
-    this.canvas.style.width = `${this.width}px`;
-    this.canvas.style.height = `${this.height}px`;
+    const backingWidth = Math.round(this.width * this.dpr);
+    const backingHeight = Math.round(this.height * this.dpr);
+    const styleWidth = `${this.width}px`;
+    const styleHeight = `${this.height}px`;
+    if (
+      this.ctx &&
+      this.canvas.width === backingWidth &&
+      this.canvas.height === backingHeight &&
+      this.canvas.style.width === styleWidth &&
+      this.canvas.style.height === styleHeight
+    ) {
+      return this.size();
+    }
+    this.canvas.width = backingWidth;
+    this.canvas.height = backingHeight;
+    this.canvas.style.width = styleWidth;
+    this.canvas.style.height = styleHeight;
     this.ctx = this.canvas.getContext("2d");
     this.ctx?.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.clear(background);
@@ -96,10 +113,11 @@ export class Canvas2DRenderer {
   }
 
   regionAt(point: CanvasPoint): CanvasRegion | undefined {
-    return this.regions
-      .slice()
-      .reverse()
-      .find((region) => this.regionContains(region, point));
+    for (let index = this.regions.length - 1; index >= 0; index--) {
+      const region = this.regions[index];
+      if (this.regionContains(region, point)) return region;
+    }
+    return undefined;
   }
 
   private run(
@@ -467,7 +485,10 @@ export class Canvas2DRenderer {
     this.applyStyle(command);
     ctx.beginPath();
     ctx.moveTo(num(points[0].x), num(points[0].y));
-    for (const p of points.slice(1)) ctx.lineTo(num(p.x), num(p.y));
+    for (let index = 1; index < points.length; index++) {
+      const point = points[index];
+      ctx.lineTo(num(point.x), num(point.y));
+    }
     if (close) ctx.closePath();
     this.fillStroke(command, !close);
     ctx.restore();
@@ -516,7 +537,7 @@ export class Canvas2DRenderer {
   private drawPath(command: Extract<CanvasCommand, { type: "path" }>): void {
     const ctx = this.ctx;
     if (!ctx || !command.d) return;
-    const path = pathFromData(command.d);
+    const path = this.pathFromData(command.d);
     if (!path) return;
     ctx.save();
     this.applyStyle(command);
@@ -551,13 +572,10 @@ export class Canvas2DRenderer {
     ctx.textAlign = "start";
     ctx.textBaseline = "alphabetic";
     this.applyStyle(command);
-    const lines = wrapText(ctx, str(command.text), num(command.width, 240));
+    const width = num(command.width, 240);
+    const lines = this.wrapText(ctx, str(command.text), width);
     const lineHeight = num(command.lineHeight, 18);
-    const x = textBoxAnchorX(
-      num(command.x),
-      num(command.width, 240),
-      ctx.textAlign,
-    );
+    const x = textBoxAnchorX(num(command.x), width, ctx.textAlign);
     lines.forEach((line, index) => {
       const y = num(command.y) + index * lineHeight;
       if (command.stroke) ctx.strokeText(line, x, y);
@@ -695,15 +713,17 @@ export class Canvas2DRenderer {
     points?: CanvasPoint[];
   }): Path2D | undefined {
     const path = new Path2D();
-    if (shape.d) return pathFromData(shape.d);
+    if (shape.d) return this.pathFromData(shape.d);
     if (shape.shape === "circle") {
       path.arc(num(shape.x), num(shape.y), num(shape.radius), 0, Math.PI * 2);
       return path;
     }
     if (shape.shape === "polygon" && shape.points?.length) {
       path.moveTo(num(shape.points[0].x), num(shape.points[0].y));
-      for (const point of shape.points.slice(1))
+      for (let index = 1; index < shape.points.length; index++) {
+        const point = shape.points[index];
         path.lineTo(num(point.x), num(point.y));
+      }
       path.closePath();
       return path;
     }
@@ -759,8 +779,33 @@ export class Canvas2DRenderer {
 
   private isPointInPath(d: string, point: CanvasPoint): boolean {
     if (!this.ctx) return false;
-    const path = pathFromData(d);
+    const path = this.pathFromData(d);
     return path ? this.ctx.isPointInPath(path, point.x, point.y) : false;
+  }
+
+  private pathFromData(d: string): Path2D | undefined {
+    if (this.pathCache.has(d)) return this.pathCache.get(d) ?? undefined;
+    try {
+      const path = new Path2D(d);
+      remember(this.pathCache, d, path, MAX_PATH_CACHE);
+      return path;
+    } catch {
+      remember(this.pathCache, d, null, MAX_PATH_CACHE);
+      return undefined;
+    }
+  }
+
+  private wrapText(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    width: number,
+  ): string[] {
+    const key = `${ctx.font}\u0000${width}\u0000${text}`;
+    const cached = this.textWrapCache.get(key);
+    if (cached) return cached;
+    const lines = wrapText(ctx, text, width);
+    remember(this.textWrapCache, key, lines, MAX_TEXT_WRAP_CACHE);
+    return lines;
   }
 }
 
@@ -775,14 +820,6 @@ function addRectPath(
   if (radius > 0 && "roundRect" in path)
     path.roundRect(x, y, width, height, radius);
   else path.rect(x, y, width, height);
-}
-
-function pathFromData(d: string): Path2D | undefined {
-  try {
-    return new Path2D(d);
-  } catch {
-    return undefined;
-  }
 }
 
 function wrapText(
@@ -836,6 +873,14 @@ function isCanvasStyle(
   value: unknown,
 ): value is CanvasGradient | CanvasPattern {
   return typeof value === "object" && value !== null;
+}
+
+function remember<K, V>(cache: Map<K, V>, key: K, value: V, max: number): void {
+  if (cache.size >= max) {
+    const oldest = cache.keys().next();
+    if (!oldest.done) cache.delete(oldest.value);
+  }
+  cache.set(key, value);
 }
 
 function num(value: unknown, fallback = 0): number {
