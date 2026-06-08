@@ -37,6 +37,7 @@ func TestCanvasFrameMarshalUsesTypedCommands(t *testing.T) {
 				CanvasPaint: plugin.CanvasPaint{Stroke: "#f97316", NoFill: true},
 				D:           "M 0 0 L 10 10",
 			},
+			plugin.CanvasSnapshot{RequestID: "preview", MinIntervalMs: 250},
 		},
 		Regions: []plugin.CanvasRegion{{
 			ID: "open", X: 24, Y: 32, Width: 160, Height: 44, Cursor: "pointer",
@@ -67,6 +68,10 @@ func TestCanvasFrameMarshalUsesTypedCommands(t *testing.T) {
 	path := commands[3].(map[string]any)
 	if path["fill"] != false || path["stroke"] != "#f97316" {
 		t.Fatalf("path paint encoded incorrectly: %#v", path)
+	}
+	snapshot := commands[4].(map[string]any)
+	if snapshot["type"] != string(plugin.CanvasCommandSnapshot) || snapshot["minIntervalMs"] != float64(250) {
+		t.Fatalf("snapshot encoded incorrectly: %#v", snapshot)
 	}
 	regions := got["regions"].([]any)
 	if regions[0].(map[string]any)["id"] != "open" {

@@ -15,6 +15,7 @@ export class Canvas2DRenderer {
   private readonly emit: EmitEvent;
   private imageCache = new Map<string, HTMLImageElement>();
   private resources = new Map<string, CanvasGradient | CanvasPattern>();
+  private snapshotTimes = new Map<string, number>();
   private regions: CanvasRegion[] = [];
   private lastFrame: CanvasFrame | null = null;
   private lastBackground: string | undefined;
@@ -655,6 +656,12 @@ export class Canvas2DRenderer {
     command: Extract<CanvasCommand, { type: "snapshot" }>,
   ): void {
     if (!this.canvas) return;
+    const key = command.requestId || "__default__";
+    const minInterval = Math.max(0, command.minIntervalMs ?? 500);
+    const now = performance.now();
+    const last = this.snapshotTimes.get(key);
+    if (last !== undefined && now - last < minInterval) return;
+    this.snapshotTimes.set(key, now);
     const mime = command.mime || "image/png";
     this.emit({
       type: "snapshot",

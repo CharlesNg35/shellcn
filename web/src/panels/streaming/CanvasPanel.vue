@@ -29,6 +29,8 @@ const renderer = new Canvas2DRenderer((event) => sendEvent(event));
 
 let resizeObserver: ResizeObserver | undefined;
 let capturedRegionId: string | undefined;
+let pointerMoveFrame = 0;
+let pendingPointerMove: CanvasOutgoingEvent | undefined;
 
 const isInteractive = computed(
   () => cfg.value?.interactive || cfg.value?.keyboard || cfg.value?.pointer,
@@ -121,7 +123,7 @@ function onPointer(ev: MouseEvent | PointerEvent): void {
     canvasEl.value?.releasePointerCapture?.(ev.pointerId);
     capturedRegionId = undefined;
   }
-  sendEvent({
+  const event: CanvasOutgoingEvent = {
     type: "pointer",
     event: ev.type,
     x: point.x,
@@ -132,7 +134,25 @@ function onPointer(ev: MouseEvent | PointerEvent): void {
     pointerType: "pointerType" in ev ? ev.pointerType : undefined,
     regionId: region?.id,
     modifiers: modifiers(ev),
-  });
+  };
+  if (ev.type === "pointermove") {
+    pendingPointerMove = event;
+    if (!pointerMoveFrame)
+      pointerMoveFrame = requestAnimationFrame(flushPointerMove);
+    return;
+  }
+  flushPointerMove();
+  sendEvent(event);
+}
+
+function flushPointerMove(): void {
+  if (pointerMoveFrame) {
+    cancelAnimationFrame(pointerMoveFrame);
+    pointerMoveFrame = 0;
+  }
+  const event = pendingPointerMove;
+  pendingPointerMove = undefined;
+  if (event) sendEvent(event);
 }
 
 function onWheel(ev: WheelEvent): void {
@@ -187,7 +207,10 @@ onMounted(() => {
 
 onActivated(() => resizeCanvas());
 
-onUnmounted(() => resizeObserver?.disconnect());
+onUnmounted(() => {
+  resizeObserver?.disconnect();
+  flushPointerMove();
+});
 
 watch(status, (next) => {
   if (next === "open")

@@ -414,6 +414,71 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
+  it("coalesces canvas pointer moves to the latest animation frame", async () => {
+    const rafCallbacks: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      rafCallbacks.push(callback);
+      return rafCallbacks.length;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    const w = mount(CanvasPanel, {
+      props: {
+        ...props,
+        config: {
+          width: 100,
+          height: 100,
+          scrollable: true,
+          interactive: true,
+          pointer: true,
+        },
+      },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const socket = streamSockets()[0];
+    socket.emit("open");
+    socket.emit("message", {
+      data: JSON.stringify({
+        commands: [{ type: "clear", color: "#000" }],
+        regions: [{ id: "card", x: 0, y: 0, width: 800, height: 450 }],
+      }),
+    });
+    await nextTick();
+
+    const canvas = w.get('[data-test="canvas-panel-canvas"]');
+    vi.spyOn(canvas.element, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 100,
+      height: 100,
+      right: 100,
+      bottom: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    for (const x of [10, 20, 30])
+      canvas.element.dispatchEvent(
+        new MouseEvent("pointermove", {
+          clientX: x,
+          clientY: x,
+          buttons: 1,
+          bubbles: true,
+        }),
+      );
+
+    expect(rafCallbacks).toHaveLength(1);
+    expect(
+      socket.sent.filter((msg) => msg.includes('"pointermove"')),
+    ).toHaveLength(0);
+    rafCallbacks[0]?.(0);
+    const moves = socket.sent.filter((msg) => msg.includes('"pointermove"'));
+    expect(moves).toHaveLength(1);
+    expect(moves[0]).toContain('"x":240');
+    expect(moves[0]).toContain('"regionId":"card"');
+    w.unmount();
+  });
+
   it("treats non-interactive canvas panels as visualizations", async () => {
     const w = mount(CanvasPanel, {
       props: {
@@ -746,6 +811,54 @@ describe("streaming stub panels", () => {
     expect(socket.sent.some((msg) => msg.includes('"requestId":"s1"'))).toBe(
       true,
     );
+    w.unmount();
+  });
+
+  it("throttles repeated canvas snapshots unless explicitly disabled", async () => {
+    vi.spyOn(performance, "now")
+      .mockReturnValueOnce(1000)
+      .mockReturnValueOnce(1010)
+      .mockReturnValueOnce(1020)
+      .mockReturnValueOnce(1030);
+    const w = mount(CanvasPanel, {
+      props: {
+        ...props,
+        config: { interactive: true },
+      },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const socket = streamSockets()[0];
+    socket.emit("open");
+    for (const command of [
+      { type: "snapshot", requestId: "same", mime: "image/png" },
+      { type: "snapshot", requestId: "same", mime: "image/png" },
+      {
+        type: "snapshot",
+        requestId: "unthrottled",
+        mime: "image/png",
+        minIntervalMs: 0,
+      },
+      {
+        type: "snapshot",
+        requestId: "unthrottled",
+        mime: "image/png",
+        minIntervalMs: 0,
+      },
+    ]) {
+      socket.emit("message", { data: JSON.stringify({ commands: [command] }) });
+    }
+    await nextTick();
+
+    const snapshots = socket.sent.filter((msg) =>
+      msg.includes('"type":"snapshot"'),
+    );
+    expect(
+      snapshots.filter((msg) => msg.includes('"requestId":"same"')),
+    ).toHaveLength(1);
+    expect(
+      snapshots.filter((msg) => msg.includes('"requestId":"unthrottled"')),
+    ).toHaveLength(2);
     w.unmount();
   });
 

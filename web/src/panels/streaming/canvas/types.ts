@@ -209,7 +209,13 @@ export type CanvasCommand =
       height?: number;
       data?: number[];
     }
-  | { type: "snapshot"; requestId?: string; mime?: string; quality?: number };
+  | {
+      type: "snapshot";
+      requestId?: string;
+      mime?: string;
+      quality?: number;
+      minIntervalMs?: number;
+    };
 
 export type CanvasCommandType = CanvasCommand["type"];
 

@@ -479,9 +479,10 @@ type CanvasImageData struct {
 }
 
 type CanvasSnapshot struct {
-	RequestID string  `json:"requestId,omitempty"`
-	MIME      string  `json:"mime,omitempty"`
-	Quality   float64 `json:"quality,omitempty"`
+	RequestID     string  `json:"requestId,omitempty"`
+	MIME          string  `json:"mime,omitempty"`
+	Quality       float64 `json:"quality,omitempty"`
+	MinIntervalMs int     `json:"minIntervalMs,omitempty"`
 }
 
 func (CanvasClear) canvasCommand()          {}
