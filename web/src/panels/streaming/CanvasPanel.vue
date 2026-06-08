@@ -39,12 +39,14 @@ const pointerEnabled = computed(
 const keyboardEnabled = computed(
   () => cfg.value?.keyboard ?? isInteractive.value,
 );
-const wheelEnabled = computed(() => cfg.value?.wheel ?? isInteractive.value);
 const resizeEvents = computed(() => cfg.value?.resizeEvents ?? true);
 const scrollable = computed(
   () =>
     cfg.value?.scrollable ??
     (Boolean(cfg.value?.width) || Boolean(cfg.value?.height)),
+);
+const wheelEnabled = computed(
+  () => cfg.value?.wheel ?? (isInteractive.value && !scrollable.value),
 );
 const canvasRole = computed(() =>
   isInteractive.value ? "application" : "img",

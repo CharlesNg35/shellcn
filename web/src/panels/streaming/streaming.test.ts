@@ -434,7 +434,12 @@ describe("streaming stub panels", () => {
     const w = mount(CanvasPanel, {
       props: {
         ...props,
-        config: { width: 1600, height: 900, scrollable: true },
+        config: {
+          width: 1600,
+          height: 900,
+          scrollable: true,
+          interactive: true,
+        },
       },
       global: { plugins: [pinia] },
     });
@@ -458,6 +463,47 @@ describe("streaming stub panels", () => {
           msg.includes('"height":900'),
       ),
     ).toBe(true);
+
+    const wheel = new WheelEvent("wheel", {
+      deltaY: 120,
+      cancelable: true,
+      bubbles: true,
+    });
+    canvas.dispatchEvent(wheel);
+    expect(wheel.defaultPrevented).toBe(false);
+    expect(socket.sent.some((msg) => msg.includes('"type":"wheel"'))).toBe(
+      false,
+    );
+    w.unmount();
+  });
+
+  it("lets scrollable canvas plugins explicitly capture wheel input", async () => {
+    const w = mount(CanvasPanel, {
+      props: {
+        ...props,
+        config: { scrollable: true, interactive: true, wheel: true },
+      },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const socket = streamSockets()[0];
+    socket.emit("open");
+    await flushPromises();
+
+    const canvas = w.get<HTMLCanvasElement>(
+      '[data-test="canvas-panel-canvas"]',
+    ).element;
+    const wheel = new WheelEvent("wheel", {
+      deltaY: 120,
+      cancelable: true,
+      bubbles: true,
+    });
+    canvas.dispatchEvent(wheel);
+
+    expect(wheel.defaultPrevented).toBe(true);
+    expect(socket.sent.some((msg) => msg.includes('"type":"wheel"'))).toBe(
+      true,
+    );
     w.unmount();
   });
 
