@@ -254,7 +254,13 @@ export function isCanvasCommandType(type: string): type is CanvasCommandType {
 }
 
 export type CanvasOutgoingEvent =
-  | { type: "ready" | "resize"; width: number; height: number; dpr: number }
+  | {
+      type: "ready" | "resize";
+      width: number;
+      height: number;
+      dpr: number;
+      theme?: "light" | "dark";
+    }
   | {
       type: "pointer";
       event: string;

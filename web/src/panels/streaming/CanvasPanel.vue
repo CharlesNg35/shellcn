@@ -9,6 +9,7 @@ import {
   watch,
 } from "vue";
 import { useStream } from "../../composables/useStream";
+import { useTheme } from "../../composables/useTheme";
 import type { CanvasPanelConfig } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import { parseCanvasFrame } from "./canvas/parser";
@@ -22,6 +23,7 @@ const cfg = computed(() => props.config as CanvasPanelConfig | undefined);
 const panelEl = ref<HTMLElement | null>(null);
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 const statusText = ref("Waiting for canvas frames...");
+const { theme } = useTheme();
 
 const renderer = new Canvas2DRenderer((event) => sendEvent(event));
 
@@ -39,6 +41,14 @@ const keyboardEnabled = computed(
 );
 const wheelEnabled = computed(() => cfg.value?.wheel ?? isInteractive.value);
 const resizeEvents = computed(() => cfg.value?.resizeEvents ?? true);
+const canvasRole = computed(() =>
+  isInteractive.value ? "application" : "img",
+);
+const canvasAriaLabel = computed(
+  () =>
+    cfg.value?.ariaLabel ||
+    (isInteractive.value ? "Interactive canvas panel" : "Canvas visualization"),
+);
 
 const { status, error, send, reconnect } = useStream(
   props.connectionId,
@@ -62,7 +72,8 @@ function resizeCanvas(): void {
     cfg.value?.background,
     cfg.value?.hidpi !== false,
   );
-  if (resizeEvents.value) sendEvent({ type: "resize", ...size });
+  if (resizeEvents.value)
+    sendEvent({ type: "resize", ...size, theme: theme.value });
 }
 
 function onFrame(frame: string): void {
@@ -76,6 +87,7 @@ function onFrame(frame: string): void {
 
 function onPointer(ev: MouseEvent | PointerEvent): void {
   if (!pointerEnabled.value) return;
+  ev.preventDefault();
   if (cfg.value?.focusOnPointer ?? true) canvasEl.value?.focus();
   const point = renderer.pointFromEvent(ev);
   const region = capturedRegionId
@@ -169,7 +181,13 @@ onUnmounted(() => resizeObserver?.disconnect());
 
 watch(status, (next) => {
   if (next === "open")
-    void nextTick(() => sendEvent({ type: "ready", ...renderer.size() }));
+    void nextTick(() =>
+      sendEvent({ type: "ready", ...renderer.size(), theme: theme.value }),
+    );
+});
+
+watch(theme, () => {
+  if (status.value === "open") resizeCanvas();
 });
 </script>
 
@@ -191,14 +209,12 @@ watch(status, (next) => {
         data-test="canvas-panel-canvas"
         class="block size-full outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         :tabindex="keyboardEnabled ? 0 : -1"
-        :aria-label="cfg?.ariaLabel || 'Interactive canvas panel'"
-        role="application"
+        :aria-label="canvasAriaLabel"
+        :role="canvasRole"
         @pointerdown="onPointer"
         @pointerup="onPointer"
         @pointermove="onPointer"
         @pointercancel="onPointer"
-        @click="onPointer"
-        @dblclick="onPointer"
         @wheel="onWheel"
         @keydown="onKey"
         @keyup="onKey"

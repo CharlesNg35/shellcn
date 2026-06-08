@@ -366,6 +366,15 @@ describe("streaming stub panels", () => {
         bubbles: true,
       }),
     );
+    canvas.element.dispatchEvent(
+      new MouseEvent("click", {
+        clientX: 10,
+        clientY: 10,
+        button: 0,
+        buttons: 0,
+        bubbles: true,
+      }),
+    );
     await nextTick();
     expect(socket.sent.some((msg) => msg.includes('"type":"pointer"'))).toBe(
       true,
@@ -373,6 +382,30 @@ describe("streaming stub panels", () => {
     expect(socket.sent.some((msg) => msg.includes('"regionId":"button"'))).toBe(
       true,
     );
+    expect(
+      socket.sent.some(
+        (msg) => msg.includes('"type":"ready"') && msg.includes('"theme":'),
+      ),
+    ).toBe(true);
+    expect(socket.sent.some((msg) => msg.includes('"event":"click"'))).toBe(
+      false,
+    );
+    w.unmount();
+  });
+
+  it("treats non-interactive canvas panels as visualizations", async () => {
+    const w = mount(CanvasPanel, {
+      props: {
+        ...props,
+        config: { resizeEvents: true, ariaLabel: "Kubernetes service flow" },
+      },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const canvas = w.get('[data-test="canvas-panel-canvas"]');
+    expect(canvas.attributes("role")).toBe("img");
+    expect(canvas.attributes("tabindex")).toBe("-1");
+    expect(canvas.attributes("aria-label")).toBe("Kubernetes service flow");
     w.unmount();
   });
 

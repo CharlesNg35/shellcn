@@ -152,6 +152,18 @@ func TestCanvasExpandedCommandsMarshal(t *testing.T) {
 }
 
 func TestParseCanvasEvent(t *testing.T) {
+	readyEvent, err := plugin.ParseCanvasEvent([]byte(`{"type":"ready","width":800,"height":480,"dpr":2,"theme":"dark"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready, ok := readyEvent.(*plugin.CanvasReadyEvent)
+	if !ok {
+		t.Fatalf("got %T, want *plugin.CanvasReadyEvent", readyEvent)
+	}
+	if ready.Theme != plugin.CanvasThemeDark || ready.Width != 800 || ready.DPR != 2 {
+		t.Fatalf("decoded ready event incorrectly: %#v", ready)
+	}
+
 	ev, err := plugin.ParseCanvasEvent([]byte(`{
 		"type":"pointer",
 		"event":"pointerdown",

@@ -56,6 +56,20 @@ const (
 	CanvasEventSnapshot CanvasEventType = "snapshot"
 )
 
+const (
+	CanvasPointerDown   = "pointerdown"
+	CanvasPointerMove   = "pointermove"
+	CanvasPointerUp     = "pointerup"
+	CanvasPointerCancel = "pointercancel"
+)
+
+type CanvasTheme string
+
+const (
+	CanvasThemeLight CanvasTheme = "light"
+	CanvasThemeDark  CanvasTheme = "dark"
+)
+
 type CanvasLineCap string
 
 const (
@@ -723,6 +737,7 @@ type CanvasReadyEvent struct {
 	Width  float64         `json:"width"`
 	Height float64         `json:"height"`
 	DPR    float64         `json:"dpr"`
+	Theme  CanvasTheme     `json:"theme,omitempty"`
 }
 
 func (CanvasReadyEvent) canvasEvent() {}
@@ -735,6 +750,7 @@ type CanvasResizeEvent struct {
 	Width  float64         `json:"width"`
 	Height float64         `json:"height"`
 	DPR    float64         `json:"dpr"`
+	Theme  CanvasTheme     `json:"theme,omitempty"`
 }
 
 func (CanvasResizeEvent) canvasEvent() {}
