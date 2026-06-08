@@ -219,6 +219,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 			Properties: props(
 				prop("width", number()),
 				prop("height", number()),
+				prop("scrollable", boolProp()),
 				prop("hidpi", boolProp()),
 				prop("interactive", boolProp()),
 				prop("keyboard", boolProp()),

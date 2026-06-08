@@ -285,6 +285,7 @@ export interface SplitPanelConfig {
 export interface CanvasPanelConfig {
   width?: number;
   height?: number;
+  scrollable?: boolean;
   hidpi?: boolean;
   interactive?: boolean;
   keyboard?: boolean;

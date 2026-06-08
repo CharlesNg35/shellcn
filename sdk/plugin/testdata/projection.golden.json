@@ -324,6 +324,9 @@
         "resizeEvents": {
           "type": "boolean"
         },
+        "scrollable": {
+          "type": "boolean"
+        },
         "wheel": {
           "type": "boolean"
         },

@@ -41,6 +41,11 @@ const keyboardEnabled = computed(
 );
 const wheelEnabled = computed(() => cfg.value?.wheel ?? isInteractive.value);
 const resizeEvents = computed(() => cfg.value?.resizeEvents ?? true);
+const scrollable = computed(
+  () =>
+    cfg.value?.scrollable ??
+    (Boolean(cfg.value?.width) || Boolean(cfg.value?.height)),
+);
 const canvasRole = computed(() =>
   isInteractive.value ? "application" : "img",
 );
@@ -71,6 +76,9 @@ function resizeCanvas(): void {
     parent,
     cfg.value?.background,
     cfg.value?.hidpi !== false,
+    scrollable.value
+      ? { width: cfg.value?.width, height: cfg.value?.height }
+      : undefined,
   );
   if (resizeEvents.value)
     sendEvent({ type: "resize", ...size, theme: theme.value });
@@ -201,7 +209,8 @@ watch(theme, () => {
     />
     <div
       ref="panelEl"
-      class="relative min-h-0 flex-1 overflow-hidden"
+      class="relative min-h-0 flex-1"
+      :class="scrollable ? 'overflow-auto' : 'overflow-hidden'"
       :style="{ background: cfg?.background || 'transparent' }"
     >
       <canvas

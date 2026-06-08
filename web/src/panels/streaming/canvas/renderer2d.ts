@@ -36,11 +36,18 @@ export class Canvas2DRenderer {
     parent: HTMLElement,
     background?: string,
     hidpi = true,
+    content?: { width?: number; height?: number },
   ): { width: number; height: number; dpr: number } {
     if (!this.canvas) return this.size();
     const rect = parent.getBoundingClientRect();
-    this.width = Math.max(1, Math.round(rect.width || this.width));
-    this.height = Math.max(1, Math.round(rect.height || this.height));
+    this.width = Math.max(
+      1,
+      Math.round(Math.max(rect.width || this.width, content?.width || 0)),
+    );
+    this.height = Math.max(
+      1,
+      Math.round(Math.max(rect.height || this.height, content?.height || 0)),
+    );
     this.dpr = hidpi ? window.devicePixelRatio || 1 : 1;
     this.canvas.width = Math.round(this.width * this.dpr);
     this.canvas.height = Math.round(this.height * this.dpr);

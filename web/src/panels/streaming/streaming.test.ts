@@ -430,6 +430,37 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
+  it("uses declared canvas dimensions as a scrollable drawing surface", async () => {
+    const w = mount(CanvasPanel, {
+      props: {
+        ...props,
+        config: { width: 1600, height: 900, scrollable: true },
+      },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const socket = streamSockets()[0];
+    socket.emit("open");
+    await nextTick();
+    await flushPromises();
+    await nextTick();
+
+    const canvas = w.get<HTMLCanvasElement>(
+      '[data-test="canvas-panel-canvas"]',
+    ).element;
+    expect(canvas.style.width).toBe("1600px");
+    expect(canvas.style.height).toBe("900px");
+    expect(
+      socket.sent.some(
+        (msg) =>
+          msg.includes('"type":"ready"') &&
+          msg.includes('"width":1600') &&
+          msg.includes('"height":900'),
+      ),
+    ).toBe(true);
+    w.unmount();
+  });
+
   it("does not leak canvas alpha between frames", async () => {
     const w = mount(CanvasPanel, {
       props: {

@@ -258,6 +258,7 @@ type SplitConfig struct {
 type CanvasConfig struct {
 	Width          int    `json:"width,omitempty"`
 	Height         int    `json:"height,omitempty"`
+	Scrollable     bool   `json:"scrollable,omitempty"`
 	HiDPI          bool   `json:"hidpi,omitempty"`
 	Interactive    bool   `json:"interactive,omitempty"`
 	Keyboard       bool   `json:"keyboard,omitempty"`
