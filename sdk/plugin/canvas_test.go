@@ -160,7 +160,7 @@ func TestParseCanvasEvent(t *testing.T) {
 	if !ok {
 		t.Fatalf("got %T, want *plugin.CanvasReadyEvent", readyEvent)
 	}
-	if ready.Theme != plugin.CanvasThemeDark || ready.Width != 800 || ready.DPR != 2 {
+	if ready.Theme != plugin.PanelThemeDark || ready.Width != 800 || ready.DPR != 2 {
 		t.Fatalf("decoded ready event incorrectly: %#v", ready)
 	}
 

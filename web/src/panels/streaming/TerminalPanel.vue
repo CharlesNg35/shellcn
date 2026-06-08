@@ -33,7 +33,7 @@ const emit = defineEmits<{
   recordingChange: [recording: boolean];
   streamStatusChange: [status: ChannelStatus];
 }>();
-const { isDark } = useTheme();
+const { isDark, theme } = useTheme();
 
 const cfg = computed(() => props.config as TerminalPanelConfig | undefined);
 const zoomEnabled = computed(() => cfg.value?.zoom === true);
@@ -195,7 +195,17 @@ const { status, error, send, reconnect } = useStream(
   { keySuffix: props.streamKeySuffix },
 );
 
-watch(status, (next) => emit("streamStatusChange", next), { immediate: true });
+watch(
+  status,
+  (next) => {
+    emit("streamStatusChange", next);
+    if (next === "open") {
+      lastSize = "";
+      void nextTick(applyFit);
+    }
+  },
+  { immediate: true },
+);
 
 // Fit the grid to the container; debounced so a burst of resize events settles
 // before we re-measure. The resize control frame keeps the remote PTY aligned
@@ -204,11 +214,12 @@ function applyFit(): void {
   if (!fit || !term) return;
   try {
     fit.fit();
-    const size = `${term.cols}x${term.rows}`;
+    if (status.value !== "open") return;
+    const size = `${term.cols}x${term.rows}:${theme.value}`;
     if (size !== lastSize) {
       lastSize = size;
       send(
-        `\0${JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows })}`,
+        `\0${JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows, theme: theme.value })}`,
       );
     }
   } catch {
@@ -224,6 +235,7 @@ function scheduleFit(): void {
 function applyTerminalTheme(): void {
   if (!term) return;
   term.options.theme = { ...terminalTheme.value };
+  applyFit();
 }
 
 async function onReconnect(): Promise<void> {

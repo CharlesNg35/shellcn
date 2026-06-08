@@ -30,6 +30,15 @@ const (
 	PanelHTTPClient PanelType = "http_client"
 )
 
+// PanelTheme is the core light/dark hint sent to drawable stream panels. It is
+// advisory: plugins should use it only for colors, never for behavior or auth.
+type PanelTheme string
+
+const (
+	PanelThemeLight PanelTheme = "light"
+	PanelThemeDark  PanelTheme = "dark"
+)
+
 // PanelConfig is closed to this package so config fields cannot accept arbitrary
 // data.
 type PanelConfig interface{ panelConfig() }

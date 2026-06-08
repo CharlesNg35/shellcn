@@ -309,6 +309,27 @@ describe("streaming stub panels", () => {
     second.unmount();
   });
 
+  it("sends terminal resize controls with the current theme", async () => {
+    const w = mount(TerminalPanel, {
+      props,
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const socket = streamSockets()[0];
+    socket.emit("open");
+    await nextTick();
+    await flushPromises();
+    expect(
+      socket.sent.some(
+        (msg) =>
+          msg.startsWith("\0") &&
+          msg.includes('"type":"resize"') &&
+          msg.includes('"theme":'),
+      ),
+    ).toBe(true);
+    w.unmount();
+  });
+
   it("renders canvas frames and sends pointer input", async () => {
     const w = mount(CanvasPanel, {
       props: {

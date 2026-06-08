@@ -66,7 +66,14 @@ func TestCopyTerminalInputSplitsControlFrames(t *testing.T) {
 }
 
 func TestParseResizeControl(t *testing.T) {
-	if _, _, ok := plugin.ParseResizeControl([]byte(`{"type":"resize","cols":1,"rows":2}`)); !ok {
+	control, ok := plugin.ParseTerminalControl([]byte(`{"type":"resize","cols":1,"rows":2,"theme":"dark"}`))
+	if !ok {
+		t.Fatal("valid terminal control not parsed")
+	}
+	if control.Type != "resize" || control.Cols != 1 || control.Rows != 2 || control.Theme != plugin.PanelThemeDark {
+		t.Fatalf("terminal control = %#v", control)
+	}
+	if _, _, ok := plugin.ParseResizeControl([]byte(`{"type":"resize","cols":1,"rows":2,"theme":"dark"}`)); !ok {
 		t.Fatal("valid resize not parsed")
 	}
 	if _, _, ok := plugin.ParseResizeControl([]byte(`{"type":"other"}`)); ok {
