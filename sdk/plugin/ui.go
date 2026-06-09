@@ -255,20 +255,29 @@ type SplitConfig struct {
 	Panels      []SplitPanel     `json:"panels,omitempty"`
 }
 
+type CanvasWheelMode string
+
+const (
+	CanvasWheelAuto     CanvasWheelMode = "auto"
+	CanvasWheelCapture  CanvasWheelMode = "capture"
+	CanvasWheelModified CanvasWheelMode = "modified"
+	CanvasWheelNone     CanvasWheelMode = "none"
+)
+
 type CanvasConfig struct {
-	Width          int    `json:"width,omitempty"`
-	Height         int    `json:"height,omitempty"`
-	Scrollable     bool   `json:"scrollable,omitempty"`
-	HiDPI          bool   `json:"hidpi,omitempty"`
-	Interactive    bool   `json:"interactive,omitempty"`
-	Keyboard       bool   `json:"keyboard,omitempty"`
-	Pointer        bool   `json:"pointer,omitempty"`
-	Wheel          bool   `json:"wheel,omitempty"`
-	ResizeEvents   bool   `json:"resizeEvents,omitempty"`
-	Background     string `json:"background,omitempty"`
-	FocusOnPointer bool   `json:"focusOnPointer,omitempty"`
-	AriaLabel      string `json:"ariaLabel,omitempty"`
-	Instructions   string `json:"instructions,omitempty"`
+	Width          int             `json:"width,omitempty"`
+	Height         int             `json:"height,omitempty"`
+	Scrollable     bool            `json:"scrollable,omitempty"`
+	HiDPI          bool            `json:"hidpi,omitempty"`
+	Interactive    bool            `json:"interactive,omitempty"`
+	Keyboard       bool            `json:"keyboard,omitempty"`
+	Pointer        bool            `json:"pointer,omitempty"`
+	WheelMode      CanvasWheelMode `json:"wheelMode,omitempty"`
+	ResizeEvents   bool            `json:"resizeEvents,omitempty"`
+	Background     string          `json:"background,omitempty"`
+	FocusOnPointer bool            `json:"focusOnPointer,omitempty"`
+	AriaLabel      string          `json:"ariaLabel,omitempty"`
+	Instructions   string          `json:"instructions,omitempty"`
 }
 
 // MetricStat is one KPI number card in the metrics panel.

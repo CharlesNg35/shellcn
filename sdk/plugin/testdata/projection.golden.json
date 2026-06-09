@@ -327,8 +327,14 @@
         "scrollable": {
           "type": "boolean"
         },
-        "wheel": {
-          "type": "boolean"
+        "wheelMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "capture",
+            "modified",
+            "none"
+          ]
         },
         "width": {
           "type": "number"

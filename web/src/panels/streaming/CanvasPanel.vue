@@ -59,9 +59,8 @@ const scrollable = computed(
     cfg.value?.scrollable ??
     (Boolean(cfg.value?.width) || Boolean(cfg.value?.height)),
 );
-const wheelEnabled = computed(
-  () => cfg.value?.wheel ?? (isInteractive.value && !scrollable.value),
-);
+const wheelEnabled = computed(() => isInteractive.value && !scrollable.value);
+const wheelMode = computed(() => cfg.value?.wheelMode || "auto");
 const canvasRole = computed(() =>
   isInteractive.value ? "application" : "img",
 );
@@ -168,7 +167,7 @@ function flushPointerMove(): void {
 }
 
 function onWheel(ev: WheelEvent): void {
-  if (!wheelEnabled.value) return;
+  if (!shouldSendWheel(ev)) return;
   ev.preventDefault();
   const point = renderer.pointFromEvent(ev);
   sendEvent({
@@ -180,6 +179,19 @@ function onWheel(ev: WheelEvent): void {
     deltaMode: ev.deltaMode,
     modifiers: modifiers(ev),
   });
+}
+
+function shouldSendWheel(ev: WheelEvent): boolean {
+  switch (wheelMode.value) {
+    case "none":
+      return false;
+    case "capture":
+      return true;
+    case "modified":
+      return ev.altKey || ev.ctrlKey || ev.metaKey;
+    default:
+      return Boolean(wheelEnabled.value);
+  }
 }
 
 function onKey(ev: KeyboardEvent): void {

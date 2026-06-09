@@ -224,7 +224,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("interactive", boolProp()),
 				prop("keyboard", boolProp()),
 				prop("pointer", boolProp()),
-				prop("wheel", boolProp()),
+				prop("wheelMode", enum("auto", "capture", "modified", "none")),
 				prop("resizeEvents", boolProp()),
 				prop("background", stringProp()),
 				prop("focusOnPointer", boolProp()),

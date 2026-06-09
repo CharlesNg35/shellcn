@@ -290,7 +290,7 @@ export interface CanvasPanelConfig {
   interactive?: boolean;
   keyboard?: boolean;
   pointer?: boolean;
-  wheel?: boolean;
+  wheelMode?: "auto" | "capture" | "modified" | "none";
   resizeEvents?: boolean;
   background?: string;
   focusOnPointer?: boolean;

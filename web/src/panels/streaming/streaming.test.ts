@@ -595,7 +595,7 @@ describe("streaming stub panels", () => {
     const w = mount(CanvasPanel, {
       props: {
         ...props,
-        config: { scrollable: true, interactive: true, wheel: true },
+        config: { scrollable: true, interactive: true, wheelMode: "capture" },
       },
       global: { plugins: [pinia] },
     });
@@ -617,6 +617,80 @@ describe("streaming stub panels", () => {
     expect(wheel.defaultPrevented).toBe(true);
     expect(socket.sent.some((msg) => msg.includes('"type":"wheel"'))).toBe(
       true,
+    );
+    w.unmount();
+  });
+
+  it("supports modifier-only canvas wheel input", async () => {
+    const w = mount(CanvasPanel, {
+      props: {
+        ...props,
+        config: {
+          scrollable: true,
+          interactive: true,
+          wheelMode: "modified",
+        },
+      },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const socket = streamSockets()[0];
+    socket.emit("open");
+    await flushPromises();
+
+    const canvas = w.get<HTMLCanvasElement>(
+      '[data-test="canvas-panel-canvas"]',
+    ).element;
+    const plain = new WheelEvent("wheel", {
+      deltaY: 120,
+      cancelable: true,
+      bubbles: true,
+    });
+    canvas.dispatchEvent(plain);
+    expect(plain.defaultPrevented).toBe(false);
+    expect(socket.sent.some((msg) => msg.includes('"type":"wheel"'))).toBe(
+      false,
+    );
+
+    const modified = new WheelEvent("wheel", {
+      deltaY: -80,
+      ctrlKey: true,
+      cancelable: true,
+      bubbles: true,
+    });
+    canvas.dispatchEvent(modified);
+    expect(modified.defaultPrevented).toBe(true);
+    expect(socket.sent.some((msg) => msg.includes('"type":"wheel"'))).toBe(
+      true,
+    );
+    w.unmount();
+  });
+
+  it("can disable canvas wheel input on responsive interactive surfaces", async () => {
+    const w = mount(CanvasPanel, {
+      props: {
+        ...props,
+        config: { interactive: true, wheelMode: "none" },
+      },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const socket = streamSockets()[0];
+    socket.emit("open");
+    await flushPromises();
+
+    const canvas = w.get<HTMLCanvasElement>(
+      '[data-test="canvas-panel-canvas"]',
+    ).element;
+    const wheel = new WheelEvent("wheel", {
+      deltaY: 120,
+      cancelable: true,
+      bubbles: true,
+    });
+    canvas.dispatchEvent(wheel);
+    expect(wheel.defaultPrevented).toBe(false);
+    expect(socket.sent.some((msg) => msg.includes('"type":"wheel"'))).toBe(
+      false,
     );
     w.unmount();
   });
