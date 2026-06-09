@@ -73,8 +73,8 @@ describe("primeVuePassthrough", () => {
     );
     expect(primeVuePassthrough.tablist.tabList).toContain("flex-nowrap");
     expect(primeVuePassthrough.tablist.tabList).toContain("pl-1");
-    expect(primeVuePassthrough.tablist.tabList).toContain("pr-9");
-    expect(primeVuePassthrough.tablist.tabList).toContain("scroll-pr-9");
+    expect(primeVuePassthrough.tablist.tabList).toContain("after:w-8");
+    expect(primeVuePassthrough.tablist.tabList).not.toContain("pr-9");
     expect(primeVuePassthrough.tab.root).toContain("shrink-0");
     expect(primeVuePassthrough.tab.root).toContain("whitespace-nowrap");
     expect(primeVuePassthrough.tablist.prevButton).toContain("absolute");

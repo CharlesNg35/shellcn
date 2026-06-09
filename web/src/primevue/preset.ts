@@ -644,7 +644,7 @@ export const primeVuePassthrough = {
     content:
       "min-w-0 overflow-x-auto overflow-y-hidden scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
     tabList:
-      "flex w-max min-w-full scroll-pr-9 flex-nowrap gap-1 py-0 pr-9 pl-1",
+      "flex w-max min-w-full flex-nowrap gap-1 py-0 pl-1 after:block after:w-8 after:shrink-0 after:content-['']",
     activeBar: "hidden",
     prevButton:
       "absolute inset-y-0 left-0 z-30 flex w-8 cursor-pointer items-center justify-center bg-linear-to-r from-surface-0 via-surface-0 to-transparent text-surface-500 outline-none transition-colors hover:text-surface-900 focus-visible:ring-2 focus-visible:ring-primary-500/35 dark:from-surface-950 dark:via-surface-950 dark:text-surface-400 dark:hover:text-surface-0 [&>svg]:h-4 [&>svg]:w-4",
