@@ -26,8 +26,8 @@ func recordTerminalSession(t *testing.T, h *harness, user string) (connID, recID
 	}
 	connID = createConnID(t, resp)
 
-	tok := h.mintTicket(t, user, connID, "t.ws", nil)
-	c, err := h.dialWS(t, user, "/api/connections/"+connID+"/x/t.ws?ticket="+tok)
+	tok := h.mintTicket(t, user, connID, "tester.ws", nil)
+	c, err := h.dialWS(t, user, "/api/connections/"+connID+"/x/tester.ws?ticket="+tok)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestDesktopChunkFlow(t *testing.T) {
 	id := createConnID(t, resp)
 
 	resp = h.do(t, http.MethodPost, "/api/connections/"+id+"/recordings/desktop", "op",
-		strings.NewReader(`{"routeId":"t.desk","format":"webm_canvas"}`))
+		strings.NewReader(`{"routeId":"tester.desk","format":"webm_canvas"}`))
 	if resp.Status != http.StatusCreated {
 		t.Fatalf("start desktop: %d (%s)", resp.Status, resp.Body)
 	}

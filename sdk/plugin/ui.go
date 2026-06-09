@@ -23,6 +23,7 @@ const (
 	PanelTaskProgress  PanelType = "task_progress"
 	PanelSplit         PanelType = "split"
 	PanelCanvas        PanelType = "canvas"
+	PanelWasm          PanelType = "wasm"
 
 	PanelGraph      PanelType = "graph"
 	PanelTrace      PanelType = "trace"
@@ -63,6 +64,7 @@ func (TimelineConfig) panelConfig()      {}
 func (TaskProgressConfig) panelConfig()  {}
 func (SplitConfig) panelConfig()         {}
 func (CanvasConfig) panelConfig()        {}
+func (WasmConfig) panelConfig()          {}
 
 // StreamKind tags the long-lived channel a panel binds to.
 type StreamKind string
@@ -308,6 +310,72 @@ type CanvasConfig struct {
 	FocusOnPointer bool   `json:"focusOnPointer,omitempty"`
 	AriaLabel      string `json:"ariaLabel,omitempty"`
 	Instructions   string `json:"instructions,omitempty"`
+}
+
+type WasmRuntime string
+
+const (
+	WasmRuntimeGo      WasmRuntime = "go"
+	WasmRuntimeGeneric WasmRuntime = "generic"
+)
+
+type WasmScaleMode string
+
+const (
+	WasmScaleFit    WasmScaleMode = "fit"
+	WasmScaleResize WasmScaleMode = "resize"
+	WasmScaleScroll WasmScaleMode = "scroll"
+)
+
+type WasmAsset struct {
+	Path   string     `json:"path"`
+	MIME   string     `json:"mime,omitempty"`
+	Source DataSource `json:"source"`
+}
+
+type WasmBoot struct {
+	Scripts []string `json:"scripts,omitempty"`
+}
+
+type WasmCapabilities struct {
+	Keyboard    bool `json:"keyboard,omitempty"`
+	Pointer     bool `json:"pointer,omitempty"`
+	Audio       bool `json:"audio,omitempty"`
+	Fullscreen  bool `json:"fullscreen,omitempty"`
+	PointerLock bool `json:"pointerLock,omitempty"`
+	Gamepad     bool `json:"gamepad,omitempty"`
+}
+
+type WasmBridgeRoute struct {
+	RouteID string            `json:"routeId"`
+	Method  Method            `json:"method,omitempty"`
+	Params  map[string]string `json:"params,omitempty"`
+}
+
+type WasmBridgeStream struct {
+	RouteID string            `json:"routeId"`
+	Params  map[string]string `json:"params,omitempty"`
+}
+
+type WasmBridge struct {
+	Routes  []WasmBridgeRoute  `json:"routes,omitempty"`
+	Streams []WasmBridgeStream `json:"streams,omitempty"`
+}
+
+// WasmConfig declares a sandboxed browser-side WASM app. The core owns the
+// iframe, CSP, asset URLs, and bridge; plugins declare assets and allowed routes.
+type WasmConfig struct {
+	Entry        string           `json:"entry"`
+	Runtime      WasmRuntime      `json:"runtime,omitempty"`
+	Boot         WasmBoot         `json:"boot,omitempty"`
+	Assets       []WasmAsset      `json:"assets,omitempty"`
+	Width        int              `json:"width,omitempty"`
+	Height       int              `json:"height,omitempty"`
+	ScaleMode    WasmScaleMode    `json:"scaleMode,omitempty"`
+	Capabilities WasmCapabilities `json:"capabilities,omitempty"`
+	Bridge       WasmBridge       `json:"bridge,omitempty"`
+	AriaLabel    string           `json:"ariaLabel,omitempty"`
+	Instructions string           `json:"instructions,omitempty"`
 }
 
 // MetricStat is one KPI number card in the metrics panel.

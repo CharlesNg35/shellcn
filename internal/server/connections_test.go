@@ -270,10 +270,10 @@ func TestDisconnectConnectionSessionClosesOnlyCurrentUserSession(t *testing.T) {
 		strings.NewReader(`{"subjectId":"viewer","access":"use"}`)); resp.Status != http.StatusCreated {
 		t.Fatalf("share c-op: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "op", nil); resp.Status != http.StatusOK {
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "op", nil); resp.Status != http.StatusOK {
 		t.Fatalf("open op session: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "viewer", nil); resp.Status != http.StatusOK {
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "viewer", nil); resp.Status != http.StatusOK {
 		t.Fatalf("open viewer session: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
 	if got := h.pluginSessions.Stats().Sessions; got != 2 {

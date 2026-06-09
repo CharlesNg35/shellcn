@@ -231,6 +231,18 @@ func (l *linter) panel(path string, p plugin.Panel) {
 		default:
 			l.add(Error, path, "canvas scaleMode %q is not supported", c.ScaleMode)
 		}
+	case plugin.WasmConfig:
+		switch c.ScaleMode {
+		case "", plugin.WasmScaleResize, plugin.WasmScaleFit, plugin.WasmScaleScroll:
+		default:
+			l.add(Error, path, "wasm scaleMode %q is not supported", c.ScaleMode)
+		}
+		if (c.Width == 0) != (c.Height == 0) {
+			l.add(Error, path, "wasm width and height must be declared together")
+		}
+		if c.Width > 0 && c.Height > 0 && c.ScaleMode == "" {
+			l.add(Warning, path, "wasm with fixed dimensions should declare scaleMode fit or scroll")
+		}
 	}
 }
 

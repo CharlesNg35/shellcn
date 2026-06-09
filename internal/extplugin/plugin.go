@@ -3,10 +3,13 @@
 package extplugin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
+	"time"
 
 	"google.golang.org/grpc"
 
@@ -124,6 +127,9 @@ func (g *grpcPlugin) invoke(rc *plugin.RequestContext, routeID string) (any, err
 	if err != nil {
 		return nil, grpcplugin.ErrorFromStatus(err)
 	}
+	if dl := resp.GetDownload(); dl != nil {
+		return decodeDownload(dl), nil
+	}
 	if len(resp.GetResultJson()) == 0 {
 		return nil, nil
 	}
@@ -132,6 +138,25 @@ func (g *grpcPlugin) invoke(rc *plugin.RequestContext, routeID string) (any, err
 		return nil, err
 	}
 	return result, nil
+}
+
+func decodeDownload(dl *pluginv1.DownloadResponse) *plugin.Download {
+	modTime := time.Time{}
+	if dl.GetModTimeUnixNano() != 0 {
+		modTime = time.Unix(0, dl.GetModTimeUnixNano())
+	}
+	size := dl.GetSize()
+	if size < 0 {
+		size = int64(len(dl.GetBody()))
+	}
+	return &plugin.Download{
+		Name:    dl.GetName(),
+		MIME:    dl.GetMime(),
+		Size:    size,
+		ModTime: modTime,
+		Inline:  dl.GetInline(),
+		Body:    io.NopCloser(bytes.NewReader(dl.GetBody())),
+	}
 }
 
 func wireUser(u plugin.User) *pluginv1.ActingUser {

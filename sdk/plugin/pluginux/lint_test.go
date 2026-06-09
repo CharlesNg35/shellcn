@@ -170,3 +170,33 @@ func TestLintRejectsFitCanvasWithoutLogicalSize(t *testing.T) {
 		t.Fatalf("expected fit canvas size error")
 	}
 }
+
+func TestLintRejectsPartialWasmDimensions(t *testing.T) {
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "x",
+		Title:      "X",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		Tabs: []plugin.Panel{{
+			Key:  "wasm",
+			Type: plugin.PanelWasm,
+			Config: plugin.WasmConfig{
+				Entry:     "app.wasm",
+				Width:     1280,
+				ScaleMode: plugin.WasmScaleFit,
+				Assets: []plugin.WasmAsset{{
+					Path:   "app.wasm",
+					Source: plugin.DataSource{RouteID: "x.asset"},
+				}},
+			},
+		}},
+	}
+	routes := []plugin.Route{{
+		ID: "x.asset", Method: plugin.MethodGet, Permission: "x.read",
+		Risk: plugin.RiskSafe, Handle: noop,
+	}}
+	if !hasError(pluginux.Lint(m, routes), "wasm width and height must be declared together") {
+		t.Fatalf("expected wasm dimension error")
+	}
+}

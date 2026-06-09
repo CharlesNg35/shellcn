@@ -20,6 +20,7 @@ export const KNOWN_PANEL_TYPES = [
   "task_progress",
   "split",
   "canvas",
+  "wasm",
   "graph",
   "trace",
   "kv",
@@ -296,6 +297,58 @@ export interface CanvasPanelConfig {
   resizeEvents?: boolean;
   background?: string;
   focusOnPointer?: boolean;
+  ariaLabel?: string;
+  instructions?: string;
+}
+
+export type WasmRuntime = "go" | "generic";
+export type WasmScaleMode = "fit" | "resize" | "scroll";
+
+export interface WasmAsset {
+  path: string;
+  mime?: string;
+  source: DataSource;
+}
+
+export interface WasmBoot {
+  scripts?: string[];
+}
+
+export interface WasmCapabilities {
+  keyboard?: boolean;
+  pointer?: boolean;
+  audio?: boolean;
+  fullscreen?: boolean;
+  pointerLock?: boolean;
+  gamepad?: boolean;
+}
+
+export interface WasmBridgeRoute {
+  routeId: string;
+  method?: Exclude<Method, "WS">;
+  params?: Record<string, string>;
+}
+
+export interface WasmBridgeStream {
+  routeId: string;
+  params?: Record<string, string>;
+}
+
+export interface WasmBridge {
+  routes?: WasmBridgeRoute[];
+  streams?: WasmBridgeStream[];
+}
+
+export interface WasmPanelConfig {
+  entry: string;
+  runtime?: WasmRuntime;
+  boot?: WasmBoot;
+  assets?: WasmAsset[];
+  width?: number;
+  height?: number;
+  scaleMode?: WasmScaleMode;
+  capabilities?: WasmCapabilities;
+  bridge?: WasmBridge;
   ariaLabel?: string;
   instructions?: string;
 }

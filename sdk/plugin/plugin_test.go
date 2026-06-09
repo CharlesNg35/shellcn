@@ -144,6 +144,10 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 	}{
 		{"unsupported api version", "APIVersion", func(m *plugin.Manifest, _ *[]plugin.Route) { m.APIVersion = 99 }},
 		{"missing name", "Name is required", func(m *plugin.Manifest, _ *[]plugin.Route) { m.Name = "" }},
+		{"name with uppercase", "Name \"Bad\" is invalid", func(m *plugin.Manifest, _ *[]plugin.Route) { m.Name = "Bad" }},
+		{"name with dot", "Name \"bad.plugin\" is invalid", func(m *plugin.Manifest, _ *[]plugin.Route) { m.Name = "bad.plugin" }},
+		{"name with slash", "Name \"bad/plugin\" is invalid", func(m *plugin.Manifest, _ *[]plugin.Route) { m.Name = "bad/plugin" }},
+		{"name with leading digit", "Name \"1bad\" is invalid", func(m *plugin.Manifest, _ *[]plugin.Route) { m.Name = "1bad" }},
 		{"missing category", "Category is required", func(m *plugin.Manifest, _ *[]plugin.Route) { m.Category = "" }},
 		{"unknown category", "not a built-in category", func(m *plugin.Manifest, _ *[]plugin.Route) { m.Category = "weird" }},
 		{"missing direct transport", "must include", func(m *plugin.Manifest, _ *[]plugin.Route) { m.SupportedTransports = nil }},
@@ -152,6 +156,9 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		}},
 		{"duplicate route id", "duplicate route ID", func(_ *plugin.Manifest, r *[]plugin.Route) {
 			*r = append(*r, plugin.Route{ID: "x.list", Method: plugin.MethodGet, Permission: "p", Risk: plugin.RiskSafe, Handle: noop})
+		}},
+		{"route outside plugin namespace", "must be namespaced under plugin", func(_ *plugin.Manifest, r *[]plugin.Route) {
+			(*r)[0].ID = "other.list"
 		}},
 		{"route missing permission", "missing a Permission", func(_ *plugin.Manifest, r *[]plugin.Route) {
 			(*r)[0].Permission = ""
@@ -389,6 +396,137 @@ func TestValidateAcceptsSplitAndTaskProgressPanels(t *testing.T) {
 	}
 	if err := plugin.Validate(m, routes); err != nil {
 		t.Fatalf("valid split/task manifest rejected: %v", err)
+	}
+}
+
+func TestValidateAcceptsWasmPanel(t *testing.T) {
+	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "wasm",
+		Title:      "WASM",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{
+			plugin.TransportDirect,
+		},
+		Tabs: []plugin.Panel{{
+			Key:   "app",
+			Label: "App",
+			Type:  plugin.PanelWasm,
+			Config: plugin.WasmConfig{
+				Entry:   "app.wasm",
+				Runtime: plugin.WasmRuntimeGo,
+				Boot:    plugin.WasmBoot{Scripts: []string{"wasm_exec.js"}},
+				Assets: []plugin.WasmAsset{
+					{Path: "wasm_exec.js", MIME: "text/javascript", Source: plugin.DataSource{RouteID: "wasm.asset", Params: map[string]string{"path": "wasm_exec.js"}}},
+					{Path: "app.wasm", MIME: "application/wasm", Source: plugin.DataSource{RouteID: "wasm.asset", Params: map[string]string{"path": "app.wasm"}}},
+				},
+				Bridge: plugin.WasmBridge{
+					Routes:  []plugin.WasmBridgeRoute{{RouteID: "wasm.state", Method: plugin.MethodGet}},
+					Streams: []plugin.WasmBridgeStream{{RouteID: "wasm.events"}},
+				},
+			},
+		}},
+	}
+	routes := []plugin.Route{
+		{ID: "wasm.asset", Method: plugin.MethodGet, Permission: "wasm.read", Risk: plugin.RiskSafe, Handle: noop},
+		{ID: "wasm.state", Method: plugin.MethodGet, Permission: "wasm.read", Risk: plugin.RiskSafe, Handle: noop},
+		{ID: "wasm.events", Method: plugin.MethodWS, Permission: "wasm.read", Risk: plugin.RiskSafe, Stream: stream},
+	}
+	if err := plugin.Validate(m, routes); err != nil {
+		t.Fatalf("valid wasm manifest rejected: %v", err)
+	}
+}
+
+func TestValidateRejectsBadWasmPanel(t *testing.T) {
+	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	base := func() (plugin.Manifest, []plugin.Route) {
+		return plugin.Manifest{
+				APIVersion: plugin.CurrentAPIVersion,
+				Name:       "wasm",
+				Title:      "WASM",
+				Category:   plugin.CategoryOther,
+				Layout:     plugin.LayoutTabs,
+				SupportedTransports: []plugin.Transport{
+					plugin.TransportDirect,
+				},
+				Tabs: []plugin.Panel{{
+					Key:   "app",
+					Label: "App",
+					Type:  plugin.PanelWasm,
+					Config: plugin.WasmConfig{
+						Entry: "app.wasm",
+						Assets: []plugin.WasmAsset{
+							{Path: "app.wasm", Source: plugin.DataSource{RouteID: "wasm.asset"}},
+						},
+						Bridge: plugin.WasmBridge{
+							Routes:  []plugin.WasmBridgeRoute{{RouteID: "wasm.state", Method: plugin.MethodGet}},
+							Streams: []plugin.WasmBridgeStream{{RouteID: "wasm.events"}},
+						},
+					},
+				}},
+			}, []plugin.Route{
+				{ID: "wasm.asset", Method: plugin.MethodGet, Permission: "wasm.read", Risk: plugin.RiskSafe, Handle: noop},
+				{ID: "wasm.state", Method: plugin.MethodGet, Permission: "wasm.read", Risk: plugin.RiskSafe, Handle: noop},
+				{ID: "wasm.events", Method: plugin.MethodWS, Permission: "wasm.read", Risk: plugin.RiskSafe, Stream: stream},
+			}
+	}
+	tests := []struct {
+		name string
+		want string
+		mut  func(*plugin.WasmConfig, *[]plugin.Route)
+	}{
+		{"entry not declared", "entry", func(c *plugin.WasmConfig, _ *[]plugin.Route) { c.Entry = "missing.wasm" }},
+		{"entry required", "entry is required", func(c *plugin.WasmConfig, _ *[]plugin.Route) { c.Entry = "" }},
+		{"runtime unsupported", "runtime", func(c *plugin.WasmConfig, _ *[]plugin.Route) {
+			c.Runtime = plugin.WasmRuntime("native")
+		}},
+		{"scale mode unsupported", "scaleMode", func(c *plugin.WasmConfig, _ *[]plugin.Route) {
+			c.ScaleMode = plugin.WasmScaleMode("cover")
+		}},
+		{"partial dimensions rejected", "width and height must be declared together", func(c *plugin.WasmConfig, _ *[]plugin.Route) {
+			c.Width = 1280
+		}},
+		{"boot script not declared", "boot.scripts", func(c *plugin.WasmConfig, _ *[]plugin.Route) {
+			c.Boot.Scripts = []string{"missing.js"}
+		}},
+		{"asset path required", "assets[0].path is required", func(c *plugin.WasmConfig, _ *[]plugin.Route) {
+			c.Entry = ""
+			c.Assets[0].Path = ""
+		}},
+		{"asset path duplicated", "duplicated", func(c *plugin.WasmConfig, _ *[]plugin.Route) {
+			c.Assets = append(c.Assets, c.Assets[0])
+		}},
+		{"asset source unknown", "assets[0].source references unknown route", func(c *plugin.WasmConfig, _ *[]plugin.Route) {
+			c.Assets[0].Source.RouteID = "ghost"
+		}},
+		{"bridge route wrong method", "declares method", func(c *plugin.WasmConfig, _ *[]plugin.Route) {
+			c.Bridge.Routes[0].Method = plugin.MethodPost
+		}},
+		{"bridge route cannot be stream", "references stream route", func(c *plugin.WasmConfig, _ *[]plugin.Route) {
+			c.Bridge.Routes[0].RouteID = "wasm.events"
+		}},
+		{"bridge stream must be ws", "invalid stream method", func(c *plugin.WasmConfig, _ *[]plugin.Route) {
+			c.Bridge.Streams[0].RouteID = "wasm.state"
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m, routes := base()
+			cfg := m.Tabs[0].Config.(plugin.WasmConfig)
+			tc.mut(&cfg, &routes)
+			m.Tabs[0].Config = cfg
+			err := plugin.Validate(m, routes)
+			if err == nil {
+				t.Fatalf("expected validation error containing %q", tc.want)
+			}
+			if !contains(err.Error(), tc.want) {
+				t.Errorf("error %q does not contain %q", err.Error(), tc.want)
+			}
+		})
 	}
 }
 

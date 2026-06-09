@@ -3,6 +3,8 @@ package plugin
 import (
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 )
 
 // CurrentAPIVersion is the plugin contract version this core supports.
@@ -16,6 +18,8 @@ var validMethods = map[Method]bool{
 	MethodGet: true, MethodPost: true, MethodPut: true,
 	MethodPatch: true, MethodDelete: true, MethodWS: true,
 }
+
+var pluginNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 
 // Validate checks a manifest + its routes at registration, returning an
 // aggregate of all actionable problems found (not just the first).
@@ -52,6 +56,8 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 	}
 	if m.Name == "" {
 		add("Name is required")
+	} else if !pluginNamePattern.MatchString(m.Name) {
+		add("Name %q is invalid; use lowercase letters, digits, underscores, or hyphens, starting with a letter", m.Name)
 	}
 	if m.Title == "" {
 		add("Title is required")
@@ -81,7 +87,7 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 		add("AgentProfile declared but transport %q is not supported", TransportAgent)
 	}
 
-	routesByID := validateRoutes(routes, add)
+	routesByID := validateRoutes(m.Name, routes, add)
 	actionIDs := validateActions(m, routesByID, collectTabKeys(m), add)
 	validateHeaderActions(m, actionIDs, add)
 	validateScope(m, routesByID, add)
@@ -175,12 +181,16 @@ func validateSchemaShape(ctx string, schema Schema, add func(string, ...any)) {
 }
 
 // validateRoutes checks route shape and returns the set of route ids.
-func validateRoutes(routes []Route, add func(string, ...any)) map[string]Route {
+func validateRoutes(pluginName string, routes []Route, add func(string, ...any)) map[string]Route {
 	ids := make(map[string]Route, len(routes))
+	routePrefix := pluginName + "."
 	for _, rt := range routes {
 		if rt.ID == "" {
 			add("a route is missing an ID")
 			continue
+		}
+		if pluginName != "" && !strings.HasPrefix(rt.ID, routePrefix) {
+			add("route %q must be namespaced under plugin %q (expected prefix %q)", rt.ID, pluginName, routePrefix)
 		}
 		if _, exists := ids[rt.ID]; exists {
 			add("duplicate route ID %q", rt.ID)
@@ -492,6 +502,20 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 			}
 		}
 	}
+	checkBridgeRoute := func(ctx string, route WasmBridgeRoute) {
+		checkRouteID(ctx, route.RouteID)
+		if rt, ok := routes[route.RouteID]; ok {
+			if rt.Method == MethodWS {
+				add("%s references stream route %q", ctx, route.RouteID)
+			}
+			if route.Method != "" && route.Method != rt.Method {
+				add("%s declares method %q but route %q uses %q", ctx, route.Method, route.RouteID, rt.Method)
+			}
+		}
+		if route.Method == MethodWS {
+			add("%s method cannot be WS", ctx)
+		}
+	}
 	checkTabs := func(ctx string, tabs []Panel) {
 		for _, t := range tabs {
 			checkPanelSource(fmt.Sprintf("%s tab %q source", ctx, t.Key), t.Type, t.Source)
@@ -506,6 +530,7 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 				checkStreamSource,
 				checkPanelSource,
 				checkActionIDs,
+				checkBridgeRoute,
 				add,
 			)
 		}
@@ -527,6 +552,7 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 			checkStreamSource,
 			checkPanelSource,
 			checkActionIDs,
+			checkBridgeRoute,
 			add,
 		)
 	}
@@ -607,6 +633,7 @@ func checkPanelConfigRoutes(
 	checkStreamSource func(string, *DataSource),
 	checkPanelSource func(string, PanelType, *DataSource),
 	checkActionIDs func(string, []string),
+	checkBridgeRoute func(string, WasmBridgeRoute),
 	add func(string, ...any),
 ) {
 	switch c := config.(type) {
@@ -659,6 +686,51 @@ func checkPanelConfigRoutes(
 	case TaskProgressConfig:
 		checkWriteRouteID(ctx+" cancelRouteId", c.CancelRouteID)
 		checkWriteRouteID(ctx+" retryRouteId", c.RetryRouteID)
+	case WasmConfig:
+		assetPaths := map[string]bool{}
+		if c.Entry == "" {
+			add("%s entry is required", ctx)
+		}
+		switch c.Runtime {
+		case "", WasmRuntimeGo, WasmRuntimeGeneric:
+		default:
+			add("%s runtime %q is not supported", ctx, c.Runtime)
+		}
+		switch c.ScaleMode {
+		case "", WasmScaleResize, WasmScaleFit, WasmScaleScroll:
+		default:
+			add("%s scaleMode %q is not supported", ctx, c.ScaleMode)
+		}
+		if c.Width < 0 || c.Height < 0 {
+			add("%s width and height must be non-negative", ctx)
+		}
+		if (c.Width == 0) != (c.Height == 0) {
+			add("%s width and height must be declared together", ctx)
+		}
+		for i, asset := range c.Assets {
+			if asset.Path == "" {
+				add("%s assets[%d].path is required", ctx, i)
+			} else if assetPaths[asset.Path] {
+				add("%s assets[%d].path %q is duplicated", ctx, i, asset.Path)
+			}
+			assetPaths[asset.Path] = true
+			checkReadSource(fmt.Sprintf("%s assets[%d].source", ctx, i), asset.Source)
+		}
+		if c.Entry != "" && !assetPaths[c.Entry] {
+			add("%s entry %q is not declared in assets", ctx, c.Entry)
+		}
+		for i, script := range c.Boot.Scripts {
+			if !assetPaths[script] {
+				add("%s boot.scripts[%d] %q is not declared in assets", ctx, i, script)
+			}
+		}
+		for i, route := range c.Bridge.Routes {
+			routeCtx := fmt.Sprintf("%s bridge.routes[%d].routeId", ctx, i)
+			checkBridgeRoute(routeCtx, route)
+		}
+		for i, stream := range c.Bridge.Streams {
+			checkStreamSource(fmt.Sprintf("%s bridge.streams[%d]", ctx, i), &DataSource{RouteID: stream.RouteID, Method: MethodWS, Params: stream.Params})
+		}
 	case DashboardConfig:
 		for _, cell := range c.Cells {
 			cellCtx := fmt.Sprintf("%s cell %q", ctx, cell.Key)
@@ -677,6 +749,7 @@ func checkPanelConfigRoutes(
 				checkStreamSource,
 				checkPanelSource,
 				checkActionIDs,
+				checkBridgeRoute,
 				add,
 			)
 		}
@@ -698,6 +771,7 @@ func checkPanelConfigRoutes(
 				checkStreamSource,
 				checkPanelSource,
 				checkActionIDs,
+				checkBridgeRoute,
 				add,
 			)
 		}
