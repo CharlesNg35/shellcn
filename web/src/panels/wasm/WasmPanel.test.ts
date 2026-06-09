@@ -20,6 +20,8 @@ describe("WasmPanel", () => {
         },
       },
     });
+    expect(w.find('[data-test="panel-loader"]').exists()).toBe(true);
+    expect(w.text()).not.toContain("Loading WebAssembly panel");
     await flushPromises();
 
     const iframe = w.get("iframe");

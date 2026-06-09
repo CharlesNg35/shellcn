@@ -10,6 +10,7 @@ import {
 } from "vue";
 import { useStream } from "../../composables/useStream";
 import { useTheme } from "../../composables/useTheme";
+import PanelLoader from "../../components/PanelLoader.vue";
 import type { CanvasPanelConfig } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import { parseCanvasFrame } from "./canvas/parser";
@@ -26,7 +27,8 @@ const props = defineProps<PanelProps>();
 const cfg = computed(() => props.config as CanvasPanelConfig | undefined);
 const panelEl = ref<HTMLElement | null>(null);
 const canvasEl = ref<HTMLCanvasElement | null>(null);
-const statusText = ref("Waiting for canvas frames...");
+const hasRenderedFrame = ref(false);
+const frameError = ref("");
 const { theme } = useTheme();
 
 const renderer = new Canvas2DRenderer((event) => sendEvent(event));
@@ -83,12 +85,23 @@ const canvasAriaLabel = computed(
     cfg.value?.ariaLabel ||
     (isInteractive.value ? "Interactive canvas panel" : "Canvas visualization"),
 );
-
 const { status, error, send, reconnect } = useStream(
   props.connectionId,
   props.source,
   { resource: props.resource },
   onFrame,
+);
+const showInitialLoader = computed(
+  () =>
+    !hasRenderedFrame.value &&
+    !frameError.value &&
+    status.value === "connecting",
+);
+const showEmptyState = computed(
+  () =>
+    !hasRenderedFrame.value &&
+    !frameError.value &&
+    status.value !== "connecting",
 );
 
 function setupCanvas(): void {
@@ -124,9 +137,10 @@ function canvasResizeOptions(): CanvasResizeOptions {
 function onFrame(frame: string): void {
   try {
     renderer.render(parseCanvasFrame(frame), cfg.value?.background);
-    statusText.value = "";
+    hasRenderedFrame.value = true;
+    frameError.value = "";
   } catch (err) {
-    statusText.value = `Invalid canvas frame: ${(err as Error).message}`;
+    frameError.value = `Invalid canvas frame: ${(err as Error).message}`;
   }
 }
 
@@ -313,11 +327,18 @@ watch(theme, () => {
           "This panel is controlled by the active plugin. Use keyboard and pointer input when available."
         }}
       </p>
+      <PanelLoader v-if="showInitialLoader" class="absolute inset-0" />
       <div
-        v-if="statusText"
+        v-else-if="showEmptyState"
         class="pointer-events-none absolute inset-0 grid place-items-center p-4 text-sm text-surface-500"
       >
-        {{ statusText }}
+        No canvas frames yet.
+      </div>
+      <div
+        v-else-if="frameError"
+        class="pointer-events-none absolute inset-0 grid place-items-center p-4 text-sm text-surface-500"
+      >
+        {{ frameError }}
       </div>
     </div>
   </div>

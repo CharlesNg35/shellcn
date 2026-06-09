@@ -3,6 +3,7 @@ import { computed, nextTick, onActivated, ref } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import { useStream } from "../../composables/useStream";
+import PanelLoader from "../../components/PanelLoader.vue";
 import type { PanelProps } from "../core/types";
 import StreamStatusBar from "./StreamStatusBar.vue";
 
@@ -57,6 +58,13 @@ const visibleLines = computed(() => {
   if (!q) return lines.value;
   return lines.value.filter((line) => line.toLowerCase().includes(q));
 });
+const hasLines = computed(() => lines.value.length > 0);
+const showInitialLoader = computed(
+  () => !hasLines.value && status.value === "connecting",
+);
+const emptyText = computed(() =>
+  status.value === "open" ? "No log frames yet." : "No log frames received.",
+);
 
 const downloadHref = computed(
   () =>
@@ -121,8 +129,12 @@ onActivated(() => void nextTick(scrollToBottom));
       >
         {{ line }}
       </div>
-      <div v-if="!visibleLines.length" class="text-surface-500">
-        Waiting for log frames…
+      <PanelLoader v-if="showInitialLoader" />
+      <div v-else-if="!hasLines" class="text-surface-500">
+        {{ emptyText }}
+      </div>
+      <div v-else-if="!visibleLines.length" class="text-surface-500">
+        No matching log lines.
       </div>
     </div>
   </div>

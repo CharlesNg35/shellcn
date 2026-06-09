@@ -140,6 +140,7 @@ import RemoteDesktopPanel from "./RemoteDesktopPanel.vue";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import TerminalGridPanel from "./TerminalGridPanel.vue";
 import CanvasPanel from "./CanvasPanel.vue";
+import TaskProgressPanel from "./TaskProgressPanel.vue";
 
 const props = {
   connectionId: "c1",
@@ -330,6 +331,39 @@ describe("streaming stub panels", () => {
       ),
     ).toBe(true);
     w.unmount();
+  });
+
+  it("uses the shared loader for empty streaming panel states", async () => {
+    for (const comp of [LogStreamPanel, CanvasPanel, TaskProgressPanel]) {
+      const w = mount(comp, { props, global: { plugins: [pinia] } });
+      await flushPromises();
+      expect(w.find('[data-test="panel-loader"]').exists()).toBe(true);
+      expect(w.text()).not.toContain("Waiting for");
+      w.unmount();
+      useStreamChannelsStore().closeForConnection("c1");
+    }
+  });
+
+  it("replaces empty streaming loaders after the stream opens", async () => {
+    const cases = [
+      { comp: LogStreamPanel, text: "No log frames yet." },
+      { comp: CanvasPanel, text: "No canvas frames yet." },
+      { comp: TaskProgressPanel, text: "No task output yet." },
+    ];
+
+    for (const current of cases) {
+      const w = mount(current.comp, { props, global: { plugins: [pinia] } });
+      await flushPromises();
+      const socket = streamSockets().at(-1)!;
+      socket.emit("open");
+      await nextTick();
+      await flushPromises();
+
+      expect(w.find('[data-test="panel-loader"]').exists()).toBe(false);
+      expect(w.text()).toContain(current.text);
+      w.unmount();
+      useStreamChannelsStore().closeForConnection("c1");
+    }
   });
 
   it("renders canvas frames and sends pointer input", async () => {

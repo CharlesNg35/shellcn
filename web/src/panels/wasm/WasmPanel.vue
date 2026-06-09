@@ -16,11 +16,15 @@ import type {
   WasmPanelConfig,
 } from "../../types/projection";
 import type { PanelProps } from "../core/types";
+import PanelLoader from "../../components/PanelLoader.vue";
 import PanelError from "../shared/PanelError.vue";
+
+const WASM_BRIDGE_SOURCE = "shellcn.wasm" as const;
+const HOST_BRIDGE_SOURCE = "shellcn.host" as const;
 
 type BridgeRequest =
   | {
-      source: "shellcn.wasm";
+      source: typeof WASM_BRIDGE_SOURCE;
       type: "route.request";
       id: string;
       routeId: string;
@@ -29,20 +33,25 @@ type BridgeRequest =
       body?: unknown;
     }
   | {
-      source: "shellcn.wasm";
+      source: typeof WASM_BRIDGE_SOURCE;
       type: "stream.open";
       id: string;
       routeId: string;
       params?: Record<string, string>;
     }
   | {
-      source: "shellcn.wasm";
+      source: typeof WASM_BRIDGE_SOURCE;
       type: "stream.send";
       id: string;
       data?: unknown;
     }
-  | { source: "shellcn.wasm"; type: "stream.close"; id: string }
-  | { source: "shellcn.wasm"; type: "asset.request"; id: string; path: string };
+  | { source: typeof WASM_BRIDGE_SOURCE; type: "stream.close"; id: string }
+  | {
+      source: typeof WASM_BRIDGE_SOURCE;
+      type: "asset.request";
+      id: string;
+      path: string;
+    };
 
 const props = defineProps<PanelProps>();
 
@@ -147,7 +156,7 @@ async function rebuild(): Promise<void> {
 function onMessage(event: MessageEvent): void {
   if (event.source !== iframeEl.value?.contentWindow) return;
   const msg = event.data as BridgeRequest;
-  if (msg?.source !== "shellcn.wasm") return;
+  if (msg?.source !== WASM_BRIDGE_SOURCE) return;
   switch (msg.type) {
     case "route.request":
       void handleRoute(msg);
@@ -280,7 +289,7 @@ function post(
   transfer?: Transferable[],
 ): void {
   iframeEl.value?.contentWindow?.postMessage(
-    { source: "shellcn.host", ...message },
+    { source: HOST_BRIDGE_SOURCE, ...message },
     "*",
     transfer ?? [],
   );
@@ -328,7 +337,7 @@ html,body{margin:0;width:100%;min-height:100%;height:100%;overflow:${bodyOverflo
 </style>
 </head>
 <body>
-<div id="shellcn-wasm-status">Loading WebAssembly...</div>
+<div id="shellcn-wasm-status">Loading</div>
 ${scriptOpen}${escapeScript(bridgeScript(config))}${scriptClose}
 ${boot}
 ${scriptOpen}${escapeScript(startScript(config))}${scriptClose}
@@ -337,13 +346,15 @@ ${scriptOpen}${escapeScript(startScript(config))}${scriptClose}
 }
 
 function bridgeScript(config: WasmPanelConfig): string {
+  const wasmSource = JSON.stringify(WASM_BRIDGE_SOURCE);
+  const hostSource = JSON.stringify(HOST_BRIDGE_SOURCE);
   return `
 (() => {
   const pending = new Map();
   const streams = new Map();
   function request(type, payload) {
     const id = crypto.randomUUID();
-    parent.postMessage({ source: "shellcn.wasm", type, id, ...payload }, "*");
+    parent.postMessage({ source: ${wasmSource}, type, id, ...payload }, "*");
     return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
   }
   window.shellcn = {
@@ -361,12 +372,12 @@ function bridgeScript(config: WasmPanelConfig): string {
     stream(routeId, params = {}) {
       const id = crypto.randomUUID();
       const listeners = new Set();
-      parent.postMessage({ source: "shellcn.wasm", type: "stream.open", id, routeId, params }, "*");
+      parent.postMessage({ source: ${wasmSource}, type: "stream.open", id, routeId, params }, "*");
       const handle = {
         id,
         onMessage(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-        send(data) { parent.postMessage({ source: "shellcn.wasm", type: "stream.send", id, data }, "*"); },
-        close() { parent.postMessage({ source: "shellcn.wasm", type: "stream.close", id }, "*"); streams.delete(id); },
+        send(data) { parent.postMessage({ source: ${wasmSource}, type: "stream.send", id, data }, "*"); },
+        close() { parent.postMessage({ source: ${wasmSource}, type: "stream.close", id }, "*"); streams.delete(id); },
         _emit(data) { for (const fn of listeners) fn(data); }
       };
       streams.set(id, handle);
@@ -375,7 +386,7 @@ function bridgeScript(config: WasmPanelConfig): string {
   };
   window.addEventListener("message", (event) => {
     const msg = event.data;
-    if (!msg || msg.source !== "shellcn.host") return;
+    if (!msg || msg.source !== ${hostSource}) return;
     if (msg.type === "route.response" || msg.type === "asset.response") {
       const req = pending.get(msg.id);
       if (!req) return;
@@ -429,12 +440,7 @@ function escapeScript(value: string): string {
     class="relative h-full min-h-0 bg-surface-950"
     :class="viewportClass"
   >
-    <div
-      v-if="loading"
-      class="absolute inset-0 grid place-items-center p-4 text-sm text-surface-400"
-    >
-      Loading WebAssembly panel...
-    </div>
+    <PanelLoader v-if="loading" class="absolute inset-0 bg-surface-950" />
     <iframe
       v-if="srcdoc"
       ref="iframeEl"
