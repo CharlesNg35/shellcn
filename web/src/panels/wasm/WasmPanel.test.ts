@@ -25,9 +25,13 @@ describe("WasmPanel", () => {
     await flushPromises();
 
     const iframe = w.get("iframe");
-    expect(iframe.attributes("sandbox")).toBe("allow-scripts allow-fullscreen");
+    expect(iframe.attributes("sandbox")).toBe("allow-scripts");
+    expect(iframe.attributes("sandbox")).not.toContain("allow-fullscreen");
     expect(iframe.attributes("sandbox")).not.toContain("allow-same-origin");
     expect(iframe.attributes("allow")).toBe("fullscreen; gamepad");
     expect(iframe.attributes("srcdoc")).toContain("overflow:auto");
+    expect(iframe.attributes("srcdoc")).toContain("theme:");
+    expect(iframe.attributes("srcdoc")).toContain("onTheme(fn)");
+    expect(iframe.attributes("srcdoc")).toContain('msg.type === "theme"');
   });
 });

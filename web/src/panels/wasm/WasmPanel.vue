@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import { apiFetch } from "../../api/client";
 import {
   callRoute,
@@ -17,6 +17,7 @@ import type {
 } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import PanelLoader from "../../components/PanelLoader.vue";
+import { useTheme } from "../../composables/useTheme";
 import PanelError from "../shared/PanelError.vue";
 
 const WASM_BRIDGE_SOURCE = "shellcn.wasm" as const;
@@ -60,6 +61,7 @@ const iframeEl = ref<HTMLIFrameElement | null>(null);
 const srcdoc = ref("");
 const error = ref<string | null>(null);
 const loading = ref(true);
+const { theme } = useTheme();
 const activeStreams = new Map<string, WebSocket>();
 
 const assetMap = computed(() => {
@@ -105,7 +107,6 @@ const iframeStyle = computed(() => {
 });
 const sandbox = computed(() => {
   const tokens = ["allow-scripts"];
-  if (cfg.value?.capabilities?.fullscreen) tokens.push("allow-fullscreen");
   if (cfg.value?.capabilities?.pointerLock) tokens.push("allow-pointer-lock");
   return tokens.join(" ");
 });
@@ -123,6 +124,7 @@ watch(
   },
   { immediate: true },
 );
+watch(theme, () => postTheme());
 
 window.addEventListener("message", onMessage);
 onUnmounted(() => {
@@ -145,6 +147,8 @@ async function rebuild(): Promise<void> {
       (config.boot?.scripts ?? []).map((path) => fetchAssetText(path)),
     );
     srcdoc.value = buildSrcdoc(config, scripts);
+    await nextTick();
+    postTheme();
   } catch (err) {
     error.value = (err as Error).message;
     srcdoc.value = "";
@@ -270,6 +274,10 @@ function closeStreams(): void {
   activeStreams.clear();
 }
 
+function postTheme(): void {
+  post({ type: "theme", theme: theme.value });
+}
+
 async function handleAsset(id: string, path: string): Promise<void> {
   try {
     const buffer = await fetchAssetBuffer(path);
@@ -352,6 +360,7 @@ function bridgeScript(config: WasmPanelConfig): string {
 (() => {
   const pending = new Map();
   const streams = new Map();
+  const themeListeners = new Set();
   function request(type, payload) {
     const id = crypto.randomUUID();
     parent.postMessage({ source: ${wasmSource}, type, id, ...payload }, "*");
@@ -359,6 +368,12 @@ function bridgeScript(config: WasmPanelConfig): string {
   }
   window.shellcn = {
     capabilities: ${JSON.stringify(config.capabilities ?? {})},
+    theme: ${JSON.stringify(theme.value)},
+    onTheme(fn) {
+      if (typeof fn !== "function") return () => {};
+      themeListeners.add(fn);
+      return () => themeListeners.delete(fn);
+    },
     route(routeId, body = {}, options = {}) {
       return request("route.request", { routeId, body, params: options.params || {}, method: options.method });
     },
@@ -387,6 +402,11 @@ function bridgeScript(config: WasmPanelConfig): string {
   window.addEventListener("message", (event) => {
     const msg = event.data;
     if (!msg || msg.source !== ${hostSource}) return;
+    if (msg.type === "theme") {
+      window.shellcn.theme = msg.theme;
+      for (const fn of themeListeners) fn(msg.theme);
+      return;
+    }
     if (msg.type === "route.response" || msg.type === "asset.response") {
       const req = pending.get(msg.id);
       if (!req) return;
@@ -451,6 +471,7 @@ function escapeScript(value: string): string {
       :style="iframeStyle"
       :allow="iframeAllow || undefined"
       class="block border-0 bg-surface-950"
+      @load="postTheme"
     />
     <p class="sr-only">
       {{
