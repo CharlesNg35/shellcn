@@ -97,6 +97,7 @@ class FakePath2D {
   roundRect() {}
   moveTo() {}
   lineTo() {}
+  quadraticCurveTo() {}
   arc() {}
   closePath() {}
 }
@@ -171,7 +172,8 @@ beforeEach(() => {
   const canvasContext = {
     setTransform: () => canvasOps.push("setTransform"),
     transform: () => canvasOps.push("transform"),
-    clearRect: () => canvasOps.push("clearRect"),
+    clearRect: (x: number, y: number, width: number, height: number) =>
+      canvasOps.push(`clearRect:${x}:${y}:${width}:${height}`),
     fillRect: () => canvasOps.push("fillRect"),
     beginPath: () => canvasOps.push("beginPath"),
     rect: () => canvasOps.push("rect"),
@@ -845,7 +847,36 @@ describe("streaming stub panels", () => {
           { type: "style", fillId: "g1", stroke: "#fff", lineWidth: 2 },
           { type: "lineDash", segments: [4, 2], offset: 1 },
           { type: "shadow", color: "#000", blur: 8, offsetX: 2, offsetY: 3 },
-          { type: "clip", shape: "rect", x: 0, y: 0, width: 200, height: 120 },
+          {
+            type: "clear",
+            color: "#111827",
+            x: 8,
+            y: 9,
+            width: 10,
+            height: 11,
+          },
+          {
+            type: "cursor",
+            value: "crosshair",
+          },
+          {
+            type: "clip",
+            shape: "rect",
+            x: 0,
+            y: 0,
+            width: 200,
+            height: 120,
+            radii: { topLeft: 4, topRight: 8, bottomRight: 12 },
+          },
+          {
+            type: "rect",
+            x: 12,
+            y: 14,
+            width: 100,
+            height: 48,
+            radii: { topLeft: 10, topRight: 14, bottomLeft: 6 },
+            fill: "#111827",
+          },
           {
             type: "arc",
             x: 50,
@@ -885,6 +916,13 @@ describe("streaming stub panels", () => {
             width: 80,
             text: "Wrapped canvas label",
             lineHeight: 16,
+            height: 52,
+            padding: 6,
+            maxLines: 1,
+            ellipsis: "...",
+            verticalAlign: "middle",
+            background: "#020617",
+            radius: 8,
           },
           {
             type: "textBox",
@@ -894,6 +932,21 @@ describe("streaming stub panels", () => {
             text: "Centered",
             textAlign: "center",
           },
+          {
+            type: "fillText",
+            x: 22,
+            y: 120,
+            text: "Fill command",
+          },
+          {
+            type: "strokeText",
+            x: 22,
+            y: 140,
+            text: "Stroke command",
+            stroke: "#fff",
+          },
+          { type: "focusRegion", id: "action" },
+          { type: "announce", text: "Action focused", mode: "assertive" },
           { type: "measureText", requestId: "m1", text: "Measure me" },
           {
             type: "imageData",
@@ -905,23 +958,43 @@ describe("streaming stub panels", () => {
           },
           { type: "snapshot", requestId: "s1", mime: "image/png" },
         ],
+        regions: [
+          {
+            id: "action",
+            x: 20,
+            y: 20,
+            width: 80,
+            height: 40,
+            label: "Action region",
+          },
+        ],
       }),
     });
     await nextTick();
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
 
     for (const op of [
       "linearGradient",
       "lineDash:4,2",
+      "clearRect:8:9:10:11",
       "clip",
       "arc",
       "quadraticCurveTo",
       "bezierCurveTo",
       "measureText:Measure me",
       "fillText:Centered:100:60",
+      "fillText:Fill command:22:120",
+      "strokeText:Stroke command:22:140",
       "putImageData",
     ]) {
       expect(canvasOps).toContain(op);
     }
+    const canvas = w.get('[data-test="canvas-panel-canvas"]');
+    expect((canvas.element as HTMLCanvasElement).style.cursor).toBe(
+      "crosshair",
+    );
+    expect(canvas.attributes("aria-description")).toBe("Action region");
+    expect(w.text()).toContain("Action focused");
     expect(
       socket.sent.some((msg) => msg.includes('"type":"textMetrics"')),
     ).toBe(true);

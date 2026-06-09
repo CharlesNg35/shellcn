@@ -3,6 +3,7 @@ import {
   type CanvasCommand,
   type CanvasFrame,
   type CanvasPoint,
+  type CanvasRadii,
   type CanvasRegion,
 } from "./types";
 
@@ -50,12 +51,26 @@ function parseRegion(value: unknown): CanvasRegion | undefined {
     width: optionalNumber(value.width),
     height: optionalNumber(value.height),
     radius: optionalNumber(value.radius),
+    radii: parseRadii(value.radii),
     points: parsePoints(value.points),
     d: stringValue(value.d),
     cursor: stringValue(value.cursor),
     label: stringValue(value.label),
     capturePointer: value.capturePointer === true,
   };
+}
+
+function parseRadii(value: unknown): CanvasRadii | undefined {
+  if (!isRecord(value)) return undefined;
+  const radii: CanvasRadii = {
+    topLeft: optionalNumber(value.topLeft),
+    topRight: optionalNumber(value.topRight),
+    bottomRight: optionalNumber(value.bottomRight),
+    bottomLeft: optionalNumber(value.bottomLeft),
+  };
+  return Object.values(radii).some((item) => item !== undefined)
+    ? radii
+    : undefined;
 }
 
 function parsePoints(value: unknown): CanvasPoint[] | undefined {

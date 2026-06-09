@@ -2,6 +2,13 @@ export type CanvasPoint = { x: number; y: number };
 
 export type CanvasRegionShape = "rect" | "circle" | "polygon" | "path";
 
+export interface CanvasRadii {
+  topLeft?: number;
+  topRight?: number;
+  bottomRight?: number;
+  bottomLeft?: number;
+}
+
 export interface CanvasRegion {
   id: string;
   shape?: CanvasRegionShape;
@@ -10,6 +17,7 @@ export interface CanvasRegion {
   width?: number;
   height?: number;
   radius?: number;
+  radii?: CanvasRadii;
   points?: CanvasPoint[];
   d?: string;
   cursor?: string;
@@ -41,6 +49,8 @@ export interface CanvasPaint {
 }
 
 export type CanvasGradientKind = "linear" | "radial" | "conic";
+export type CanvasTextVerticalAlign = "top" | "middle" | "bottom";
+export type CanvasAnnounceMode = "polite" | "assertive";
 
 export interface CanvasGradientStop {
   offset: number;
@@ -113,6 +123,7 @@ export type CanvasCommand =
       width?: number;
       height?: number;
       radius?: number;
+      radii?: CanvasRadii;
       points?: CanvasPoint[];
       fillRule?: CanvasFillRule;
     } & CanvasPaint)
@@ -123,6 +134,7 @@ export type CanvasCommand =
       width?: number;
       height?: number;
       radius?: number;
+      radii?: CanvasRadii;
     } & CanvasPaint)
   | ({
       type: "line";
@@ -180,11 +192,34 @@ export type CanvasCommand =
       maxWidth?: number;
     } & CanvasPaint)
   | ({
+      type: "fillText";
+      x?: number;
+      y?: number;
+      text?: string;
+      maxWidth?: number;
+    } & CanvasPaint)
+  | ({
+      type: "strokeText";
+      x?: number;
+      y?: number;
+      text?: string;
+      maxWidth?: number;
+    } & CanvasPaint)
+  | ({
       type: "textBox";
       x?: number;
       y?: number;
       width?: number;
+      height?: number;
       lineHeight?: number;
+      padding?: number;
+      maxLines?: number;
+      ellipsis?: string;
+      verticalAlign?: CanvasTextVerticalAlign;
+      background?: string;
+      backgroundId?: string;
+      radius?: number;
+      radii?: CanvasRadii;
       text?: string;
     } & CanvasPaint)
   | { type: "measureText"; requestId?: string; text?: string; font?: string }
@@ -215,7 +250,10 @@ export type CanvasCommand =
       mime?: string;
       quality?: number;
       minIntervalMs?: number;
-    };
+    }
+  | { type: "cursor"; value?: string }
+  | { type: "focusRegion"; id?: string }
+  | { type: "announce"; text?: string; mode?: CanvasAnnounceMode };
 
 export type CanvasCommandType = CanvasCommand["type"];
 
@@ -248,11 +286,16 @@ const canvasCommandTypes = [
   "ellipse",
   "path",
   "text",
+  "fillText",
+  "strokeText",
   "textBox",
   "measureText",
   "image",
   "imageData",
   "snapshot",
+  "cursor",
+  "focusRegion",
+  "announce",
 ] as const satisfies readonly CanvasCommandType[];
 
 export function isCanvasCommandType(type: string): type is CanvasCommandType {

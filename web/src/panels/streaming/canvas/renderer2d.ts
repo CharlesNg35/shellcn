@@ -6,6 +6,14 @@ import type {
   CanvasRegion,
   CanvasOutgoingEvent,
 } from "./types";
+import { addRectPath, pointInPolygon } from "./geometry";
+import {
+  fitTextBoxLines,
+  isEnhancedTextBox,
+  textBoxAnchorX,
+  textBoxOffsetY,
+  wrapText,
+} from "./textLayout";
 
 type EmitEvent = (event: CanvasOutgoingEvent) => void;
 const MAX_PATH_CACHE = 256;
@@ -23,6 +31,7 @@ export class Canvas2DRenderer {
   private regions: CanvasRegion[] = [];
   private lastFrame: CanvasFrame | null = null;
   private lastBackground: string | undefined;
+  private announcer: HTMLDivElement | null = null;
   private frameVersion = 0;
   private width = 800;
   private height = 450;
@@ -98,9 +107,9 @@ export class Canvas2DRenderer {
     version: number,
   ): void {
     this.resetFrameState();
+    if (frame.regions) this.regions = frame.regions;
     for (const command of frame.commands)
       this.run(command, background, version);
-    if (frame.regions) this.regions = frame.regions;
   }
 
   pointFromEvent(ev: MouseEvent | WheelEvent): CanvasPoint {
@@ -138,8 +147,16 @@ export class Canvas2DRenderer {
         if (typeof command.background === "string")
           this.clear(command.background);
         if (Array.isArray(command.regions)) this.regions = command.regions;
-        if (typeof command.cursor === "string" && this.canvas)
-          this.canvas.style.cursor = command.cursor;
+        if (typeof command.cursor === "string") this.setCursor(command.cursor);
+        break;
+      case "cursor":
+        this.setCursor(command.value || "default");
+        break;
+      case "focusRegion":
+        this.focusRegion(command.id);
+        break;
+      case "announce":
+        this.announce(command.text || "", command.mode);
         break;
       case "regions":
         this.regions = Array.isArray(command.items) ? command.items : [];
@@ -227,6 +244,12 @@ export class Canvas2DRenderer {
         break;
       case "text":
         this.drawText(command);
+        break;
+      case "fillText":
+        this.drawText(command, "fill");
+        break;
+      case "strokeText":
+        this.drawText(command, "stroke");
         break;
       case "textBox":
         this.drawTextBox(command);
@@ -399,6 +422,7 @@ export class Canvas2DRenderer {
       num(command.width),
       num(command.height),
       num(command.radius),
+      command.radii,
     );
     this.fillStroke(command);
     ctx.restore();
@@ -546,7 +570,13 @@ export class Canvas2DRenderer {
     ctx.restore();
   }
 
-  private drawText(command: Extract<CanvasCommand, { type: "text" }>): void {
+  private drawText(
+    command: Extract<
+      CanvasCommand,
+      { type: "text" | "fillText" | "strokeText" }
+    >,
+    mode: "normal" | "fill" | "stroke" = "normal",
+  ): void {
     const ctx = this.ctx;
     if (!ctx) return;
     ctx.save();
@@ -558,8 +588,10 @@ export class Canvas2DRenderer {
     const y = num(command.y);
     const maxWidth =
       typeof command.maxWidth === "number" ? command.maxWidth : undefined;
-    if (command.stroke) ctx.strokeText(text, x, y, maxWidth);
-    if (command.fill !== false) ctx.fillText(text, x, y, maxWidth);
+    if (mode === "stroke" || (mode === "normal" && command.stroke))
+      ctx.strokeText(text, x, y, maxWidth);
+    if (mode === "fill" || (mode === "normal" && command.fill !== false))
+      ctx.fillText(text, x, y, maxWidth);
     ctx.restore();
   }
 
@@ -573,11 +605,35 @@ export class Canvas2DRenderer {
     ctx.textBaseline = "alphabetic";
     this.applyStyle(command);
     const width = num(command.width, 240);
-    const lines = this.wrapText(ctx, str(command.text), width);
     const lineHeight = num(command.lineHeight, 18);
-    const x = textBoxAnchorX(num(command.x), width, ctx.textAlign);
+    const padding = Math.max(0, num(command.padding));
+    const enhanced = isEnhancedTextBox(command);
+    const contentWidth = Math.max(1, width - padding * 2);
+    const lines = fitTextBoxLines(
+      ctx,
+      this.wrapText(ctx, str(command.text), contentWidth),
+      contentWidth,
+      command.maxLines,
+      command.ellipsis,
+    );
+    if (enhanced) this.drawTextBoxBackground(command, width, padding);
+    const height = num(command.height, lines.length * lineHeight + padding * 2);
+    const textHeight = lines.length * lineHeight;
+    const offsetY = textBoxOffsetY(
+      height,
+      textHeight,
+      padding,
+      command.verticalAlign,
+    );
+    const x = textBoxAnchorX(
+      num(command.x) + padding,
+      contentWidth,
+      ctx.textAlign,
+    );
+    const baseline = enhanced ? "top" : "alphabetic";
+    ctx.textBaseline = baseline;
     lines.forEach((line, index) => {
-      const y = num(command.y) + index * lineHeight;
+      const y = num(command.y) + (enhanced ? offsetY : 0) + index * lineHeight;
       if (command.stroke) ctx.strokeText(line, x, y);
       if (command.fill !== false) ctx.fillText(line, x, y);
     });
@@ -710,6 +766,7 @@ export class Canvas2DRenderer {
     width?: number;
     height?: number;
     radius?: number;
+    radii?: CanvasRegion["radii"];
     points?: CanvasPoint[];
   }): Path2D | undefined {
     const path = new Path2D();
@@ -734,6 +791,7 @@ export class Canvas2DRenderer {
       num(shape.width),
       num(shape.height),
       num(shape.radius),
+      shape.radii,
     );
     return path;
   }
@@ -807,66 +865,71 @@ export class Canvas2DRenderer {
     remember(this.textWrapCache, key, lines, MAX_TEXT_WRAP_CACHE);
     return lines;
   }
-}
 
-function addRectPath(
-  path: Pick<CanvasRenderingContext2D, "rect"> | Path2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius = 0,
-): void {
-  if (radius > 0 && "roundRect" in path)
-    path.roundRect(x, y, width, height, radius);
-  else path.rect(x, y, width, height);
-}
+  private drawTextBoxBackground(
+    command: Extract<CanvasCommand, { type: "textBox" }>,
+    width: number,
+    padding: number,
+  ): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const background = command.backgroundId
+      ? this.resources.get(command.backgroundId)
+      : command.background;
+    if (!background) return;
+    const height = num(
+      command.height,
+      num(command.lineHeight, 18) + padding * 2,
+    );
+    ctx.save();
+    if (typeof background === "string" || isCanvasStyle(background))
+      ctx.fillStyle = background;
+    ctx.beginPath();
+    addRectPath(
+      ctx,
+      num(command.x),
+      num(command.y),
+      width,
+      height,
+      num(command.radius),
+      command.radii,
+    );
+    ctx.fill();
+    ctx.restore();
+  }
 
-function wrapText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  width: number,
-): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (current && ctx.measureText(next).width > width) {
-      lines.push(current);
-      current = word;
+  private setCursor(cursor: string): void {
+    if (this.canvas) this.canvas.style.cursor = cursor;
+  }
+
+  private focusRegion(id?: string): void {
+    if (!this.canvas) return;
+    const region = this.regions.find((item) => item.id === id);
+    if (region?.label) {
+      this.canvas.setAttribute("aria-description", region.label);
+      this.canvas.title = region.label;
     } else {
-      current = next;
+      this.canvas.removeAttribute("aria-description");
+      this.canvas.removeAttribute("title");
     }
   }
-  if (current) lines.push(current);
-  return lines.length ? lines : [""];
-}
 
-function textBoxAnchorX(
-  x: number,
-  width: number,
-  align: CanvasTextAlign,
-): number {
-  if (align === "center") return x + width / 2;
-  if (align === "right" || align === "end") return x + width;
-  return x;
-}
-
-function pointInPolygon(point: CanvasPoint, polygon: CanvasPoint[]): boolean {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].x;
-    const yi = polygon[i].y;
-    const xj = polygon[j].x;
-    const yj = polygon[j].y;
-    if (
-      yi > point.y !== yj > point.y &&
-      point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi
-    )
-      inside = !inside;
+  private announce(text: string, mode?: string): void {
+    if (!this.canvas || !text) return;
+    if (!this.announcer) {
+      this.announcer = document.createElement("div");
+      this.announcer.className = "sr-only";
+      this.canvas.insertAdjacentElement("afterend", this.announcer);
+    }
+    this.announcer.setAttribute(
+      "aria-live",
+      mode === "assertive" ? "assertive" : "polite",
+    );
+    this.announcer.textContent = "";
+    window.setTimeout(() => {
+      if (this.announcer) this.announcer.textContent = text;
+    }, 0);
   }
-  return inside;
 }
 
 function isCanvasStyle(

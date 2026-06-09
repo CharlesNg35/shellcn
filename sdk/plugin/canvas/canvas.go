@@ -49,11 +49,16 @@ const (
 	CommandEllipse        CommandType = "ellipse"
 	CommandPath           CommandType = "path"
 	CommandText           CommandType = "text"
+	CommandFillText       CommandType = "fillText"
+	CommandStrokeText     CommandType = "strokeText"
 	CommandTextBox        CommandType = "textBox"
 	CommandMeasureText    CommandType = "measureText"
 	CommandImage          CommandType = "image"
 	CommandImageData      CommandType = "imageData"
 	CommandSnapshot       CommandType = "snapshot"
+	CommandCursor         CommandType = "cursor"
+	CommandFocusRegion    CommandType = "focusRegion"
+	CommandAnnounce       CommandType = "announce"
 )
 
 type EventType string
@@ -112,6 +117,28 @@ const (
 	TextBaselineBottom      TextBaseline = "bottom"
 )
 
+type TextVerticalAlign string
+
+const (
+	TextVerticalAlignTop    TextVerticalAlign = "top"
+	TextVerticalAlignMiddle TextVerticalAlign = "middle"
+	TextVerticalAlignBottom TextVerticalAlign = "bottom"
+)
+
+type FillRule string
+
+const (
+	FillRuleNonZero FillRule = "nonzero"
+	FillRuleEvenOdd FillRule = "evenodd"
+)
+
+type AnnounceMode string
+
+const (
+	AnnouncePolite    AnnounceMode = "polite"
+	AnnounceAssertive AnnounceMode = "assertive"
+)
+
 type CompositeOperation string
 
 const (
@@ -157,6 +184,13 @@ type Point struct {
 	Y float64 `json:"y"`
 }
 
+type Radii struct {
+	TopLeft     float64 `json:"topLeft,omitempty"`
+	TopRight    float64 `json:"topRight,omitempty"`
+	BottomRight float64 `json:"bottomRight,omitempty"`
+	BottomLeft  float64 `json:"bottomLeft,omitempty"`
+}
+
 type RegionShape string
 
 const (
@@ -174,6 +208,7 @@ type Region struct {
 	Width          float64     `json:"width,omitempty"`
 	Height         float64     `json:"height,omitempty"`
 	Radius         float64     `json:"radius,omitempty"`
+	Radii          *Radii      `json:"radii,omitempty"`
 	Points         []Point     `json:"points,omitempty"`
 	D              string      `json:"d,omitempty"`
 	Cursor         string      `json:"cursor,omitempty"`
@@ -259,7 +294,11 @@ type Paint struct {
 }
 
 type Clear struct {
-	Color string `json:"color,omitempty"`
+	Color  string  `json:"color,omitempty"`
+	X      float64 `json:"x,omitempty"`
+	Y      float64 `json:"y,omitempty"`
+	Width  float64 `json:"width,omitempty"`
+	Height float64 `json:"height,omitempty"`
 }
 
 type Set struct {
@@ -361,8 +400,9 @@ type Clip struct {
 	Width    float64     `json:"width,omitempty"`
 	Height   float64     `json:"height,omitempty"`
 	Radius   float64     `json:"radius,omitempty"`
+	Radii    *Radii      `json:"radii,omitempty"`
 	Points   []Point     `json:"points,omitempty"`
-	FillRule string      `json:"fillRule,omitempty"`
+	FillRule FillRule    `json:"fillRule,omitempty"`
 }
 
 type Rect struct {
@@ -372,6 +412,7 @@ type Rect struct {
 	Width  float64 `json:"width,omitempty"`
 	Height float64 `json:"height,omitempty"`
 	Radius float64 `json:"radius,omitempty"`
+	Radii  *Radii  `json:"radii,omitempty"`
 }
 
 type Line struct {
@@ -442,7 +483,8 @@ type Ellipse struct {
 
 type Path struct {
 	Paint
-	D string `json:"d,omitempty"`
+	D        string   `json:"d,omitempty"`
+	FillRule FillRule `json:"fillRule,omitempty"`
 }
 
 type Text struct {
@@ -453,13 +495,38 @@ type Text struct {
 	MaxWidth *float64 `json:"maxWidth,omitempty"`
 }
 
+type FillText struct {
+	Paint
+	X        float64  `json:"x,omitempty"`
+	Y        float64  `json:"y,omitempty"`
+	Text     string   `json:"text,omitempty"`
+	MaxWidth *float64 `json:"maxWidth,omitempty"`
+}
+
+type StrokeText struct {
+	Paint
+	X        float64  `json:"x,omitempty"`
+	Y        float64  `json:"y,omitempty"`
+	Text     string   `json:"text,omitempty"`
+	MaxWidth *float64 `json:"maxWidth,omitempty"`
+}
+
 type TextBox struct {
 	Paint
-	X          float64 `json:"x,omitempty"`
-	Y          float64 `json:"y,omitempty"`
-	Width      float64 `json:"width,omitempty"`
-	LineHeight float64 `json:"lineHeight,omitempty"`
-	Text       string  `json:"text,omitempty"`
+	X             float64           `json:"x,omitempty"`
+	Y             float64           `json:"y,omitempty"`
+	Width         float64           `json:"width,omitempty"`
+	Height        float64           `json:"height,omitempty"`
+	LineHeight    float64           `json:"lineHeight,omitempty"`
+	Padding       float64           `json:"padding,omitempty"`
+	MaxLines      int               `json:"maxLines,omitempty"`
+	Ellipsis      string            `json:"ellipsis,omitempty"`
+	VerticalAlign TextVerticalAlign `json:"verticalAlign,omitempty"`
+	Background    string            `json:"background,omitempty"`
+	BackgroundID  string            `json:"backgroundId,omitempty"`
+	Radius        float64           `json:"radius,omitempty"`
+	Radii         *Radii            `json:"radii,omitempty"`
+	Text          string            `json:"text,omitempty"`
 }
 
 type MeasureText struct {
@@ -497,6 +564,19 @@ type Snapshot struct {
 	MinIntervalMs int     `json:"minIntervalMs,omitempty"`
 }
 
+type Cursor struct {
+	Value string `json:"value,omitempty"`
+}
+
+type FocusRegion struct {
+	ID string `json:"id,omitempty"`
+}
+
+type Announce struct {
+	Text string       `json:"text,omitempty"`
+	Mode AnnounceMode `json:"mode,omitempty"`
+}
+
 func (Clear) canvasCommand()          {}
 func (RawCommand) canvasCommand()     {}
 func (Set) canvasCommand()            {}
@@ -526,11 +606,16 @@ func (Circle) canvasCommand()         {}
 func (Ellipse) canvasCommand()        {}
 func (Path) canvasCommand()           {}
 func (Text) canvasCommand()           {}
+func (FillText) canvasCommand()       {}
+func (StrokeText) canvasCommand()     {}
 func (TextBox) canvasCommand()        {}
 func (MeasureText) canvasCommand()    {}
 func (Image) canvasCommand()          {}
 func (ImageData) canvasCommand()      {}
 func (Snapshot) canvasCommand()       {}
+func (Cursor) canvasCommand()         {}
+func (FocusRegion) canvasCommand()    {}
+func (Announce) canvasCommand()       {}
 
 func (c Clear) MarshalJSON() ([]byte, error) {
 	type payload Clear
@@ -681,6 +766,16 @@ func (c Text) MarshalJSON() ([]byte, error) {
 	return marshalCommand(CommandText, payload(c), &c.Paint)
 }
 
+func (c FillText) MarshalJSON() ([]byte, error) {
+	type payload FillText
+	return marshalCommand(CommandFillText, payload(c), &c.Paint)
+}
+
+func (c StrokeText) MarshalJSON() ([]byte, error) {
+	type payload StrokeText
+	return marshalCommand(CommandStrokeText, payload(c), &c.Paint)
+}
+
 func (c TextBox) MarshalJSON() ([]byte, error) {
 	type payload TextBox
 	return marshalCommand(CommandTextBox, payload(c), &c.Paint)
@@ -704,6 +799,21 @@ func (c ImageData) MarshalJSON() ([]byte, error) {
 func (c Snapshot) MarshalJSON() ([]byte, error) {
 	type payload Snapshot
 	return marshalCommand(CommandSnapshot, payload(c), nil)
+}
+
+func (c Cursor) MarshalJSON() ([]byte, error) {
+	type payload Cursor
+	return marshalCommand(CommandCursor, payload(c), nil)
+}
+
+func (c FocusRegion) MarshalJSON() ([]byte, error) {
+	type payload FocusRegion
+	return marshalCommand(CommandFocusRegion, payload(c), nil)
+}
+
+func (c Announce) MarshalJSON() ([]byte, error) {
+	type payload Announce
+	return marshalCommand(CommandAnnounce, payload(c), nil)
 }
 
 func marshalCommand(commandType CommandType, payload any, paint *Paint) ([]byte, error) {
