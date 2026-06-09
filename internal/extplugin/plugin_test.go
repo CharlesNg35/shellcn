@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"testing"
 
@@ -57,6 +58,15 @@ func (s *stubServer) Connect(context.Context, *pluginv1.ConnectRequest) (*plugin
 func (s *stubServer) Invoke(_ context.Context, req *pluginv1.InvokeRequest) (*pluginv1.InvokeResponse, error) {
 	if req.GetParams()["fail"] == "1" {
 		return nil, status.Error(codes.NotFound, "row gone")
+	}
+	if req.GetParams()["download"] == "1" {
+		return &pluginv1.InvokeResponse{Download: &pluginv1.DownloadResponse{
+			Name:   "app.wasm",
+			Mime:   "application/wasm",
+			Size:   4,
+			Inline: true,
+			Body:   []byte{0x00, 0x61, 0x73, 0x6d},
+		}}, nil
 	}
 	out, _ := json.Marshal(map[string]any{
 		"route":       req.GetRouteId(),
@@ -195,6 +205,36 @@ func TestInvokeThroughSessionHandle(t *testing.T) {
 	}
 	if got := res.(map[string]any); got["route"] != "demo.list" {
 		t.Fatalf("unexpected result: %v", got)
+	}
+}
+
+func TestInvokeDownloadRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	manifest, routes := fixture()
+	bundle, _ := grpcplugin.EncodeManifest(manifest, routes)
+	p, err := extplugin.New(ctx, dialStub(t, &stubServer{manifest: bundle}))
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+	sess, err := p.Connect(ctx, plugin.ConnectConfig{ConnectionID: "c1", Transport: plugin.TransportDirect})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	rc := plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, sess, map[string]string{"download": "1"}, nil, nil)
+	res, err := p.Routes()[0].Handle(rc)
+	if err != nil {
+		t.Fatalf("handle: %v", err)
+	}
+	dl, ok := res.(*plugin.Download)
+	if !ok {
+		t.Fatalf("result = %T, want *plugin.Download", res)
+	}
+	body, err := io.ReadAll(dl.Body)
+	if err != nil {
+		t.Fatalf("read download: %v", err)
+	}
+	if dl.Name != "app.wasm" || dl.MIME != "application/wasm" || !dl.Inline || string(body) != "\x00asm" {
+		t.Fatalf("download mismatch: %#v body=%#v", dl, body)
 	}
 }
 

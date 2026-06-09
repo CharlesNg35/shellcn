@@ -9,8 +9,8 @@ type Resizer interface {
 
 // CopyTerminalInput forwards browser keystrokes from client to ch, handling the
 // terminal panel's in-band control frames: a frame beginning with 0x00 carries
-// JSON ({"type":"resize","cols":N,"rows":N}) and is applied to ch when it
-// implements Resizer instead of being written upstream. Use it as the
+// JSON ({"type":"resize","cols":N,"rows":N,"theme":"dark"}) and is applied to
+// ch when it implements Resizer instead of being written upstream. Use it as the
 // browser→upstream half of a terminal StreamHandler:
 //
 //	go func() { errc <- plugin.CopyTerminalInput(ch, client) }()
@@ -33,24 +33,35 @@ func CopyTerminalInput(ch Channel, client ClientStream) error {
 }
 
 func applyTerminalControl(ch Channel, frame []byte) {
-	cols, rows, ok := ParseResizeControl(frame)
-	if !ok {
+	control, ok := ParseTerminalControl(frame)
+	if !ok || control.Type != "resize" {
 		return
 	}
 	if r, ok := ch.(Resizer); ok {
-		_ = r.Resize(cols, rows)
+		_ = r.Resize(control.Cols, control.Rows)
 	}
+}
+
+type TerminalControl struct {
+	Type  string     `json:"type"`
+	Cols  int        `json:"cols,omitempty"`
+	Rows  int        `json:"rows,omitempty"`
+	Theme PanelTheme `json:"theme,omitempty"`
+}
+
+func ParseTerminalControl(frame []byte) (TerminalControl, bool) {
+	var msg TerminalControl
+	if json.Unmarshal(frame, &msg) != nil || msg.Type == "" {
+		return TerminalControl{}, false
+	}
+	return msg, true
 }
 
 // ParseResizeControl decodes a terminal control frame's JSON payload (the bytes
 // after the 0x00 prefix); ok is false for anything that is not a resize.
 func ParseResizeControl(frame []byte) (cols, rows int, ok bool) {
-	var msg struct {
-		Type string `json:"type"`
-		Cols int    `json:"cols"`
-		Rows int    `json:"rows"`
-	}
-	if json.Unmarshal(frame, &msg) != nil || msg.Type != "resize" {
+	msg, ok := ParseTerminalControl(frame)
+	if !ok || msg.Type != "resize" {
 		return 0, 0, false
 	}
 	return msg.Cols, msg.Rows, true

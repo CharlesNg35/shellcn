@@ -101,6 +101,16 @@ message InvokeRequest {
 
 message InvokeResponse {
   bytes result_json = 1;
+  DownloadResponse download = 2;
+}
+
+message DownloadResponse {
+  string name = 1;
+  string mime = 2;
+  int64 size = 3;
+  int64 mod_time_unix_nano = 4;
+  bool inline = 5;
+  bytes body = 6;
 }
 
 message StreamStart {

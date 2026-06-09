@@ -640,7 +640,7 @@ func (s *Server) streamHasContinuousClientReader(res resolved) bool {
 }
 
 func streamKindHasContinuousClientReader(kind plugin.StreamKind) bool {
-	return kind == plugin.StreamTerminal || kind == plugin.StreamDesktop
+	return kind == plugin.StreamTerminal || kind == plugin.StreamDesktop || kind == plugin.StreamCanvas
 }
 
 // streamCloseReason fits an error into a WebSocket close reason.

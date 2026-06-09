@@ -214,6 +214,43 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("panels", array(splitPanelObject())),
 			),
 		},
+		PanelCanvas: {
+			Type: "object",
+			Properties: props(
+				prop("width", number()),
+				prop("height", number()),
+				prop("scaleMode", enum("resize", "fit", "scroll")),
+				prop("minScale", number()),
+				prop("maxScale", number()),
+				prop("hidpi", boolProp()),
+				prop("interactive", boolProp()),
+				prop("keyboard", boolProp()),
+				prop("pointer", boolProp()),
+				prop("wheelMode", enum("auto", "capture", "modified", "none")),
+				prop("resizeEvents", boolProp()),
+				prop("background", stringProp()),
+				prop("focusOnPointer", boolProp()),
+				prop("ariaLabel", stringProp()),
+				prop("instructions", stringProp()),
+			),
+		},
+		PanelWasm: {
+			Type: "object",
+			Properties: props(
+				prop("entry", stringProp()),
+				prop("runtime", enum("go", "generic")),
+				prop("boot", wasmBoot()),
+				prop("assets", array(wasmAsset())),
+				prop("width", number()),
+				prop("height", number()),
+				prop("scaleMode", enum("fit", "resize", "scroll")),
+				prop("capabilities", wasmCapabilities()),
+				prop("bridge", wasmBridge()),
+				prop("ariaLabel", stringProp()),
+				prop("instructions", stringProp()),
+			),
+			Required: []string{"entry"},
+		},
 	}
 }
 
@@ -260,6 +297,62 @@ func dataSource() PanelConfigProperty {
 			prop("params", stringMap()),
 		),
 		Required: []string{"routeId"},
+	}
+}
+
+func wasmBoot() PanelConfigProperty {
+	return PanelConfigProperty{Type: "object", Properties: props(prop("scripts", array(stringProp())))}
+}
+
+func wasmAsset() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("path", stringProp()),
+			prop("mime", stringProp()),
+			prop("source", dataSource()),
+		),
+		Required: []string{"path", "source"},
+	}
+}
+
+func wasmCapabilities() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("keyboard", boolProp()),
+			prop("pointer", boolProp()),
+			prop("audio", boolProp()),
+			prop("fullscreen", boolProp()),
+			prop("pointerLock", boolProp()),
+			prop("gamepad", boolProp()),
+		),
+	}
+}
+
+func wasmBridge() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("routes", array(wasmBridgeRoute())),
+			prop("streams", array(wasmBridgeStream())),
+		),
+	}
+}
+
+func wasmBridgeRoute() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type:       "object",
+		Properties: props(prop("routeId", stringProp()), prop("method", enum("GET", "POST", "PUT", "PATCH", "DELETE")), prop("params", stringMap())),
+		Required:   []string{"routeId"},
+	}
+}
+
+func wasmBridgeStream() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type:       "object",
+		Properties: props(prop("routeId", stringProp()), prop("params", stringMap())),
+		Required:   []string{"routeId"},
 	}
 }
 

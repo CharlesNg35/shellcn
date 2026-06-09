@@ -114,8 +114,9 @@ onMounted(() => {
 
       <Tabs
         :value="tab"
+        scrollable
         :pt="{
-          root: 'flex flex-col',
+          root: 'flex min-w-0 flex-col',
           tabpanels: { root: 'overflow-visible pt-4' },
           tabpanel: { root: 'focus-visible:outline-none' },
         }"

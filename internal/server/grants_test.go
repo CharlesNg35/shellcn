@@ -19,7 +19,7 @@ func TestConnectionGrantUseVsManage(t *testing.T) {
 	}
 	grantID := createConnID(t, resp)
 
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "viewer", nil); resp.Status != http.StatusOK {
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "viewer", nil); resp.Status != http.StatusOK {
 		t.Errorf("use grant should allow opening: got %d", resp.Status)
 	}
 	if resp := h.do(t, http.MethodGet, "/api/connections", "viewer", nil); resp.Status != http.StatusOK ||
@@ -43,7 +43,7 @@ func TestConnectionGrantUseVsManage(t *testing.T) {
 	if resp := h.do(t, http.MethodDelete, "/api/connections/c-op/grants/"+grantID, "op", nil); resp.Status != http.StatusOK {
 		t.Fatalf("revoke: want 200, got %d", resp.Status)
 	}
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "viewer", nil); resp.Status != http.StatusForbidden {
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "viewer", nil); resp.Status != http.StatusForbidden {
 		t.Errorf("after revoke: want 403, got %d", resp.Status)
 	}
 
@@ -80,7 +80,7 @@ func TestGrantDeleteIsScopedToResource(t *testing.T) {
 	if resp := h.do(t, http.MethodDelete, "/api/connections/c-view/grants/"+connGrantID, "viewer", nil); resp.Status != http.StatusNotFound {
 		t.Fatalf("delete connection grant through wrong connection: want 404, got %d (%s)", resp.Status, resp.Body)
 	}
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "viewer", nil); resp.Status != http.StatusOK {
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "viewer", nil); resp.Status != http.StatusOK {
 		t.Fatalf("connection grant should still exist, got %d", resp.Status)
 	}
 
@@ -152,7 +152,7 @@ func TestShareByEmail(t *testing.T) {
 		strings.NewReader(`{"email":"viewer@example.com","access":"use"}`)); resp.Status != http.StatusCreated {
 		t.Fatalf("share by email: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "viewer", nil); resp.Status != http.StatusOK {
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "viewer", nil); resp.Status != http.StatusOK {
 		t.Errorf("grantee open after email share: want 200, got %d", resp.Status)
 	}
 	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/grants", "op",

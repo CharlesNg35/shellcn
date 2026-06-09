@@ -82,14 +82,14 @@ func (testPlugin) Manifest() plugin.Manifest {
 				{Label: "Docker", Kind: "docker", Template: "run {{.ConnectURL}} {{.Token}}"},
 			},
 		},
-		Tabs: []plugin.Panel{{Key: "items", Label: "Items", Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "t.list"}}},
+		Tabs: []plugin.Panel{{Key: "items", Label: "Items", Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "tester.list"}}},
 		Streams: []plugin.Stream{
-			{ID: "t.ws", Kind: plugin.StreamTerminal, RouteID: "t.ws"},
-			{ID: "t.desk", Kind: plugin.StreamDesktop, RouteID: "t.desk"},
+			{ID: "tester.ws", Kind: plugin.StreamTerminal, RouteID: "tester.ws"},
+			{ID: "tester.desk", Kind: plugin.StreamDesktop, RouteID: "tester.desk"},
 		},
 		Recording: []plugin.RecordingCapability{
-			{Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2}, StreamIDs: []string{"t.ws"}, Authoritative: true},
-			{Class: plugin.RecordingDesktop, Formats: []plugin.RecordingFormat{plugin.FormatWebMCanvas}, StreamIDs: []string{"t.desk"}},
+			{Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2}, StreamIDs: []string{"tester.ws"}, Authoritative: true},
+			{Class: plugin.RecordingDesktop, Formats: []plugin.RecordingFormat{plugin.FormatWebMCanvas}, StreamIDs: []string{"tester.desk"}},
 		},
 	}
 }
@@ -97,24 +97,24 @@ func (testPlugin) Manifest() plugin.Manifest {
 func (testPlugin) Routes() []plugin.Route {
 	return []plugin.Route{
 		{
-			ID: "t.list", Method: plugin.MethodGet, Permission: "t.read", Risk: plugin.RiskSafe, AuditEvent: "t.list",
+			ID: "tester.list", Method: plugin.MethodGet, Permission: "tester.read", Risk: plugin.RiskSafe, AuditEvent: "tester.list",
 			Handle: func(*plugin.RequestContext) (any, error) { return plugin.Page[string]{Items: []string{"a", "b"}}, nil },
 		},
 		{
-			ID: "t.unauth", Method: plugin.MethodGet, Permission: "t.read", Risk: plugin.RiskSafe, AuditEvent: "t.unauth",
+			ID: "tester.unauth", Method: plugin.MethodGet, Permission: "tester.read", Risk: plugin.RiskSafe, AuditEvent: "tester.unauth",
 			Handle: func(*plugin.RequestContext) (any, error) { return nil, plugin.ErrUnauthorized },
 		},
 		{
-			ID: "t.echoparam", Method: plugin.MethodGet, Permission: "t.read", Risk: plugin.RiskSafe, AuditEvent: "t.echoparam",
+			ID: "tester.echoparam", Method: plugin.MethodGet, Permission: "tester.read", Risk: plugin.RiskSafe, AuditEvent: "tester.echoparam",
 			Path:   "/echo/{name}",
 			Handle: func(rc *plugin.RequestContext) (any, error) { return map[string]string{"name": rc.Param("name")}, nil },
 		},
 		{
-			ID: "t.danger", Method: plugin.MethodDelete, Permission: "t.delete", Risk: plugin.RiskDestructive, AuditEvent: "t.danger",
+			ID: "tester.danger", Method: plugin.MethodDelete, Permission: "tester.delete", Risk: plugin.RiskDestructive, AuditEvent: "tester.danger",
 			Handle: func(*plugin.RequestContext) (any, error) { return map[string]bool{"ok": true}, nil },
 		},
 		{
-			ID: "t.input", Method: plugin.MethodPost, Permission: "t.write", Risk: plugin.RiskWrite, AuditEvent: "t.input",
+			ID: "tester.input", Method: plugin.MethodPost, Permission: "tester.write", Risk: plugin.RiskWrite, AuditEvent: "tester.input",
 			Handle: func(rc *plugin.RequestContext) (any, error) {
 				var body struct {
 					Name string `json:"name" validate:"required"`
@@ -126,7 +126,7 @@ func (testPlugin) Routes() []plugin.Route {
 			},
 		},
 		{
-			ID: "t.schema", Method: plugin.MethodPost, Permission: "t.write", Risk: plugin.RiskWrite, AuditEvent: "t.schema",
+			ID: "tester.schema", Method: plugin.MethodPost, Permission: "tester.write", Risk: plugin.RiskWrite, AuditEvent: "tester.schema",
 			Input: &plugin.Schema{Groups: []plugin.Group{{Name: "Input", Fields: []plugin.Field{
 				{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
 			}}}},
@@ -136,7 +136,7 @@ func (testPlugin) Routes() []plugin.Route {
 			},
 		},
 		{
-			ID: "t.upload", Method: plugin.MethodPost, Permission: "t.write", Risk: plugin.RiskWrite, AuditEvent: "t.upload",
+			ID: "tester.upload", Method: plugin.MethodPost, Permission: "tester.write", Risk: plugin.RiskWrite, AuditEvent: "tester.upload",
 			Input: &plugin.Schema{Groups: []plugin.Group{{Name: "Upload", Fields: []plugin.Field{
 				{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
 				{Key: "files", Label: "Files", Type: plugin.FieldFile, Required: true},
@@ -156,7 +156,7 @@ func (testPlugin) Routes() []plugin.Route {
 			},
 		},
 		{
-			ID: "t.ws", Method: plugin.MethodWS, Permission: "t.read", Risk: plugin.RiskSafe, AuditEvent: "t.ws",
+			ID: "tester.ws", Method: plugin.MethodWS, Permission: "tester.read", Risk: plugin.RiskSafe, AuditEvent: "tester.ws",
 			Stream: func(_ *plugin.RequestContext, c plugin.ClientStream) error {
 				buf := make([]byte, 1024)
 				n, _ := c.Read(buf)
@@ -165,7 +165,7 @@ func (testPlugin) Routes() []plugin.Route {
 			},
 		},
 		{
-			ID: "t.desk", Method: plugin.MethodWS, Permission: "t.read", Risk: plugin.RiskPrivileged, AuditEvent: "t.desk",
+			ID: "tester.desk", Method: plugin.MethodWS, Permission: "tester.read", Risk: plugin.RiskPrivileged, AuditEvent: "tester.desk",
 			Stream: func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil },
 		},
 	}
@@ -377,7 +377,7 @@ func (h *harness) doReq(t *testing.T, req *http.Request, userID string) apiResp 
 func TestWrapperOrder(t *testing.T) {
 	h := newHarness(t)
 
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "", nil); resp.Status != http.StatusUnauthorized {
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "", nil); resp.Status != http.StatusUnauthorized {
 		t.Errorf("unauthenticated: want 401, got %d", resp.Status)
 	}
 
@@ -385,7 +385,7 @@ func TestWrapperOrder(t *testing.T) {
 		t.Errorf("unknown route: want 404, got %d", resp.Status)
 	}
 
-	if resp := h.do(t, http.MethodDelete, "/api/connections/c-view/x/t.danger", "viewer", nil); resp.Status != http.StatusForbidden {
+	if resp := h.do(t, http.MethodDelete, "/api/connections/c-view/x/tester.danger", "viewer", nil); resp.Status != http.StatusForbidden {
 		t.Errorf("viewer destructive: want 403, got %d", resp.Status)
 	}
 
@@ -393,23 +393,23 @@ func TestWrapperOrder(t *testing.T) {
 		t.Errorf("connect failure: want 503, got %d", resp.Status)
 	}
 
-	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/x/t.input", "op", strings.NewReader(`{}`)); resp.Status != http.StatusBadRequest {
+	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/x/tester.input", "op", strings.NewReader(`{}`)); resp.Status != http.StatusBadRequest {
 		t.Errorf("bad input: want 400, got %d", resp.Status)
 	}
 
-	resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "op", nil)
+	resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "op", nil)
 	if resp.Status != http.StatusOK {
 		t.Fatalf("happy: want 200, got %d", resp.Status)
 	}
 	rows, _ := h.store.Audit.List(context.Background(), store.AuditFilter{ConnectionID: "c-op"})
 	var found bool
 	for _, r := range rows {
-		if r.Event == "t.list" && r.Result == models.AuditAllowed {
+		if r.Event == "tester.list" && r.Result == models.AuditAllowed {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("expected an allowed audit row for t.list, got %+v", rows)
+		t.Errorf("expected an allowed audit row for tester.list, got %+v", rows)
 	}
 }
 
@@ -456,7 +456,7 @@ func TestConnectionProxyExemptFromCSRF(t *testing.T) {
 
 func TestParamResolution(t *testing.T) {
 	h := newHarness(t)
-	resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.echoparam?p.name=resolved", "op", nil)
+	resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.echoparam?p.name=resolved", "op", nil)
 	if resp.Status != http.StatusOK {
 		t.Fatalf("want 200, got %d", resp.Status)
 	}
@@ -464,10 +464,10 @@ func TestParamResolution(t *testing.T) {
 	if !strings.Contains(string(b), "resolved") {
 		t.Errorf("p.name param did not resolve into rc.Param: %s", b)
 	}
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.echoparam", "op", nil); resp.Status != http.StatusBadRequest {
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.echoparam", "op", nil); resp.Status != http.StatusBadRequest {
 		t.Fatalf("missing declared param: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.echoparam?p.name=x&p.extra=y", "op", nil); resp.Status != http.StatusOK {
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.echoparam?p.name=x&p.extra=y", "op", nil); resp.Status != http.StatusOK {
 		t.Fatalf("scoped extra param: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
 }
@@ -490,7 +490,7 @@ func TestMultipartRouteBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, h.ts.URL+"/api/connections/c-op/x/t.upload", &body)
+	req, err := http.NewRequest(http.MethodPost, h.ts.URL+"/api/connections/c-op/x/tester.upload", &body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -514,7 +514,7 @@ func TestMultipartRejectedWithoutFileInputSchema(t *testing.T) {
 	_ = mw.WriteField("name", "release")
 	_ = mw.Close()
 
-	req, err := http.NewRequest(http.MethodPost, h.ts.URL+"/api/connections/c-op/x/t.input", &body)
+	req, err := http.NewRequest(http.MethodPost, h.ts.URL+"/api/connections/c-op/x/tester.input", &body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -528,7 +528,7 @@ func TestWrapperValidatesDeclaredInputSchemaBeforeHandler(t *testing.T) {
 	h := newHarness(t)
 	schemaOnlyCalls.Store(0)
 
-	resp := h.do(t, http.MethodPost, "/api/connections/c-op/x/t.schema", "op", strings.NewReader(`{}`))
+	resp := h.do(t, http.MethodPost, "/api/connections/c-op/x/tester.schema", "op", strings.NewReader(`{}`))
 	if resp.Status != http.StatusBadRequest {
 		t.Fatalf("schema invalid input: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
@@ -536,7 +536,7 @@ func TestWrapperValidatesDeclaredInputSchemaBeforeHandler(t *testing.T) {
 		t.Fatalf("handler ran despite invalid declared input: calls=%d", got)
 	}
 
-	resp = h.do(t, http.MethodPost, "/api/connections/c-op/x/t.schema", "op", strings.NewReader(`{"name":"release"}`))
+	resp = h.do(t, http.MethodPost, "/api/connections/c-op/x/tester.schema", "op", strings.NewReader(`{"name":"release"}`))
 	if resp.Status != http.StatusOK {
 		t.Fatalf("schema valid input: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
@@ -544,7 +544,7 @@ func TestWrapperValidatesDeclaredInputSchemaBeforeHandler(t *testing.T) {
 		t.Fatalf("handler call count = %d, want 1", got)
 	}
 
-	resp = h.do(t, http.MethodPost, "/api/connections/c-op/x/t.schema", "op", strings.NewReader(`{"name":"release","extra":"nope"}`))
+	resp = h.do(t, http.MethodPost, "/api/connections/c-op/x/tester.schema", "op", strings.NewReader(`{"name":"release","extra":"nope"}`))
 	if resp.Status != http.StatusBadRequest {
 		t.Fatalf("schema unknown field: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
@@ -555,7 +555,7 @@ func TestWrapperValidatesDeclaredInputSchemaBeforeHandler(t *testing.T) {
 
 func TestDeniedAuthorizationIsAudited(t *testing.T) {
 	h := newHarness(t)
-	resp := h.do(t, http.MethodDelete, "/api/connections/c-view/x/t.danger", "viewer", nil)
+	resp := h.do(t, http.MethodDelete, "/api/connections/c-view/x/tester.danger", "viewer", nil)
 	if resp.Status != http.StatusForbidden {
 		t.Fatalf("viewer destructive: want 403, got %d", resp.Status)
 	}
@@ -565,11 +565,11 @@ func TestDeniedAuthorizationIsAudited(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, row := range rows {
-		if row.RouteID == "t.danger" && row.Result == models.AuditDenied {
+		if row.RouteID == "tester.danger" && row.Result == models.AuditDenied {
 			return
 		}
 	}
-	t.Fatalf("missing denied audit row for t.danger: %+v", rows)
+	t.Fatalf("missing denied audit row for tester.danger: %+v", rows)
 }
 
 func TestAgentEnrollmentIsAudited(t *testing.T) {
@@ -766,7 +766,7 @@ func TestAdminCannotAccessOthersConnection(t *testing.T) {
 	h := newHarness(t)
 	// Admin is a user-management role, not a super-user: no implicit access to
 	// another user's connection.
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "admin", nil); resp.Status != http.StatusForbidden {
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "admin", nil); resp.Status != http.StatusForbidden {
 		t.Errorf("admin on another's connection: want 403, got %d", resp.Status)
 	}
 }
@@ -774,7 +774,7 @@ func TestAdminCannotAccessOthersConnection(t *testing.T) {
 func TestStrangerDeniedConnection(t *testing.T) {
 	h := newHarness(t)
 	// viewer is not owner/grantee of c-op → forbidden even for a safe route.
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "viewer", nil); resp.Status != http.StatusForbidden {
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "viewer", nil); resp.Status != http.StatusForbidden {
 		t.Errorf("stranger on a connection: want 403, got %d", resp.Status)
 	}
 }
@@ -1216,7 +1216,7 @@ func TestPlatformAuth401IsMarked(t *testing.T) {
 
 func TestPluginRoute401IsNotMarkedAsPlatformAuth(t *testing.T) {
 	h := newHarness(t)
-	req, _ := http.NewRequest(http.MethodGet, h.ts.URL+"/api/connections/c-op/x/t.unauth", nil)
+	req, _ := http.NewRequest(http.MethodGet, h.ts.URL+"/api/connections/c-op/x/tester.unauth", nil)
 	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: h.sessions["op"].ID})
 	raw, err := h.ts.Client().Do(req)
 	if err != nil {
@@ -1233,15 +1233,15 @@ func TestPluginRoute401IsNotMarkedAsPlatformAuth(t *testing.T) {
 
 func TestWSRequiresTicket(t *testing.T) {
 	h := newHarness(t)
-	if _, err := h.dialWS(t, "op", "/api/connections/c-op/x/t.ws"); err == nil {
+	if _, err := h.dialWS(t, "op", "/api/connections/c-op/x/tester.ws"); err == nil {
 		t.Error("WS without a ticket should be rejected")
 	}
 }
 
 func TestWSHappyPathEcho(t *testing.T) {
 	h := newHarness(t)
-	tok := h.mintTicket(t, "op", "c-op", "t.ws", nil)
-	c, err := h.dialWS(t, "op", "/api/connections/c-op/x/t.ws?ticket="+tok)
+	tok := h.mintTicket(t, "op", "c-op", "tester.ws", nil)
+	c, err := h.dialWS(t, "op", "/api/connections/c-op/x/tester.ws?ticket="+tok)
 	if err != nil {
 		t.Fatalf("dial with valid ticket: %v", err)
 	}
@@ -1263,8 +1263,8 @@ func TestWSHappyPathEcho(t *testing.T) {
 
 func TestWSAcceptsBinarySubprotocol(t *testing.T) {
 	h := newHarness(t)
-	tok := h.mintTicket(t, "op", "c-op", "t.ws", nil)
-	c, err := h.dialWSWithSubprotocol(t, "op", "/api/connections/c-op/x/t.ws?ticket="+tok, "binary")
+	tok := h.mintTicket(t, "op", "c-op", "tester.ws", nil)
+	c, err := h.dialWSWithSubprotocol(t, "op", "/api/connections/c-op/x/tester.ws?ticket="+tok, "binary")
 	if err != nil {
 		t.Fatalf("dial with binary subprotocol: %v", err)
 	}
@@ -1285,8 +1285,8 @@ func TestWSStreamRecordedWhenPolicyForced(t *testing.T) {
 	}
 	id := createConnID(t, resp)
 
-	tok := h.mintTicket(t, "op", id, "t.ws", nil)
-	c, err := h.dialWS(t, "op", "/api/connections/"+id+"/x/t.ws?ticket="+tok)
+	tok := h.mintTicket(t, "op", id, "tester.ws", nil)
+	c, err := h.dialWS(t, "op", "/api/connections/"+id+"/x/tester.ws?ticket="+tok)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -1320,21 +1320,21 @@ func TestWSStreamRecordedWhenPolicyForced(t *testing.T) {
 func TestWSTicketParamMismatchRejected(t *testing.T) {
 	h := newHarness(t)
 	// Mint a ticket bound to name=a, then try to use it for name=b.
-	tok := h.mintTicket(t, "op", "c-op", "t.ws", map[string]string{"name": "a"})
-	if _, err := h.dialWS(t, "op", "/api/connections/c-op/x/t.ws?p.name=b&ticket="+tok); err == nil {
+	tok := h.mintTicket(t, "op", "c-op", "tester.ws", map[string]string{"name": "a"})
+	if _, err := h.dialWS(t, "op", "/api/connections/c-op/x/tester.ws?p.name=b&ticket="+tok); err == nil {
 		t.Error("ticket minted for one resource must not work for another")
 	}
 }
 
 func TestWSTicketSingleUse(t *testing.T) {
 	h := newHarness(t)
-	tok := h.mintTicket(t, "op", "c-op", "t.ws", nil)
-	c, err := h.dialWS(t, "op", "/api/connections/c-op/x/t.ws?ticket="+tok)
+	tok := h.mintTicket(t, "op", "c-op", "tester.ws", nil)
+	c, err := h.dialWS(t, "op", "/api/connections/c-op/x/tester.ws?ticket="+tok)
 	if err != nil {
 		t.Fatalf("first dial: %v", err)
 	}
 	_ = c.CloseNow()
-	if _, err := h.dialWS(t, "op", "/api/connections/c-op/x/t.ws?ticket="+tok); err == nil {
+	if _, err := h.dialWS(t, "op", "/api/connections/c-op/x/tester.ws?ticket="+tok); err == nil {
 		t.Error("ticket replay must be rejected")
 	}
 }

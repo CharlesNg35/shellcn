@@ -47,6 +47,67 @@ func TestRegisterGetAll(t *testing.T) {
 	}
 }
 
+func TestRoutesAreScopedByPluginName(t *testing.T) {
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	reg := New()
+	for _, name := range []string{"alpha", "beta"} {
+		m := plugin.Manifest{
+			APIVersion:          plugin.CurrentAPIVersion,
+			Name:                name,
+			Title:               strings.ToUpper(name),
+			Category:            plugin.CategoryOther,
+			Layout:              plugin.LayoutTabs,
+			SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+		}
+		routes := []plugin.Route{{
+			ID:         name + ".list",
+			Method:     plugin.MethodGet,
+			Permission: name + ".read",
+			Risk:       plugin.RiskSafe,
+			AuditEvent: name + ".list",
+			Handle:     noop,
+		}}
+		if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
+			t.Fatalf("register %s: %v", name, err)
+		}
+	}
+	if _, ok := reg.Route("alpha", "alpha.list"); !ok {
+		t.Fatal("alpha should resolve its own route")
+	}
+	if _, ok := reg.Route("alpha", "beta.list"); ok {
+		t.Fatal("alpha must not resolve beta's route")
+	}
+	if _, ok := reg.Route("beta", "beta.list"); !ok {
+		t.Fatal("beta should resolve its own route")
+	}
+}
+
+func TestRegisterRejectsRouteOutsidePluginNamespace(t *testing.T) {
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	m := plugin.Manifest{
+		APIVersion:          plugin.CurrentAPIVersion,
+		Name:                "alpha",
+		Title:               "Alpha",
+		Category:            plugin.CategoryOther,
+		Layout:              plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+	}
+	err := New().Register(&stubPlugin{
+		manifest: m,
+		routes: []plugin.Route{{
+			ID:         "beta.list",
+			Method:     plugin.MethodGet,
+			Permission: "alpha.read",
+			Risk:       plugin.RiskSafe,
+			AuditEvent: "alpha.list",
+			Handle:     noop,
+		}},
+	})
+	if err == nil || !contains(err.Error(), "must be namespaced under plugin") {
+		t.Fatalf("namespace error = %v", err)
+	}
+}
+
 func TestSummariesSortByCategory(t *testing.T) {
 	m, routes := sampleManifest()
 	db := plugin.Manifest{

@@ -32,6 +32,8 @@ func TestPanelConfigSchemasCoverConfigJSONFields(t *testing.T) {
 		{plugin.PanelTimeline, reflect.TypeOf(plugin.TimelineConfig{})},
 		{plugin.PanelTaskProgress, reflect.TypeOf(plugin.TaskProgressConfig{})},
 		{plugin.PanelSplit, reflect.TypeOf(plugin.SplitConfig{})},
+		{plugin.PanelCanvas, reflect.TypeOf(plugin.CanvasConfig{})},
+		{plugin.PanelWasm, reflect.TypeOf(plugin.WasmConfig{})},
 	}
 
 	schemas := plugin.PanelConfigSchemas()
@@ -78,6 +80,9 @@ func TestNestedPanelConfigSchemasCoverSDKTypes(t *testing.T) {
 	assertArrayItemSchemaMatchesStruct(t, "split.panels", plugin.SplitPanel{}, schemas[plugin.PanelSplit].Properties["panels"])
 	assertArrayItemSchemaMatchesStruct(t, "object_detail.sections", plugin.ObjectDetailSection{}, schemas[plugin.PanelObjectDetail].Properties["sections"])
 	assertArrayItemSchemaMatchesStruct(t, "object_detail.sections.fields", plugin.ObjectDetailField{}, schemas[plugin.PanelObjectDetail].Properties["sections"].Items.Properties["fields"])
+	assertArrayItemSchemaMatchesStruct(t, "wasm.assets", plugin.WasmAsset{}, schemas[plugin.PanelWasm].Properties["assets"])
+	assertArrayItemSchemaMatchesStruct(t, "wasm.bridge.routes", plugin.WasmBridgeRoute{}, schemas[plugin.PanelWasm].Properties["bridge"].Properties["routes"])
+	assertArrayItemSchemaMatchesStruct(t, "wasm.bridge.streams", plugin.WasmBridgeStream{}, schemas[plugin.PanelWasm].Properties["bridge"].Properties["streams"])
 }
 
 func assertArrayItemSchemaMatchesStruct(t *testing.T, path string, sample any, schema plugin.PanelConfigProperty) {

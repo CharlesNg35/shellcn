@@ -24,6 +24,8 @@ var panelConfigDecoders = map[PanelType]func(json.RawMessage) (PanelConfig, erro
 	PanelTimeline:      func(r json.RawMessage) (PanelConfig, error) { return decode[TimelineConfig](r) },
 	PanelTaskProgress:  func(r json.RawMessage) (PanelConfig, error) { return decode[TaskProgressConfig](r) },
 	PanelSplit:         func(r json.RawMessage) (PanelConfig, error) { return decode[SplitConfig](r) },
+	PanelCanvas:        func(r json.RawMessage) (PanelConfig, error) { return decode[CanvasConfig](r) },
+	PanelWasm:          func(r json.RawMessage) (PanelConfig, error) { return decode[WasmConfig](r) },
 }
 
 func decode[T PanelConfig](raw json.RawMessage) (PanelConfig, error) {

@@ -8,6 +8,7 @@ import type { PanelProps } from "../core/types";
 import type { TaskProgressPanelConfig } from "../../types/projection";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import AppIcon from "../../components/AppIcon.vue";
+import PanelLoader from "../../components/PanelLoader.vue";
 
 const props = defineProps<PanelProps>();
 
@@ -56,6 +57,12 @@ const progressMode = computed(() =>
 );
 const progressValue = computed(() =>
   percent.value == null ? undefined : Math.max(0, Math.min(100, percent.value)),
+);
+const showInitialLoader = computed(
+  () => !lines.value.length && status.value === "connecting",
+);
+const emptyText = computed(() =>
+  status.value === "open" ? "No task output yet." : "No task output received.",
 );
 
 async function runRoute(routeId: string | undefined): Promise<void> {
@@ -150,8 +157,9 @@ async function onReconnect(): Promise<void> {
       <div v-for="(line, i) in lines" :key="i" class="whitespace-pre-wrap">
         {{ line }}
       </div>
-      <div v-if="!lines.length" class="text-surface-500">
-        Waiting for task output...
+      <PanelLoader v-if="showInitialLoader" />
+      <div v-else-if="!lines.length" class="text-surface-500">
+        {{ emptyText }}
       </div>
     </div>
   </div>

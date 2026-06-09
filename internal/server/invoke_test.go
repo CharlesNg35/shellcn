@@ -38,9 +38,9 @@ func TestInvokeRouteAllowedRecordsAudit(t *testing.T) {
 	h := newHarness(t)
 	ctx := audit.WithSource(context.Background(), audit.SourceAI, "turn-7")
 
-	result, err := h.srv.InvokeRoute(ctx, h.user(t, "op"), "c-op", "t.list", nil, nil)
+	result, err := h.srv.InvokeRoute(ctx, h.user(t, "op"), "c-op", "tester.list", nil, nil)
 	if err != nil {
-		t.Fatalf("invoke t.list: %v", err)
+		t.Fatalf("invoke tester.list: %v", err)
 	}
 	page, ok := result.(plugin.Page[string])
 	if !ok || len(page.Items) != 2 {
@@ -49,7 +49,7 @@ func TestInvokeRouteAllowedRecordsAudit(t *testing.T) {
 
 	var found bool
 	for _, r := range auditRows(t, h, "c-op") {
-		if r.RouteID == "t.list" && r.Result == models.AuditAllowed {
+		if r.RouteID == "tester.list" && r.Result == models.AuditAllowed {
 			found = true
 			if r.Source != audit.SourceAI || r.TurnID != "turn-7" {
 				t.Fatalf("audit source/turn = %q/%q, want ai/turn-7", r.Source, r.TurnID)
@@ -57,19 +57,19 @@ func TestInvokeRouteAllowedRecordsAudit(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatal("missing allowed audit row for t.list")
+		t.Fatal("missing allowed audit row for tester.list")
 	}
 }
 
 func TestInvokeRouteDeniedForStranger(t *testing.T) {
 	h := newHarness(t)
 	// viewer is neither owner nor grantee of c-op → forbidden, audited denied.
-	_, err := h.srv.InvokeRoute(context.Background(), h.user(t, "viewer"), "c-op", "t.list", nil, nil)
+	_, err := h.srv.InvokeRoute(context.Background(), h.user(t, "viewer"), "c-op", "tester.list", nil, nil)
 	if !errors.Is(err, policy.ErrForbidden) {
 		t.Fatalf("stranger invoke: want ErrForbidden, got %v", err)
 	}
 	for _, r := range auditRows(t, h, "c-op") {
-		if r.RouteID == "t.list" && r.Result == models.AuditDenied {
+		if r.RouteID == "tester.list" && r.Result == models.AuditDenied {
 			return
 		}
 	}
@@ -80,7 +80,7 @@ func TestInvokeRouteRBACBlocksRiskBeyondRole(t *testing.T) {
 	h := newHarness(t)
 	// viewer owns c-view but the viewer role cannot perform a destructive route,
 	// exactly as over HTTP — the agent cannot exceed the user's RBAC.
-	_, err := h.srv.InvokeRoute(context.Background(), h.user(t, "viewer"), "c-view", "t.danger", nil, nil)
+	_, err := h.srv.InvokeRoute(context.Background(), h.user(t, "viewer"), "c-view", "tester.danger", nil, nil)
 	if !errors.Is(err, policy.ErrForbidden) {
 		t.Fatalf("viewer destructive: want ErrForbidden, got %v", err)
 	}
@@ -90,7 +90,7 @@ func TestInvokeRouteValidationFailureSkipsHandler(t *testing.T) {
 	h := newHarness(t)
 	schemaOnlyCalls.Store(0)
 
-	_, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "t.schema", nil, []byte(`{}`))
+	_, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "tester.schema", nil, []byte(`{}`))
 	if err == nil {
 		t.Fatal("invalid input: want error")
 	}
@@ -98,7 +98,7 @@ func TestInvokeRouteValidationFailureSkipsHandler(t *testing.T) {
 		t.Fatalf("handler ran despite invalid input: calls=%d", got)
 	}
 
-	if _, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "t.schema", nil, []byte(`{"name":"release"}`)); err != nil {
+	if _, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "tester.schema", nil, []byte(`{"name":"release"}`)); err != nil {
 		t.Fatalf("valid input: %v", err)
 	}
 	if got := schemaOnlyCalls.Load(); got != 1 {
@@ -108,21 +108,21 @@ func TestInvokeRouteValidationFailureSkipsHandler(t *testing.T) {
 
 func TestInvokeRouteHandlerErrorAudited(t *testing.T) {
 	h := newHarness(t)
-	_, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "t.unauth", nil, nil)
+	_, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "tester.unauth", nil, nil)
 	if !errors.Is(err, plugin.ErrUnauthorized) {
 		t.Fatalf("handler error: want ErrUnauthorized, got %v", err)
 	}
 	for _, r := range auditRows(t, h, "c-op") {
-		if r.RouteID == "t.unauth" && r.Result == models.AuditError {
+		if r.RouteID == "tester.unauth" && r.Result == models.AuditError {
 			return
 		}
 	}
-	t.Fatal("missing error audit row for t.unauth")
+	t.Fatal("missing error audit row for tester.unauth")
 }
 
 func TestInvokeRouteResolvesPathParams(t *testing.T) {
 	h := newHarness(t)
-	result, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "t.echoparam", map[string]string{"name": "resolved"}, nil)
+	result, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "tester.echoparam", map[string]string{"name": "resolved"}, nil)
 	if err != nil {
 		t.Fatalf("invoke echoparam: %v", err)
 	}
@@ -130,25 +130,25 @@ func TestInvokeRouteResolvesPathParams(t *testing.T) {
 		t.Fatalf("unexpected result %#v", result)
 	}
 
-	if _, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "t.echoparam", nil, nil); !errors.Is(err, plugin.ErrInvalidInput) {
+	if _, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "tester.echoparam", nil, nil); !errors.Is(err, plugin.ErrInvalidInput) {
 		t.Fatalf("missing required param: want ErrInvalidInput, got %v", err)
 	}
 }
 
 func TestInvokeRouteRejectsStreamRoutes(t *testing.T) {
 	h := newHarness(t)
-	if _, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "t.ws", nil, nil); !errors.Is(err, plugin.ErrNotSupported) {
+	if _, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "tester.ws", nil, nil); !errors.Is(err, plugin.ErrNotSupported) {
 		t.Fatalf("stream route: want ErrNotSupported, got %v", err)
 	}
 }
 
 func TestHTTPDispatchRecordsHTTPSource(t *testing.T) {
 	h := newHarness(t)
-	if resp := h.do(t, "GET", "/api/connections/c-op/x/t.list", "op", nil); resp.Status != 200 {
+	if resp := h.do(t, "GET", "/api/connections/c-op/x/tester.list", "op", nil); resp.Status != 200 {
 		t.Fatalf("want 200, got %d", resp.Status)
 	}
 	for _, r := range auditRows(t, h, "c-op") {
-		if r.RouteID == "t.list" && r.Result == models.AuditAllowed {
+		if r.RouteID == "tester.list" && r.Result == models.AuditAllowed {
 			if r.Source != audit.SourceHTTP {
 				t.Fatalf("http audit source = %q, want http", r.Source)
 			}

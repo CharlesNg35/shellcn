@@ -55,15 +55,18 @@ design seam for contributor ergonomics, not a dynamic-loading mechanism.
 
 ## 2. Non-goals (v1)
 
-- **All plugins are first-party and compiled in.** The plugin boundary is an
-  internal seam (a contributor adds a protocol in one Go package), not dynamic
-  loading. **No `.so`, no WASM, no external plugin processes.** (If out-of-tree
-  third-party plugins are ever needed, the path is gRPC subprocesses — never Go
-  `.so`, which is too brittle. Deferred indefinitely.)
+- **No native dynamic loading.** First-party plugins are compiled in, and
+  third-party plugins run as gRPC subprocesses. The gateway never loads Go
+  `.so` plugins. Browser-side WebAssembly is allowed only through the generic
+  `PanelWasm` contract: the core owns the sandboxed iframe, asset loading,
+  route/stream bridge, auth, CSP, validation, and lifecycle.
 - **No horizontal scaling / HA clustering.** Sessions live in memory; v1 runs as
   a **single instance** (§8 notes the future path: session affinity).
-- **No plugin-shipped UI / iframe escape hatch.** If something genuinely cannot
-  be expressed by the declarative model + core panels, it is out of scope for v1.
+- **No plugin-shipped arbitrary UI / iframe escape hatch.** Plugins cannot
+  provide raw HTML, JavaScript, or frontend code for the ShellCN app. They may
+  declare a sandboxed `PanelWasm` when the use case genuinely needs an isolated
+  WASM program; bridge access is explicit in the manifest and limited to declared
+  routes, streams, and assets.
 - **No SPICE.** SPICE has no production-grade browser client, so it stays out of
   scope. RDP is decoded in-process by the pure-Go `grdp` client and bridged to
   noVNC/RFB — see §6.2. The core exposes a generic `remote_desktop` panel
@@ -184,7 +187,7 @@ type NetTransport interface {
 ```go
 type Manifest struct {
     APIVersion  int      // plugin contract version the core must support
-    Name        string   // stable id, e.g. "ssh"
+    Name        string   // stable id, e.g. "ssh"; [a-z][a-z0-9_-]*
     Version     string   // plugin's own semver
     Title       string   // "SSH"
     Description string
@@ -805,6 +808,8 @@ const (
     PanelTimeline      PanelType = "timeline"       // events/tasks/audit trail over a list route
     PanelTaskProgress  PanelType = "task_progress"  // long-running task stream with progress/cancel/retry
     PanelSplit         PanelType = "split"          // resizable horizontal/vertical child panel composition
+    PanelCanvas        PanelType = "canvas"         // plugin-driven draw/input protocol over a WS stream
+    PanelWasm          PanelType = "wasm"           // sandboxed browser-side WASM app with declared assets/bridge
 
     PanelGraph      PanelType = "graph"       // node/edge viz — Neo4j, topology
     PanelTrace      PanelType = "trace"       // span waterfall — Jaeger, Tempo
@@ -1023,12 +1028,45 @@ detail. A node can be a non-expandable list destination by setting
 is allowed for this.
 
 The core validates every route/action/source reference during plugin
-registration. `DataSource.Method`, when declared, must match the referenced
-route. Read panels (`table`, `form`, `document`, `code_editor`, `diff`,
+registration. Route IDs are plugin-owned, not global: every route declared by a
+plugin named `docker` must use the `docker.` prefix, and every manifest
+reference resolves only against that same plugin's route set. A plugin cannot
+call another plugin's route by spelling its ID; the gateway first resolves the
+connection protocol, then looks up the route inside that plugin only.
+`DataSource.Method`, when declared, must match the referenced route. Read panels
+(`table`, `form`, `document`, `code_editor`, `diff`,
 `file_browser`, `object_detail`, `timeline`, etc.) must source from `GET` routes; streaming
 panels (`terminal`, `terminal_grid`, `log_stream`, `metrics`, `query_editor`,
-`remote_desktop`, `task_progress`, and table/resource watch sources) must source
+`remote_desktop`, `task_progress`, `canvas`, and table/resource watch sources) must source
 from `WS` routes.
+Canvas streams use a JSON wire protocol, but plugin code should use the SDK's
+typed canvas structs (`CanvasFrame`, `CanvasCommand`, `CanvasRegion`,
+`CanvasPointerEvent`, etc.) rather than hand-built maps.
+Canvas panels declare their sizing policy in `CanvasConfig.ScaleMode`:
+`resize` reports the current viewport as the logical drawing surface, `fit`
+scales a declared `Width`/`Height` logical surface into the available panel while
+mapping input back to logical coordinates, and `scroll` keeps a declared
+`Width`/`Height` surface at 1:1 CSS pixels with panel scrolling for naturally
+oversized surfaces such as maps, whiteboards, timelines, dependency graphs, and
+linked-node diagrams. Ready and resize events include logical size, viewport
+size, scale, DPR, and theme.
+`PanelWasm` does not bind through `Panel.Source`; it declares `WasmConfig`
+instead. `Assets` are read-only route-backed files, `Entry` names the primary
+WASM artifact, boot scripts must also be listed in assets, `Bridge.Routes` must
+name non-WS routes with matching methods, and `Bridge.Streams` must name WS
+routes. The browser runs the WASM app in a sandboxed iframe with no same-origin
+privilege; all data access goes through the declared bridge, which the parent
+renderer enforces. The host exposes the entry path as `window.shellcn.entry`,
+the current ShellCN theme through `window.shellcn.theme`, and live theme changes
+through `window.shellcn.onTheme(fn)`. Generic WASM without boot scripts is
+instantiated directly from `Entry`, which is useful for simple C/C++/Rust modules
+that export `_start` or `main`. Generic WASM with boot scripts lets the loader
+own startup, which is required by framework builds such as Leptos, Yew,
+wasm-bindgen, or Emscripten; those loaders should fetch bytes with
+`window.shellcn.asset(window.shellcn.entry)`. `Width` and `Height` are optional;
+omit them for a full-panel app, use `scroll` for naturally taller sandbox
+content, and declare both dimensions only for a fixed logical viewport that
+should be fitted or scrolled as a surface.
 Table mutation sources (`insert`, `update`, `delete`) and editor/form save
 methods must resolve to write methods (`POST`, `PUT`, `PATCH`, or `DELETE`).
 Dashboard and split child panels are validated recursively with the same rules

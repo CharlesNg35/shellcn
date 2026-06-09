@@ -3,6 +3,7 @@ package grpcplugin
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/url"
 	"strconv"
 	"sync"
@@ -146,11 +147,68 @@ func (s *server) Invoke(ctx context.Context, req *pluginv1.InvokeRequest) (*plug
 	if err != nil {
 		return nil, StatusFromError(err)
 	}
+	if dl, ok := res.(*plugin.Download); ok {
+		out, err := encodeDownload(dl)
+		if err != nil {
+			return nil, StatusFromError(err)
+		}
+		return out, nil
+	}
 	data, err := json.Marshal(res)
 	if err != nil {
 		return nil, StatusFromError(err)
 	}
 	return &pluginv1.InvokeResponse{ResultJson: data}, nil
+}
+
+func encodeDownload(dl *plugin.Download) (*pluginv1.InvokeResponse, error) {
+	var r io.Reader
+	switch {
+	case dl.Body != nil:
+		defer func() { _ = dl.Body.Close() }()
+		r = dl.Body
+	case dl.Seeker != nil:
+		defer func() { _ = dl.Seeker.Close() }()
+		if _, err := dl.Seeker.Seek(0, io.SeekStart); err != nil {
+			return nil, err
+		}
+		r = dl.Seeker
+	case dl.OpenRange != nil:
+		body, err := dl.OpenRange(0, -1)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = body.Close() }()
+		r = body
+	}
+	if r == nil {
+		return &pluginv1.InvokeResponse{Download: &pluginv1.DownloadResponse{
+			Name:   dl.Name,
+			Mime:   dl.MIME,
+			Size:   dl.Size,
+			Inline: dl.Inline,
+		}}, nil
+	}
+	body, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	size := dl.Size
+	if size < 0 {
+		size = int64(len(body))
+	}
+	var modTime int64
+	if !dl.ModTime.IsZero() {
+		modTime = dl.ModTime.UnixNano()
+	}
+	return &pluginv1.InvokeResponse{Download: &pluginv1.DownloadResponse{
+		Name:            dl.Name,
+		Mime:            dl.MIME,
+		Size:            size,
+		ModTimeUnixNano: modTime,
+		Inline:          dl.Inline,
+		Body:            body,
+	}}, nil
 }
 
 func (s *server) conn(id string) *connState {

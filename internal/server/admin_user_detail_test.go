@@ -10,7 +10,7 @@ func TestAdminUserDetailEndpoints(t *testing.T) {
 	h := newHarness(t)
 
 	// Generate an audit entry owned by op.
-	h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "op", nil)
+	h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "op", nil)
 
 	// Single user.
 	if resp := h.do(t, http.MethodGet, "/api/admin/users/op", "admin", nil); resp.Status != http.StatusOK ||

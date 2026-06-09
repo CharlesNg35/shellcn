@@ -291,6 +291,67 @@
     }
   ],
   "panelConfigSchemas": {
+    "canvas": {
+      "type": "object",
+      "properties": {
+        "ariaLabel": {
+          "type": "string"
+        },
+        "background": {
+          "type": "string"
+        },
+        "focusOnPointer": {
+          "type": "boolean"
+        },
+        "height": {
+          "type": "number"
+        },
+        "hidpi": {
+          "type": "boolean"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "interactive": {
+          "type": "boolean"
+        },
+        "keyboard": {
+          "type": "boolean"
+        },
+        "maxScale": {
+          "type": "number"
+        },
+        "minScale": {
+          "type": "number"
+        },
+        "pointer": {
+          "type": "boolean"
+        },
+        "resizeEvents": {
+          "type": "boolean"
+        },
+        "scaleMode": {
+          "type": "string",
+          "enum": [
+            "resize",
+            "fit",
+            "scroll"
+          ]
+        },
+        "wheelMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "capture",
+            "modified",
+            "none"
+          ]
+        },
+        "width": {
+          "type": "number"
+        }
+      }
+    },
     "code_editor": {
       "type": "object",
       "properties": {
@@ -1184,6 +1245,185 @@
           "type": "string"
         }
       }
+    },
+    "wasm": {
+      "type": "object",
+      "properties": {
+        "ariaLabel": {
+          "type": "string"
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "mime": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "source": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "GET",
+                      "POST",
+                      "PUT",
+                      "PATCH",
+                      "DELETE",
+                      "WS"
+                    ]
+                  },
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "*": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "routeId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "routeId"
+                ]
+              }
+            },
+            "required": [
+              "path",
+              "source"
+            ]
+          }
+        },
+        "boot": {
+          "type": "object",
+          "properties": {
+            "scripts": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "bridge": {
+          "type": "object",
+          "properties": {
+            "routes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "GET",
+                      "POST",
+                      "PUT",
+                      "PATCH",
+                      "DELETE"
+                    ]
+                  },
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "*": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "routeId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "routeId"
+                ]
+              }
+            },
+            "streams": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "*": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "routeId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "routeId"
+                ]
+              }
+            }
+          }
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "audio": {
+              "type": "boolean"
+            },
+            "fullscreen": {
+              "type": "boolean"
+            },
+            "gamepad": {
+              "type": "boolean"
+            },
+            "keyboard": {
+              "type": "boolean"
+            },
+            "pointer": {
+              "type": "boolean"
+            },
+            "pointerLock": {
+              "type": "boolean"
+            }
+          }
+        },
+        "entry": {
+          "type": "string"
+        },
+        "height": {
+          "type": "number"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "go",
+            "generic"
+          ]
+        },
+        "scaleMode": {
+          "type": "string",
+          "enum": [
+            "fit",
+            "resize",
+            "scroll"
+          ]
+        },
+        "width": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "entry"
+      ]
     }
   }
 }

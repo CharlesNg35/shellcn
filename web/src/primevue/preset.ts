@@ -638,15 +638,21 @@ export const primeVuePassthrough = {
     },
   },
 
-  tabs: { root: "flex min-h-0 flex-col" },
+  tabs: { root: "flex min-h-0 min-w-0 flex-col" },
   tablist: {
-    root: "sticky top-0 z-20 shrink-0 border-b border-surface-200 bg-surface-0/95 backdrop-blur dark:border-surface-800 dark:bg-surface-950/95",
-    content: "flex",
-    tabList: "flex gap-1 px-1",
+    root: "sticky top-0 z-20 min-w-0 shrink-0 overflow-hidden border-b border-surface-200 bg-surface-0/95 backdrop-blur dark:border-surface-800 dark:bg-surface-950/95",
+    content:
+      "min-w-0 overflow-x-auto overflow-y-hidden scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+    tabList:
+      "flex w-max min-w-full flex-nowrap gap-1 py-0 pl-1 after:block after:w-8 after:shrink-0 after:content-['']",
     activeBar: "hidden",
+    prevButton:
+      "absolute inset-y-0 left-0 z-30 flex w-8 cursor-pointer items-center justify-center bg-linear-to-r from-surface-0 via-surface-0 to-transparent text-surface-500 outline-none transition-colors hover:text-surface-900 focus-visible:ring-2 focus-visible:ring-primary-500/35 dark:from-surface-950 dark:via-surface-950 dark:text-surface-400 dark:hover:text-surface-0 [&>svg]:h-4 [&>svg]:w-4",
+    nextButton:
+      "absolute inset-y-0 right-0 z-30 flex w-8 cursor-pointer items-center justify-center bg-linear-to-l from-surface-0 via-surface-0 to-transparent text-surface-500 outline-none transition-colors hover:text-surface-900 focus-visible:ring-2 focus-visible:ring-primary-500/35 dark:from-surface-950 dark:via-surface-950 dark:text-surface-400 dark:hover:text-surface-0 [&>svg]:h-4 [&>svg]:w-4",
   },
   tab: {
-    root: "-mb-px flex cursor-pointer items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-sm font-medium text-surface-500 transition-colors hover:text-surface-800 data-[p-active=true]:border-primary-500 data-[p-active=true]:text-surface-900 dark:hover:text-surface-200 dark:data-[p-active=true]:text-surface-0",
+    root: "-mb-px flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm font-medium text-surface-500 transition-colors hover:text-surface-800 data-[p-active=true]:border-primary-500 data-[p-active=true]:text-surface-900 dark:hover:text-surface-200 dark:data-[p-active=true]:text-surface-0",
   },
   tabpanels: { root: "min-h-0 flex-1 overflow-auto pt-4" },
   tabpanel: { root: "h-full focus-visible:outline-none" },

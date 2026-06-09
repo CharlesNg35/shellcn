@@ -19,6 +19,8 @@ export const KNOWN_PANEL_TYPES = [
   "timeline",
   "task_progress",
   "split",
+  "canvas",
+  "wasm",
   "graph",
   "trace",
   "kv",
@@ -36,7 +38,8 @@ export type StreamKind =
   | "desktop"
   | "metrics"
   | "file"
-  | "task";
+  | "task"
+  | "canvas";
 
 export type ColumnType =
   | "text"
@@ -278,6 +281,76 @@ export interface SplitChildPanel extends DashboardCell {
 export interface SplitPanelConfig {
   orientation?: "horizontal" | "vertical";
   panels?: SplitChildPanel[];
+}
+
+export interface CanvasPanelConfig {
+  width?: number;
+  height?: number;
+  scaleMode?: "resize" | "fit" | "scroll";
+  minScale?: number;
+  maxScale?: number;
+  hidpi?: boolean;
+  interactive?: boolean;
+  keyboard?: boolean;
+  pointer?: boolean;
+  wheelMode?: "auto" | "capture" | "modified" | "none";
+  resizeEvents?: boolean;
+  background?: string;
+  focusOnPointer?: boolean;
+  ariaLabel?: string;
+  instructions?: string;
+}
+
+export type WasmRuntime = "go" | "generic";
+export type WasmScaleMode = "fit" | "resize" | "scroll";
+
+export interface WasmAsset {
+  path: string;
+  mime?: string;
+  source: DataSource;
+}
+
+export interface WasmBoot {
+  scripts?: string[];
+}
+
+export interface WasmCapabilities {
+  keyboard?: boolean;
+  pointer?: boolean;
+  audio?: boolean;
+  fullscreen?: boolean;
+  pointerLock?: boolean;
+  gamepad?: boolean;
+}
+
+export interface WasmBridgeRoute {
+  routeId: string;
+  method?: Exclude<Method, "WS">;
+  params?: Record<string, string>;
+}
+
+export interface WasmBridgeStream {
+  routeId: string;
+  params?: Record<string, string>;
+}
+
+export interface WasmBridge {
+  routes?: WasmBridgeRoute[];
+  streams?: WasmBridgeStream[];
+}
+
+export interface WasmPanelConfig {
+  entry: string;
+  runtime?: WasmRuntime;
+  boot?: WasmBoot;
+  assets?: WasmAsset[];
+  width?: number;
+  height?: number;
+  scaleMode?: WasmScaleMode;
+  capabilities?: WasmCapabilities;
+  bridge?: WasmBridge;
+  ariaLabel?: string;
+  instructions?: string;
 }
 
 export interface Badge {

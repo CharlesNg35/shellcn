@@ -22,11 +22,22 @@ const (
 	PanelTimeline      PanelType = "timeline"
 	PanelTaskProgress  PanelType = "task_progress"
 	PanelSplit         PanelType = "split"
+	PanelCanvas        PanelType = "canvas"
+	PanelWasm          PanelType = "wasm"
 
 	PanelGraph      PanelType = "graph"
 	PanelTrace      PanelType = "trace"
 	PanelKV         PanelType = "kv"
 	PanelHTTPClient PanelType = "http_client"
+)
+
+// PanelTheme is the core light/dark hint sent to drawable stream panels. It is
+// advisory: plugins should use it only for colors, never for behavior or auth.
+type PanelTheme string
+
+const (
+	PanelThemeLight PanelTheme = "light"
+	PanelThemeDark  PanelTheme = "dark"
 )
 
 // PanelConfig is closed to this package so config fields cannot accept arbitrary
@@ -52,6 +63,8 @@ func (ObjectDetailConfig) panelConfig()  {}
 func (TimelineConfig) panelConfig()      {}
 func (TaskProgressConfig) panelConfig()  {}
 func (SplitConfig) panelConfig()         {}
+func (CanvasConfig) panelConfig()        {}
+func (WasmConfig) panelConfig()          {}
 
 // StreamKind tags the long-lived channel a panel binds to.
 type StreamKind string
@@ -63,6 +76,7 @@ const (
 	StreamMetrics  StreamKind = "metrics"
 	StreamFile     StreamKind = "file"
 	StreamTask     StreamKind = "task"
+	StreamCanvas   StreamKind = "canvas"
 )
 
 // DataSource binds a panel to a route by id; params interpolate from the active
@@ -241,6 +255,129 @@ type SplitPanel struct {
 type SplitConfig struct {
 	Orientation SplitOrientation `json:"orientation,omitempty"`
 	Panels      []SplitPanel     `json:"panels,omitempty"`
+}
+
+type CanvasWheelMode string
+
+const (
+	// CanvasWheelAuto captures wheel events for interactive resize/fit canvases
+	// and leaves wheel scrolling to the browser for scroll-mode canvases.
+	CanvasWheelAuto CanvasWheelMode = "auto"
+	// CanvasWheelCapture sends every wheel event to the plugin. Use it only when
+	// wheel gestures are part of the canvas interaction model.
+	CanvasWheelCapture CanvasWheelMode = "capture"
+	// CanvasWheelModified sends wheel events only with Alt, Ctrl, or Meta held,
+	// keeping ordinary panel scrolling available.
+	CanvasWheelModified CanvasWheelMode = "modified"
+	// CanvasWheelNone disables plugin wheel input.
+	CanvasWheelNone CanvasWheelMode = "none"
+)
+
+type CanvasScaleMode string
+
+const (
+	// CanvasScaleResize makes the browser report the viewport as the logical
+	// drawing surface. Use it when the plugin can redraw responsively.
+	CanvasScaleResize CanvasScaleMode = "resize"
+	// CanvasScaleFit keeps a fixed logical surface and scales it into the panel,
+	// while pointer and wheel coordinates remain in logical units.
+	CanvasScaleFit CanvasScaleMode = "fit"
+	// CanvasScaleScroll keeps a fixed logical surface at 1:1 CSS pixels and lets
+	// the panel scroll. Use it for naturally large surfaces.
+	CanvasScaleScroll CanvasScaleMode = "scroll"
+)
+
+// CanvasConfig declares a plugin-driven 2D canvas surface. The frontend owns the
+// DOM and rendering engine; plugins send typed canvas frames and receive typed
+// input/resize events.
+type CanvasConfig struct {
+	Width     int             `json:"width,omitempty"`
+	Height    int             `json:"height,omitempty"`
+	ScaleMode CanvasScaleMode `json:"scaleMode,omitempty"`
+	// MinScale and MaxScale clamp fit-mode display scaling. They do not change
+	// logical coordinates.
+	MinScale    float64         `json:"minScale,omitempty"`
+	MaxScale    float64         `json:"maxScale,omitempty"`
+	HiDPI       bool            `json:"hidpi,omitempty"`
+	Interactive bool            `json:"interactive,omitempty"`
+	Keyboard    bool            `json:"keyboard,omitempty"`
+	Pointer     bool            `json:"pointer,omitempty"`
+	WheelMode   CanvasWheelMode `json:"wheelMode,omitempty"`
+	// ResizeEvents controls whether ready/resize events are sent with logical
+	// size, viewport size, scale, DPR, and theme.
+	ResizeEvents   bool   `json:"resizeEvents,omitempty"`
+	Background     string `json:"background,omitempty"`
+	FocusOnPointer bool   `json:"focusOnPointer,omitempty"`
+	AriaLabel      string `json:"ariaLabel,omitempty"`
+	Instructions   string `json:"instructions,omitempty"`
+}
+
+type WasmRuntime string
+
+const (
+	WasmRuntimeGo      WasmRuntime = "go"
+	WasmRuntimeGeneric WasmRuntime = "generic"
+)
+
+type WasmScaleMode string
+
+const (
+	WasmScaleFit    WasmScaleMode = "fit"
+	WasmScaleResize WasmScaleMode = "resize"
+	WasmScaleScroll WasmScaleMode = "scroll"
+)
+
+type WasmAsset struct {
+	Path   string     `json:"path"`
+	MIME   string     `json:"mime,omitempty"`
+	Source DataSource `json:"source"`
+}
+
+type WasmBoot struct {
+	Scripts []string `json:"scripts,omitempty"`
+}
+
+type WasmCapabilities struct {
+	Keyboard    bool `json:"keyboard,omitempty"`
+	Pointer     bool `json:"pointer,omitempty"`
+	Audio       bool `json:"audio,omitempty"`
+	Fullscreen  bool `json:"fullscreen,omitempty"`
+	PointerLock bool `json:"pointerLock,omitempty"`
+	Gamepad     bool `json:"gamepad,omitempty"`
+}
+
+type WasmBridgeRoute struct {
+	RouteID string            `json:"routeId"`
+	Method  Method            `json:"method,omitempty"`
+	Params  map[string]string `json:"params,omitempty"`
+}
+
+type WasmBridgeStream struct {
+	RouteID string            `json:"routeId"`
+	Params  map[string]string `json:"params,omitempty"`
+}
+
+type WasmBridge struct {
+	Routes  []WasmBridgeRoute  `json:"routes,omitempty"`
+	Streams []WasmBridgeStream `json:"streams,omitempty"`
+}
+
+// WasmConfig declares a sandboxed browser-side WASM app. Entry is the primary
+// WASM artifact. Boot scripts are optional runtime/glue loaders; for generic
+// framework builds they own startup and should load Entry through the bridge.
+// The core owns the iframe, CSP, asset URLs, and bridge.
+type WasmConfig struct {
+	Entry        string           `json:"entry"`
+	Runtime      WasmRuntime      `json:"runtime,omitempty"`
+	Boot         WasmBoot         `json:"boot,omitempty"`
+	Assets       []WasmAsset      `json:"assets,omitempty"`
+	Width        int              `json:"width,omitempty"`
+	Height       int              `json:"height,omitempty"`
+	ScaleMode    WasmScaleMode    `json:"scaleMode,omitempty"`
+	Capabilities WasmCapabilities `json:"capabilities,omitempty"`
+	Bridge       WasmBridge       `json:"bridge,omitempty"`
+	AriaLabel    string           `json:"ariaLabel,omitempty"`
+	Instructions string           `json:"instructions,omitempty"`
 }
 
 // MetricStat is one KPI number card in the metrics panel.

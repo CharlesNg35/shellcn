@@ -120,3 +120,83 @@ func TestLintAcceptsTaskProgressTaskStream(t *testing.T) {
 		t.Fatalf("unexpected UX errors: %#v", findings)
 	}
 }
+
+func TestLintAcceptsCanvasStream(t *testing.T) {
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "x",
+		Title:      "X",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		Tabs: []plugin.Panel{{
+			Key:    "canvas",
+			Label:  "Canvas",
+			Type:   plugin.PanelCanvas,
+			Source: &plugin.DataSource{RouteID: "x.canvas", Method: plugin.MethodWS},
+			Config: plugin.CanvasConfig{Interactive: true, Keyboard: true, Pointer: true},
+		}},
+		Streams: []plugin.Stream{{ID: "x.canvas", Kind: plugin.StreamCanvas, RouteID: "x.canvas"}},
+	}
+	routes := []plugin.Route{{
+		ID: "x.canvas", Method: plugin.MethodWS, Permission: "x.canvas",
+		Risk: plugin.RiskSafe, Stream: stream,
+	}}
+	if findings := pluginux.Errors(pluginux.Lint(m, routes)); len(findings) != 0 {
+		t.Fatalf("unexpected UX errors: %#v", findings)
+	}
+}
+
+func TestLintRejectsFitCanvasWithoutLogicalSize(t *testing.T) {
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "x",
+		Title:      "X",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		Tabs: []plugin.Panel{{
+			Key:    "canvas",
+			Label:  "Canvas",
+			Type:   plugin.PanelCanvas,
+			Source: &plugin.DataSource{RouteID: "x.canvas", Method: plugin.MethodWS},
+			Config: plugin.CanvasConfig{ScaleMode: plugin.CanvasScaleFit, Interactive: true},
+		}},
+		Streams: []plugin.Stream{{ID: "x.canvas", Kind: plugin.StreamCanvas, RouteID: "x.canvas"}},
+	}
+	routes := []plugin.Route{{
+		ID: "x.canvas", Method: plugin.MethodWS, Permission: "x.canvas",
+		Risk: plugin.RiskSafe, Stream: stream,
+	}}
+	if !hasError(pluginux.Lint(m, routes), `canvas "fit" scale mode requires positive width and height`) {
+		t.Fatalf("expected fit canvas size error")
+	}
+}
+
+func TestLintRejectsPartialWasmDimensions(t *testing.T) {
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "x",
+		Title:      "X",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		Tabs: []plugin.Panel{{
+			Key:  "wasm",
+			Type: plugin.PanelWasm,
+			Config: plugin.WasmConfig{
+				Entry:     "app.wasm",
+				Width:     1280,
+				ScaleMode: plugin.WasmScaleFit,
+				Assets: []plugin.WasmAsset{{
+					Path:   "app.wasm",
+					Source: plugin.DataSource{RouteID: "x.asset"},
+				}},
+			},
+		}},
+	}
+	routes := []plugin.Route{{
+		ID: "x.asset", Method: plugin.MethodGet, Permission: "x.read",
+		Risk: plugin.RiskSafe, Handle: noop,
+	}}
+	if !hasError(pluginux.Lint(m, routes), "wasm width and height must be declared together") {
+		t.Fatalf("expected wasm dimension error")
+	}
+}

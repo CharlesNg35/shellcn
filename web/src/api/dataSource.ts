@@ -199,6 +199,36 @@ export async function runAction(
   );
 }
 
+export async function callRoute<T = unknown>(
+  connectionId: string,
+  routeId: string,
+  ctx: ResolveContext = {},
+  body?: unknown,
+  params: Record<string, string> = {},
+  method = "POST",
+): Promise<T> {
+  const resolved = withScope(connectionId, resolveParams(params, ctx));
+  const url = withQuery(
+    routePath(connectionId, routeId),
+    queryParams(resolved),
+  );
+  const upper = method.toUpperCase();
+  const init: RequestInit = { method: upper };
+  if (upper !== "GET" && upper !== "HEAD") {
+    init.headers = { "Content-Type": "application/json" };
+    init.body = JSON.stringify(body ?? {});
+  }
+  const res = await track(connectionId, apiFetch(url, init));
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  if (!text) return undefined as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return text as T;
+  }
+}
+
 function isFile(value: unknown): value is File {
   return typeof File !== "undefined" && value instanceof File;
 }

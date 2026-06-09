@@ -131,7 +131,7 @@ func fieldsHaveRequired(fields []plugin.Field) bool {
 
 func longLivedPanel(panel plugin.PanelType) bool {
 	switch panel {
-	case plugin.PanelTerminal, plugin.PanelTerminalGrid, plugin.PanelRemoteDesktop, plugin.PanelLogStream, plugin.PanelMetrics, plugin.PanelTaskProgress:
+	case plugin.PanelTerminal, plugin.PanelTerminalGrid, plugin.PanelRemoteDesktop, plugin.PanelLogStream, plugin.PanelMetrics, plugin.PanelTaskProgress, plugin.PanelCanvas:
 		return true
 	default:
 		return false
@@ -217,6 +217,32 @@ func (l *linter) panel(path string, p plugin.Panel) {
 		for _, child := range c.Panels {
 			l.panel(path+" split "+child.Key, child.Panel)
 		}
+	case plugin.CanvasConfig:
+		switch c.ScaleMode {
+		case plugin.CanvasScaleFit, plugin.CanvasScaleScroll:
+			if c.Width <= 0 || c.Height <= 0 {
+				l.add(Error, path, "canvas %q scale mode requires positive width and height", c.ScaleMode)
+			}
+		case "":
+			if c.Width > 0 || c.Height > 0 {
+				l.add(Warning, path, "canvas with fixed dimensions should declare scaleMode fit or scroll")
+			}
+		case plugin.CanvasScaleResize:
+		default:
+			l.add(Error, path, "canvas scaleMode %q is not supported", c.ScaleMode)
+		}
+	case plugin.WasmConfig:
+		switch c.ScaleMode {
+		case "", plugin.WasmScaleResize, plugin.WasmScaleFit, plugin.WasmScaleScroll:
+		default:
+			l.add(Error, path, "wasm scaleMode %q is not supported", c.ScaleMode)
+		}
+		if (c.Width == 0) != (c.Height == 0) {
+			l.add(Error, path, "wasm width and height must be declared together")
+		}
+		if c.Width > 0 && c.Height > 0 && c.ScaleMode == "" {
+			l.add(Warning, path, "wasm with fixed dimensions should declare scaleMode fit or scroll")
+		}
 	}
 }
 
@@ -250,6 +276,8 @@ func expectedStreamKind(panel plugin.PanelType) (plugin.StreamKind, bool) {
 		return plugin.StreamMetrics, true
 	case plugin.PanelTaskProgress:
 		return plugin.StreamTask, true
+	case plugin.PanelCanvas:
+		return plugin.StreamCanvas, true
 	default:
 		return "", false
 	}

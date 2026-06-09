@@ -80,7 +80,7 @@ func TestProtocolDisabledHiddenAndBlocked(t *testing.T) {
 	}
 
 	// Connecting an existing connection of the disabled protocol fails clearly.
-	resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "op", nil)
+	resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "op", nil)
 	if resp.Status != http.StatusForbidden {
 		t.Fatalf("connect disabled: status %d (%s)", resp.Status, resp.Body)
 	}
@@ -90,7 +90,7 @@ func TestProtocolDisabledHiddenAndBlocked(t *testing.T) {
 
 	// Re-enabling restores access.
 	setAvailability(t, h, "tester", "enabled")
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "op", nil); resp.Status != http.StatusOK {
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "op", nil); resp.Status != http.StatusOK {
 		t.Fatalf("connect re-enabled: status %d (%s)", resp.Status, resp.Body)
 	}
 }
@@ -109,7 +109,7 @@ func TestProtocolAdminOnlyVisibility(t *testing.T) {
 	}
 
 	// A non-admin cannot open a session for it; an admin can (subject to RBAC).
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "op", nil); resp.Status != http.StatusForbidden {
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "op", nil); resp.Status != http.StatusForbidden {
 		t.Fatalf("admin_only connect by non-admin: status %d (%s)", resp.Status, resp.Body)
 	}
 }
