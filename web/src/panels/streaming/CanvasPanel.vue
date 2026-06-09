@@ -31,6 +31,18 @@ let resizeObserver: ResizeObserver | undefined;
 let capturedRegionId: string | undefined;
 let pointerMoveFrame = 0;
 let pendingPointerMove: CanvasOutgoingEvent | undefined;
+const canvasScrollKeys = new Set([
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "End",
+  "Home",
+  "PageDown",
+  "PageUp",
+  " ",
+  "Spacebar",
+]);
 
 const isInteractive = computed(
   () => cfg.value?.interactive || cfg.value?.keyboard || cfg.value?.pointer,
@@ -172,6 +184,7 @@ function onWheel(ev: WheelEvent): void {
 
 function onKey(ev: KeyboardEvent): void {
   if (!keyboardEnabled.value) return;
+  if (shouldPreventCanvasKeyDefault(ev)) ev.preventDefault();
   sendEvent({
     type: "key",
     event: ev.type,
@@ -180,6 +193,12 @@ function onKey(ev: KeyboardEvent): void {
     repeat: ev.repeat,
     modifiers: modifiers(ev),
   });
+}
+
+function shouldPreventCanvasKeyDefault(ev: KeyboardEvent): boolean {
+  if (ev.type !== "keydown") return false;
+  if (ev.altKey || ev.ctrlKey || ev.metaKey) return false;
+  return canvasScrollKeys.has(ev.key) || canvasScrollKeys.has(ev.code);
 }
 
 function sendEvent(event: CanvasOutgoingEvent): void {

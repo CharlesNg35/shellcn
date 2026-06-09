@@ -495,6 +495,55 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
+  it("prevents page scrolling for interactive canvas movement keys", async () => {
+    const w = mount(CanvasPanel, {
+      props: {
+        ...props,
+        config: { interactive: true, keyboard: true },
+      },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const socket = streamSockets()[0];
+    socket.emit("open");
+    await flushPromises();
+
+    const canvas = w.get<HTMLCanvasElement>(
+      '[data-test="canvas-panel-canvas"]',
+    ).element;
+    const arrow = new KeyboardEvent("keydown", {
+      key: "ArrowUp",
+      code: "ArrowUp",
+      cancelable: true,
+      bubbles: true,
+    });
+    canvas.dispatchEvent(arrow);
+    expect(arrow.defaultPrevented).toBe(true);
+
+    const text = new KeyboardEvent("keydown", {
+      key: "x",
+      code: "KeyX",
+      cancelable: true,
+      bubbles: true,
+    });
+    canvas.dispatchEvent(text);
+    expect(text.defaultPrevented).toBe(false);
+
+    const modified = new KeyboardEvent("keydown", {
+      key: "ArrowUp",
+      code: "ArrowUp",
+      ctrlKey: true,
+      cancelable: true,
+      bubbles: true,
+    });
+    canvas.dispatchEvent(modified);
+    expect(modified.defaultPrevented).toBe(false);
+    expect(socket.sent.some((msg) => msg.includes('"key":"ArrowUp"'))).toBe(
+      true,
+    );
+    w.unmount();
+  });
+
   it("uses declared canvas dimensions as a scrollable drawing surface", async () => {
     const w = mount(CanvasPanel, {
       props: {
