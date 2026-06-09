@@ -1,5 +1,6 @@
 import { mount, flushPromises } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
+import { installFetch } from "../../test/fetchMock";
 import WasmPanel from "./WasmPanel.vue";
 
 describe("WasmPanel", () => {
@@ -30,8 +31,38 @@ describe("WasmPanel", () => {
     expect(iframe.attributes("sandbox")).not.toContain("allow-same-origin");
     expect(iframe.attributes("allow")).toBe("fullscreen; gamepad");
     expect(iframe.attributes("srcdoc")).toContain("overflow:auto");
+    expect(iframe.attributes("srcdoc")).toContain('entry: "app.wasm"');
     expect(iframe.attributes("srcdoc")).toContain("theme:");
     expect(iframe.attributes("srcdoc")).toContain("onTheme(fn)");
     expect(iframe.attributes("srcdoc")).toContain('msg.type === "theme"');
+    expect(iframe.attributes("srcdoc")).toContain(
+      'window.shellcn.asset("app.wasm")',
+    );
+  });
+
+  it("lets generic boot scripts own startup for framework WASM", async () => {
+    installFetch(() => ({
+      body: "window.shellcn.asset(window.shellcn.entry);",
+    }));
+    const w = mount(WasmPanel, {
+      props: {
+        connectionId: "c1",
+        config: {
+          entry: "app_bg.wasm",
+          runtime: "generic",
+          boot: { scripts: ["boot.js"] },
+          assets: [
+            { path: "app_bg.wasm", source: { routeId: "wasm.asset" } },
+            { path: "boot.js", source: { routeId: "wasm.asset" } },
+          ],
+        },
+      },
+    });
+    await flushPromises();
+
+    const srcdoc = w.get("iframe").attributes("srcdoc");
+    expect(srcdoc).toContain('entry: "app_bg.wasm"');
+    expect(srcdoc).toContain("window.shellcn.asset(window.shellcn.entry)");
+    expect(srcdoc).toContain("if (true) return;");
   });
 });

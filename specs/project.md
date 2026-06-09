@@ -1051,16 +1051,22 @@ oversized surfaces such as maps, whiteboards, timelines, dependency graphs, and
 linked-node diagrams. Ready and resize events include logical size, viewport
 size, scale, DPR, and theme.
 `PanelWasm` does not bind through `Panel.Source`; it declares `WasmConfig`
-instead. `Assets` are read-only route-backed files, `Entry` and boot scripts
-must be listed in those assets, `Bridge.Routes` must name non-WS routes with
-matching methods, and `Bridge.Streams` must name WS routes. The browser runs the
-WASM app in a sandboxed iframe with no same-origin privilege; all data access
-goes through the declared bridge, which the parent renderer enforces. The host
-also exposes the current ShellCN theme through `window.shellcn.theme` and live
-theme changes through `window.shellcn.onTheme(fn)`. `Width` and `Height` are
-optional; omit them for a full-panel app, use `scroll` for naturally taller
-sandbox content, and declare both dimensions only for a fixed logical viewport
-that should be fitted or scrolled as a surface.
+instead. `Assets` are read-only route-backed files, `Entry` names the primary
+WASM artifact, boot scripts must also be listed in assets, `Bridge.Routes` must
+name non-WS routes with matching methods, and `Bridge.Streams` must name WS
+routes. The browser runs the WASM app in a sandboxed iframe with no same-origin
+privilege; all data access goes through the declared bridge, which the parent
+renderer enforces. The host exposes the entry path as `window.shellcn.entry`,
+the current ShellCN theme through `window.shellcn.theme`, and live theme changes
+through `window.shellcn.onTheme(fn)`. Generic WASM without boot scripts is
+instantiated directly from `Entry`, which is useful for simple C/C++/Rust modules
+that export `_start` or `main`. Generic WASM with boot scripts lets the loader
+own startup, which is required by framework builds such as Leptos, Yew,
+wasm-bindgen, or Emscripten; those loaders should fetch bytes with
+`window.shellcn.asset(window.shellcn.entry)`. `Width` and `Height` are optional;
+omit them for a full-panel app, use `scroll` for naturally taller sandbox
+content, and declare both dimensions only for a fixed logical viewport that
+should be fitted or scrolled as a surface.
 Table mutation sources (`insert`, `update`, `delete`) and editor/form save
 methods must resolve to write methods (`POST`, `PUT`, `PATCH`, or `DELETE`).
 Dashboard and split child panels are validated recursively with the same rules

@@ -362,8 +362,10 @@ type WasmBridge struct {
 	Streams []WasmBridgeStream `json:"streams,omitempty"`
 }
 
-// WasmConfig declares a sandboxed browser-side WASM app. The core owns the
-// iframe, CSP, asset URLs, and bridge; plugins declare assets and allowed routes.
+// WasmConfig declares a sandboxed browser-side WASM app. Entry is the primary
+// WASM artifact. Boot scripts are optional runtime/glue loaders; for generic
+// framework builds they own startup and should load Entry through the bridge.
+// The core owns the iframe, CSP, asset URLs, and bridge.
 type WasmConfig struct {
 	Entry        string           `json:"entry"`
 	Runtime      WasmRuntime      `json:"runtime,omitempty"`

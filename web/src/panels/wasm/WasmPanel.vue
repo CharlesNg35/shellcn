@@ -367,6 +367,7 @@ function bridgeScript(config: WasmPanelConfig): string {
     return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
   }
   window.shellcn = {
+    entry: ${JSON.stringify(config.entry)},
     capabilities: ${JSON.stringify(config.capabilities ?? {})},
     theme: ${JSON.stringify(theme.value)},
     onTheme(fn) {
@@ -424,11 +425,14 @@ function bridgeScript(config: WasmPanelConfig): string {
 function startScript(config: WasmPanelConfig): string {
   const runtime = config.runtime ?? "generic";
   const entry = JSON.stringify(config.entry);
+  const bootOwnsGenericStartup =
+    runtime === "generic" && Boolean(config.boot?.scripts?.length);
   return `
 (async () => {
   const status = document.getElementById("shellcn-wasm-status");
   try {
     if (typeof WebAssembly !== "object") throw new Error("WebAssembly is not supported in this browser.");
+    if (${JSON.stringify(bootOwnsGenericStartup)}) return;
     const bytes = await window.shellcn.asset(${entry});
     if (${JSON.stringify(runtime)} === "go") {
       if (typeof Go !== "function") throw new Error("Go WASM runtime was not loaded.");
