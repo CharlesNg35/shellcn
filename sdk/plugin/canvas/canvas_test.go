@@ -215,7 +215,7 @@ func TestRegionHelpers(t *testing.T) {
 }
 
 func TestParseEvent(t *testing.T) {
-	readyEvent, err := canvas.ParseEvent([]byte(`{"type":"ready","width":800,"height":480,"dpr":2,"theme":"dark"}`))
+	readyEvent, err := canvas.ParseEvent([]byte(`{"type":"ready","width":1200,"height":800,"viewportWidth":900,"viewportHeight":600,"scale":0.75,"dpr":2,"theme":"dark"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +223,7 @@ func TestParseEvent(t *testing.T) {
 	if !ok {
 		t.Fatalf("got %T, want *canvas.ReadyEvent", readyEvent)
 	}
-	if ready.Theme != canvas.PanelThemeDark || ready.Width != 800 || ready.DPR != 2 {
+	if ready.Theme != canvas.PanelThemeDark || ready.Width != 1200 || ready.ViewportWidth != 900 || ready.Scale != 0.75 || ready.DPR != 2 {
 		t.Fatalf("decoded ready event incorrectly: %#v", ready)
 	}
 

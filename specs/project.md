@@ -1033,6 +1033,14 @@ from `WS` routes.
 Canvas streams use a JSON wire protocol, but plugin code should use the SDK's
 typed canvas structs (`CanvasFrame`, `CanvasCommand`, `CanvasRegion`,
 `CanvasPointerEvent`, etc.) rather than hand-built maps.
+Canvas panels declare their sizing policy in `CanvasConfig.ScaleMode`:
+`resize` reports the current viewport as the logical drawing surface, `fit`
+scales a declared `Width`/`Height` logical surface into the available panel while
+mapping input back to logical coordinates, and `scroll` keeps a declared
+`Width`/`Height` surface at 1:1 CSS pixels with panel scrolling for naturally
+oversized surfaces such as maps, whiteboards, timelines, dependency graphs, and
+linked-node diagrams. Ready and resize events include logical size, viewport
+size, scale, DPR, and theme.
 Table mutation sources (`insert`, `update`, `delete`) and editor/form save
 methods must resolve to write methods (`POST`, `PUT`, `PATCH`, or `DELETE`).
 Dashboard and split child panels are validated recursively with the same rules

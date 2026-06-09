@@ -307,6 +307,9 @@ export type CanvasOutgoingEvent =
       type: "ready" | "resize";
       width: number;
       height: number;
+      viewportWidth?: number;
+      viewportHeight?: number;
+      scale?: number;
       dpr: number;
       theme?: "light" | "dark";
     }

@@ -16,6 +16,25 @@ import {
 } from "./textLayout";
 
 type EmitEvent = (event: CanvasOutgoingEvent) => void;
+export type CanvasScaleMode = "resize" | "fit" | "scroll";
+
+export interface CanvasResizeOptions {
+  mode: CanvasScaleMode;
+  width?: number;
+  height?: number;
+  minScale?: number;
+  maxScale?: number;
+}
+
+export interface CanvasRendererSize {
+  width: number;
+  height: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  scale: number;
+  dpr: number;
+}
+
 const MAX_PATH_CACHE = 256;
 const MAX_TEXT_WRAP_CACHE = 256;
 
@@ -35,6 +54,9 @@ export class Canvas2DRenderer {
   private frameVersion = 0;
   private width = 800;
   private height = 450;
+  private viewportWidth = 800;
+  private viewportHeight = 450;
+  private scale = 1;
   private dpr = 1;
 
   constructor(emit: EmitEvent) {
@@ -50,23 +72,35 @@ export class Canvas2DRenderer {
     parent: HTMLElement,
     background?: string,
     hidpi = true,
-    content?: { width?: number; height?: number },
-  ): { width: number; height: number; dpr: number } {
+    options: CanvasResizeOptions = { mode: "resize" },
+  ): CanvasRendererSize {
     if (!this.canvas) return this.size();
     const rect = parent.getBoundingClientRect();
-    this.width = Math.max(
-      1,
-      Math.round(Math.max(rect.width || this.width, content?.width || 0)),
-    );
-    this.height = Math.max(
-      1,
-      Math.round(Math.max(rect.height || this.height, content?.height || 0)),
-    );
+    this.viewportWidth = Math.max(1, Math.round(rect.width || this.width));
+    this.viewportHeight = Math.max(1, Math.round(rect.height || this.height));
+    const intrinsicWidth = positiveSize(options.width)
+      ? Math.round(options.width)
+      : this.viewportWidth;
+    const intrinsicHeight = positiveSize(options.height)
+      ? Math.round(options.height)
+      : this.viewportHeight;
+    if (options.mode === "resize") {
+      this.width = this.viewportWidth;
+      this.height = this.viewportHeight;
+      this.scale = 1;
+    } else {
+      this.width = intrinsicWidth || this.viewportWidth;
+      this.height = intrinsicHeight || this.viewportHeight;
+      this.scale =
+        options.mode === "fit"
+          ? this.fitScale(options.minScale, options.maxScale)
+          : 1;
+    }
     this.dpr = hidpi ? window.devicePixelRatio || 1 : 1;
     const backingWidth = Math.round(this.width * this.dpr);
     const backingHeight = Math.round(this.height * this.dpr);
-    const styleWidth = `${this.width}px`;
-    const styleHeight = `${this.height}px`;
+    const styleWidth = `${Math.max(1, Math.round(this.width * this.scale))}px`;
+    const styleHeight = `${Math.max(1, Math.round(this.height * this.scale))}px`;
     if (
       this.ctx &&
       this.canvas.width === backingWidth &&
@@ -86,8 +120,25 @@ export class Canvas2DRenderer {
     return this.size();
   }
 
-  size(): { width: number; height: number; dpr: number } {
-    return { width: this.width, height: this.height, dpr: this.dpr };
+  size(): CanvasRendererSize {
+    return {
+      width: this.width,
+      height: this.height,
+      viewportWidth: this.viewportWidth,
+      viewportHeight: this.viewportHeight,
+      scale: this.scale,
+      dpr: this.dpr,
+    };
+  }
+
+  private fitScale(minScale?: number, maxScale?: number): number {
+    const fit = Math.min(
+      this.viewportWidth / Math.max(1, this.width),
+      this.viewportHeight / Math.max(1, this.height),
+    );
+    const min = validScale(minScale) ? minScale : 0;
+    const max = validScale(maxScale) ? maxScale : Number.POSITIVE_INFINITY;
+    return Math.max(min, Math.min(max, fit));
   }
 
   currentRegions(): CanvasRegion[] {
@@ -948,6 +999,14 @@ function remember<K, V>(cache: Map<K, V>, key: K, value: V, max: number): void {
 
 function num(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function validScale(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function positiveSize(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
 function str(value: unknown): string {

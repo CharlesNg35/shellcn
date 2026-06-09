@@ -318,14 +318,25 @@
         "keyboard": {
           "type": "boolean"
         },
+        "maxScale": {
+          "type": "number"
+        },
+        "minScale": {
+          "type": "number"
+        },
         "pointer": {
           "type": "boolean"
         },
         "resizeEvents": {
           "type": "boolean"
         },
-        "scrollable": {
-          "type": "boolean"
+        "scaleMode": {
+          "type": "string",
+          "enum": [
+            "resize",
+            "fit",
+            "scroll"
+          ]
         },
         "wheelMode": {
           "type": "string",

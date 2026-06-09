@@ -429,7 +429,7 @@ describe("streaming stub panels", () => {
         config: {
           width: 100,
           height: 100,
-          scrollable: true,
+          scaleMode: "scroll",
           interactive: true,
           pointer: true,
         },
@@ -476,7 +476,7 @@ describe("streaming stub panels", () => {
     rafCallbacks[0]?.(0);
     const moves = socket.sent.filter((msg) => msg.includes('"pointermove"'));
     expect(moves).toHaveLength(1);
-    expect(moves[0]).toContain('"x":240');
+    expect(moves[0]).toContain('"x":30');
     expect(moves[0]).toContain('"regionId":"card"');
     w.unmount();
   });
@@ -553,7 +553,7 @@ describe("streaming stub panels", () => {
         config: {
           width: 1600,
           height: 900,
-          scrollable: true,
+          scaleMode: "scroll",
           interactive: true,
         },
       },
@@ -565,6 +565,10 @@ describe("streaming stub panels", () => {
     await nextTick();
     await flushPromises();
     await nextTick();
+
+    const viewport = w.get('[data-test="canvas-panel-viewport"]');
+    expect(viewport.classes()).toContain("overflow-auto");
+    expect(viewport.classes()).toContain("overscroll-contain");
 
     const canvas = w.get<HTMLCanvasElement>(
       '[data-test="canvas-panel-canvas"]',
@@ -593,11 +597,99 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
-  it("lets scrollable canvas plugins explicitly capture wheel input", async () => {
+  it("fits declared canvas dimensions without changing logical pointer coordinates", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 500,
+      right: 1000,
+      bottom: 500,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
     const w = mount(CanvasPanel, {
       props: {
         ...props,
-        config: { scrollable: true, interactive: true, wheelMode: "capture" },
+        config: {
+          width: 1200,
+          height: 800,
+          scaleMode: "fit",
+          interactive: true,
+          pointer: true,
+          wheelMode: "none",
+        },
+      },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const socket = streamSockets()[0];
+    socket.emit("open");
+    await nextTick();
+    await flushPromises();
+    await nextTick();
+
+    const viewport = w.get('[data-test="canvas-panel-viewport"]');
+    expect(viewport.classes()).toContain("place-items-center");
+    const canvas = w.get<HTMLCanvasElement>(
+      '[data-test="canvas-panel-canvas"]',
+    ).element;
+    expect(canvas.style.width).toBe("750px");
+    expect(canvas.style.height).toBe("500px");
+    expect(
+      socket.sent.some(
+        (msg) =>
+          msg.includes('"type":"ready"') &&
+          msg.includes('"width":1200') &&
+          msg.includes('"height":800') &&
+          msg.includes('"viewportWidth":1000') &&
+          msg.includes('"viewportHeight":500') &&
+          msg.includes('"scale":0.625'),
+      ),
+    ).toBe(true);
+
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      left: 125,
+      top: 0,
+      width: 750,
+      height: 500,
+      right: 875,
+      bottom: 500,
+      x: 125,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    canvas.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        clientX: 500,
+        clientY: 250,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(
+      socket.sent.some(
+        (msg) =>
+          msg.includes('"type":"pointer"') &&
+          msg.includes('"x":600') &&
+          msg.includes('"y":400'),
+      ),
+    ).toBe(true);
+    w.unmount();
+  });
+
+  it("lets scroll-mode canvas plugins explicitly capture wheel input", async () => {
+    const w = mount(CanvasPanel, {
+      props: {
+        ...props,
+        config: {
+          width: 1600,
+          height: 900,
+          scaleMode: "scroll",
+          interactive: true,
+          wheelMode: "capture",
+        },
       },
       global: { plugins: [pinia] },
     });
@@ -628,7 +720,9 @@ describe("streaming stub panels", () => {
       props: {
         ...props,
         config: {
-          scrollable: true,
+          width: 1600,
+          height: 900,
+          scaleMode: "scroll",
           interactive: true,
           wheelMode: "modified",
         },

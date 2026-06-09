@@ -217,6 +217,20 @@ func (l *linter) panel(path string, p plugin.Panel) {
 		for _, child := range c.Panels {
 			l.panel(path+" split "+child.Key, child.Panel)
 		}
+	case plugin.CanvasConfig:
+		switch c.ScaleMode {
+		case plugin.CanvasScaleFit, plugin.CanvasScaleScroll:
+			if c.Width <= 0 || c.Height <= 0 {
+				l.add(Error, path, "canvas %q scale mode requires positive width and height", c.ScaleMode)
+			}
+		case "":
+			if c.Width > 0 || c.Height > 0 {
+				l.add(Warning, path, "canvas with fixed dimensions should declare scaleMode fit or scroll")
+			}
+		case plugin.CanvasScaleResize:
+		default:
+			l.add(Error, path, "canvas scaleMode %q is not supported", c.ScaleMode)
+		}
 	}
 }
 

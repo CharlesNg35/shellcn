@@ -145,3 +145,28 @@ func TestLintAcceptsCanvasStream(t *testing.T) {
 		t.Fatalf("unexpected UX errors: %#v", findings)
 	}
 }
+
+func TestLintRejectsFitCanvasWithoutLogicalSize(t *testing.T) {
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "x",
+		Title:      "X",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		Tabs: []plugin.Panel{{
+			Key:    "canvas",
+			Label:  "Canvas",
+			Type:   plugin.PanelCanvas,
+			Source: &plugin.DataSource{RouteID: "x.canvas", Method: plugin.MethodWS},
+			Config: plugin.CanvasConfig{ScaleMode: plugin.CanvasScaleFit, Interactive: true},
+		}},
+		Streams: []plugin.Stream{{ID: "x.canvas", Kind: plugin.StreamCanvas, RouteID: "x.canvas"}},
+	}
+	routes := []plugin.Route{{
+		ID: "x.canvas", Method: plugin.MethodWS, Permission: "x.canvas",
+		Risk: plugin.RiskSafe, Stream: stream,
+	}}
+	if !hasError(pluginux.Lint(m, routes), `canvas "fit" scale mode requires positive width and height`) {
+		t.Fatalf("expected fit canvas size error")
+	}
+}

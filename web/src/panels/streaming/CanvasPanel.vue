@@ -13,7 +13,11 @@ import { useTheme } from "../../composables/useTheme";
 import type { CanvasPanelConfig } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import { parseCanvasFrame } from "./canvas/parser";
-import { Canvas2DRenderer } from "./canvas/renderer2d";
+import {
+  Canvas2DRenderer,
+  type CanvasResizeOptions,
+  type CanvasScaleMode,
+} from "./canvas/renderer2d";
 import type { CanvasModifierState, CanvasOutgoingEvent } from "./canvas/types";
 import StreamStatusBar from "./StreamStatusBar.vue";
 
@@ -54,16 +58,26 @@ const keyboardEnabled = computed(
   () => cfg.value?.keyboard ?? isInteractive.value,
 );
 const resizeEvents = computed(() => cfg.value?.resizeEvents ?? true);
-const scrollable = computed(
-  () =>
-    cfg.value?.scrollable ??
-    (Boolean(cfg.value?.width) || Boolean(cfg.value?.height)),
-);
+const scaleMode = computed<CanvasScaleMode>(() => {
+  if (cfg.value?.scaleMode) return cfg.value.scaleMode;
+  return "resize";
+});
+const scrollable = computed(() => scaleMode.value === "scroll");
 const wheelEnabled = computed(() => isInteractive.value && !scrollable.value);
 const wheelMode = computed(() => cfg.value?.wheelMode || "auto");
 const canvasRole = computed(() =>
   isInteractive.value ? "application" : "img",
 );
+const viewportClass = computed(() => {
+  switch (scaleMode.value) {
+    case "fit":
+      return "grid place-items-center overflow-hidden";
+    case "scroll":
+      return "overflow-auto overscroll-contain";
+    default:
+      return "overflow-hidden";
+  }
+});
 const canvasAriaLabel = computed(
   () =>
     cfg.value?.ariaLabel ||
@@ -91,12 +105,20 @@ function resizeCanvas(): void {
     parent,
     cfg.value?.background,
     cfg.value?.hidpi !== false,
-    scrollable.value
-      ? { width: cfg.value?.width, height: cfg.value?.height }
-      : undefined,
+    canvasResizeOptions(),
   );
   if (resizeEvents.value)
     sendEvent({ type: "resize", ...size, theme: theme.value });
+}
+
+function canvasResizeOptions(): CanvasResizeOptions {
+  return {
+    mode: scaleMode.value,
+    width: cfg.value?.width,
+    height: cfg.value?.height,
+    minScale: cfg.value?.minScale,
+    maxScale: cfg.value?.maxScale,
+  };
 }
 
 function onFrame(frame: string): void {
@@ -265,8 +287,9 @@ watch(theme, () => {
     />
     <div
       ref="panelEl"
+      data-test="canvas-panel-viewport"
       class="relative min-h-0 flex-1"
-      :class="scrollable ? 'overflow-auto' : 'overflow-hidden'"
+      :class="viewportClass"
       :style="{ background: cfg?.background || 'transparent' }"
     >
       <canvas

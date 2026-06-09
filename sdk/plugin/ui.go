@@ -264,10 +264,20 @@ const (
 	CanvasWheelNone     CanvasWheelMode = "none"
 )
 
+type CanvasScaleMode string
+
+const (
+	CanvasScaleResize CanvasScaleMode = "resize"
+	CanvasScaleFit    CanvasScaleMode = "fit"
+	CanvasScaleScroll CanvasScaleMode = "scroll"
+)
+
 type CanvasConfig struct {
 	Width          int             `json:"width,omitempty"`
 	Height         int             `json:"height,omitempty"`
-	Scrollable     bool            `json:"scrollable,omitempty"`
+	ScaleMode      CanvasScaleMode `json:"scaleMode,omitempty"`
+	MinScale       float64         `json:"minScale,omitempty"`
+	MaxScale       float64         `json:"maxScale,omitempty"`
 	HiDPI          bool            `json:"hidpi,omitempty"`
 	Interactive    bool            `json:"interactive,omitempty"`
 	Keyboard       bool            `json:"keyboard,omitempty"`

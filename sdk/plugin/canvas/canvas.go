@@ -849,11 +849,14 @@ type ModifierState struct {
 }
 
 type ReadyEvent struct {
-	Type   EventType  `json:"type"`
-	Width  float64    `json:"width"`
-	Height float64    `json:"height"`
-	DPR    float64    `json:"dpr"`
-	Theme  PanelTheme `json:"theme,omitempty"`
+	Type           EventType  `json:"type"`
+	Width          float64    `json:"width"`
+	Height         float64    `json:"height"`
+	ViewportWidth  float64    `json:"viewportWidth,omitempty"`
+	ViewportHeight float64    `json:"viewportHeight,omitempty"`
+	Scale          float64    `json:"scale,omitempty"`
+	DPR            float64    `json:"dpr"`
+	Theme          PanelTheme `json:"theme,omitempty"`
 }
 
 func (ReadyEvent) canvasEvent() {}
@@ -862,11 +865,14 @@ func (ReadyEvent) EventType() EventType {
 }
 
 type ResizeEvent struct {
-	Type   EventType  `json:"type"`
-	Width  float64    `json:"width"`
-	Height float64    `json:"height"`
-	DPR    float64    `json:"dpr"`
-	Theme  PanelTheme `json:"theme,omitempty"`
+	Type           EventType  `json:"type"`
+	Width          float64    `json:"width"`
+	Height         float64    `json:"height"`
+	ViewportWidth  float64    `json:"viewportWidth,omitempty"`
+	ViewportHeight float64    `json:"viewportHeight,omitempty"`
+	Scale          float64    `json:"scale,omitempty"`
+	DPR            float64    `json:"dpr"`
+	Theme          PanelTheme `json:"theme,omitempty"`
 }
 
 func (ResizeEvent) canvasEvent() {}
