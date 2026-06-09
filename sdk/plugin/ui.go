@@ -258,36 +258,56 @@ type SplitConfig struct {
 type CanvasWheelMode string
 
 const (
-	CanvasWheelAuto     CanvasWheelMode = "auto"
-	CanvasWheelCapture  CanvasWheelMode = "capture"
+	// CanvasWheelAuto captures wheel events for interactive resize/fit canvases
+	// and leaves wheel scrolling to the browser for scroll-mode canvases.
+	CanvasWheelAuto CanvasWheelMode = "auto"
+	// CanvasWheelCapture sends every wheel event to the plugin. Use it only when
+	// wheel gestures are part of the canvas interaction model.
+	CanvasWheelCapture CanvasWheelMode = "capture"
+	// CanvasWheelModified sends wheel events only with Alt, Ctrl, or Meta held,
+	// keeping ordinary panel scrolling available.
 	CanvasWheelModified CanvasWheelMode = "modified"
-	CanvasWheelNone     CanvasWheelMode = "none"
+	// CanvasWheelNone disables plugin wheel input.
+	CanvasWheelNone CanvasWheelMode = "none"
 )
 
 type CanvasScaleMode string
 
 const (
+	// CanvasScaleResize makes the browser report the viewport as the logical
+	// drawing surface. Use it when the plugin can redraw responsively.
 	CanvasScaleResize CanvasScaleMode = "resize"
-	CanvasScaleFit    CanvasScaleMode = "fit"
+	// CanvasScaleFit keeps a fixed logical surface and scales it into the panel,
+	// while pointer and wheel coordinates remain in logical units.
+	CanvasScaleFit CanvasScaleMode = "fit"
+	// CanvasScaleScroll keeps a fixed logical surface at 1:1 CSS pixels and lets
+	// the panel scroll. Use it for naturally large surfaces.
 	CanvasScaleScroll CanvasScaleMode = "scroll"
 )
 
+// CanvasConfig declares a plugin-driven 2D canvas surface. The frontend owns the
+// DOM and rendering engine; plugins send typed canvas frames and receive typed
+// input/resize events.
 type CanvasConfig struct {
-	Width          int             `json:"width,omitempty"`
-	Height         int             `json:"height,omitempty"`
-	ScaleMode      CanvasScaleMode `json:"scaleMode,omitempty"`
-	MinScale       float64         `json:"minScale,omitempty"`
-	MaxScale       float64         `json:"maxScale,omitempty"`
-	HiDPI          bool            `json:"hidpi,omitempty"`
-	Interactive    bool            `json:"interactive,omitempty"`
-	Keyboard       bool            `json:"keyboard,omitempty"`
-	Pointer        bool            `json:"pointer,omitempty"`
-	WheelMode      CanvasWheelMode `json:"wheelMode,omitempty"`
-	ResizeEvents   bool            `json:"resizeEvents,omitempty"`
-	Background     string          `json:"background,omitempty"`
-	FocusOnPointer bool            `json:"focusOnPointer,omitempty"`
-	AriaLabel      string          `json:"ariaLabel,omitempty"`
-	Instructions   string          `json:"instructions,omitempty"`
+	Width     int             `json:"width,omitempty"`
+	Height    int             `json:"height,omitempty"`
+	ScaleMode CanvasScaleMode `json:"scaleMode,omitempty"`
+	// MinScale and MaxScale clamp fit-mode display scaling. They do not change
+	// logical coordinates.
+	MinScale    float64         `json:"minScale,omitempty"`
+	MaxScale    float64         `json:"maxScale,omitempty"`
+	HiDPI       bool            `json:"hidpi,omitempty"`
+	Interactive bool            `json:"interactive,omitempty"`
+	Keyboard    bool            `json:"keyboard,omitempty"`
+	Pointer     bool            `json:"pointer,omitempty"`
+	WheelMode   CanvasWheelMode `json:"wheelMode,omitempty"`
+	// ResizeEvents controls whether ready/resize events are sent with logical
+	// size, viewport size, scale, DPR, and theme.
+	ResizeEvents   bool   `json:"resizeEvents,omitempty"`
+	Background     string `json:"background,omitempty"`
+	FocusOnPointer bool   `json:"focusOnPointer,omitempty"`
+	AriaLabel      string `json:"ariaLabel,omitempty"`
+	Instructions   string `json:"instructions,omitempty"`
 }
 
 // MetricStat is one KPI number card in the metrics panel.
