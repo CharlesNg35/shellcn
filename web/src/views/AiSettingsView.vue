@@ -114,7 +114,8 @@ onMounted(load);
 
     <Tabs
       :value="tab"
-      :pt="{ root: 'flex min-h-0 flex-1 flex-col' }"
+      scrollable
+      :pt="{ root: 'flex min-h-0 min-w-0 flex-1 flex-col' }"
       @update:value="tab = String($event)"
     >
       <TabList>

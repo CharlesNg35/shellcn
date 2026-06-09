@@ -166,7 +166,12 @@ function formatDate(iso: string): string {
     <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
     <SkeletonList v-else-if="loading && !user" :rows="4" />
 
-    <Tabs v-else-if="user" :value="tab" @update:value="tab = String($event)">
+    <Tabs
+      v-else-if="user"
+      :value="tab"
+      scrollable
+      @update:value="tab = String($event)"
+    >
       <TabList>
         <Tab value="overview">
           <AppIcon

@@ -57,6 +57,28 @@ const TablePanelStub = defineComponent({
   `,
 });
 
+const TabsStub = defineComponent({
+  name: "TestTabs",
+  props: {
+    value: { type: [String, Number], default: "" },
+    scrollable: { type: Boolean, default: false },
+  },
+  emits: ["update:value"],
+  template:
+    '<div data-test="workspace-tabs" :data-scrollable="scrollable"><slot /></div>',
+});
+
+const TabListStub = defineComponent({
+  name: "TabList",
+  template: '<div data-test="workspace-tab-list"><slot /></div>',
+});
+
+const TabStub = defineComponent({
+  name: "TestTab",
+  props: { value: { type: [String, Number], required: true } },
+  template: '<button type="button"><slot /></button>',
+});
+
 let requests: Array<{ url: string; init?: RequestInit }>;
 
 function router() {
@@ -507,6 +529,64 @@ describe("ConnectionWorkspace", () => {
     await r.back();
     await flushPromises();
     expect(r.currentRoute.value.query.v).not.toBe("keys");
+  });
+
+  it("uses PrimeVue scrollable tabs for manifest tab layouts", async () => {
+    const manyTabs: PluginProjection = {
+      ...projection,
+      layout: Layout.Tabs,
+      tree: [],
+      resources: [],
+      tabs: Array.from({ length: 12 }, (_, index) => ({
+        key: `tab-${index}`,
+        label: `Long tab ${index + 1}`,
+        panel: "document",
+        source: { routeId: `x.tab.${index}` },
+      })),
+    };
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections"))
+        return {
+          body: [
+            {
+              id: "c1",
+              name: "docker",
+              protocol: "docker",
+              transport: "direct",
+            },
+          ],
+        };
+      if (url.endsWith("/api/connections/c1/session"))
+        return { body: { state: "connected", channels: 0, streams: 0 } };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      if (url.endsWith("/api/plugins/docker")) return { body: manyTabs };
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+    const ws = useWorkspaceStore();
+    ws.setConnected("c1", true);
+
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: {
+          AppIcon: true,
+          PanelHost: true,
+          Tabs: TabsStub,
+          TabList: TabListStub,
+          Tab: TabStub,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(
+      wrapper.get('[data-test="workspace-tabs"]').attributes(),
+    ).toMatchObject({
+      "data-scrollable": "true",
+    });
   });
 
   it("pushes ?v= per opened view and reconstructs it on Back (sidebar_tree)", async () => {

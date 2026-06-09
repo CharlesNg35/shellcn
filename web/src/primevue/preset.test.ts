@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { mount } from "@vue/test-utils";
 import Checkbox from "primevue/checkbox";
 import ToggleSwitch from "primevue/toggleswitch";
+import PrimeVue from "primevue/config";
+import Tabs from "primevue/tabs";
+import TabList from "primevue/tablist";
+import Tab from "primevue/tab";
 import { primeVuePassthrough } from "./preset";
 
 describe("primeVuePassthrough", () => {
@@ -58,9 +62,53 @@ describe("primeVuePassthrough", () => {
   });
 
   it("keeps tab navigation visible while tab panels scroll", () => {
+    expect(primeVuePassthrough.tabs.root).toContain("min-w-0");
     expect(primeVuePassthrough.tablist.root).toContain("sticky");
     expect(primeVuePassthrough.tablist.root).toContain("top-0");
+    expect(primeVuePassthrough.tablist.root).toContain("overflow-hidden");
     expect(primeVuePassthrough.tablist.root).toContain("backdrop-blur");
+    expect(primeVuePassthrough.tablist.content).toContain("overflow-x-auto");
+    expect(primeVuePassthrough.tablist.content).toContain(
+      "[scrollbar-width:none]",
+    );
+    expect(primeVuePassthrough.tablist.tabList).toContain("flex-nowrap");
+    expect(primeVuePassthrough.tablist.tabList).toContain("pl-1");
+    expect(primeVuePassthrough.tablist.tabList).toContain("pr-9");
+    expect(primeVuePassthrough.tablist.tabList).toContain("scroll-pr-9");
+    expect(primeVuePassthrough.tab.root).toContain("shrink-0");
+    expect(primeVuePassthrough.tab.root).toContain("whitespace-nowrap");
+    expect(primeVuePassthrough.tablist.prevButton).toContain("absolute");
+    expect(primeVuePassthrough.tablist.prevButton).toContain("left-0");
+    expect(primeVuePassthrough.tablist.nextButton).toContain("right-0");
+  });
+
+  it("applies tablist pass-through classes to PrimeVue scroll navigators", () => {
+    const wrapper = mount(
+      {
+        components: { Tabs, TabList, Tab },
+        template: `
+          <Tabs value="0" scrollable>
+            <TabList>
+              <Tab v-for="i in 12" :key="i" :value="String(i - 1)">Tab {{ i }}</Tab>
+            </TabList>
+          </Tabs>
+        `,
+      },
+      {
+        global: {
+          plugins: [[PrimeVue, { unstyled: true, pt: primeVuePassthrough }]],
+        },
+      },
+    );
+
+    const root = wrapper.get('[data-pc-name="tablist"]');
+    expect(root.classes()).toContain("overflow-hidden");
+    expect(wrapper.get('[data-pc-section="content"]').classes()).toContain(
+      "overflow-x-auto",
+    );
+    expect(wrapper.get('[data-pc-section="tablist"]').classes()).toContain(
+      "flex-nowrap",
+    );
   });
 
   it("keeps modal chrome bounded and scrollable", () => {

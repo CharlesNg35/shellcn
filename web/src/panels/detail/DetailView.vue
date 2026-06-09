@@ -120,6 +120,7 @@ function onActionDone(action: Action, result?: Record<string, unknown>): void {
     <Tabs
       v-if="detail.tabs.length > 1"
       :value="activeTab"
+      scrollable
       @update:value="activeTab = String($event)"
     >
       <TabList>

@@ -323,10 +323,11 @@ function onActionDone(action: Action): void {
              panel instead of destroying it — terminals/streams stay alive. -->
           <div
             v-if="projection.layout === Layout.Tabs"
-            class="flex h-full flex-col"
+            class="flex h-full min-w-0 flex-col"
           >
             <Tabs
               :value="view.activeTab ?? ''"
+              scrollable
               @update:value="ws.setActiveTab(id, String($event))"
             >
               <TabList>
