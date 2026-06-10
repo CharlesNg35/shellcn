@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -462,9 +463,15 @@ func (s *gormPluginStorageStore) List(ctx context.Context, f PluginStorageFilter
 		return nil, err
 	}
 	var list []models.PluginStorageItem
-	if err := applyPluginStorageFilter(s.db.WithContext(ctx), f).
-		Order("collection ASC, plugin ASC, connection_id ASC, owner_id ASC, item_key ASC").
-		Find(&list).Error; err != nil {
+	q := applyPluginStorageFilter(s.db.WithContext(ctx), f).
+		Order("collection ASC, plugin ASC, connection_id ASC, owner_id ASC, item_key ASC")
+	if f.Offset > 0 {
+		q = q.Offset(f.Offset)
+	}
+	if f.Limit > 0 {
+		q = q.Limit(f.Limit)
+	}
+	if err := q.Find(&list).Error; err != nil {
 		return nil, err
 	}
 	return list, nil
@@ -486,7 +493,32 @@ func applyPluginStorageFilter(q *gorm.DB, f PluginStorageFilter) *gorm.DB {
 	if f.Key != "" {
 		q = q.Where("item_key = ?", f.Key)
 	}
+	if len(f.Keys) > 0 {
+		q = q.Where("item_key IN ?", f.Keys)
+	}
+	if f.KeyPrefix != "" {
+		q = q.Where("item_key LIKE ? ESCAPE '\\'", escapeSQLLikePrefix(f.KeyPrefix))
+	}
+	if f.ContentType != "" {
+		q = q.Where("content_type = ?", f.ContentType)
+	}
+	if !f.CreatedAfter.IsZero() {
+		q = q.Where("created_at >= ?", f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		q = q.Where("created_at <= ?", f.CreatedBefore)
+	}
+	if !f.UpdatedAfter.IsZero() {
+		q = q.Where("updated_at >= ?", f.UpdatedAfter)
+	}
+	if !f.UpdatedBefore.IsZero() {
+		q = q.Where("updated_at <= ?", f.UpdatedBefore)
+	}
 	return q
+}
+
+func escapeSQLLikePrefix(prefix string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(prefix) + "%"
 }
 
 type gormPreferenceStore struct{ db *gorm.DB }

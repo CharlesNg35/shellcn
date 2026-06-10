@@ -30,6 +30,10 @@ func validatePluginStorageFilter(f PluginStorageFilter, mode pluginStorageFilter
 		return fmt.Errorf("%w: plugin storage owner_id is required", models.ErrInvalidInput)
 	case mode == pluginStorageFilterRead && f.Key == "":
 		return fmt.Errorf("%w: plugin storage key is required", models.ErrInvalidInput)
+	case f.Limit < 0:
+		return fmt.Errorf("%w: plugin storage limit cannot be negative", models.ErrInvalidInput)
+	case f.Offset < 0:
+		return fmt.Errorf("%w: plugin storage offset cannot be negative", models.ErrInvalidInput)
 	default:
 		return nil
 	}

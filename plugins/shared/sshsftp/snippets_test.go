@@ -89,7 +89,7 @@ func (s *testPluginStorage) Delete(_ context.Context, scope plugin.StorageScope,
 	return nil
 }
 
-func (s *testPluginStorage) List(_ context.Context, scope plugin.StorageScope) ([]plugin.StorageItem, error) {
+func (s *testPluginStorage) List(_ context.Context, scope plugin.StorageScope, _ *plugin.StorageListFilter) ([]plugin.StorageItem, error) {
 	var out []plugin.StorageItem
 	for k, item := range s.items {
 		if k.collection == scope.Collection {

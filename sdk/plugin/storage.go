@@ -39,11 +39,24 @@ type StorageItem struct {
 	UpdatedAt   time.Time
 }
 
+// StorageListFilter narrows List results within a resolved StorageScope.
+type StorageListFilter struct {
+	Keys          []string
+	KeyPrefix     string
+	ContentType   string
+	CreatedAfter  time.Time
+	CreatedBefore time.Time
+	UpdatedAfter  time.Time
+	UpdatedBefore time.Time
+	Limit         int
+	Offset        int
+}
+
 // Storage is the generic persistence surface exposed to plugin route handlers.
 // Implementations must scope access; plugins never receive raw database access.
 type Storage interface {
 	Get(ctx context.Context, scope StorageScope, key string) (StorageItem, error)
 	Put(ctx context.Context, collection string, item StorageItem) (StorageItem, error)
 	Delete(ctx context.Context, scope StorageScope, key string) error
-	List(ctx context.Context, scope StorageScope) ([]StorageItem, error)
+	List(ctx context.Context, scope StorageScope, filter *StorageListFilter) ([]StorageItem, error)
 }

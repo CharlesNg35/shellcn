@@ -141,7 +141,7 @@ func storage(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := rc.Storage.List(rc.Ctx, scope)
+	rows, err := rc.Storage.List(rc.Ctx, scope, nil)
 	if err != nil {
 		return nil, err
 	}

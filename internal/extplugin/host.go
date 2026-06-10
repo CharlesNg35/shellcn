@@ -111,7 +111,7 @@ func (h *hostServer) StorageList(ctx context.Context, req *pluginv1.StorageListR
 	if h.storage == nil {
 		return nil, status.Error(codes.Unavailable, "plugin storage unavailable")
 	}
-	items, err := h.storage.List(ctx, pluginStorageScope(req.GetScope()))
+	items, err := h.storage.List(ctx, pluginStorageScope(req.GetScope()), pluginStorageListFilter(req.GetFilter()))
 	if err != nil {
 		return nil, grpcplugin.StatusFromError(err)
 	}
@@ -129,6 +129,23 @@ func pluginStorageScope(scope *pluginv1.StorageScope) plugin.StorageScope {
 	return plugin.StorageScope{
 		Collection: scope.GetCollection(),
 		Level:      normalizeStorageScopeLevel(plugin.StorageScopeLevel(scope.GetLevel())),
+	}
+}
+
+func pluginStorageListFilter(filter *pluginv1.StorageListFilter) *plugin.StorageListFilter {
+	if filter == nil {
+		return nil
+	}
+	return &plugin.StorageListFilter{
+		Keys:          append([]string(nil), filter.GetKeys()...),
+		KeyPrefix:     filter.GetKeyPrefix(),
+		ContentType:   filter.GetContentType(),
+		CreatedAfter:  unixNanoTime(filter.GetCreatedAfterUnixNano()),
+		CreatedBefore: unixNanoTime(filter.GetCreatedBeforeUnixNano()),
+		UpdatedAfter:  unixNanoTime(filter.GetUpdatedAfterUnixNano()),
+		UpdatedBefore: unixNanoTime(filter.GetUpdatedBeforeUnixNano()),
+		Limit:         int(filter.GetLimit()),
+		Offset:        int(filter.GetOffset()),
 	}
 }
 

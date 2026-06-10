@@ -250,6 +250,7 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		OwnerID:      "u1",
 		ConnectionID: "c1",
 	}
+	baseTime := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	item := &models.PluginStorageItem{
 		Collection:   scope.Collection,
 		Plugin:       scope.Plugin,
@@ -259,6 +260,8 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		Value:        []byte("systemctl restart app"),
 		ContentType:  "text/plain",
 		Metadata:     map[string]string{"name": "Restart app"},
+		CreatedAt:    baseTime,
+		UpdatedAt:    baseTime.Add(time.Minute),
 	}
 	if err := s.PluginStorage.Put(ctx, nil); !errors.Is(err, models.ErrInvalidInput) {
 		t.Fatalf("put nil: want ErrInvalidInput, got %v", err)
@@ -290,6 +293,8 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 		{name: "plugin", filter: store.PluginStorageFilter{Collection: scope.Collection, OwnerID: scope.OwnerID}},
 		{name: "owner", filter: store.PluginStorageFilter{Collection: scope.Collection, Plugin: scope.Plugin}},
 		{name: "get_key", filter: store.PluginStorageFilter{Collection: scope.Collection, Plugin: scope.Plugin, OwnerID: scope.OwnerID}},
+		{name: "negative_limit", filter: store.PluginStorageFilter{Collection: scope.Collection, Plugin: scope.Plugin, OwnerID: scope.OwnerID, Limit: -1}},
+		{name: "negative_offset", filter: store.PluginStorageFilter{Collection: scope.Collection, Plugin: scope.Plugin, OwnerID: scope.OwnerID, Offset: -1}},
 	} {
 		t.Run("invalid_filter_"+tc.name, func(t *testing.T) {
 			if _, err := s.PluginStorage.Get(ctx, tc.filter); !errors.Is(err, models.ErrInvalidInput) {
@@ -341,8 +346,20 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 	second := *item
 	second.ItemKey = "prod/status"
 	second.Value = []byte("systemctl status app")
+	second.Metadata = map[string]string{"name": "Status app"}
+	second.CreatedAt = baseTime.Add(2 * time.Hour)
+	second.UpdatedAt = baseTime.Add(3 * time.Hour)
 	if err := s.PluginStorage.Put(ctx, &second); err != nil {
 		t.Fatalf("put second: %v", err)
+	}
+	specialPrefix := *item
+	specialPrefix.ItemKey = `prod/%_literal`
+	specialPrefix.Value = []byte("literal wildcard")
+	specialPrefix.Metadata = map[string]string{"name": "Literal wildcard"}
+	specialPrefix.CreatedAt = baseTime.Add(4 * time.Hour)
+	specialPrefix.UpdatedAt = baseTime.Add(5 * time.Hour)
+	if err := s.PluginStorage.Put(ctx, &specialPrefix); err != nil {
+		t.Fatalf("put special prefix: %v", err)
 	}
 	rows, err := s.PluginStorage.List(ctx, store.PluginStorageFilter{
 		Collection:   scope.Collection,
@@ -353,8 +370,66 @@ func testPluginStorage(t *testing.T, s *store.Store) {
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(rows) != 2 || rows[0].ItemKey != "prod/restart" || rows[1].ItemKey != "prod/status" {
+	if len(rows) != 3 || rows[0].ItemKey != `prod/%_literal` || rows[1].ItemKey != "prod/restart" || rows[2].ItemKey != "prod/status" {
 		t.Fatalf("unexpected filtered rows: %+v", rows)
+	}
+
+	rows, err = s.PluginStorage.List(ctx, store.PluginStorageFilter{
+		Collection:  scope.Collection,
+		Plugin:      scope.Plugin,
+		OwnerID:     scope.OwnerID,
+		KeyPrefix:   "prod/re",
+		ContentType: "text/plain",
+	})
+	if err != nil {
+		t.Fatalf("list filtered: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ItemKey != "prod/restart" {
+		t.Fatalf("unexpected list filter rows: %+v", rows)
+	}
+
+	rows, err = s.PluginStorage.List(ctx, store.PluginStorageFilter{
+		Collection:    scope.Collection,
+		Plugin:        scope.Plugin,
+		OwnerID:       scope.OwnerID,
+		Keys:          []string{"prod/status", "missing"},
+		CreatedAfter:  baseTime.Add(time.Hour),
+		CreatedBefore: baseTime.Add(3 * time.Hour),
+		UpdatedAfter:  baseTime.Add(2 * time.Hour),
+		UpdatedBefore: baseTime.Add(4 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("list key set/time range: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ItemKey != "prod/status" {
+		t.Fatalf("unexpected key set/time range rows: %+v", rows)
+	}
+
+	rows, err = s.PluginStorage.List(ctx, store.PluginStorageFilter{
+		Collection: scope.Collection,
+		Plugin:     scope.Plugin,
+		OwnerID:    scope.OwnerID,
+		KeyPrefix:  `prod/%_`,
+	})
+	if err != nil {
+		t.Fatalf("list literal prefix: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ItemKey != `prod/%_literal` {
+		t.Fatalf("prefix should be literal, got %+v", rows)
+	}
+
+	rows, err = s.PluginStorage.List(ctx, store.PluginStorageFilter{
+		Collection: scope.Collection,
+		Plugin:     scope.Plugin,
+		OwnerID:    scope.OwnerID,
+		Limit:      1,
+		Offset:     1,
+	})
+	if err != nil {
+		t.Fatalf("list limit/offset: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ItemKey != "prod/restart" {
+		t.Fatalf("unexpected limit/offset rows: %+v", rows)
 	}
 
 	item.Value = []byte("updated")
