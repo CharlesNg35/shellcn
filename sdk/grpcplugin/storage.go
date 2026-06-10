@@ -40,8 +40,8 @@ func (s hostStorage) Delete(ctx context.Context, scope plugin.StorageScope, key 
 	return ErrorFromStatus(err)
 }
 
-func (s hostStorage) List(ctx context.Context, scope plugin.StorageScope) ([]plugin.StorageItem, error) {
-	resp, err := s.host.StorageList(ctx, &pluginv1.StorageListRequest{Scope: wireStorageScope(scope)})
+func (s hostStorage) List(ctx context.Context, scope plugin.StorageScope, filter *plugin.StorageListFilter) ([]plugin.StorageItem, error) {
+	resp, err := s.host.StorageList(ctx, &pluginv1.StorageListRequest{Scope: wireStorageScope(scope), Filter: wireStorageListFilter(filter)})
 	if err != nil {
 		return nil, ErrorFromStatus(err)
 	}
@@ -52,10 +52,44 @@ func (s hostStorage) List(ctx context.Context, scope plugin.StorageScope) ([]plu
 	return out, nil
 }
 
+func wireStorageListFilter(filter *plugin.StorageListFilter) *pluginv1.StorageListFilter {
+	if filter == nil {
+		return nil
+	}
+	return &pluginv1.StorageListFilter{
+		Keys:                  append([]string(nil), filter.Keys...),
+		KeyPrefix:             filter.KeyPrefix,
+		ContentType:           filter.ContentType,
+		CreatedAfterUnixNano:  timeUnixNano(filter.CreatedAfter),
+		CreatedBeforeUnixNano: timeUnixNano(filter.CreatedBefore),
+		UpdatedAfterUnixNano:  timeUnixNano(filter.UpdatedAfter),
+		UpdatedBeforeUnixNano: timeUnixNano(filter.UpdatedBefore),
+		Limit:                 int32(filter.Limit),
+		Offset:                int32(filter.Offset),
+	}
+}
+
 func wireStorageScope(scope plugin.StorageScope) *pluginv1.StorageScope {
 	return &pluginv1.StorageScope{
 		Collection: scope.Collection,
 		Level:      string(normalizeStorageScopeLevel(scope.Level)),
+	}
+}
+
+func pluginStorageListFilter(filter *pluginv1.StorageListFilter) *plugin.StorageListFilter {
+	if filter == nil {
+		return nil
+	}
+	return &plugin.StorageListFilter{
+		Keys:          append([]string(nil), filter.GetKeys()...),
+		KeyPrefix:     filter.GetKeyPrefix(),
+		ContentType:   filter.GetContentType(),
+		CreatedAfter:  unixNanoTime(filter.GetCreatedAfterUnixNano()),
+		CreatedBefore: unixNanoTime(filter.GetCreatedBeforeUnixNano()),
+		UpdatedAfter:  unixNanoTime(filter.GetUpdatedAfterUnixNano()),
+		UpdatedBefore: unixNanoTime(filter.GetUpdatedBeforeUnixNano()),
+		Limit:         int(filter.GetLimit()),
+		Offset:        int(filter.GetOffset()),
 	}
 }
 
@@ -96,6 +130,13 @@ func unixNanoTime(v int64) time.Time {
 		return time.Time{}
 	}
 	return time.Unix(0, v)
+}
+
+func timeUnixNano(v time.Time) int64 {
+	if v.IsZero() {
+		return 0
+	}
+	return v.UnixNano()
 }
 
 func cloneStringMap(in map[string]string) map[string]string {

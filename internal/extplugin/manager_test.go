@@ -295,7 +295,7 @@ func (s *memoryPluginStorage) Delete(_ context.Context, scope plugin.StorageScop
 	return nil
 }
 
-func (s *memoryPluginStorage) List(_ context.Context, scope plugin.StorageScope) ([]plugin.StorageItem, error) {
+func (s *memoryPluginStorage) List(_ context.Context, scope plugin.StorageScope, _ *plugin.StorageListFilter) ([]plugin.StorageItem, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var out []plugin.StorageItem

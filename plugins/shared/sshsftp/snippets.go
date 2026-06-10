@@ -53,7 +53,7 @@ func (s *snippetStore) Get(ctx context.Context, id string) (storedSnippet, error
 }
 
 func (s *snippetStore) List(ctx context.Context) ([]storedSnippet, error) {
-	rows, err := s.storage.List(ctx, snippetStorageScope())
+	rows, err := s.storage.List(ctx, snippetStorageScope(), nil)
 	if err != nil {
 		return nil, err
 	}

@@ -266,24 +266,25 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 			Forward:   forward,
 		},
 	}
-	if err := wsjson.Write(handshakeCtx, c, resp); err != nil {
-		teardownCtx, teardownCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
-		defer teardownCancel()
-		if !s.tunnelRegistered(connID) {
-			s.deps.Enrollments.MarkOffline(teardownCtx, connID)
-		}
-		_ = c.Close(websocket.StatusInternalError, "handshake failed")
-		return
-	}
-
 	agentUser := models.User{ID: "agent", Username: app.AgentUsername}
-	s.auditAgentEvent(r.Context(), agentUser, connID, agentConnectEvent, models.AuditAllowed, nil)
-	s.deps.Logger.Info("agent tunnel online", "connection", connID, "mode", proxy.Mode)
-	releasedActive, tunnelErr := transport.ServeGatewayTunnel(r.Context(), c, connID, s.deps.Tunnels, forward)
+	connected := false
+	releasedActive, tunnelErr := transport.ServeGatewayTunnel(r.Context(), c, connID, s.deps.Tunnels, forward, func() error {
+		if err := wsjson.Write(handshakeCtx, c, resp); err != nil {
+			_ = c.Close(websocket.StatusInternalError, "handshake failed")
+			return err
+		}
+		connected = true
+		s.auditAgentEvent(r.Context(), agentUser, connID, agentConnectEvent, models.AuditAllowed, nil)
+		s.deps.Logger.Info("agent tunnel online", "connection", connID, "mode", proxy.Mode)
+		return nil
+	})
 	teardownCtx, teardownCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
 	defer teardownCancel()
 	if releasedActive {
 		s.deps.Enrollments.MarkOffline(teardownCtx, connID)
+	}
+	if !connected {
+		return
 	}
 	result := models.AuditAllowed
 	if tunnelErr != nil {

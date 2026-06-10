@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -65,6 +66,41 @@ func TestStorageBridgeUserScopeFiltersByPluginAndOwner(t *testing.T) {
 	}
 	if st.lastFilter.ConnectionID != "" {
 		t.Fatalf("user storage should not filter by connection: %+v", st.lastFilter)
+	}
+}
+
+func TestStorageBridgeListAppliesCallerFilterInsideResolvedScope(t *testing.T) {
+	st := &capturePluginStorage{}
+	bridge := storageBridge{inner: st, pluginID: "ssh", connectionID: "c1", ownerID: "u1"}
+
+	_, err := bridge.List(context.Background(), plugin.ConnectionStorage("snippets"), &plugin.StorageListFilter{
+		Keys:          []string{"prod/restart", "prod/status"},
+		KeyPrefix:     "prod/",
+		ContentType:   "application/json",
+		CreatedAfter:  time.Unix(10, 0),
+		CreatedBefore: time.Unix(20, 0),
+		UpdatedAfter:  time.Unix(30, 0),
+		UpdatedBefore: time.Unix(40, 0),
+		Limit:         25,
+		Offset:        50,
+	})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if st.lastFilter.Collection != "snippets" ||
+		st.lastFilter.Plugin != "ssh" ||
+		st.lastFilter.ConnectionID != "c1" ||
+		st.lastFilter.OwnerID != "u1" ||
+		!slices.Equal(st.lastFilter.Keys, []string{"prod/restart", "prod/status"}) ||
+		st.lastFilter.KeyPrefix != "prod/" ||
+		st.lastFilter.ContentType != "application/json" ||
+		!st.lastFilter.CreatedAfter.Equal(time.Unix(10, 0)) ||
+		!st.lastFilter.CreatedBefore.Equal(time.Unix(20, 0)) ||
+		!st.lastFilter.UpdatedAfter.Equal(time.Unix(30, 0)) ||
+		!st.lastFilter.UpdatedBefore.Equal(time.Unix(40, 0)) ||
+		st.lastFilter.Limit != 25 ||
+		st.lastFilter.Offset != 50 {
+		t.Fatalf("unexpected list filter: %+v", st.lastFilter)
 	}
 }
 
@@ -165,6 +201,7 @@ func (s *capturePluginStorage) Delete(context.Context, store.PluginStorageFilter
 	return nil
 }
 
-func (s *capturePluginStorage) List(context.Context, store.PluginStorageFilter) ([]models.PluginStorageItem, error) {
+func (s *capturePluginStorage) List(_ context.Context, f store.PluginStorageFilter) ([]models.PluginStorageItem, error) {
+	s.lastFilter = f
 	return []models.PluginStorageItem{s.item}, nil
 }

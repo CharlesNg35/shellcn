@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -932,6 +933,15 @@ func (s *memPluginStorageStore) List(_ context.Context, f PluginStorageFilter) (
 		}
 		return out[i].ItemKey < out[j].ItemKey
 	})
+	if f.Offset > 0 {
+		if f.Offset >= len(out) {
+			return nil, nil
+		}
+		out = out[f.Offset:]
+	}
+	if f.Limit > 0 && f.Limit < len(out) {
+		out = out[:f.Limit]
+	}
 	return out, nil
 }
 
@@ -961,7 +971,37 @@ func pluginStorageMatches(item models.PluginStorageItem, f PluginStorageFilter) 
 	if f.Key != "" && item.ItemKey != f.Key {
 		return false
 	}
+	if len(f.Keys) > 0 && !pluginStorageKeyIn(item.ItemKey, f.Keys) {
+		return false
+	}
+	if f.KeyPrefix != "" && !strings.HasPrefix(item.ItemKey, f.KeyPrefix) {
+		return false
+	}
+	if f.ContentType != "" && item.ContentType != f.ContentType {
+		return false
+	}
+	if !f.CreatedAfter.IsZero() && item.CreatedAt.Before(f.CreatedAfter) {
+		return false
+	}
+	if !f.CreatedBefore.IsZero() && item.CreatedAt.After(f.CreatedBefore) {
+		return false
+	}
+	if !f.UpdatedAfter.IsZero() && item.UpdatedAt.Before(f.UpdatedAfter) {
+		return false
+	}
+	if !f.UpdatedBefore.IsZero() && item.UpdatedAt.After(f.UpdatedBefore) {
+		return false
+	}
 	return true
+}
+
+func pluginStorageKeyIn(key string, keys []string) bool {
+	for _, candidate := range keys {
+		if key == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 type memPreferenceStore struct {

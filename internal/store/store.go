@@ -136,11 +136,20 @@ type AuditFilter struct {
 // Plugin, and OwnerID are required for all operations. ConnectionID is optional
 // for user-scoped reads/lists/deletes across the current user's connection rows.
 type PluginStorageFilter struct {
-	Collection   string
-	Plugin       string
-	ConnectionID string
-	OwnerID      string
-	Key          string
+	Collection    string
+	Plugin        string
+	ConnectionID  string
+	OwnerID       string
+	Key           string
+	Keys          []string
+	KeyPrefix     string
+	ContentType   string
+	CreatedAfter  time.Time
+	CreatedBefore time.Time
+	UpdatedAfter  time.Time
+	UpdatedBefore time.Time
+	Limit         int
+	Offset        int
 }
 
 // PluginStorageStore persists scoped plugin-owned platform objects.

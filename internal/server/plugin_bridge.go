@@ -73,11 +73,12 @@ func (b storageBridge) Delete(ctx context.Context, scope plugin.StorageScope, ke
 	return pluginStorageError(b.inner.Delete(ctx, f))
 }
 
-func (b storageBridge) List(ctx context.Context, scope plugin.StorageScope) ([]plugin.StorageItem, error) {
+func (b storageBridge) List(ctx context.Context, scope plugin.StorageScope, filter *plugin.StorageListFilter) ([]plugin.StorageItem, error) {
 	f, err := b.filter(scope, "")
 	if err != nil {
 		return nil, err
 	}
+	applyStorageListFilter(&f, filter)
 	rows, err := b.inner.List(ctx, f)
 	if err != nil {
 		return nil, pluginStorageError(err)
@@ -87,6 +88,21 @@ func (b storageBridge) List(ctx context.Context, scope plugin.StorageScope) ([]p
 		out[i] = toPluginStorageItem(row)
 	}
 	return out, nil
+}
+
+func applyStorageListFilter(f *store.PluginStorageFilter, filter *plugin.StorageListFilter) {
+	if filter == nil {
+		return
+	}
+	f.Keys = append([]string(nil), filter.Keys...)
+	f.KeyPrefix = filter.KeyPrefix
+	f.ContentType = filter.ContentType
+	f.CreatedAfter = filter.CreatedAfter
+	f.CreatedBefore = filter.CreatedBefore
+	f.UpdatedAfter = filter.UpdatedAfter
+	f.UpdatedBefore = filter.UpdatedBefore
+	f.Limit = filter.Limit
+	f.Offset = filter.Offset
 }
 
 func (b storageBridge) filter(scope plugin.StorageScope, key string) (store.PluginStorageFilter, error) {

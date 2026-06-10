@@ -185,6 +185,18 @@ message StorageItem {
   int64 updated_at_unix_nano = 6;
 }
 
+message StorageListFilter {
+  repeated string keys = 1;
+  string key_prefix = 2;
+  string content_type = 3;
+  int64 created_after_unix_nano = 4;
+  int64 created_before_unix_nano = 5;
+  int64 updated_after_unix_nano = 6;
+  int64 updated_before_unix_nano = 7;
+  int32 limit = 8;
+  int32 offset = 9;
+}
+
 message StorageGetRequest {
   StorageScope scope = 1;
   string key = 2;
@@ -202,6 +214,7 @@ message StorageDeleteRequest {
 
 message StorageListRequest {
   StorageScope scope = 1;
+  StorageListFilter filter = 2;
 }
 
 message StorageListResponse {
