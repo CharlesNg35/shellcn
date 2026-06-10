@@ -338,7 +338,7 @@ function buildSrcdoc(config: WasmPanelConfig, scripts: string[]): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src blob: data:; media-src blob: data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' blob:; worker-src blob:; connect-src blob:; style-src 'unsafe-inline'; img-src blob: data:; media-src blob: data:; font-src blob: data:;">
 <style>
 html,body{margin:0;width:100%;min-height:100%;height:100%;overflow:${bodyOverflow};background:#020617;color:#e2e8f0;font-family:Inter,system-ui,sans-serif}
 #shellcn-wasm-status{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:#94a3b8}

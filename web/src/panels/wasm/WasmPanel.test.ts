@@ -31,6 +31,9 @@ describe("WasmPanel", () => {
     expect(iframe.attributes("sandbox")).not.toContain("allow-same-origin");
     expect(iframe.attributes("allow")).toBe("fullscreen; gamepad");
     expect(iframe.attributes("srcdoc")).toContain("overflow:auto");
+    expect(iframe.attributes("srcdoc")).toContain("script-src");
+    expect(iframe.attributes("srcdoc")).toContain("blob:");
+    expect(iframe.attributes("srcdoc")).toContain("worker-src blob:");
     expect(iframe.attributes("srcdoc")).toContain('entry: "app.wasm"');
     expect(iframe.attributes("srcdoc")).toContain("theme:");
     expect(iframe.attributes("srcdoc")).toContain("onTheme(fn)");
