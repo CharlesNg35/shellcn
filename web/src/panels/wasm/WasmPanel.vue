@@ -275,7 +275,7 @@ function closeStreams(): void {
 }
 
 function postTheme(): void {
-  post({ type: "theme", theme: theme.value });
+  post({ type: "theme", theme: theme.value, colors: themeColors() });
 }
 
 async function handleAsset(id: string, path: string): Promise<void> {
@@ -345,7 +345,7 @@ html,body{margin:0;width:100%;min-height:100%;height:100%;overflow:${bodyOverflo
 </style>
 </head>
 <body>
-<div id="shellcn-wasm-status">Loading</div>
+<div id="shellcn-wasm-status">Loading...</div>
 ${scriptOpen}${escapeScript(bridgeScript(config))}${scriptClose}
 ${boot}
 ${scriptOpen}${escapeScript(startScript(config))}${scriptClose}
@@ -370,6 +370,7 @@ function bridgeScript(config: WasmPanelConfig): string {
     entry: ${JSON.stringify(config.entry)},
     capabilities: ${JSON.stringify(config.capabilities ?? {})},
     theme: ${JSON.stringify(theme.value)},
+    colors: ${JSON.stringify(themeColors())},
     onTheme(fn) {
       if (typeof fn !== "function") return () => {};
       themeListeners.add(fn);
@@ -405,7 +406,8 @@ function bridgeScript(config: WasmPanelConfig): string {
     if (!msg || msg.source !== ${hostSource}) return;
     if (msg.type === "theme") {
       window.shellcn.theme = msg.theme;
-      for (const fn of themeListeners) fn(msg.theme);
+      window.shellcn.colors = msg.colors || {};
+      for (const fn of themeListeners) fn(msg.theme, window.shellcn.colors);
       return;
     }
     if (msg.type === "route.response" || msg.type === "asset.response") {
@@ -420,6 +422,36 @@ function bridgeScript(config: WasmPanelConfig): string {
     if (msg.type === "stream.close") streams.delete(msg.id);
   });
 })();`;
+}
+
+function themeColors(): Record<string, string> {
+  const style = getComputedStyle(document.documentElement);
+  const read = (name: string) => style.getPropertyValue(name).trim();
+  return {
+    primary50: read("--p-primary-50"),
+    primary100: read("--p-primary-100"),
+    primary200: read("--p-primary-200"),
+    primary300: read("--p-primary-300"),
+    primary400: read("--p-primary-400"),
+    primary500: read("--p-primary-500"),
+    primary600: read("--p-primary-600"),
+    primary700: read("--p-primary-700"),
+    primary800: read("--p-primary-800"),
+    primary900: read("--p-primary-900"),
+    primary950: read("--p-primary-950"),
+    surface0: read("--p-surface-0"),
+    surface50: read("--p-surface-50"),
+    surface100: read("--p-surface-100"),
+    surface200: read("--p-surface-200"),
+    surface300: read("--p-surface-300"),
+    surface400: read("--p-surface-400"),
+    surface500: read("--p-surface-500"),
+    surface600: read("--p-surface-600"),
+    surface700: read("--p-surface-700"),
+    surface800: read("--p-surface-800"),
+    surface900: read("--p-surface-900"),
+    surface950: read("--p-surface-950"),
+  };
 }
 
 function startScript(config: WasmPanelConfig): string {

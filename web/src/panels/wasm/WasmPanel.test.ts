@@ -36,7 +36,11 @@ describe("WasmPanel", () => {
     expect(iframe.attributes("srcdoc")).toContain("worker-src blob:");
     expect(iframe.attributes("srcdoc")).toContain('entry: "app.wasm"');
     expect(iframe.attributes("srcdoc")).toContain("theme:");
+    expect(iframe.attributes("srcdoc")).toContain("colors:");
     expect(iframe.attributes("srcdoc")).toContain("onTheme(fn)");
+    expect(iframe.attributes("srcdoc")).toContain(
+      "fn(msg.theme, window.shellcn.colors)",
+    );
     expect(iframe.attributes("srcdoc")).toContain('msg.type === "theme"');
     expect(iframe.attributes("srcdoc")).toContain(
       'window.shellcn.asset("app.wasm")',
