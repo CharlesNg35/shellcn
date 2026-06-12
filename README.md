@@ -16,9 +16,7 @@
 ShellCN is a single Go binary that gives you one secure, audited place to reach all your
 servers, containers, databases, and desktops. Run it, open a browser, and you're in.
 
-_Demo (coming soon):_
-
-It speaks **20 protocols** out of the box today:
+It ships with **20 built-in protocols**. Add more via plugins or Marketplace:
 
 - **Shells**: SSH
 - **File transfer**: SFTP, FTP/FTPS, SMB, WebDAV, S3
@@ -115,6 +113,10 @@ Requires Go 1.26+ and Node 24+.
 make build    # single binary at bin/shellcn
 make dev      # live-reloading dev server
 ```
+
+## Screenshot
+
+![ShellCN Kubernetes cluster overview](docs/assets/shellcn-kubernetes-overview.png)
 
 ## Related repositories
 
