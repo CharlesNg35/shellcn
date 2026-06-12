@@ -192,7 +192,7 @@ async function onConfig(
   busy.value = true;
   try {
     if (isEdit.value && props.connectionId) {
-      const updated = await connectionsApi.update(props.connectionId, {
+      const updated = await conns.updateConnection(props.connectionId, {
         name: name.value.trim(),
         transport: transport.value,
         config,
@@ -201,11 +201,10 @@ async function onConfig(
         aiMode: aiMode.value,
         aiAllowDestructive: aiAllowDestructive.value,
       });
-      await conns.refresh();
       notify.success("Connection updated", updated.name);
       emit("saved", { id: props.connectionId, created: false });
     } else {
-      const created = await connectionsApi.create({
+      const created = await conns.createConnection({
         name: name.value.trim(),
         protocol: protocol.value,
         transport: transport.value,
@@ -215,7 +214,6 @@ async function onConfig(
         aiMode: aiMode.value,
         aiAllowDestructive: aiAllowDestructive.value,
       });
-      await conns.refresh();
       notify.success("Connection created", created.name);
       emit("saved", { id: created.id, created: true });
     }

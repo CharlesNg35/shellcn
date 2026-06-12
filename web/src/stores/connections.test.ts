@@ -3,8 +3,9 @@ import { setActivePinia, createPinia } from "pinia";
 import { installFetch } from "../test/fetchMock";
 import { useConnectionsStore } from "./connections";
 import { Layout } from "../types/projection";
+import type { ConnectionSummary } from "../types/projection";
 
-const connections = [
+const connections: ConnectionSummary[] = [
   {
     id: "a",
     name: "alpha",
@@ -104,5 +105,101 @@ describe("connections store", () => {
     await store.refreshPlugins();
     expect(store.plugins).toEqual([dockerPlugin]);
     expect(store.projections).toEqual({});
+  });
+
+  it("patches a renamed folder in local sidebar state", async () => {
+    installFetch((url, init) => {
+      if (
+        url.endsWith("/api/connection-folders/f1") &&
+        init?.method === "PUT"
+      ) {
+        return {
+          body: {
+            id: "f1",
+            name: "Production EU",
+            color: "teal",
+            sortOrder: 9,
+          },
+        };
+      }
+      return { status: 404, body: { error: "nope" } };
+    });
+    const store = useConnectionsStore();
+    store.folders = [
+      {
+        id: "f1",
+        parentId: "root",
+        name: "Production",
+        color: "blue",
+        sortOrder: 9,
+      },
+    ];
+
+    const folder = await store.updateFolder("f1", {
+      name: "Production EU",
+      color: "teal",
+    });
+
+    expect(folder).toMatchObject({
+      id: "f1",
+      parentId: "root",
+      name: "Production EU",
+      color: "teal",
+      sortOrder: 9,
+    });
+    expect(store.folders[0]).toEqual(folder);
+  });
+
+  it("patches a renamed connection in local sidebar state", async () => {
+    installFetch((url, init) => {
+      if (url.endsWith("/api/connections/a") && init?.method === "PUT") {
+        return {
+          body: {
+            id: "a",
+            name: "alpha prod",
+            protocol: "ssh",
+            transport: "agent",
+            config: {},
+            secrets: {},
+            recording: { terminal: "manual" },
+            aiMode: "read_only",
+            aiAllowDestructive: false,
+          },
+        };
+      }
+      return { status: 404, body: { error: "nope" } };
+    });
+    const store = useConnectionsStore();
+    store.connections = [
+      {
+        ...connections[0],
+        folderId: "f1",
+        sortOrder: 2,
+        canManage: true,
+      },
+    ];
+
+    await store.updateConnection("a", {
+      name: "alpha prod",
+      transport: "agent",
+      config: {},
+      preserveCredentials: [],
+      recording: { terminal: "manual" },
+      aiMode: "read_only",
+      aiAllowDestructive: false,
+    });
+
+    expect(store.byId("a")).toMatchObject({
+      id: "a",
+      name: "alpha prod",
+      protocol: "ssh",
+      transport: "agent",
+      folderId: "f1",
+      sortOrder: 2,
+      canManage: true,
+      recording: { terminal: "manual" },
+      aiMode: "read_only",
+      aiAllowDestructive: false,
+    });
   });
 });
