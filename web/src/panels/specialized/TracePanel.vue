@@ -36,7 +36,8 @@ type SpanRow = TraceSpan & {
 
 const props = defineProps<PanelProps>();
 
-const loading = ref(false);
+const loadedOnce = ref(false);
+const refreshing = ref(false);
 const error = ref<string | null>(null);
 const payload = ref<TracePayload>({});
 const filterText = ref("");
@@ -44,6 +45,8 @@ const selected = ref<SpanRow | null>(null);
 const traceConfig = computed(
   () => props.config as TracePanelConfig | undefined,
 );
+const showInitialLoader = computed(() => refreshing.value && !loadedOnce.value);
+const blockingError = computed(() => error.value && !loadedOnce.value);
 
 function spanStart(span: TraceSpan): number {
   if (typeof span.startMs === "number") return span.startMs;
@@ -120,10 +123,11 @@ function selectRow(event: { data: unknown }): void {
 
 async function load(): Promise<void> {
   if (!props.source) {
-    loading.value = false;
+    loadedOnce.value = true;
     return;
   }
-  loading.value = true;
+  if (refreshing.value) return;
+  refreshing.value = true;
   error.value = null;
   try {
     payload.value = await fetchDoc<TracePayload>(
@@ -134,16 +138,26 @@ async function load(): Promise<void> {
       },
     );
     selected.value = null;
+    loadedOnce.value = true;
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
-    loading.value = false;
+    refreshing.value = false;
   }
 }
 
-watch(() => [props.connectionId, props.resource?.uid], load, {
-  immediate: true,
-});
+watch(
+  () => [props.connectionId, props.resource?.uid],
+  () => {
+    payload.value = {};
+    selected.value = null;
+    loadedOnce.value = false;
+    void load();
+  },
+  {
+    immediate: true,
+  },
+);
 </script>
 
 <template>
@@ -162,13 +176,13 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         type="button"
         severity="secondary"
         class="ml-auto"
-        :disabled="loading"
+        :disabled="refreshing"
         @click="load"
       >
         <AppIcon
           :icon="{ type: 'lucide', value: 'refresh-cw' }"
           :size="14"
-          :loading="loading"
+          :loading="refreshing"
         />
         Refresh
       </Button>
@@ -176,10 +190,10 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
 
     <div class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_20rem]">
       <div class="min-h-0 overflow-hidden">
-        <SkeletonList v-if="loading" />
+        <SkeletonList v-if="showInitialLoader" />
         <PanelError
-          v-else-if="error"
-          :message="error"
+          v-else-if="blockingError"
+          :message="error ?? ''"
           retryable
           @retry="load"
         />
@@ -192,6 +206,9 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           selection-mode="single"
           @row-click="selectRow"
         >
+          <template v-if="error" #header>
+            <PanelError :message="error" retryable @retry="load" />
+          </template>
           <template #empty>No spans.</template>
           <Column header="Span">
             <template #body="{ data }">

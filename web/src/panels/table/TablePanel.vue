@@ -1233,16 +1233,23 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div class="min-h-0 flex-1 overflow-hidden">
+    <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
       <PanelError
-        v-if="error"
+        v-if="error && !rows.length"
         :message="error"
         retryable
         @retry="load(first)"
       />
       <SkeletonList v-else-if="loading && !rows.length" :rows="8" />
+      <PanelError
+        v-else-if="error"
+        class="border-b border-surface-200 dark:border-surface-800"
+        :message="error"
+        retryable
+        @retry="load(first)"
+      />
       <DataTable
-        v-else
+        v-if="rows.length || (!loading && !error)"
         v-model:selection="selection"
         :value="rows"
         :data-key="dataKeyField"

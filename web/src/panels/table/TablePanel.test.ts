@@ -705,6 +705,46 @@ describe("TablePanel staged edits", () => {
     w.unmount();
   });
 
+  it("keeps existing rows visible when refresh fails", async () => {
+    let calls = 0;
+    installFetch(() => {
+      calls += 1;
+      if (calls === 1) {
+        return {
+          body: {
+            items: [row("a", "alpha")],
+            nextCursor: "",
+            total: 1,
+          },
+        };
+      }
+      return {
+        status: 500,
+        body: { error: "refresh failed" },
+      };
+    });
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "server_monitor.processes" },
+        config: { columns },
+      },
+    });
+    await flushPromises();
+    expect(w.text()).toContain("alpha");
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Refresh"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain("alpha");
+    expect(w.text()).toContain("refresh failed");
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(false);
+    w.unmount();
+  });
+
   it("opens the detail dialog from the details icon when rowClick is detail", async () => {
     installFetch(() => ({
       body: {

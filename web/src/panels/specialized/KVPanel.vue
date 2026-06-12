@@ -263,10 +263,22 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           @click="createOpen = true"
         />
       </div>
-      <PanelError v-if="error" :message="error" retryable @retry="load" />
+      <PanelError
+        v-if="error && !entries.length"
+        :message="error"
+        retryable
+        @retry="load"
+      />
       <SkeletonList v-else-if="loading && !entries.length" :rows="8" />
+      <PanelError
+        v-else-if="error"
+        class="border-b border-surface-200 dark:border-surface-800"
+        :message="error"
+        retryable
+        @retry="load"
+      />
       <DataTable
-        v-else
+        v-if="entries.length || (!loading && !error)"
         :value="visibleEntries"
         data-key="key"
         scrollable

@@ -33,7 +33,8 @@ const MAX_FILTER_CHIPS = 12;
 const props = defineProps<PanelProps>();
 const notify = useNotify();
 
-const loading = ref(false);
+const loadedOnce = ref(false);
+const refreshing = ref(false);
 const expanding = ref(false);
 const exporting = ref(false);
 const graphFrame = ref<HTMLElement | null>(null);
@@ -85,10 +86,11 @@ const canExpand = computed(() => Boolean(graphConfig.value?.expandRouteId));
 const canExport = computed(
   () =>
     (graphConfig.value?.exportable ?? true) &&
-    !loading.value &&
-    !error.value &&
+    !refreshing.value &&
     graph.value.nodes.length > 0,
 );
+const showInitialLoader = computed(() => refreshing.value && !loadedOnce.value);
+const blockingError = computed(() => error.value && !loadedOnce.value);
 
 const exportItems = computed<MenuItem[]>(() => [
   { label: "PNG", command: () => void exportGraph("png") },
@@ -112,12 +114,12 @@ function toggleExportMenu(event: Event): void {
 
 async function load(): Promise<void> {
   if (!props.source) {
-    loading.value = false;
+    loadedOnce.value = true;
     return;
   }
-  loading.value = true;
+  if (refreshing.value) return;
+  refreshing.value = true;
   error.value = null;
-  hidden.value = new Set();
   try {
     payload.value = await fetchDoc<GraphPayload>(
       props.connectionId,
@@ -126,10 +128,11 @@ async function load(): Promise<void> {
         resource: props.resource,
       },
     );
+    loadedOnce.value = true;
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
-    loading.value = false;
+    refreshing.value = false;
   }
 }
 
@@ -222,9 +225,19 @@ async function exportGraph(format: "png" | "jpeg" | "svg"): Promise<void> {
   }
 }
 
-watch(() => [props.connectionId, props.resource?.uid], load, {
-  immediate: true,
-});
+watch(
+  () => [props.connectionId, props.resource?.uid],
+  () => {
+    payload.value = {};
+    selectedId.value = null;
+    hidden.value = new Set();
+    loadedOnce.value = false;
+    void load();
+  },
+  {
+    immediate: true,
+  },
+);
 </script>
 
 <template>
@@ -265,13 +278,13 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           type="button"
           severity="secondary"
           size="small"
-          :disabled="loading"
+          :disabled="refreshing"
           @click="load"
         >
           <AppIcon
             :icon="{ type: 'lucide', value: 'refresh-cw' }"
             :size="14"
-            :loading="loading || expanding"
+            :loading="refreshing || expanding"
           />
           Refresh
         </Button>
@@ -301,9 +314,14 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
       </Button>
     </div>
 
-    <div ref="graphFrame" class="min-h-0 flex-1">
-      <PanelLoader v-if="loading" />
-      <PanelError v-else-if="error" :message="error" retryable @retry="load" />
+    <div ref="graphFrame" class="relative min-h-0 flex-1">
+      <PanelLoader v-if="showInitialLoader" />
+      <PanelError
+        v-else-if="blockingError"
+        :message="error ?? ''"
+        retryable
+        @retry="load"
+      />
       <div
         v-else-if="!graph.nodes.length"
         class="flex h-full items-center justify-center p-6 text-sm text-surface-400"
@@ -321,6 +339,13 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         @node-click="selectNode"
         @node-double-click="expand($event.node.id)"
       >
+        <PanelError
+          v-if="error"
+          class="absolute top-3 right-3 left-3 z-10 shadow-lg"
+          :message="error"
+          retryable
+          @retry="load"
+        />
         <template #node-record="recordProps">
           <RecordNode
             :data="recordProps.data"

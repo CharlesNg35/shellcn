@@ -35,4 +35,51 @@ describe("DocumentPanel", () => {
     await flushPromises();
     expect(w.find(".shellcn-codemirror-host").exists()).toBe(true);
   });
+
+  it("keeps the current document visible during refresh", async () => {
+    let calls = 0;
+    let resolveRefresh: ((value: Response) => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        calls += 1;
+        if (calls === 1) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ State: { Status: "running" } }), {
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+        }
+        return new Promise((resolve) => {
+          resolveRefresh = resolve;
+        });
+      }),
+    );
+
+    const w = mount(DocumentPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "docker.container.inspect" },
+      },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Refresh"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(false);
+    expect(w.text()).toContain("running");
+
+    resolveRefresh?.(
+      new Response(JSON.stringify({ State: { Status: "healthy" } }), {
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    await flushPromises();
+
+    expect(w.text()).toContain("healthy");
+  });
 });

@@ -178,6 +178,59 @@ describe("specialized panels", () => {
     expect(w.text()).toContain("runtime");
   });
 
+  it("keeps graph content visible during refresh", async () => {
+    let calls = 0;
+    let resolveRefresh: ((value: Response) => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        calls += 1;
+        if (calls === 1) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                nodes: [{ id: "api", label: "API", group: "service" }],
+                edges: [],
+              }),
+              { headers: { "Content-Type": "application/json" } },
+            ),
+          );
+        }
+        return new Promise((resolve) => {
+          resolveRefresh = resolve;
+        });
+      }),
+    );
+
+    const w = mount(GraphPanel, {
+      props: { connectionId: "c1", source: { routeId: "graph" } },
+      global: { plugins: [ToastService] },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Refresh"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.find('[data-test="panel-loader"]').exists()).toBe(false);
+    expect(w.text()).toContain("API");
+
+    resolveRefresh?.(
+      new Response(
+        JSON.stringify({
+          nodes: [{ id: "worker", label: "Worker", group: "service" }],
+          edges: [],
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    await flushPromises();
+
+    expect(w.text()).toContain("Worker");
+  });
+
   it("exports the graph viewport as a PNG", async () => {
     const w = mount(GraphPanel, {
       props: { connectionId: "c1", source: { routeId: "graph" } },
@@ -226,6 +279,74 @@ describe("specialized panels", () => {
     expect(w.text()).toContain("select users");
     await w.findAll("tbody tr")[1].trigger("click");
     expect(w.text()).toContain("table");
+  });
+
+  it("keeps trace spans visible during refresh", async () => {
+    let calls = 0;
+    let resolveRefresh: ((value: Response) => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        calls += 1;
+        if (calls === 1) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                traceId: "t1",
+                spans: [
+                  {
+                    id: "root",
+                    name: "GET /users",
+                    service: "api",
+                    startMs: 0,
+                    durationMs: 50,
+                  },
+                ],
+              }),
+              { headers: { "Content-Type": "application/json" } },
+            ),
+          );
+        }
+        return new Promise((resolve) => {
+          resolveRefresh = resolve;
+        });
+      }),
+    );
+
+    const w = mount(TracePanel, {
+      props: { connectionId: "c1", source: { routeId: "trace" } },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Refresh"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(false);
+    expect(w.text()).toContain("GET /users");
+
+    resolveRefresh?.(
+      new Response(
+        JSON.stringify({
+          traceId: "t1",
+          spans: [
+            {
+              id: "root",
+              name: "POST /orders",
+              service: "api",
+              startMs: 0,
+              durationMs: 42,
+            },
+          ],
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    await flushPromises();
+
+    expect(w.text()).toContain("POST /orders");
   });
 
   it("loads and edits a typed key value", async () => {
@@ -309,6 +430,68 @@ describe("specialized panels", () => {
     resolveRefresh?.();
     await flushPromises();
     expect(refresh().find(".animate-spin").exists()).toBe(false);
+  });
+
+  it("keeps KV rows visible when refresh fails", async () => {
+    let listCalls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("kv.read")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                key: "session:1",
+                type: "json",
+                value: { user: "ada" },
+              }),
+              { headers: { "Content-Type": "application/json" } },
+            ),
+          );
+        }
+        if (url.includes("kv.list")) {
+          listCalls += 1;
+          if (listCalls === 1) {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  items: [{ key: "session:1", type: "json" }],
+                  nextCursor: "",
+                }),
+                { headers: { "Content-Type": "application/json" } },
+              ),
+            );
+          }
+          return Promise.resolve(
+            new Response(JSON.stringify({ error: "refresh failed" }), {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify({}), {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }),
+    );
+    const w = mount(KVPanel, {
+      props: { connectionId: "c1", source: { routeId: "kv.list" } },
+    });
+    await flushPromises();
+    expect(w.text()).toContain("session:1");
+
+    await w
+      .findAllComponents(Button)
+      .find((button) => button.text().includes("Refresh"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain("session:1");
+    expect(w.text()).toContain("refresh failed");
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(false);
   });
 
   it("shows key creation only when the generic kv create route is declared", async () => {
