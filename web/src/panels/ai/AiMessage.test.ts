@@ -32,17 +32,19 @@ function bubbleClasses(content: string): string[] {
 }
 
 describe("AiMessage", () => {
-  it("uses a stable readable width for assistant messages", () => {
-    expect(
-      bubbleClasses(
-        [
-          "| Point | Teaching | References |",
-          "| --- | --- | --- |",
-          "| A | B | C |",
-        ].join("\n"),
-      ),
-    ).toContain("w-[88%]");
+  it("caps assistant width but lets bubbles hug their content", () => {
+    const tableClasses = bubbleClasses(
+      [
+        "| Point | Teaching | References |",
+        "| --- | --- | --- |",
+        "| A | B | C |",
+      ].join("\n"),
+    );
+    expect(tableClasses).toContain("max-w-[88%]");
+    expect(tableClasses).not.toContain("w-[88%]");
 
-    expect(bubbleClasses("Short answer.")).toContain("w-[88%]");
+    const shortClasses = bubbleClasses("Short answer.");
+    expect(shortClasses).toContain("max-w-[88%]");
+    expect(shortClasses).not.toContain("w-[88%]");
   });
 });
