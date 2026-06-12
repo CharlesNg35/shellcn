@@ -9,6 +9,7 @@ import {
   wasmStageAllow,
   wasmStageEntries,
   wasmStageEntryStyle,
+  wasmStageFrameBoxStyle,
   wasmStageFrameStyle,
   wasmStageSandbox,
   wasmStageViewportClass,
@@ -39,20 +40,22 @@ watch(theme, refreshWasmStageTheme);
         :style="wasmStageEntryStyle(entry)"
         data-test="wasm-stage-entry"
       >
-        <iframe
-          v-if="entry.srcdoc"
-          :ref="
-            (el) =>
-              setWasmPanelIframe(entry.key, el as HTMLIFrameElement | null)
-          "
-          :aria-label="entry.config.ariaLabel || 'WebAssembly panel'"
-          :sandbox="wasmStageSandbox(entry.config)"
-          :srcdoc="entry.srcdoc"
-          :style="wasmStageFrameStyle(entry.config)"
-          :allow="wasmStageAllow(entry.config)"
-          class="block border-0 bg-surface-950"
-          @load="refreshWasmStageTheme"
-        />
+        <div :style="wasmStageFrameBoxStyle(entry)">
+          <iframe
+            v-if="entry.srcdoc"
+            :ref="
+              (el) =>
+                setWasmPanelIframe(entry.key, el as HTMLIFrameElement | null)
+            "
+            :aria-label="entry.config.ariaLabel || 'WebAssembly panel'"
+            :sandbox="wasmStageSandbox(entry.config)"
+            :srcdoc="entry.srcdoc"
+            :style="wasmStageFrameStyle(entry)"
+            :allow="wasmStageAllow(entry.config)"
+            class="block border-0 bg-surface-950"
+            @load="refreshWasmStageTheme"
+          />
+        </div>
       </div>
     </div>
   </Teleport>

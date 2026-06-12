@@ -225,20 +225,45 @@ export function wasmStageEntryStyle(
   };
 }
 
-export function wasmStageFrameStyle(
-  config: WasmPanelConfig,
+export function wasmStageFrameBoxStyle(
+  entry: WasmStageEntry,
 ): Record<string, string> {
+  const { config, rect } = entry;
   const width = config.width;
   const height = config.height;
+  if (config.scaleMode === "fit" && width && height && rect) {
+    const scale = Math.min(rect.width / width, rect.height / height);
+    return {
+      position: "relative",
+      width: `${Math.max(0, width * scale)}px`,
+      height: `${Math.max(0, height * scale)}px`,
+      flex: "0 0 auto",
+    };
+  }
   if (config.scaleMode === "scroll" && width && height)
     return { width: `${width}px`, height: `${height}px` };
-  if (config.scaleMode === "fit" && width && height)
+
+  return { width: "100%", height: "100%" };
+}
+
+export function wasmStageFrameStyle(
+  entry: WasmStageEntry,
+): Record<string, string> {
+  const { config, rect } = entry;
+  const width = config.width;
+  const height = config.height;
+  if (config.scaleMode === "fit" && width && height && rect) {
+    const scale = Math.min(rect.width / width, rect.height / height);
     return {
       width: `${width}px`,
       height: `${height}px`,
-      maxWidth: "100%",
-      maxHeight: "100%",
+      transform: `scale(${scale})`,
+      transformOrigin: "top left",
     };
+  }
+  if (config.scaleMode === "scroll" && width && height)
+    return { width: "100%", height: "100%" };
+
   return { width: "100%", height: "100%" };
 }
 

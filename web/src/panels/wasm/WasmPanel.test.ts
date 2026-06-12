@@ -8,7 +8,11 @@ import {
   deactivateWasmPanel,
   disposeWasmStage,
   registerWasmPanel,
+  updateWasmPanelRect,
   wasmStageEntries,
+  wasmStageFrameBoxStyle,
+  wasmStageFrameStyle,
+  wasmStageViewportClass,
 } from "./wasmStage";
 
 describe("WasmPanel", () => {
@@ -172,5 +176,114 @@ describe("WasmPanel", () => {
       "four",
     ]);
     expect(document.body.querySelectorAll("iframe")).toHaveLength(3);
+  });
+
+  it("maps wasm scale modes to stable iframe layout styles", async () => {
+    registerWasmPanel({
+      key: "resize",
+      connectionId: "resize",
+      config: {
+        entry: "app.wasm",
+        scaleMode: "resize",
+        assets: [{ path: "app.wasm", source: { routeId: "wasm.asset" } }],
+      },
+    });
+    registerWasmPanel({
+      key: "scroll-fluid",
+      connectionId: "scroll-fluid",
+      config: {
+        entry: "app.wasm",
+        scaleMode: "scroll",
+        assets: [{ path: "app.wasm", source: { routeId: "wasm.asset" } }],
+      },
+    });
+    registerWasmPanel({
+      key: "scroll-fixed",
+      connectionId: "scroll-fixed",
+      config: {
+        entry: "app.wasm",
+        scaleMode: "scroll",
+        width: 1200,
+        height: 900,
+        assets: [{ path: "app.wasm", source: { routeId: "wasm.asset" } }],
+      },
+    });
+    registerWasmPanel({
+      key: "fit",
+      connectionId: "fit",
+      config: {
+        entry: "app.wasm",
+        scaleMode: "fit",
+        width: 1200,
+        height: 800,
+        assets: [{ path: "app.wasm", source: { routeId: "wasm.asset" } }],
+      },
+    });
+    updateWasmPanelRect("fit", {
+      top: 0,
+      left: 0,
+      width: 600,
+      height: 500,
+    });
+    await flushPromises();
+
+    const byKey = new Map(
+      wasmStageEntries.value.map((entry) => [entry.key, entry]),
+    );
+    const resize = byKey.get("resize");
+    const scrollFluid = byKey.get("scroll-fluid");
+    const scrollFixed = byKey.get("scroll-fixed");
+    const fit = byKey.get("fit");
+    expect(resize).toBeTruthy();
+    expect(scrollFluid).toBeTruthy();
+    expect(scrollFixed).toBeTruthy();
+    expect(fit).toBeTruthy();
+
+    expect(wasmStageViewportClass(resize!.config)).toBe("overflow-hidden");
+    expect(wasmStageFrameBoxStyle(resize!)).toEqual({
+      width: "100%",
+      height: "100%",
+    });
+    expect(wasmStageFrameStyle(resize!)).toEqual({
+      width: "100%",
+      height: "100%",
+    });
+
+    expect(wasmStageViewportClass(scrollFluid!.config)).toBe(
+      "overflow-auto overscroll-contain",
+    );
+    expect(wasmStageFrameBoxStyle(scrollFluid!)).toEqual({
+      width: "100%",
+      height: "100%",
+    });
+    expect(wasmStageFrameStyle(scrollFluid!)).toEqual({
+      width: "100%",
+      height: "100%",
+    });
+
+    expect(wasmStageFrameBoxStyle(scrollFixed!)).toEqual({
+      width: "1200px",
+      height: "900px",
+    });
+    expect(wasmStageFrameStyle(scrollFixed!)).toEqual({
+      width: "100%",
+      height: "100%",
+    });
+
+    expect(wasmStageViewportClass(fit!.config)).toBe(
+      "grid place-items-center overflow-hidden",
+    );
+    expect(wasmStageFrameBoxStyle(fit!)).toEqual({
+      position: "relative",
+      width: "600px",
+      height: "400px",
+      flex: "0 0 auto",
+    });
+    expect(wasmStageFrameStyle(fit!)).toEqual({
+      width: "1200px",
+      height: "800px",
+      transform: "scale(0.5)",
+      transformOrigin: "top left",
+    });
   });
 });

@@ -440,6 +440,62 @@ func TestValidateAcceptsWasmPanel(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsBadCanvasPanel(t *testing.T) {
+	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
+	base := func() (plugin.Manifest, []plugin.Route) {
+		return plugin.Manifest{
+				APIVersion: plugin.CurrentAPIVersion,
+				Name:       "canvas",
+				Title:      "Canvas",
+				Category:   plugin.CategoryOther,
+				Layout:     plugin.LayoutTabs,
+				SupportedTransports: []plugin.Transport{
+					plugin.TransportDirect,
+				},
+				Tabs: []plugin.Panel{{
+					Key:    "surface",
+					Label:  "Surface",
+					Type:   plugin.PanelCanvas,
+					Source: &plugin.DataSource{RouteID: "canvas.stream", Method: plugin.MethodWS},
+					Config: plugin.CanvasConfig{},
+				}},
+				Streams: []plugin.Stream{{ID: "canvas.stream", Kind: plugin.StreamCanvas, RouteID: "canvas.stream"}},
+			}, []plugin.Route{
+				{ID: "canvas.stream", Method: plugin.MethodWS, Permission: "canvas.read", Risk: plugin.RiskSafe, Stream: stream},
+			}
+	}
+	tests := []struct {
+		name string
+		want string
+		mut  func(*plugin.CanvasConfig)
+	}{
+		{"scale mode unsupported", "scaleMode", func(c *plugin.CanvasConfig) {
+			c.ScaleMode = plugin.CanvasScaleMode("cover")
+		}},
+		{"partial dimensions rejected", "width and height must be declared together", func(c *plugin.CanvasConfig) {
+			c.Width = 1280
+		}},
+		{"fit dimensions required", "scaleMode fit requires positive width and height", func(c *plugin.CanvasConfig) {
+			c.ScaleMode = plugin.CanvasScaleFit
+		}},
+		{"scroll dimensions required", "scaleMode scroll requires positive width and height", func(c *plugin.CanvasConfig) {
+			c.ScaleMode = plugin.CanvasScaleScroll
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m, routes := base()
+			cfg := m.Tabs[0].Config.(plugin.CanvasConfig)
+			tc.mut(&cfg)
+			m.Tabs[0].Config = cfg
+			err := plugin.Validate(m, routes)
+			if err == nil || !contains(err.Error(), tc.want) {
+				t.Fatalf("Validate() error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestValidateRejectsBadWasmPanel(t *testing.T) {
 	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
 	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
@@ -489,6 +545,9 @@ func TestValidateRejectsBadWasmPanel(t *testing.T) {
 		}},
 		{"partial dimensions rejected", "width and height must be declared together", func(c *plugin.WasmConfig, _ *[]plugin.Route) {
 			c.Width = 1280
+		}},
+		{"fit dimensions required", "scaleMode fit requires width and height", func(c *plugin.WasmConfig, _ *[]plugin.Route) {
+			c.ScaleMode = plugin.WasmScaleFit
 		}},
 		{"boot script not declared", "boot.scripts", func(c *plugin.WasmConfig, _ *[]plugin.Route) {
 			c.Boot.Scripts = []string{"missing.js"}
