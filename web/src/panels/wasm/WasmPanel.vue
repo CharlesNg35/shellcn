@@ -500,7 +500,6 @@ function escapeScript(value: string): string {
     <iframe
       v-if="srcdoc"
       ref="iframeEl"
-      title="WASM panel"
       :aria-label="cfg?.ariaLabel || 'WebAssembly panel'"
       :sandbox="sandbox"
       :srcdoc="srcdoc"
