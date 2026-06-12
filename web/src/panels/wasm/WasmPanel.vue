@@ -9,10 +9,10 @@ import {
   ref,
   watch,
 } from "vue";
-import PanelLoader from "../../components/PanelLoader.vue";
-import type { WasmPanelConfig } from "../../types/projection";
-import type { PanelProps } from "../core/types";
-import PanelError from "../shared/PanelError.vue";
+import PanelLoader from "@/components/PanelLoader.vue";
+import type { PanelProps } from "@/panels/core/types";
+import PanelError from "@/panels/shared/PanelError.vue";
+import type { WasmPanelConfig } from "@/types/projection";
 import {
   activateWasmPanel,
   deactivateWasmPanel,

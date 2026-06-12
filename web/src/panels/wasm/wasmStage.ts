@@ -1,12 +1,13 @@
 import { computed, markRaw, reactive } from "vue";
-import { apiFetch } from "../../api/client";
+import { apiFetch } from "@/api/client";
 import {
   callRoute,
   prepareStream,
   resolveParams,
   routeURL,
-} from "../../api/dataSource";
-import { KEEP_ALIVE_WASM_PANELS_MAX } from "../../stores/sessionLimits";
+} from "@/api/dataSource";
+import { useTheme } from "@/composables/useTheme";
+import { KEEP_ALIVE_WASM_PANELS_MAX } from "@/stores/sessionLimits";
 import type {
   DataSource,
   Method,
@@ -15,8 +16,7 @@ import type {
   WasmBridgeRoute,
   WasmBridgeStream,
   WasmPanelConfig,
-} from "../../types/projection";
-import { useTheme } from "../../composables/useTheme";
+} from "@/types/projection";
 
 const WASM_BRIDGE_SOURCE = "shellcn.wasm" as const;
 const HOST_BRIDGE_SOURCE = "shellcn.host" as const;
@@ -527,11 +527,28 @@ function bridgeScript(config: WasmPanelConfig): string {
   const wasmSource = JSON.stringify(WASM_BRIDGE_SOURCE);
   const hostSource = JSON.stringify(HOST_BRIDGE_SOURCE);
   const { theme } = useTheme();
+  const autoHideAfterAssets =
+    (config.runtime ?? "generic") === "generic" &&
+    Boolean(config.boot?.scripts?.length);
   return `
 (() => {
   const pending = new Map();
   const streams = new Map();
   const themeListeners = new Set();
+  const autoHideAfterAssets = ${JSON.stringify(autoHideAfterAssets)};
+  let pendingAssets = 0;
+  let hideStatusTimer = 0;
+  function statusEl() {
+    return document.getElementById("shellcn-wasm-status");
+  }
+  function hideStatusSoon() {
+    if (!autoHideAfterAssets) return;
+    if (pendingAssets > 0 || hideStatusTimer) return;
+    hideStatusTimer = setTimeout(() => {
+      hideStatusTimer = 0;
+      if (pendingAssets === 0) statusEl()?.remove();
+    }, 0);
+  }
   function request(type, payload) {
     const id = crypto.randomUUID();
     parent.postMessage({ source: ${wasmSource}, type, id, ...payload }, "*");
@@ -548,18 +565,23 @@ function bridgeScript(config: WasmPanelConfig): string {
       return () => themeListeners.delete(fn);
     },
     reportError(error) {
+      if (hideStatusTimer) {
+        clearTimeout(hideStatusTimer);
+        hideStatusTimer = 0;
+      }
       const message = error instanceof Error ? error.message : String(error || "WebAssembly panel failed.");
-      const status = document.getElementById("shellcn-wasm-status");
+      const status = statusEl();
       if (status) status.textContent = message;
       parent.postMessage({ source: ${wasmSource}, type: "runtime.error", error: message }, "*");
     },
     hideStatus() {
-      document.getElementById("shellcn-wasm-status")?.remove();
+      statusEl()?.remove();
     },
     route(routeId, body = {}, options = {}) {
       return request("route.request", { routeId, body, params: options.params || {}, method: options.method });
     },
     asset(path) {
+      pendingAssets += 1;
       return request("asset.request", { path });
     },
     async assetURL(path, mime = "application/octet-stream") {
@@ -594,7 +616,9 @@ function bridgeScript(config: WasmPanelConfig): string {
       const req = pending.get(msg.id);
       if (!req) return;
       pending.delete(msg.id);
+      if (msg.type === "asset.response") pendingAssets = Math.max(0, pendingAssets - 1);
       msg.ok ? req.resolve(msg.data) : req.reject(new Error(msg.error || "Bridge request failed"));
+      if (msg.type === "asset.response" && msg.ok) hideStatusSoon();
       return;
     }
     if (msg.type === "stream.message") streams.get(msg.id)?._emit(msg.data);

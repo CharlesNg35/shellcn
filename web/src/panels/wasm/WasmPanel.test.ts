@@ -1,7 +1,7 @@
 import { mount, flushPromises } from "@vue/test-utils";
 import { defineComponent, h, KeepAlive, nextTick, ref } from "vue";
 import { afterEach, describe, expect, it } from "vitest";
-import { installFetch } from "../../test/fetchMock";
+import { installFetch } from "@/test/fetchMock";
 import WasmPanel from "./WasmPanel.vue";
 import WasmStage from "./WasmStage.vue";
 import {
@@ -57,6 +57,9 @@ describe("WasmPanel", () => {
     expect(iframe?.getAttribute("srcdoc")).toContain("reportError(error)");
     expect(iframe?.getAttribute("srcdoc")).toContain("hideStatus()");
     expect(iframe?.getAttribute("srcdoc")).toContain(
+      "const autoHideAfterAssets = false;",
+    );
+    expect(iframe?.getAttribute("srcdoc")).toContain(
       "fn(msg.theme, window.shellcn.colors)",
     );
     expect(iframe?.getAttribute("srcdoc")).toContain('msg.type === "theme"');
@@ -95,6 +98,7 @@ describe("WasmPanel", () => {
     expect(srcdoc).toContain('entry: "app_bg.wasm"');
     expect(srcdoc).toContain("window.shellcn.asset(window.shellcn.entry)");
     expect(srcdoc).toContain("if (true) return;");
+    expect(srcdoc).toContain("const autoHideAfterAssets = true;");
   });
 
   it("keeps the same iframe mounted when KeepAlive deactivates the panel", async () => {
