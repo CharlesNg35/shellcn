@@ -6,6 +6,7 @@ import WasmPanel from "./WasmPanel.vue";
 import WasmStage from "./WasmStage.vue";
 import {
   deactivateWasmPanel,
+  disposeWasmConnection,
   disposeWasmStage,
   registerWasmPanel,
   updateWasmPanelRect,
@@ -181,6 +182,36 @@ describe("WasmPanel", () => {
       "four",
     ]);
     expect(document.body.querySelectorAll("iframe")).toHaveLength(3);
+  });
+
+  it("disposes only the staged iframes for a disconnected connection", async () => {
+    mount(WasmStage);
+    registerWasmPanel({
+      key: "c1:wasm",
+      connectionId: "c1",
+      config: {
+        entry: "app.wasm",
+        assets: [{ path: "app.wasm", source: { routeId: "wasm.asset" } }],
+      },
+    });
+    registerWasmPanel({
+      key: "c2:wasm",
+      connectionId: "c2",
+      config: {
+        entry: "app.wasm",
+        assets: [{ path: "app.wasm", source: { routeId: "wasm.asset" } }],
+      },
+    });
+    await flushPromises();
+    await nextTick();
+
+    disposeWasmConnection("c1");
+    await nextTick();
+
+    expect(wasmStageEntries.value.map((entry) => entry.key)).toEqual([
+      "c2:wasm",
+    ]);
+    expect(document.body.querySelectorAll("iframe")).toHaveLength(1);
   });
 
   it("maps wasm scale modes to stable iframe layout styles", async () => {

@@ -208,6 +208,14 @@ export function disposeWasmStage(): void {
   entries.clear();
 }
 
+export function disposeWasmConnection(connectionId: string): void {
+  for (const entry of Array.from(entries.values())) {
+    if (entry.connectionId !== connectionId) continue;
+    destroyEntry(entry);
+    entries.delete(entry.key);
+  }
+}
+
 export function wasmStageEntryStyle(
   entry: WasmStageEntry,
 ): Record<string, string> {

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch } from "vue";
 import { useTheme } from "@/composables/useTheme";
+import { registerConnectionCleanup } from "@/stores/connectionCleanup";
 import {
+  disposeWasmConnection,
   disposeWasmStage,
   onWasmStageMessage,
   refreshWasmStageTheme,
@@ -16,12 +18,18 @@ import {
 } from "./wasmStage";
 
 const { theme } = useTheme();
+let unregisterConnectionCleanup: (() => void) | undefined;
 
 onMounted(() => {
   window.addEventListener("message", onWasmStageMessage);
+  unregisterConnectionCleanup = registerConnectionCleanup(
+    disposeWasmConnection,
+  );
 });
 
 onUnmounted(() => {
+  unregisterConnectionCleanup?.();
+  unregisterConnectionCleanup = undefined;
   window.removeEventListener("message", onWasmStageMessage);
   disposeWasmStage();
 });

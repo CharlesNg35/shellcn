@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "../test/fetchMock";
+import { registerConnectionCleanup } from "./connectionCleanup";
 import { useConnectionSessionsStore } from "./connectionSessions";
 import {
   CONNECTION_SESSION_HEARTBEAT_MS,
@@ -73,6 +74,19 @@ describe("connection sessions store", () => {
           request.init?.method === "DELETE",
       ),
     ).toBe(true);
+  });
+
+  it("runs registered connection cleanup when a connection is disconnected", async () => {
+    const cleanup = vi.fn();
+    const unregister = registerConnectionCleanup(cleanup);
+    const store = useConnectionSessionsStore();
+    store.start();
+
+    await store.connect("c1");
+    await store.disconnect("c1");
+
+    expect(cleanup).toHaveBeenCalledWith("c1");
+    unregister();
   });
 
   it("caps frontend live connection sessions and closes the oldest extras", async () => {
