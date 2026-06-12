@@ -67,6 +67,7 @@ function onSelect(row: Row): void {
     v-else-if="component"
     :key="panelKey"
     :connection-id="connectionId"
+    :panel-key="panelKey"
     :source="source"
     :config="config"
     :recording="panelRecording"

@@ -8,6 +8,7 @@ import { useAuthStore } from "./stores/auth";
 import AppToast from "./components/AppToast.vue";
 import AppIcon from "./components/AppIcon.vue";
 import AppRouteLoader from "./components/AppRouteLoader.vue";
+import WasmStage from "./panels/wasm/WasmStage.vue";
 
 const toast = useToast();
 const router = useRouter();
@@ -114,6 +115,7 @@ onUnmounted(() => {
     </Transition>
   </template>
   <AppToast />
+  <WasmStage />
   <ConfirmDialog>
     <template #message="{ message }">
       <div class="flex items-start gap-3">
