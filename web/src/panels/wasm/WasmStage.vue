@@ -35,7 +35,7 @@ watch(theme, refreshWasmStageTheme);
       <div
         v-for="entry in wasmStageEntries"
         :key="entry.key"
-        class="pointer-events-auto bg-surface-950"
+        class="pointer-events-auto bg-surface-0 dark:bg-surface-950"
         :class="wasmStageViewportClass(entry.config)"
         :style="wasmStageEntryStyle(entry)"
         data-test="wasm-stage-entry"
@@ -52,7 +52,7 @@ watch(theme, refreshWasmStageTheme);
             :srcdoc="entry.srcdoc"
             :style="wasmStageFrameStyle(entry)"
             :allow="wasmStageAllow(entry.config)"
-            class="block border-0 bg-surface-950"
+            class="block border-0 bg-surface-0 dark:bg-surface-950"
             @load="refreshWasmStageTheme"
           />
         </div>

@@ -128,12 +128,12 @@ function scheduleRectUpdate(): void {
   <div
     v-else
     ref="placeholder"
-    class="relative h-full min-h-0 overflow-hidden bg-surface-950"
+    class="relative h-full min-h-0 overflow-hidden bg-surface-0 dark:bg-surface-950"
     data-test="wasm-panel-placeholder"
   >
     <PanelLoader
       v-if="entry?.loading || !entry?.srcdoc"
-      class="absolute inset-0 bg-surface-950"
+      class="absolute inset-0 bg-surface-0 dark:bg-surface-950"
     />
     <p class="sr-only">
       {{

@@ -269,7 +269,11 @@ watch(
 
 <template>
   <PanelError v-if="!source" message="No terminal stream route configured." />
-  <div v-else ref="root" class="flex h-full min-h-0 flex-col bg-surface-950">
+  <div
+    v-else
+    ref="root"
+    class="flex h-full min-h-0 flex-col bg-surface-0 dark:bg-surface-950"
+  >
     <div
       class="flex min-h-8 items-center gap-2 border-b border-surface-200 bg-surface-0 px-2 py-0.5 dark:border-surface-800 dark:bg-surface-950"
     >
