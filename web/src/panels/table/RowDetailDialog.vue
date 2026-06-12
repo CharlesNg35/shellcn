@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Dialog from "primevue/dialog";
 import Button from "primevue/button";
-import { dialogRoot } from "../../primevue/preset";
+import { dialogRoot } from "@/primevue/preset";
 
 export interface DetailItem {
   key: string;

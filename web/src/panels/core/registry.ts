@@ -3,8 +3,8 @@ import {
   type AsyncComponentLoader,
   type Component,
 } from "vue";
-import type { PanelType } from "../../types/projection";
-import PanelLoader from "../../components/PanelLoader.vue";
+import type { PanelType } from "@/types/projection";
+import PanelLoader from "@/components/PanelLoader.vue";
 import TablePanel from "../table/TablePanel.vue";
 import FormPanel from "../form/FormPanel.vue";
 import EnrollPanel from "../enroll/EnrollPanel.vue";

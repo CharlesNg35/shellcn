@@ -4,7 +4,7 @@ import { nextTick } from "vue";
 import AutoComplete from "primevue/autocomplete";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
-import type { AiProviderInput, AiProviderSummary } from "../../api/ai";
+import type { AiProviderInput, AiProviderSummary } from "@/api/ai";
 import AiProviderDialog from "./AiProviderDialog.vue";
 
 const create = vi.fn();

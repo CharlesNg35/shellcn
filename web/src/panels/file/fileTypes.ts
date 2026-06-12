@@ -2,7 +2,7 @@
 // extensible — a new viewer is a one-time core addition, reused by every
 // filesystem plugin.
 
-import type { FileEntry } from "../../types/projection";
+import type { FileEntry } from "@/types/projection";
 
 export type ViewerKind =
   | "code"

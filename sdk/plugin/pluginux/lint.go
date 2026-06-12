@@ -240,6 +240,9 @@ func (l *linter) panel(path string, p plugin.Panel) {
 		if (c.Width == 0) != (c.Height == 0) {
 			l.add(Error, path, "wasm width and height must be declared together")
 		}
+		if c.ScaleMode == plugin.WasmScaleFit && (c.Width == 0 || c.Height == 0) {
+			l.add(Error, path, "wasm scaleMode fit requires width and height")
+		}
 		if c.Width > 0 && c.Height > 0 && c.ScaleMode == "" {
 			l.add(Warning, path, "wasm with fixed dimensions should declare scaleMode fit or scroll")
 		}

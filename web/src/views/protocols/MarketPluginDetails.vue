@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MarketEntry } from "../../types/projection";
+import type { MarketEntry } from "@/types/projection";
 import { marketRepoUrl, marketVersionLabel } from "./market";
 
 defineProps<{

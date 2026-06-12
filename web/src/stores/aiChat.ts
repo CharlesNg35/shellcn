@@ -357,8 +357,9 @@ export const useAiChatStore = defineStore("aiChat", () => {
     }
   }
 
-  function stop(connId: string): void {
+  function stop(connId: string, options: { clearQueue?: boolean } = {}): void {
     const st = state(connId);
+    if (options.clearQueue) st.queue = [];
     if (st.runState === "idle") return;
 
     st.runState = "stopping";

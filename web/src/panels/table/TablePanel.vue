@@ -23,11 +23,7 @@ import Select from "primevue/select";
 import Menu from "primevue/menu";
 import { useToast } from "primevue/usetoast";
 import { exportRecords, type ExportFormat } from "../shared/exportData";
-import {
-  fetchPage,
-  runAction,
-  watch as watchResource,
-} from "../../api/dataSource";
+import { fetchPage, runAction, watch as watchResource } from "@/api/dataSource";
 import type {
   Action,
   Column as ColumnSpec,
@@ -39,11 +35,11 @@ import type {
   ResourceRef,
   Row,
   TablePanelConfig,
-} from "../../types/projection";
+} from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import { formatBytes } from "../file/fileTypes";
-import { dialogRoot, inputClass } from "../../primevue/preset";
-import { cn } from "../../utils/cn";
+import { dialogRoot, inputClass } from "@/primevue/preset";
+import { cn } from "@/utils/cn";
 import {
   deleteMutation,
   insertMutation,
@@ -52,13 +48,13 @@ import {
 } from "./mutation";
 import RowDetailDialog, { type DetailItem } from "./RowDetailDialog.vue";
 import { useNavigableKinds } from "../core/navigable";
-import { useWorkspaceStore } from "../../stores/workspace";
-import SkeletonList from "../../components/SkeletonList.vue";
+import { useWorkspaceStore } from "@/stores/workspace";
+import SkeletonList from "@/components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
 import { badgeClassFor } from "../shared/severity";
 import PanelError from "../shared/PanelError.vue";
 import FormField from "../form/FormField.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{
@@ -1233,16 +1229,23 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div class="min-h-0 flex-1 overflow-hidden">
+    <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
       <PanelError
-        v-if="error"
+        v-if="error && !rows.length"
         :message="error"
         retryable
         @retry="load(first)"
       />
       <SkeletonList v-else-if="loading && !rows.length" :rows="8" />
+      <PanelError
+        v-else-if="error"
+        class="border-b border-surface-200 dark:border-surface-800"
+        :message="error"
+        retryable
+        @retry="load(first)"
+      />
       <DataTable
-        v-else
+        v-if="rows.length || (!loading && !error)"
         v-model:selection="selection"
         :value="rows"
         :data-key="dataKeyField"
@@ -1497,7 +1500,7 @@ onUnmounted(() => {
       @update:visible="(v) => !v && (actionOutput = null)"
     >
       <pre
-        class="max-h-[60vh] overflow-auto rounded-lg bg-surface-950 p-4 text-xs leading-relaxed text-surface-100"
+        class="max-h-[60vh] overflow-auto rounded-lg bg-surface-50 p-4 text-xs leading-relaxed text-surface-800 dark:bg-surface-950 dark:text-surface-100"
         >{{ actionOutput?.output || "(no output)" }}</pre
       >
       <p v-if="actionOutput?.truncated" class="mt-2 text-xs text-amber-500">

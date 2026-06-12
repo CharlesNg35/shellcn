@@ -16,9 +16,7 @@
 ShellCN is a single Go binary that gives you one secure, audited place to reach all your
 servers, containers, databases, and desktops. Run it, open a browser, and you're in.
 
-_Demo (coming soon):_
-
-It speaks **20 protocols** out of the box today:
+It ships with **20 built-in protocols**. Add more via plugins or Marketplace:
 
 - **Shells**: SSH
 - **File transfer**: SFTP, FTP/FTPS, SMB, WebDAV, S3
@@ -115,6 +113,25 @@ Requires Go 1.26+ and Node 24+.
 make build    # single binary at bin/shellcn
 make dev      # live-reloading dev server
 ```
+
+## Screenshot
+
+![ShellCN Kubernetes cluster overview](docs/assets/shellcn-kubernetes-overview.png)
+
+## Features
+
+- **One audited cockpit** for shells, files, containers, clusters, databases, and desktops.
+- **AI assistant** for supported operations workflows.
+- **Session recording** for terminal and desktop sessions.
+- **Plugin extension model** for private protocols and Marketplace-installed plugins.
+- **Agent transport** for targets that cannot be reached directly from the gateway.
+- **Role-based access control** with per-route permissions, risk levels, and audit events.
+
+## Upcoming
+
+- OAuth2 / OIDC login
+- SAML login
+- LDAP authentication
 
 ## Related repositories
 

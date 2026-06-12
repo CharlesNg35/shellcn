@@ -9,6 +9,7 @@ import {
   CONNECTION_SESSION_HEARTBEAT_MS,
   MAX_LIVE_CONNECTION_SESSIONS,
 } from "./sessionLimits";
+import { cleanupConnection } from "./connectionCleanup";
 import { useConnectionStatusStore } from "./connectionStatus";
 import { useStreamChannelsStore } from "./streamChannels";
 import { useWorkspaceStore } from "./workspace";
@@ -43,6 +44,7 @@ export const useConnectionSessionsStore = defineStore(
           return ws.isConnected(connectionId);
         default:
           ws.setConnected(connectionId, false);
+          cleanupConnection(connectionId);
           if (connectedIds().length === 0) stopHeartbeat();
           return false;
       }
@@ -110,6 +112,7 @@ export const useConnectionSessionsStore = defineStore(
       streams.closeWhere((key) => key.startsWith(`${connectionId}:`));
       ws.setConnected(connectionId, false);
       live.clear(connectionId);
+      cleanupConnection(connectionId);
       await closeConnectionSession(connectionId);
     }
 

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { fetchDoc } from "../../api/dataSource";
-import type { DiffPanelConfig } from "../../types/projection";
+import { fetchDoc } from "@/api/dataSource";
+import type { DiffPanelConfig } from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
-import SkeletonList from "../../components/SkeletonList.vue";
+import SkeletonList from "@/components/SkeletonList.vue";
 import CodeDiffView from "../shared/CodeDiffView.vue";
 
 const props = defineProps<PanelProps>();

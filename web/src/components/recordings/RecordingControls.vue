@@ -2,14 +2,14 @@
 import { computed, watch } from "vue";
 import Button from "primevue/button";
 import Tooltip from "primevue/tooltip";
-import { resolveParams } from "../../api/dataSource";
+import { resolveParams } from "@/api/dataSource";
 import {
   useRecordingControl,
   type RecordingDescriptor,
-} from "../../composables/useRecordingControl";
+} from "@/composables/useRecordingControl";
 import AppIcon from "../AppIcon.vue";
-import type { DataSource, ResourceRef } from "../../types/projection";
-import type { ChannelStatus } from "../../stores/streamChannels";
+import type { DataSource, ResourceRef } from "@/types/projection";
+import type { ChannelStatus } from "@/stores/streamChannels";
 
 const props = defineProps<{
   connectionId: string;

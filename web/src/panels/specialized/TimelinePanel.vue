@@ -9,12 +9,12 @@ import {
 import { useDocumentVisibility, useIntervalFn } from "@vueuse/core";
 import Timeline from "primevue/timeline";
 import Button from "primevue/button";
-import { fetchPage } from "../../api/dataSource";
+import { fetchPage } from "@/api/dataSource";
 import type { PanelProps } from "../core/types";
-import type { Row, TimelinePanelConfig } from "../../types/projection";
+import type { Row, TimelinePanelConfig } from "@/types/projection";
 import PanelError from "../shared/PanelError.vue";
-import SkeletonList from "../../components/SkeletonList.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import SkeletonList from "@/components/SkeletonList.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import { badgeClassFor } from "../shared/severity";
 
 const props = defineProps<PanelProps>();
@@ -23,7 +23,8 @@ const cfg = computed(
   () => (props.config as TimelinePanelConfig | undefined) ?? {},
 );
 const rows = ref<Row[]>([]);
-const loading = ref(true);
+const loadedOnce = ref(false);
+const refreshing = ref(false);
 const error = ref<string | null>(null);
 const active = ref(true);
 const visibility = useDocumentVisibility();
@@ -35,13 +36,15 @@ const severityField = computed(() => cfg.value.severityField ?? "severity");
 const iconField = computed(() => cfg.value.iconField ?? "icon");
 const emptyText = computed(() => cfg.value.emptyText ?? "No events.");
 const refreshMs = computed(() => cfg.value.refreshIntervalMs ?? 0);
+const showInitialLoader = computed(() => refreshing.value && !loadedOnce.value);
 
 async function load(): Promise<void> {
   if (!props.source) {
-    loading.value = false;
+    loadedOnce.value = true;
     return;
   }
-  loading.value = true;
+  if (refreshing.value) return;
+  refreshing.value = true;
   error.value = null;
   try {
     const page = await fetchPage<Row>(
@@ -51,10 +54,11 @@ async function load(): Promise<void> {
       { limit: 100 },
     );
     rows.value = page.items;
+    loadedOnce.value = true;
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
-    loading.value = false;
+    refreshing.value = false;
   }
 }
 
@@ -86,7 +90,11 @@ onDeactivated(() => {
 
 vueWatch(
   () => [props.connectionId, props.resource?.uid, props.source?.routeId],
-  load,
+  () => {
+    rows.value = [];
+    loadedOnce.value = false;
+    void load();
+  },
   { immediate: true },
 );
 
@@ -111,20 +119,20 @@ vueWatch(
       <Button
         type="button"
         severity="secondary"
-        :disabled="loading"
+        :disabled="refreshing"
         @click="load"
       >
         <AppIcon
           :icon="{ type: 'lucide', value: 'refresh-cw' }"
           :size="14"
-          :loading="loading"
+          :loading="refreshing"
         />
         Refresh
       </Button>
     </div>
 
     <div class="min-h-0 flex-1 overflow-auto p-4">
-      <SkeletonList v-if="loading" />
+      <SkeletonList v-if="showInitialLoader" />
       <PanelError v-else-if="error" :message="error" retryable @retry="load" />
       <div v-else-if="!rows.length" class="text-sm text-surface-500">
         {{ emptyText }}

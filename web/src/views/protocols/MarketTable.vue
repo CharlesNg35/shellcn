@@ -4,8 +4,8 @@ import IconField from "primevue/iconfield";
 import InputIcon from "primevue/inputicon";
 import InputText from "primevue/inputtext";
 import Tag from "primevue/tag";
-import AppIcon from "../../components/AppIcon.vue";
-import type { MarketEntry } from "../../types/projection";
+import AppIcon from "@/components/AppIcon.vue";
+import type { MarketEntry } from "@/types/projection";
 import MarketPluginRow from "./MarketPluginRow.vue";
 
 const props = defineProps<{

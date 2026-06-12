@@ -4,8 +4,11 @@ import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import Drawer from "primevue/drawer";
 import AiChatLauncher from "./AiChatLauncher.vue";
+import { cleanupConnection } from "../stores/connectionCleanup";
 import { useAiChatStore } from "../stores/aiChat";
 import { RiskLevel } from "../types/projection";
+
+const turnControl = vi.fn();
 
 vi.mock("../api/ai", () => ({
   aiApi: {
@@ -15,7 +18,7 @@ vi.mock("../api/ai", () => ({
       model: "gpt-4o",
     })),
     list: vi.fn(async () => []),
-    turnControl: vi.fn(),
+    turnControl: (...args: unknown[]) => turnControl(...args),
   },
   streamAiTurn: vi.fn(),
   isAbort: vi.fn(() => false),
@@ -25,6 +28,7 @@ const CONN = "conn-1";
 
 beforeEach(() => {
   localStorage.clear();
+  turnControl.mockClear();
   setActivePinia(createPinia());
 });
 
@@ -59,5 +63,33 @@ describe("AiChatLauncher", () => {
     await nextTick();
 
     expect(wrapper.findComponent(Drawer).props("dismissable")).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("stops active assistant work when the connection is cleaned up", async () => {
+    const wrapper = mount(AiChatLauncher, {
+      props: {
+        connectionId: CONN,
+        connected: true,
+      },
+    });
+    await flushPromises();
+
+    const chat = useAiChatStore();
+    const st = chat.state(CONN);
+    st.runState = "streaming";
+    st.turnId = "turn-1";
+    st.queue = ["next"];
+
+    cleanupConnection(CONN);
+    await nextTick();
+
+    expect(st.runState).toBe("idle");
+    expect(st.turnId).toBe("");
+    expect(st.queue).toEqual([]);
+    expect(turnControl).toHaveBeenCalledWith(CONN, "turn-1", {
+      type: "stop",
+    });
+    wrapper.unmount();
   });
 });

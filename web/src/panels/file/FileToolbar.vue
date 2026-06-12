@@ -7,12 +7,12 @@ import InputText from "primevue/inputtext";
 import ProgressBar from "primevue/progressbar";
 import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
-import AppIcon from "../../components/AppIcon.vue";
-import type { UploadProgress } from "../../api/dataSource";
+import AppIcon from "@/components/AppIcon.vue";
+import type { UploadProgress } from "@/api/dataSource";
 import type { FileSortKey } from "./fileTypes";
 import { formatBytes } from "./fileTypes";
-import { inputClass } from "../../primevue/preset";
-import { cn } from "../../utils/cn";
+import { inputClass } from "@/primevue/preset";
+import { cn } from "@/utils/cn";
 
 const filter = defineModel<string>("filter", { default: "" });
 const sortKey = defineModel<FileSortKey>("sortKey", { default: "name" });

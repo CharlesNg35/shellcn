@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { installFetch } from "../../test/fetchMock";
-import CredentialFormDialog from "../../components/CredentialFormDialog.vue";
+import { installFetch } from "@/test/fetchMock";
+import CredentialFormDialog from "@/components/CredentialFormDialog.vue";
 import CredentialSelect from "./CredentialSelect.vue";
 
 const credentialKinds = [

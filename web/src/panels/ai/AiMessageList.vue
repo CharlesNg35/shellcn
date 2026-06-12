@@ -2,9 +2,9 @@
 import { toRef, type VNodeRef } from "vue";
 import Button from "primevue/button";
 import AiMessageItem from "./AiMessage.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import { useAiMessageScroll } from "./useAiMessageScroll";
-import type { AiMessage } from "../../stores/aiChat";
+import type { AiMessage } from "@/stores/aiChat";
 
 const props = defineProps<{
   messages: AiMessage[];

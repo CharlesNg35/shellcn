@@ -2,7 +2,9 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { connectionsApi, connectionFoldersApi } from "../api/connections";
 import { pluginsApi } from "../api/plugins";
+import type { ConnectionCreate, ConnectionUpdate } from "../api/connections";
 import type {
+  ConnectionDetail,
   ConnectionFolder,
   ConnectionSummary,
   PluginProjection,
@@ -73,8 +75,35 @@ export const useConnectionsStore = defineStore("connections", () => {
     input: { name: string; color: ConnectionFolder["color"] },
   ): Promise<ConnectionFolder> {
     const folder = await connectionFoldersApi.update(id, input);
-    folders.value = folders.value.map((f) => (f.id === id ? folder : f));
-    return folder;
+    const merged = mergeFolder(
+      folder,
+      folders.value.find((f) => f.id === id),
+    );
+    folders.value = folders.value.map((f) => (f.id === id ? merged : f));
+    return merged;
+  }
+
+  async function createConnection(
+    input: ConnectionCreate,
+  ): Promise<ConnectionSummary> {
+    const created = await connectionsApi.create(input);
+    connections.value = [...connections.value, created].sort(
+      (a, b) => connectionSortOrder(a) - connectionSortOrder(b),
+    );
+    return created;
+  }
+
+  async function updateConnection(
+    id: string,
+    input: ConnectionUpdate,
+  ): Promise<ConnectionDetail> {
+    const updated = await connectionsApi.update(id, input);
+    const existing = connections.value.find((c) => c.id === id);
+    connections.value = connections.value.map((c) =>
+      c.id === id ? mergeConnectionSummary(c, updated, input) : c,
+    );
+    if (!existing) await refresh();
+    return updated;
   }
 
   async function deleteFolder(id: string): Promise<void> {
@@ -136,6 +165,8 @@ export const useConnectionsStore = defineStore("connections", () => {
     load,
     refresh,
     refreshPlugins,
+    createConnection,
+    updateConnection,
     createFolder,
     updateFolder,
     deleteFolder,
@@ -144,3 +175,49 @@ export const useConnectionsStore = defineStore("connections", () => {
     byId,
   };
 });
+
+function mergeFolder(
+  next: ConnectionFolder,
+  existing?: ConnectionFolder,
+): ConnectionFolder {
+  return {
+    ...existing,
+    ...next,
+    name: next.name,
+    color: next.color,
+    parentId: next.parentId ?? existing?.parentId,
+    sortOrder: next.sortOrder ?? existing?.sortOrder ?? 0,
+  };
+}
+
+function mergeConnectionSummary(
+  existing: ConnectionSummary,
+  updated: ConnectionDetail,
+  input: ConnectionUpdate,
+): ConnectionSummary {
+  return {
+    ...existing,
+    name: updated.name || input.name,
+    protocol: updated.protocol || existing.protocol,
+    transport: updated.transport || input.transport,
+    recording: updated.recording ?? stringRecord(input.recording),
+    aiMode: updated.aiMode ?? input.aiMode,
+    aiAllowDestructive:
+      updated.aiAllowDestructive ?? input.aiAllowDestructive ?? false,
+  };
+}
+
+function connectionSortOrder(a: ConnectionSummary): number {
+  return a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+}
+
+function stringRecord(
+  value: Record<string, unknown> | undefined,
+): Record<string, string> | undefined {
+  if (!value) return undefined;
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
+}

@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { resolvePanel } from "./registry";
-import FallbackPanel from "./FallbackPanel.vue";
-import PanelError from "../shared/PanelError.vue";
-import { panelConfigError, usePanelConfigSchemas } from "./config";
-import { usePanelRecordingResolver } from "./recording";
-import { useScopeStore } from "../../stores/scope";
+import { usePanelRecordingResolver } from "@/panels/core/recording";
+import PanelError from "@/panels/shared/PanelError.vue";
+import { useScopeStore } from "@/stores/scope";
 import type {
   Action,
   DataSource,
   PanelType,
   ResourceRef,
   Row,
-} from "../../types/projection";
-import type { RecordingDescriptor } from "../../composables/useRecordingControl";
+} from "@/types/projection";
+import type { RecordingDescriptor } from "@/composables/useRecordingControl";
+import { resolvePanel } from "./registry";
+import FallbackPanel from "./FallbackPanel.vue";
+import { panelConfigError, usePanelConfigSchemas } from "./config";
 
 const props = defineProps<{
   panel: PanelType;
@@ -67,6 +67,7 @@ function onSelect(row: Row): void {
     v-else-if="component"
     :key="panelKey"
     :connection-id="connectionId"
+    :panel-key="panelKey"
     :source="source"
     :config="config"
     :recording="panelRecording"

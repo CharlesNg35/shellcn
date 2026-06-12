@@ -676,6 +676,21 @@ func checkPanelConfigRoutes(
 	case QueryEditorConfig:
 		checkWriteRouteID(ctx+" cancelRouteId", c.CancelRouteID)
 		checkRouteID(ctx+" completionRouteId", c.CompletionRouteID)
+	case CanvasConfig:
+		switch c.ScaleMode {
+		case "", CanvasScaleResize, CanvasScaleFit, CanvasScaleScroll:
+		default:
+			add("%s scaleMode %q is not supported", ctx, c.ScaleMode)
+		}
+		if c.Width < 0 || c.Height < 0 {
+			add("%s width and height must be non-negative", ctx)
+		}
+		if (c.Width == 0) != (c.Height == 0) {
+			add("%s width and height must be declared together", ctx)
+		}
+		if (c.ScaleMode == CanvasScaleFit || c.ScaleMode == CanvasScaleScroll) && (c.Width <= 0 || c.Height <= 0) {
+			add("%s scaleMode %s requires positive width and height", ctx, c.ScaleMode)
+		}
 	case KVConfig:
 		checkWriteRouteID(ctx+" createRouteId", c.CreateRouteID)
 		checkRouteID(ctx+" readRouteId", c.ReadRouteID)
@@ -706,6 +721,9 @@ func checkPanelConfigRoutes(
 		}
 		if (c.Width == 0) != (c.Height == 0) {
 			add("%s width and height must be declared together", ctx)
+		}
+		if c.ScaleMode == WasmScaleFit && (c.Width == 0 || c.Height == 0) {
+			add("%s scaleMode fit requires width and height", ctx)
 		}
 		for i, asset := range c.Assets {
 			if asset.Path == "" {

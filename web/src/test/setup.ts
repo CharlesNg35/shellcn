@@ -5,6 +5,10 @@ import ToastService from "primevue/toastservice";
 import ConfirmationService from "primevue/confirmationservice";
 import { primeVuePassthrough } from "../primevue/preset";
 
+if (!globalThis.HTMLElement) {
+  globalThis.HTMLElement = window.HTMLElement;
+}
+
 // jsdom implements neither ResizeObserver (PrimeVue Tabs' ink bar) nor matchMedia
 // (Select); stub both so widgets mount under test.
 if (!window.ResizeObserver) {

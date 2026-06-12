@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import Button from "primevue/button";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 
 withDefaults(defineProps<{ message: string; retryable?: boolean }>(), {
   retryable: false,

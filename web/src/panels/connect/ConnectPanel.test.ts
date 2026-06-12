@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { defineComponent, ref } from "vue";
 import Button from "primevue/button";
-import { installFetch } from "../../test/fetchMock";
+import { installFetch } from "@/test/fetchMock";
 import ConnectPanel from "./ConnectPanel.vue";
-import type { ConnectionSummary } from "../../types/projection";
+import type { ConnectionSummary } from "@/types/projection";
 
 const direct: ConnectionSummary = {
   id: "c1",

@@ -3,10 +3,10 @@ import { ref } from "vue";
 import AiMarkdown from "./AiMarkdown.vue";
 import AiToolBadges from "./AiToolBadges.vue";
 import AiReasoning from "./AiReasoning.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import Button from "primevue/button";
 import Message from "primevue/message";
-import type { AiMessage } from "../../stores/aiChat";
+import type { AiMessage } from "@/stores/aiChat";
 
 const props = defineProps<{ message: AiMessage; streaming: boolean }>();
 const isUser = () => props.message.role === "user";
@@ -40,7 +40,7 @@ async function copy(): Promise<void> {
       :class="
         isUser()
           ? 'max-w-[82%] rounded-2xl rounded-br-md bg-primary-600 text-white'
-          : 'w-[88%] max-w-[88%] rounded-2xl rounded-tl-md border border-surface-200 bg-surface-0 text-surface-800 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-100'
+          : 'max-w-[88%] rounded-2xl rounded-tl-md border border-surface-200 bg-surface-0 text-surface-800 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-100'
       "
     >
       <p v-if="isUser()" class="wrap-break-word whitespace-pre-wrap">

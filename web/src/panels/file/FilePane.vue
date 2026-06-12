@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Button from "primevue/button";
-import AppIcon from "../../components/AppIcon.vue";
-import type { FileContent, FileEntry } from "../../types/projection";
+import AppIcon from "@/components/AppIcon.vue";
+import type { FileContent, FileEntry } from "@/types/projection";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import FilePreview from "./FilePreview.vue";
 import { formatBytes, formatDate } from "./fileTypes";

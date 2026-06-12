@@ -2,13 +2,13 @@
 import { computed, ref } from "vue";
 import Button from "primevue/button";
 import ProgressBar from "primevue/progressbar";
-import { runAction } from "../../api/dataSource";
-import { useStream } from "../../composables/useStream";
+import { runAction } from "@/api/dataSource";
+import { useStream } from "@/composables/useStream";
 import type { PanelProps } from "../core/types";
-import type { TaskProgressPanelConfig } from "../../types/projection";
+import type { TaskProgressPanelConfig } from "@/types/projection";
 import StreamStatusBar from "./StreamStatusBar.vue";
-import AppIcon from "../../components/AppIcon.vue";
-import PanelLoader from "../../components/PanelLoader.vue";
+import AppIcon from "@/components/AppIcon.vue";
+import PanelLoader from "@/components/PanelLoader.vue";
 
 const props = defineProps<PanelProps>();
 

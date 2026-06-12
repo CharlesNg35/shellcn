@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Dialog from "primevue/dialog";
-import { recordingsApi } from "../../api/recordings";
+import { recordingsApi } from "@/api/recordings";
 import CastPlayer from "./CastPlayer.vue";
 import VideoPlayer from "./VideoPlayer.vue";
-import { dialogRoot } from "../../primevue/preset";
-import type { RecordingSummary } from "../../types/projection";
+import { dialogRoot } from "@/primevue/preset";
+import type { RecordingSummary } from "@/types/projection";
 
 const props = defineProps<{
   visible: boolean;

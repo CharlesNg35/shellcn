@@ -2,8 +2,8 @@
 import { computed } from "vue";
 import Select from "primevue/select";
 import Tag from "primevue/tag";
-import AppIcon from "../../components/AppIcon.vue";
-import type { AiGlobalStatus, AiProviderSummary } from "../../api/ai";
+import AppIcon from "@/components/AppIcon.vue";
+import type { AiGlobalStatus, AiProviderSummary } from "@/api/ai";
 
 const props = defineProps<{
   providers: AiProviderSummary[];

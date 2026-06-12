@@ -5,7 +5,7 @@ import Button from "primevue/button";
 import ConfirmDialog from "primevue/confirmdialog";
 import InputText from "primevue/inputtext";
 import AiConversationList from "./AiConversationList.vue";
-import type { AiConversation } from "../../api/ai";
+import type { AiConversation } from "@/api/ai";
 
 const conversation = (over: Partial<AiConversation> = {}): AiConversation => ({
   id: "cv-1",

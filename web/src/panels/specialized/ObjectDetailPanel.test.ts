@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import ObjectDetailPanel from "./ObjectDetailPanel.vue";
 
@@ -9,6 +9,10 @@ vi.mock("../../api/dataSource", () => ({
 }));
 
 describe("ObjectDetailPanel", () => {
+  beforeEach(() => {
+    fetchDoc.mockReset();
+  });
+
   it("renders configured fields and redacts sensitive values", async () => {
     fetchDoc.mockResolvedValue({
       name: "api",
@@ -52,5 +56,53 @@ describe("ObjectDetailPanel", () => {
     expect(wrapper.text()).toContain("Running");
     expect(wrapper.text()).toContain("********");
     expect(wrapper.text()).not.toContain("secret");
+  });
+
+  it("keeps existing fields visible during refresh", async () => {
+    let resolveRefresh:
+      | ((value: { name: string; status: string }) => void)
+      | undefined;
+    fetchDoc
+      .mockResolvedValueOnce({ name: "api", status: "Running" })
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveRefresh = resolve;
+        }),
+      );
+
+    const wrapper = mount(ObjectDetailPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "x.object" },
+        config: {
+          sections: [
+            {
+              fields: [
+                { key: "name", label: "Name" },
+                { key: "status", label: "Status" },
+              ],
+            },
+          ],
+        },
+      },
+      global: { stubs: { AppIcon: true } },
+    });
+    await flushPromises();
+
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Refresh"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="skeleton-list"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain("api");
+    expect(wrapper.text()).toContain("Running");
+
+    resolveRefresh?.({ name: "api-v2", status: "Ready" });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("api-v2");
+    expect(wrapper.text()).toContain("Ready");
   });
 });

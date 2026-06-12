@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import DashboardPanel from "./DashboardPanel.vue";
 import PanelHost from "../core/PanelHost.vue";
-import type { DashboardPanelConfig } from "../../types/projection";
+import type { DashboardPanelConfig } from "@/types/projection";
 
 const config: DashboardPanelConfig = {
   cells: [

@@ -3,13 +3,8 @@ import { ref, watch } from "vue";
 import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
-import { ApiError } from "../../api/client";
-import {
-  dialogRoot,
-  btnPrimary,
-  btnDanger,
-  btnGhost,
-} from "../../primevue/preset";
+import { ApiError } from "@/api/client";
+import { dialogRoot, btnPrimary, btnDanger, btnGhost } from "@/primevue/preset";
 import AuthAlert from "./AuthAlert.vue";
 
 const props = defineProps<{

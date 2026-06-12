@@ -2,8 +2,8 @@
 import { computed, nextTick, onActivated, ref } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
-import { useStream } from "../../composables/useStream";
-import PanelLoader from "../../components/PanelLoader.vue";
+import { useStream } from "@/composables/useStream";
+import PanelLoader from "@/components/PanelLoader.vue";
 import type { PanelProps } from "../core/types";
 import StreamStatusBar from "./StreamStatusBar.vue";
 

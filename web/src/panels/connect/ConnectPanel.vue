@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onActivated, onDeactivated, ref, toRef, watch } from "vue";
 import Button from "primevue/button";
-import { useAgentState } from "../../composables/useAgentState";
-import AppIcon from "../../components/AppIcon.vue";
-import AppAlert from "../../components/AppAlert.vue";
-import type { ConnectionSummary } from "../../types/projection";
+import { useAgentState } from "@/composables/useAgentState";
+import AppIcon from "@/components/AppIcon.vue";
+import AppAlert from "@/components/AppAlert.vue";
+import type { ConnectionSummary } from "@/types/projection";
 
 const props = defineProps<{
   connectionId: string;

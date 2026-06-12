@@ -5,15 +5,15 @@ import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon } from "@xterm/addon-search";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
-import { useStream } from "../../composables/useStream";
-import { useTheme } from "../../composables/useTheme";
-import AppIcon from "../../components/AppIcon.vue";
-import RecordingControls from "../../components/recordings/RecordingControls.vue";
+import { useStream } from "@/composables/useStream";
+import { useTheme } from "@/composables/useTheme";
+import AppIcon from "@/components/AppIcon.vue";
+import RecordingControls from "@/components/recordings/RecordingControls.vue";
 import type { PanelProps } from "../core/types";
-import type { TerminalPanelConfig } from "../../types/projection";
-import PanelLoader from "../../components/PanelLoader.vue";
+import type { TerminalPanelConfig } from "@/types/projection";
+import PanelLoader from "@/components/PanelLoader.vue";
 import StreamStatusBar from "./StreamStatusBar.vue";
-import type { ChannelStatus } from "../../stores/streamChannels";
+import type { ChannelStatus } from "@/stores/streamChannels";
 
 const props = withDefaults(
   defineProps<

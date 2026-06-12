@@ -1,5 +1,5 @@
 import { computed, inject, provide, type ComputedRef } from "vue";
-import type { PanelType } from "../../types/projection";
+import type { PanelType } from "@/types/projection";
 
 export interface PanelConfigProperty {
   type: "string" | "number" | "boolean" | "object" | "array";

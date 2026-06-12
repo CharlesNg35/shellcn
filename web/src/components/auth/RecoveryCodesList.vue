@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import Button from "primevue/button";
-import { useNotify } from "../../composables/useNotify";
+import { useNotify } from "@/composables/useNotify";
 import AppIcon from "../AppIcon.vue";
 
 const props = defineProps<{ codes: string[] }>();

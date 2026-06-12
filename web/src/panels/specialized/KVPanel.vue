@@ -7,14 +7,14 @@ import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import { useToast } from "primevue/usetoast";
-import { fetchDoc, fetchPage, runFormAction } from "../../api/dataSource";
-import type { KVPanelConfig, Page } from "../../types/projection";
+import { fetchDoc, fetchPage, runFormAction } from "@/api/dataSource";
+import type { KVPanelConfig, Page } from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import PanelError from "../shared/PanelError.vue";
-import SkeletonList from "../../components/SkeletonList.vue";
-import AppIcon from "../../components/AppIcon.vue";
-import { dialogRoot } from "../../primevue/preset";
+import SkeletonList from "@/components/SkeletonList.vue";
+import AppIcon from "@/components/AppIcon.vue";
+import { dialogRoot } from "@/primevue/preset";
 
 interface KVEntry {
   key: string;
@@ -263,10 +263,22 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           @click="createOpen = true"
         />
       </div>
-      <PanelError v-if="error" :message="error" retryable @retry="load" />
+      <PanelError
+        v-if="error && !entries.length"
+        :message="error"
+        retryable
+        @retry="load"
+      />
       <SkeletonList v-else-if="loading && !entries.length" :rows="8" />
+      <PanelError
+        v-else-if="error"
+        class="border-b border-surface-200 dark:border-surface-800"
+        :message="error"
+        retryable
+        @retry="load"
+      />
       <DataTable
-        v-else
+        v-if="entries.length || (!loading && !error)"
         :value="visibleEntries"
         data-key="key"
         scrollable

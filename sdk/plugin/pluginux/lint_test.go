@@ -200,3 +200,32 @@ func TestLintRejectsPartialWasmDimensions(t *testing.T) {
 		t.Fatalf("expected wasm dimension error")
 	}
 }
+
+func TestLintRejectsWasmFitWithoutDimensions(t *testing.T) {
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "x",
+		Title:      "X",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		Tabs: []plugin.Panel{{
+			Key:  "wasm",
+			Type: plugin.PanelWasm,
+			Config: plugin.WasmConfig{
+				Entry:     "app.wasm",
+				ScaleMode: plugin.WasmScaleFit,
+				Assets: []plugin.WasmAsset{{
+					Path:   "app.wasm",
+					Source: plugin.DataSource{RouteID: "x.asset"},
+				}},
+			},
+		}},
+	}
+	routes := []plugin.Route{{
+		ID: "x.asset", Method: plugin.MethodGet, Permission: "x.read",
+		Risk: plugin.RiskSafe, Handle: noop,
+	}}
+	if !hasError(pluginux.Lint(m, routes), "wasm scaleMode fit requires width and height") {
+		t.Fatalf("expected wasm fit dimension error")
+	}
+}

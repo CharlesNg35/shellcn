@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, h, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  h,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+} from "vue";
 import Button from "primevue/button";
 import Drawer from "primevue/drawer";
 import AppIcon from "./AppIcon.vue";
 import { drawerRoot } from "../primevue/preset";
 import { useAiChatStore } from "../stores/aiChat";
 import { useAiProvidersStore } from "../stores/aiProviders";
+import { registerConnectionCleanup } from "../stores/connectionCleanup";
 
 const props = defineProps<{
   connectionId: string;
@@ -17,6 +26,7 @@ const aiProviders = useAiProvidersStore();
 const aiChat = useAiChatStore();
 const open = ref(false);
 const opened = ref(false); // mount the panel only once the drawer is first opened
+let unregisterConnectionCleanup: (() => void) | undefined;
 const visible = computed(
   () => aiProviders.available && props.connected && props.aiMode !== "disabled",
 );
@@ -77,11 +87,21 @@ function toggle(): void {
 }
 
 onMounted(async () => {
+  unregisterConnectionCleanup = registerConnectionCleanup((connectionId) => {
+    if (connectionId !== props.connectionId) return;
+    open.value = false;
+    aiChat.stop(connectionId, { clearQueue: true });
+  });
   try {
     await aiProviders.load();
   } catch {
     return;
   }
+});
+
+onUnmounted(() => {
+  unregisterConnectionCleanup?.();
+  unregisterConnectionCleanup = undefined;
 });
 
 watch(visible, (next) => {

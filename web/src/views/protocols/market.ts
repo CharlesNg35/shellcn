@@ -1,4 +1,4 @@
-import type { MarketEntry } from "../../types/projection";
+import type { MarketEntry } from "@/types/projection";
 
 export function marketAction(entry: MarketEntry): string | null {
   if (!entry.compatible) return null;

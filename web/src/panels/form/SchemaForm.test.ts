@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
-import { installFetch } from "../../test/fetchMock";
+import { installFetch } from "@/test/fetchMock";
 import SchemaForm from "./SchemaForm.vue";
-import type { Schema } from "../../types/projection";
+import type { Schema } from "@/types/projection";
 
 const schema: Schema = {
   groups: [

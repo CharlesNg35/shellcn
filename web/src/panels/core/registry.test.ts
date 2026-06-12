@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { panelRegistry, resolvePanel } from "./registry";
-import { KNOWN_PANEL_TYPES } from "../../types/projection";
+import { KNOWN_PANEL_TYPES } from "@/types/projection";
 
 describe("panel registry", () => {
   it("maps every known panel type to a component", () => {

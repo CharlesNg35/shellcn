@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import AiActionConfirm from "./AiActionConfirm.vue";
-import type { PendingConfirm } from "../../stores/aiChat";
-import { RiskLevel } from "../../types/projection";
+import type { PendingConfirm } from "@/stores/aiChat";
+import { RiskLevel } from "@/types/projection";
 
 function pending(over: Partial<PendingConfirm> = {}): PendingConfirm {
   return {

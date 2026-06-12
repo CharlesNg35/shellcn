@@ -2,18 +2,18 @@
 import { computed, onUnmounted, ref, watch } from "vue";
 import Panel from "primevue/panel";
 import Button from "primevue/button";
-import { fetchDoc } from "../../api/dataSource";
+import { fetchDoc } from "@/api/dataSource";
 import type {
   ColumnType,
   ObjectDetailField,
   ObjectDetailPanelConfig,
   ObjectDetailSection,
   Row,
-} from "../../types/projection";
+} from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
-import SkeletonList from "../../components/SkeletonList.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import SkeletonList from "@/components/SkeletonList.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import { badgeClassFor } from "../shared/severity";
 
@@ -23,7 +23,8 @@ const cfg = computed(
   () => (props.config as ObjectDetailPanelConfig | undefined) ?? {},
 );
 const doc = ref<unknown>(null);
-const loading = ref(true);
+const loadedOnce = ref(false);
+const refreshing = ref(false);
 const error = ref<string | null>(null);
 const copiedKey = ref<string | null>(null);
 const mode = ref<"fields" | "raw">("fields");
@@ -56,23 +57,27 @@ const sections = computed<ObjectDetailSection[]>(() => {
 });
 
 const pretty = computed(() => JSON.stringify(doc.value ?? {}, null, 2));
+const showInitialLoader = computed(() => refreshing.value && !loadedOnce.value);
+const blockingError = computed(() => error.value && !loadedOnce.value);
 
 async function load(): Promise<void> {
   if (!props.source) {
     doc.value = props.resource ?? {};
-    loading.value = false;
+    loadedOnce.value = true;
     return;
   }
-  loading.value = true;
+  if (refreshing.value) return;
+  refreshing.value = true;
   error.value = null;
   try {
     doc.value = await fetchDoc(props.connectionId, props.source, {
       resource: props.resource,
     });
+    loadedOnce.value = true;
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
-    loading.value = false;
+    refreshing.value = false;
   }
 }
 
@@ -112,9 +117,17 @@ async function copy(field: ObjectDetailField): Promise<void> {
   }, 1500);
 }
 
-watch(() => [props.connectionId, props.resource?.uid], load, {
-  immediate: true,
-});
+watch(
+  () => [props.connectionId, props.resource?.uid],
+  () => {
+    doc.value = null;
+    loadedOnce.value = false;
+    void load();
+  },
+  {
+    immediate: true,
+  },
+);
 onUnmounted(clearCopiedTimer);
 </script>
 
@@ -126,13 +139,13 @@ onUnmounted(clearCopiedTimer);
       <Button
         type="button"
         severity="secondary"
-        :disabled="loading"
+        :disabled="refreshing"
         @click="load"
       >
         <AppIcon
           :icon="{ type: 'lucide', value: 'refresh-cw' }"
           :size="14"
-          :loading="loading"
+          :loading="refreshing"
         />
         Refresh
       </Button>
@@ -146,8 +159,13 @@ onUnmounted(clearCopiedTimer);
     </div>
 
     <div class="min-h-0 flex-1">
-      <SkeletonList v-if="loading" />
-      <PanelError v-else-if="error" :message="error" retryable @retry="load" />
+      <SkeletonList v-if="showInitialLoader" />
+      <PanelError
+        v-else-if="blockingError"
+        :message="error ?? ''"
+        retryable
+        @retry="load"
+      />
       <CodeTextEditor
         v-else-if="mode === 'raw'"
         :value="pretty"
@@ -156,6 +174,13 @@ onUnmounted(clearCopiedTimer);
         aria-label="Raw object detail JSON"
       />
       <div v-else class="h-full overflow-auto p-4">
+        <PanelError
+          v-if="error"
+          class="mb-4"
+          :message="error"
+          retryable
+          @retry="load"
+        />
         <div class="space-y-4">
           <Panel
             v-for="(section, index) in sections"

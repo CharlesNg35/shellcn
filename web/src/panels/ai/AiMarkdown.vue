@@ -53,54 +53,125 @@ const html = computed(() =>
   <div class="ai-markdown text-sm leading-relaxed" v-html="html" />
 </template>
 
-<style scoped>
+<!-- Global (not scoped): markdown HTML is injected via v-html, so scoped
+     `:deep()` rules combined with `:global(.dark)` don't reliably compile to a
+     working dark selector. Everything is namespaced under `.ai-markdown`, and
+     dark mode uses the same plain `.dark .ai-markdown …` pattern as style.css.
+     Surface tokens are one non-flipping scale (0 = light … 950 = dark). -->
+<style>
 .ai-markdown {
-  container-type: inline-size;
-  width: 100%;
   max-width: 100%;
   min-width: 0;
   overflow-wrap: break-word;
-  word-break: break-word;
+  color: var(--p-surface-800);
+}
+.dark .ai-markdown {
+  color: var(--p-surface-100);
+}
+.ai-markdown > :first-child {
+  margin-top: 0;
+}
+.ai-markdown > :last-child {
+  margin-bottom: 0;
+}
+.ai-markdown p {
+  margin: 0.35rem 0;
+}
+.ai-markdown a {
+  color: var(--p-primary-600);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+.dark .ai-markdown a {
+  color: var(--p-primary-400);
 }
 
-.ai-markdown :deep(pre) {
+/* Tailwind preflight strips heading sizes/margins; restore a compact scale so
+   markdown structure stays legible inside the bubble. */
+.ai-markdown h1,
+.ai-markdown h2,
+.ai-markdown h3,
+.ai-markdown h4,
+.ai-markdown h5,
+.ai-markdown h6 {
+  margin: 0.75rem 0 0.35rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.ai-markdown h1 {
+  font-size: 1.3em;
+}
+.ai-markdown h2 {
+  font-size: 1.2em;
+}
+.ai-markdown h3 {
+  font-size: 1.1em;
+}
+.ai-markdown h4,
+.ai-markdown h5,
+.ai-markdown h6 {
+  font-size: 1em;
+}
+.ai-markdown ul,
+.ai-markdown ol {
+  margin: 0.35rem 0;
+  padding-left: 1.25rem;
+  list-style: revert;
+}
+.ai-markdown blockquote {
+  margin: 0.5rem 0;
+  padding: 0.1rem 0.75rem;
+  border-left: 3px solid var(--p-surface-300);
+  color: var(--p-surface-500);
+}
+.dark .ai-markdown blockquote {
+  border-left-color: var(--p-surface-600);
+  color: var(--p-surface-400);
+}
+.ai-markdown hr {
+  margin: 0.75rem 0;
+  border: 0;
+  border-top: 1px solid var(--p-surface-200);
+}
+.dark .ai-markdown hr {
+  border-top-color: var(--p-surface-700);
+}
+
+.ai-markdown code {
+  font-size: 0.85em;
+  overflow-wrap: break-word;
+  white-space: break-spaces;
+}
+.ai-markdown :not(pre) > code {
+  border-radius: 0.25rem;
+  padding: 0.1em 0.35em;
+  background: var(--p-surface-100);
+}
+.dark .ai-markdown :not(pre) > code {
+  background: var(--p-surface-800);
+}
+.ai-markdown pre {
   max-width: 100%;
   overflow-x: auto;
   border-radius: 0.5rem;
   padding: 0.75rem;
   margin: 0.5rem 0;
-  background: var(--p-surface-100, #f1f5f9);
+  background: var(--p-surface-100);
 }
-.ai-markdown :deep(code) {
-  font-size: 0.85em;
-  overflow-wrap: break-word;
-  white-space: break-spaces;
-  word-break: break-word;
+.dark .ai-markdown pre {
+  background: var(--p-surface-800);
 }
-.ai-markdown :deep(pre code) {
+.ai-markdown pre code {
   overflow-wrap: normal;
   white-space: pre;
   word-break: normal;
+  padding: 0;
+  background: transparent;
 }
-:global(.dark) .ai-markdown :deep(pre) {
-  background: var(--p-surface-800, #1e293b);
-}
-.ai-markdown :deep(p) {
-  margin: 0.35rem 0;
-}
-.ai-markdown :deep(ul),
-.ai-markdown :deep(ol) {
-  margin: 0.35rem 0;
-  padding-left: 1.25rem;
-  list-style: revert;
-}
-.ai-markdown :deep(a) {
-  color: var(--p-primary-500, #6366f1);
-  text-decoration: underline;
-  overflow-wrap: break-word;
-  word-break: break-word;
-}
-.ai-markdown :deep(.ai-markdown-table) {
+
+/* Wrapper scrolls only when a wide table can't fit; no per-column sizing — works
+   for any shape. */
+.ai-markdown .ai-markdown-table {
   width: 100%;
   max-width: 100%;
   margin: 0.5rem 0;
@@ -109,95 +180,51 @@ const html = computed(() =>
   scrollbar-color: var(--shell-scrollbar-thumb) transparent;
   scrollbar-width: thin;
 }
-.ai-markdown :deep(.ai-markdown-table:hover) {
+.ai-markdown .ai-markdown-table:hover {
   scrollbar-color: var(--shell-scrollbar-thumb-hover) transparent;
 }
-.ai-markdown :deep(.ai-markdown-table::-webkit-scrollbar) {
+.ai-markdown .ai-markdown-table::-webkit-scrollbar {
   width: 0.5rem;
   height: 0.5rem;
 }
-.ai-markdown :deep(.ai-markdown-table::-webkit-scrollbar-track) {
+.ai-markdown .ai-markdown-table::-webkit-scrollbar-track {
   background: transparent;
 }
-.ai-markdown :deep(.ai-markdown-table::-webkit-scrollbar-thumb) {
+.ai-markdown .ai-markdown-table::-webkit-scrollbar-thumb {
   border-radius: 9999px;
   background-color: var(--shell-scrollbar-thumb);
 }
-.ai-markdown :deep(.ai-markdown-table:hover::-webkit-scrollbar-thumb) {
+.ai-markdown .ai-markdown-table:hover::-webkit-scrollbar-thumb {
   background-color: var(--shell-scrollbar-thumb-hover);
 }
-.ai-markdown :deep(table) {
+.ai-markdown table {
   border-collapse: collapse;
-  width: max(100%, 31.25rem);
-  table-layout: fixed;
+  width: 100%;
   font-size: 0.8125rem;
 }
-.ai-markdown :deep(th),
-.ai-markdown :deep(td) {
-  border: 1px solid var(--p-surface-300, #cbd5e1);
+/* overflow-wrap: break-word breaks an over-long token only when it can't fit,
+   and (unlike the deprecated word-break: break-word / overflow-wrap: anywhere)
+   keeps the column's min-content at the longest word — so identifier columns
+   stay wide enough to read, and the wrapper scrolls only when truly needed. */
+.ai-markdown th,
+.ai-markdown td {
+  border: 1px solid var(--p-surface-200);
   padding: 0.375rem 0.625rem;
   overflow-wrap: break-word;
   vertical-align: top;
-  word-break: break-word;
+  color: var(--p-surface-800);
 }
-.ai-markdown :deep(th:first-child),
-.ai-markdown :deep(td:first-child) {
-  width: 20%;
-  min-width: 7.5rem;
+.dark .ai-markdown th,
+.dark .ai-markdown td {
+  border-color: var(--p-surface-700);
+  color: var(--p-surface-100);
 }
-.ai-markdown :deep(th:nth-child(2)),
-.ai-markdown :deep(td:nth-child(2)) {
-  width: 35%;
-  min-width: 11.25rem;
-}
-.ai-markdown :deep(th:nth-child(3)),
-.ai-markdown :deep(td:nth-child(3)) {
-  width: 45%;
-  min-width: 12.5rem;
-}
-.ai-markdown :deep(th) {
-  background: var(--p-surface-50, #f8fafc);
+.ai-markdown th {
+  background: var(--p-surface-100);
   font-weight: 600;
   text-align: left;
 }
-:global(.dark) .ai-markdown :deep(th) {
-  background: var(--p-surface-800, #1e293b);
-}
-.ai-markdown :deep(td a) {
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: middle;
-}
-
-@container (max-width: 37.5rem) {
-  .ai-markdown :deep(table) {
-    width: max(100%, 28.125rem);
-    font-size: 0.75rem;
-  }
-
-  .ai-markdown :deep(th),
-  .ai-markdown :deep(td) {
-    padding: 0.25rem 0.375rem;
-  }
-
-  .ai-markdown :deep(th:first-child),
-  .ai-markdown :deep(td:first-child) {
-    width: 25%;
-    min-width: 6.25rem;
-  }
-
-  .ai-markdown :deep(th:nth-child(2)),
-  .ai-markdown :deep(td:nth-child(2)) {
-    width: 30%;
-    min-width: 8.75rem;
-  }
-
-  .ai-markdown :deep(th:nth-child(3)),
-  .ai-markdown :deep(td:nth-child(3)) {
-    width: 45%;
-    min-width: 11.25rem;
-  }
+.dark .ai-markdown th {
+  background: var(--p-surface-800);
 }
 </style>

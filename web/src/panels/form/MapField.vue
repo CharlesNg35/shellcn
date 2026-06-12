@@ -2,9 +2,9 @@
 import { ref, watch } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
-import type { Field, ResourceRef } from "../../types/projection";
+import type { Field, ResourceRef } from "@/types/projection";
 import FormField from "./FormField.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import { defaultForField } from "./defaults";
 
 const props = defineProps<{

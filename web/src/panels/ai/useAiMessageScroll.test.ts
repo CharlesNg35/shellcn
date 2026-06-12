@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { nextTick, ref, type Ref } from "vue";
 import { useAiMessageScroll } from "./useAiMessageScroll";
-import type { AiMessage } from "../../stores/aiChat";
+import type { AiMessage } from "@/stores/aiChat";
 
 const stick = vi.hoisted(() => ({
   scrollRef: { value: null },

@@ -1,6 +1,6 @@
 import { inject, provide, type InjectionKey } from "vue";
-import type { RecordingDescriptor } from "../../composables/useRecordingControl";
-import type { DataSource } from "../../types/projection";
+import type { RecordingDescriptor } from "@/composables/useRecordingControl";
+import type { DataSource } from "@/types/projection";
 
 export type PanelRecordingResolver = (
   source?: DataSource,

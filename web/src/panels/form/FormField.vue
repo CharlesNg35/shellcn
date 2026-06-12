@@ -20,9 +20,9 @@ import type {
   ResourceRef,
   Row,
   ValidatorType,
-} from "../../types/projection";
-import { fetchPage } from "../../api/dataSource";
-import AppIcon from "../../components/AppIcon.vue";
+} from "@/types/projection";
+import { fetchPage } from "@/api/dataSource";
+import AppIcon from "@/components/AppIcon.vue";
 import CredentialSelect from "./CredentialSelect.vue";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import ObjectField from "./ObjectField.vue";

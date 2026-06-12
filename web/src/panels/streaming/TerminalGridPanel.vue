@@ -2,17 +2,17 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import Tooltip from "primevue/tooltip";
-import AppIcon from "../../components/AppIcon.vue";
-import RecordingControls from "../../components/recordings/RecordingControls.vue";
+import AppIcon from "@/components/AppIcon.vue";
+import RecordingControls from "@/components/recordings/RecordingControls.vue";
 import PanelError from "../shared/PanelError.vue";
 import type { PanelProps } from "../core/types";
-import { channelKey } from "../../api/dataSource";
-import { useStreamChannelsStore } from "../../stores/streamChannels";
-import type { ChannelStatus } from "../../stores/streamChannels";
+import { channelKey } from "@/api/dataSource";
+import { useStreamChannelsStore } from "@/stores/streamChannels";
+import type { ChannelStatus } from "@/stores/streamChannels";
 import type {
   TerminalGridPanelConfig,
   TerminalPanelConfig,
-} from "../../types/projection";
+} from "@/types/projection";
 import TerminalGridNode, {
   type TerminalGridDirection,
   type TerminalGridLayoutNode,
@@ -269,7 +269,11 @@ watch(
 
 <template>
   <PanelError v-if="!source" message="No terminal stream route configured." />
-  <div v-else ref="root" class="flex h-full min-h-0 flex-col bg-surface-950">
+  <div
+    v-else
+    ref="root"
+    class="flex h-full min-h-0 flex-col bg-surface-0 dark:bg-surface-950"
+  >
     <div
       class="flex min-h-8 items-center gap-2 border-b border-surface-200 bg-surface-0 px-2 py-0.5 dark:border-surface-800 dark:bg-surface-950"
     >

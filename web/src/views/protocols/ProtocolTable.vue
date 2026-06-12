@@ -2,11 +2,11 @@
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Select from "primevue/select";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import type {
   ProtocolAdminItem,
   ProtocolAvailability,
-} from "../../types/projection";
+} from "@/types/projection";
 
 const props = defineProps<{
   protocols: ProtocolAdminItem[];

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import AutoComplete from "primevue/autocomplete";
 import FormField from "./FormField.vue";
-import type { Field } from "../../types/projection";
+import type { Field } from "@/types/projection";
 
 const typeField: Field = {
   key: "type",

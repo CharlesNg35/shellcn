@@ -2,16 +2,16 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
-import { fetchDoc, runAction } from "../../api/dataSource";
-import type { CodeEditorConfig } from "../../types/projection";
+import { fetchDoc, runAction } from "@/api/dataSource";
+import type { CodeEditorConfig } from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
-import SkeletonList from "../../components/SkeletonList.vue";
-import { useTheme } from "../../composables/useTheme";
-import type { CodeMirrorEditor } from "../../codemirror";
-import AppIcon from "../../components/AppIcon.vue";
+import SkeletonList from "@/components/SkeletonList.vue";
+import { useTheme } from "@/composables/useTheme";
+import type { CodeMirrorEditor } from "@/codemirror";
+import AppIcon from "@/components/AppIcon.vue";
 import CodeDiffView from "../shared/CodeDiffView.vue";
-import { dialogRoot } from "../../primevue/preset";
+import { dialogRoot } from "@/primevue/preset";
 
 const props = defineProps<PanelProps>();
 
@@ -26,7 +26,7 @@ const saved = ref(false);
 const originalText = ref("");
 const showDiff = ref(false);
 let editor: CodeMirrorEditor | null = null;
-let codeMirror: typeof import("../../codemirror") | null = null;
+let codeMirror: typeof import("@/codemirror") | null = null;
 const editorConfig = computed(
   () => props.config as CodeEditorConfig | undefined,
 );
@@ -89,7 +89,7 @@ async function mountEditor(): Promise<void> {
     return;
   }
   try {
-    const helpers = await import("../../codemirror");
+    const helpers = await import("@/codemirror");
     codeMirror = helpers;
     editor?.view.destroy();
     editor = helpers.createCodeMirrorEditor(container.value, {

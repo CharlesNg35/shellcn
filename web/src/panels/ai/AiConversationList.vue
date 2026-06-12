@@ -2,9 +2,9 @@
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import { nextTick, ref, type VNodeRef } from "vue";
-import AppIcon from "../../components/AppIcon.vue";
-import { useConfirmAction } from "../../composables/useConfirmAction";
-import type { AiConversation } from "../../api/ai";
+import AppIcon from "@/components/AppIcon.vue";
+import { useConfirmAction } from "@/composables/useConfirmAction";
+import type { AiConversation } from "@/api/ai";
 
 defineProps<{
   conversations: AiConversation[];

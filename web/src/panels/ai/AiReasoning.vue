@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import Button from "primevue/button";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 
 const props = defineProps<{ reasoning: string; lines?: number }>();
 const expanded = ref(false);

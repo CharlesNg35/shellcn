@@ -13,6 +13,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -537,6 +538,52 @@ type wsClientStream struct {
 
 func (s *wsClientStream) Context() context.Context { return s.ctx }
 
+type activeConn struct {
+	net.Conn
+	lastActive atomic.Int64
+	writes     atomic.Int64
+}
+
+func newActiveConn(conn net.Conn) *activeConn {
+	c := &activeConn{Conn: conn}
+	c.touch()
+	return c
+}
+
+func (c *activeConn) Read(p []byte) (int, error) {
+	n, err := c.Conn.Read(p)
+	if n > 0 {
+		c.touch()
+	}
+	return n, err
+}
+
+func (c *activeConn) Write(p []byte) (int, error) {
+	c.writes.Add(1)
+	c.touch()
+	defer c.writes.Add(-1)
+	n, err := c.Conn.Write(p)
+	if n > 0 {
+		c.touch()
+	}
+	return n, err
+}
+
+func (c *activeConn) LastActive() time.Time {
+	if c.writes.Load() > 0 {
+		return time.Now()
+	}
+	n := c.lastActive.Load()
+	if n == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, n)
+}
+
+func (c *activeConn) touch() {
+	c.lastActive.Store(time.Now().UnixNano())
+}
+
 func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolved) {
 	ctx, cancel := routeContext(r.Context(), res.route)
 	defer cancel()
@@ -598,21 +645,21 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	if s.streamHasContinuousClientReader(res) {
-		go func() {
-			if err := transport.KeepAliveWebSocket(streamCtx, c); err != nil {
-				cancel()
-				_ = c.CloseNow()
-			}
-		}()
-	}
 	// noVNC streams raw RFB bytes over the negotiated "binary" subprotocol;
 	// terminal/log/query streams stay on text frames.
 	msgType := websocket.MessageText
 	if c.Subprotocol() == "binary" {
 		msgType = websocket.MessageBinary
 	}
-	conn := websocket.NetConn(streamCtx, c, msgType)
+	conn := newActiveConn(websocket.NetConn(streamCtx, c, msgType))
+	if s.streamHasContinuousClientReader(res) {
+		go func() {
+			if err := transport.KeepAliveWebSocketWhenIdle(streamCtx, c, conn.LastActive); err != nil {
+				cancel()
+				_ = c.CloseNow()
+			}
+		}()
+	}
 	client := pending.Attach(&wsClientStream{Conn: conn, ctx: streamCtx})
 
 	rc := plugin.NewRequestContext(streamCtx, toPluginUser(res.user), handle, res.params, r.URL.Query(), nil).

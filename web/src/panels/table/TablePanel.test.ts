@@ -3,9 +3,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { defineComponent, h, KeepAlive } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
-import { installFetch } from "../../test/fetchMock";
+import { installFetch } from "@/test/fetchMock";
 import TablePanel from "./TablePanel.vue";
-import { RiskLevel, type Action, type Column } from "../../types/projection";
+import { RiskLevel, type Action, type Column } from "@/types/projection";
 
 const columns: Column[] = [
   { key: "name", label: "Name", sortable: true },
@@ -702,6 +702,46 @@ describe("TablePanel staged edits", () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(calls).toBe(2);
     expect(w.text()).toContain("alpha-refreshed");
+    w.unmount();
+  });
+
+  it("keeps existing rows visible when refresh fails", async () => {
+    let calls = 0;
+    installFetch(() => {
+      calls += 1;
+      if (calls === 1) {
+        return {
+          body: {
+            items: [row("a", "alpha")],
+            nextCursor: "",
+            total: 1,
+          },
+        };
+      }
+      return {
+        status: 500,
+        body: { error: "refresh failed" },
+      };
+    });
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "server_monitor.processes" },
+        config: { columns },
+      },
+    });
+    await flushPromises();
+    expect(w.text()).toContain("alpha");
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Refresh"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain("alpha");
+    expect(w.text()).toContain("refresh failed");
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(false);
     w.unmount();
   });
 

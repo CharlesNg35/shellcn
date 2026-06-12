@@ -4,15 +4,15 @@ import Dialog from "primevue/dialog";
 import Button from "primevue/button";
 import Menu from "primevue/menu";
 import { useToast } from "primevue/usetoast";
-import { fetchDoc, runFormAction } from "../../api/dataSource";
-import type { Action, ResourceRef, Row } from "../../types/projection";
-import { RiskLevel } from "../../types/projection";
-import AppIcon from "../../components/AppIcon.vue";
+import { fetchDoc, runFormAction } from "@/api/dataSource";
+import type { Action, ResourceRef, Row } from "@/types/projection";
+import { RiskLevel } from "@/types/projection";
+import AppIcon from "@/components/AppIcon.vue";
 import SchemaForm from "../form/SchemaForm.vue";
 import { isVisible } from "../form/condition";
-import { useDockStore, type DockItem } from "../../stores/dock";
-import { dialogRoot } from "../../primevue/preset";
-import { cn } from "../../utils/cn";
+import { useDockStore, type DockItem } from "@/stores/dock";
+import { dialogRoot } from "@/primevue/preset";
+import { cn } from "@/utils/cn";
 
 const dock = useDockStore();
 

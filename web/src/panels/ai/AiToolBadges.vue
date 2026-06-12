@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import Button from "primevue/button";
-import AppIcon from "../../components/AppIcon.vue";
-import type { AiToolCall } from "../../stores/aiChat";
+import AppIcon from "@/components/AppIcon.vue";
+import type { AiToolCall } from "@/stores/aiChat";
 
 const props = defineProps<{ calls: AiToolCall[] }>();
 const expanded = ref(false);

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Button from "primevue/button";
-import AppIcon from "../../components/AppIcon.vue";
-import { btnGhost } from "../../primevue/preset";
-import type { PendingConfirm } from "../../stores/aiChat";
+import AppIcon from "@/components/AppIcon.vue";
+import { btnGhost } from "@/primevue/preset";
+import type { PendingConfirm } from "@/stores/aiChat";
 
 const props = defineProps<{ pending: PendingConfirm }>();
 const emit = defineEmits<{ approve: []; reject: [] }>();

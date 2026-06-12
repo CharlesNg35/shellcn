@@ -2,20 +2,20 @@
 import { computed, nextTick, ref, watch } from "vue";
 import Button from "primevue/button";
 import { VueDraggable } from "vue-draggable-plus";
-import { KEEP_ALIVE_WORKBENCH_TABS_MAX } from "../../stores/sessionLimits";
-import { useWorkspaceStore, type OpenView } from "../../stores/workspace";
-import { useScopeStore } from "../../stores/scope";
+import { KEEP_ALIVE_WORKBENCH_TABS_MAX } from "@/stores/sessionLimits";
+import { useWorkspaceStore, type OpenView } from "@/stores/workspace";
+import { useScopeStore } from "@/stores/scope";
 import ResourceTree from "./ResourceTree.vue";
 import DetailView from "../detail/DetailView.vue";
 import PanelHost from "../core/PanelHost.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import type {
   Action,
   ResourceRef,
   ResourceType,
   Row,
   TreeGroup,
-} from "../../types/projection";
+} from "@/types/projection";
 
 function refSubtitle(ref: ResourceRef): string {
   const location = [ref.scope, ref.namespace].filter(Boolean).join(" / ");

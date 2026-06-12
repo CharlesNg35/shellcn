@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
-import SkeletonList from "../../components/SkeletonList.vue";
-import { useTheme } from "../../composables/useTheme";
-import type { CodeMirrorEditor } from "../../codemirror";
+import SkeletonList from "@/components/SkeletonList.vue";
+import { useTheme } from "@/composables/useTheme";
+import type { CodeMirrorEditor } from "@/codemirror";
 
 const props = withDefaults(
   defineProps<{
@@ -29,7 +29,7 @@ const loading = ref(true);
 const useFallback = ref(false);
 const { isDark } = useTheme();
 let editor: CodeMirrorEditor | null = null;
-let codeMirror: typeof import("../../codemirror") | null = null;
+let codeMirror: typeof import("@/codemirror") | null = null;
 
 async function mountEditor(): Promise<void> {
   await nextTick();
@@ -40,7 +40,7 @@ async function mountEditor(): Promise<void> {
   }
   loading.value = true;
   try {
-    const helpers = await import("../../codemirror");
+    const helpers = await import("@/codemirror");
     codeMirror = helpers;
     editor?.view.destroy();
     editor = helpers.createCodeMirrorEditor(container.value, {

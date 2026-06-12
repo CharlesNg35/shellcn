@@ -3,8 +3,8 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import TreeWorkspace from "./TreeWorkspace.vue";
-import { useWorkspaceStore } from "../../stores/workspace";
-import { useScopeStore } from "../../stores/scope";
+import { useWorkspaceStore } from "@/stores/workspace";
+import { useScopeStore } from "@/stores/scope";
 
 describe("TreeWorkspace", () => {
   let scrollIntoView: ReturnType<typeof vi.fn>;

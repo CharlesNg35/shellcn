@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { collectField } from "./collect";
-import type { Field } from "../../types/projection";
+import type { Field } from "@/types/projection";
 
 describe("collectField", () => {
   it("excludes a hidden nested sub-field", () => {
