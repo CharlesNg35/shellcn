@@ -7,6 +7,7 @@ import PrimeVue from "primevue/config";
 import Dialog from "primevue/dialog";
 import { installFetch } from "@/test/fetchMock";
 import { primeVuePassthrough } from "@/primevue/preset";
+import { cleanupConnection } from "@/stores/connectionCleanup";
 import { useStreamChannelsStore } from "@/stores/streamChannels";
 import { useStream } from "@/composables/useStream";
 
@@ -52,6 +53,9 @@ const mockCodeMirror = vi.hoisted(() => ({
   onChange: null as ((value: string) => void) | null,
   diffOptions: null as unknown,
 }));
+const mockNoVnc = vi.hoisted(() => ({
+  instances: [] as Array<{ disconnectCalls: number }>,
+}));
 vi.mock("../../codemirror", () => ({
   createCodeMirrorEditor: (
     _parent: HTMLElement,
@@ -73,12 +77,18 @@ vi.mock("../../codemirror", () => ({
 }));
 vi.mock("@novnc/novnc", () => ({
   default: class {
+    disconnectCalls = 0;
     scaleViewport = false;
     clipViewport = false;
     resizeSession = false;
     background = "";
+    constructor() {
+      mockNoVnc.instances.push(this);
+    }
     addEventListener() {}
-    disconnect() {}
+    disconnect() {
+      this.disconnectCalls += 1;
+    }
   },
 }));
 
@@ -250,6 +260,7 @@ beforeEach(() => {
       return { status: 201, body: { ticket: "t1" } };
     return { body: { content: "config: true", columns: [], rows: [] } };
   });
+  mockNoVnc.instances = [];
 });
 afterEach(() => {
   useStreamChannelsStore().closeForConnection("c1");
@@ -1731,11 +1742,29 @@ describe("streaming stub panels", () => {
   });
 
   it("shows a loader while the remote desktop engine is connecting", () => {
-    const w = mount(RemoteDesktopPanel, { props });
+    const w = mount(RemoteDesktopPanel, {
+      props,
+      global: { plugins: [pinia] },
+    });
     expect(w.find('[data-test="panel-loader"]').exists()).toBe(true);
     expect(w.text()).not.toContain(
       "Remote desktop session is waiting for a stream route.",
     );
+    w.unmount();
+  });
+
+  it("disconnects a remote desktop session when the connection is cleaned up", async () => {
+    const w = mount(RemoteDesktopPanel, {
+      props,
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+
+    const active = mockNoVnc.instances.at(-1);
+    expect(active).toBeTruthy();
+    cleanupConnection("c1");
+
+    expect(active?.disconnectCalls).toBe(1);
     w.unmount();
   });
 

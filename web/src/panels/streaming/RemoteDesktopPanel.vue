@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import Button from "primevue/button";
 import { prepareStream, resolveParams } from "@/api/dataSource";
+import { registerConnectionCleanup } from "@/stores/connectionCleanup";
 import {
   useDesktopRecorder,
   desktopRecordingSupported,
@@ -27,6 +28,7 @@ const container = ref<HTMLElement | null>(null);
 const resumeRecording = ref(false);
 let remoteSession: RemoteDesktopSession | null = null;
 let activeRun = 0;
+let unregisterConnectionCleanup: (() => void) | undefined;
 
 const remoteConfig = computed(
   () => props.config as Partial<RemoteDesktopPanelConfig> | undefined,
@@ -168,10 +170,15 @@ async function onReconnect(): Promise<void> {
 }
 
 onMounted(() => {
+  unregisterConnectionCleanup = registerConnectionCleanup((connectionId) => {
+    if (connectionId === props.connectionId) disconnectRemote();
+  });
   void connectRemote();
 });
 
 onUnmounted(() => {
+  unregisterConnectionCleanup?.();
+  unregisterConnectionCleanup = undefined;
   disconnectRemote();
   recorder.dispose();
   loaded.value = false;
