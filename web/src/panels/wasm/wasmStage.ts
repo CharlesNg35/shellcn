@@ -525,21 +525,24 @@ function buildSrcdoc(config: WasmPanelConfig, scripts: string[]): string {
   const scriptOpen = "<" + "script>";
   const scriptClose = "<" + "/" + "script>";
   const bodyOverflow = config.scaleMode === "scroll" ? "auto" : "hidden";
+  const { theme } = useTheme();
   const boot = scripts
     .map((script) => `${scriptOpen}${escapeScript(script)}${scriptClose}`)
     .join("\n");
   return `<!doctype html>
-<html>
+<html data-theme="${theme.value}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' blob:; worker-src blob:; connect-src blob:; style-src 'unsafe-inline'; img-src blob: data:; media-src blob: data:; font-src blob: data:;">
 <style>
-html,body{margin:0;width:100%;min-height:100%;height:100%;overflow:${bodyOverflow};background:#020617;color:#e2e8f0;font-family:Inter,system-ui,sans-serif}
-#shellcn-wasm-status{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:#94a3b8}
+:root{color-scheme:dark;--shellcn-bg:#020617;--shellcn-text:#e2e8f0;--shellcn-muted:#94a3b8}
+:root[data-theme=light]{color-scheme:light;--shellcn-bg:#f8fafc;--shellcn-text:#0f172a;--shellcn-muted:#64748b}
+html,body{margin:0;width:100%;min-height:100%;height:100%;overflow:${bodyOverflow};background:var(--shellcn-bg);color:var(--shellcn-text);font-family:Inter,system-ui,sans-serif}
+#shellcn-wasm-status{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--shellcn-muted);background:var(--shellcn-bg)}
 </style>
 </head>
-<body>
+<body data-theme="${theme.value}">
 <div id="shellcn-wasm-status">Loading...</div>
 ${scriptOpen}${escapeScript(bridgeScript(config))}${scriptClose}
 ${boot}
@@ -565,6 +568,23 @@ function bridgeScript(config: WasmPanelConfig): string {
   let hideStatusTimer = 0;
   function statusEl() {
     return document.getElementById("shellcn-wasm-status");
+  }
+  function applyShellTheme(next, colors = {}) {
+    const theme = next === "light" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+    document.body?.setAttribute("data-theme", theme);
+    const bg = theme === "light"
+      ? colors.surface0 || colors.surface50 || "#f8fafc"
+      : colors.surface950 || colors.surface900 || "#020617";
+    const text = theme === "light"
+      ? colors.surface950 || colors.surface900 || "#0f172a"
+      : colors.surface100 || colors.surface50 || "#e2e8f0";
+    const muted = theme === "light"
+      ? colors.surface500 || colors.surface600 || "#64748b"
+      : colors.surface400 || colors.surface300 || "#94a3b8";
+    document.documentElement.style.setProperty("--shellcn-bg", bg);
+    document.documentElement.style.setProperty("--shellcn-text", text);
+    document.documentElement.style.setProperty("--shellcn-muted", muted);
   }
   function hideStatusSoon() {
     if (!autoHideAfterAssets) return;
@@ -628,12 +648,14 @@ function bridgeScript(config: WasmPanelConfig): string {
       return handle;
     }
   };
+  applyShellTheme(window.shellcn.theme, window.shellcn.colors);
   window.addEventListener("message", (event) => {
     const msg = event.data;
     if (!msg || msg.source !== ${hostSource}) return;
     if (msg.type === "theme") {
       window.shellcn.theme = msg.theme;
       window.shellcn.colors = msg.colors || {};
+      applyShellTheme(window.shellcn.theme, window.shellcn.colors);
       for (const fn of themeListeners) fn(msg.theme, window.shellcn.colors);
       return;
     }

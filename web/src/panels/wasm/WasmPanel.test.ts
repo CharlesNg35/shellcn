@@ -58,6 +58,11 @@ describe("WasmPanel", () => {
     expect(iframe?.getAttribute("srcdoc")).toContain("theme:");
     expect(iframe?.getAttribute("srcdoc")).toContain("colors:");
     expect(iframe?.getAttribute("srcdoc")).toContain("onTheme(fn)");
+    expect(iframe?.getAttribute("srcdoc")).toContain("data-theme=");
+    expect(iframe?.getAttribute("srcdoc")).toContain(
+      "background:var(--shellcn-bg)",
+    );
+    expect(iframe?.getAttribute("srcdoc")).toContain("applyShellTheme");
     expect(iframe?.getAttribute("srcdoc")).toContain("reportError(error)");
     expect(iframe?.getAttribute("srcdoc")).toContain("hideStatus()");
     expect(iframe?.getAttribute("srcdoc")).toContain(
