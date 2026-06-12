@@ -1500,7 +1500,7 @@ onUnmounted(() => {
       @update:visible="(v) => !v && (actionOutput = null)"
     >
       <pre
-        class="max-h-[60vh] overflow-auto rounded-lg bg-surface-950 p-4 text-xs leading-relaxed text-surface-100"
+        class="max-h-[60vh] overflow-auto rounded-lg bg-surface-50 p-4 text-xs leading-relaxed text-surface-800 dark:bg-surface-950 dark:text-surface-100"
         >{{ actionOutput?.output || "(no output)" }}</pre
       >
       <p v-if="actionOutput?.truncated" class="mt-2 text-xs text-amber-500">
