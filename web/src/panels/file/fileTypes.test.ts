@@ -9,7 +9,7 @@ import {
   sortEntries,
   viewerFor,
 } from "./fileTypes";
-import type { FileEntry } from "../../types/projection";
+import type { FileEntry } from "@/types/projection";
 
 describe("file type mapping", () => {
   it("picks a viewer by extension", () => {

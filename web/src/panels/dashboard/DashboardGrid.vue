@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import PanelHost from "../core/PanelHost.vue";
-import type { Action, DashboardCell, Row } from "../../types/projection";
+import type { Action, DashboardCell, Row } from "@/types/projection";
 
 // Presentational, layout-only: a responsive grid of panel cards rendered at once.
 // Shared by the connection-level `dashboard` layout and the `dashboard` panel

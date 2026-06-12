@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
-import SkeletonList from "../../components/SkeletonList.vue";
-import { useTheme } from "../../composables/useTheme";
-import type { CodeMirrorDiffMode, CodeMirrorDiffView } from "../../codemirror";
+import SkeletonList from "@/components/SkeletonList.vue";
+import { useTheme } from "@/composables/useTheme";
+import type { CodeMirrorDiffMode, CodeMirrorDiffView } from "@/codemirror";
 
 const props = withDefaults(
   defineProps<{
@@ -38,7 +38,7 @@ async function mountDiff(): Promise<void> {
   }
   loading.value = true;
   try {
-    const helpers = await import("../../codemirror");
+    const helpers = await import("@/codemirror");
     diff?.destroy();
     host.value.replaceChildren();
     diff = helpers.createCodeMirrorDiffView(host.value, {

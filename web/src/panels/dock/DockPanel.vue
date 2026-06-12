@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount } from "vue";
 import Button from "primevue/button";
-import { useDockStore } from "../../stores/dock";
-import { KEEP_ALIVE_DOCK_PANELS_MAX } from "../../stores/sessionLimits";
+import { useDockStore } from "@/stores/dock";
+import { KEEP_ALIVE_DOCK_PANELS_MAX } from "@/stores/sessionLimits";
 import PanelHost from "../core/PanelHost.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 
 const props = defineProps<{ connectionId: string }>();
 const dock = useDockStore();

@@ -1,4 +1,4 @@
-import type { Condition, Field, Rule, Validator } from "../../types/projection";
+import type { Condition, Field, Rule, Validator } from "@/types/projection";
 
 type Values = Record<string, unknown>;
 

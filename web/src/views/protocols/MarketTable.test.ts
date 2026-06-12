@@ -2,7 +2,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import Button from "primevue/button";
 import MarketTable from "./MarketTable.vue";
-import type { MarketEntry } from "../../types/projection";
+import type { MarketEntry } from "@/types/projection";
 
 function entry(overrides: Partial<MarketEntry> = {}): MarketEntry {
   return {

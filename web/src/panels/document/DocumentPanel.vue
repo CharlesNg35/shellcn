@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
 import Button from "primevue/button";
-import { fetchDoc } from "../../api/dataSource";
+import { fetchDoc } from "@/api/dataSource";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
-import SkeletonList from "../../components/SkeletonList.vue";
+import SkeletonList from "@/components/SkeletonList.vue";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import JsonNode from "./JsonNode.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 
 const props = defineProps<PanelProps>();
 

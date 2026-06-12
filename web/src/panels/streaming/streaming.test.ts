@@ -5,10 +5,10 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
 import Dialog from "primevue/dialog";
-import { installFetch } from "../../test/fetchMock";
-import { primeVuePassthrough } from "../../primevue/preset";
-import { useStreamChannelsStore } from "../../stores/streamChannels";
-import { useStream } from "../../composables/useStream";
+import { installFetch } from "@/test/fetchMock";
+import { primeVuePassthrough } from "@/primevue/preset";
+import { useStreamChannelsStore } from "@/stores/streamChannels";
+import { useStream } from "@/composables/useStream";
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {

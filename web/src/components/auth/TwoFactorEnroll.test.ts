@@ -4,7 +4,7 @@ import { setActivePinia, createPinia } from "pinia";
 import InputText from "primevue/inputtext";
 import Checkbox from "primevue/checkbox";
 import Button from "primevue/button";
-import { installFetch } from "../../test/fetchMock";
+import { installFetch } from "@/test/fetchMock";
 import TwoFactorEnroll from "./TwoFactorEnroll.vue";
 
 const session = {

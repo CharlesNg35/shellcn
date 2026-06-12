@@ -3,10 +3,10 @@ import { onMounted, ref } from "vue";
 import InputText from "primevue/inputtext";
 import Checkbox from "primevue/checkbox";
 import Button from "primevue/button";
-import { ApiError } from "../../api/client";
-import { totpApi, type TotpSetup } from "../../api/twofactor";
-import { useAuthStore } from "../../stores/auth";
-import { btnPrimary } from "../../primevue/preset";
+import { ApiError } from "@/api/client";
+import { totpApi, type TotpSetup } from "@/api/twofactor";
+import { useAuthStore } from "@/stores/auth";
+import { btnPrimary } from "@/primevue/preset";
 import AppIcon from "../AppIcon.vue";
 import RecoveryCodesList from "./RecoveryCodesList.vue";
 

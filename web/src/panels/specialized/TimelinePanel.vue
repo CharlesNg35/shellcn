@@ -9,12 +9,12 @@ import {
 import { useDocumentVisibility, useIntervalFn } from "@vueuse/core";
 import Timeline from "primevue/timeline";
 import Button from "primevue/button";
-import { fetchPage } from "../../api/dataSource";
+import { fetchPage } from "@/api/dataSource";
 import type { PanelProps } from "../core/types";
-import type { Row, TimelinePanelConfig } from "../../types/projection";
+import type { Row, TimelinePanelConfig } from "@/types/projection";
 import PanelError from "../shared/PanelError.vue";
-import SkeletonList from "../../components/SkeletonList.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import SkeletonList from "@/components/SkeletonList.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import { badgeClassFor } from "../shared/severity";
 
 const props = defineProps<PanelProps>();

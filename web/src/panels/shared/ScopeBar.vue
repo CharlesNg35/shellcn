@@ -4,10 +4,10 @@ import Select from "primevue/select";
 import MultiSelect from "primevue/multiselect";
 import InputText from "primevue/inputtext";
 import ToggleSwitch from "primevue/toggleswitch";
-import { fetchPage } from "../../api/dataSource";
-import { SCOPE_SEPARATOR, useScopeStore } from "../../stores/scope";
-import type { FilterOption, Row, ScopeFilter } from "../../types/projection";
-import AppIcon from "../../components/AppIcon.vue";
+import { fetchPage } from "@/api/dataSource";
+import { SCOPE_SEPARATOR, useScopeStore } from "@/stores/scope";
+import type { FilterOption, Row, ScopeFilter } from "@/types/projection";
+import AppIcon from "@/components/AppIcon.vue";
 
 const props = defineProps<{
   connectionId: string;

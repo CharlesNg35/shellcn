@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Handle, Position } from "@vue-flow/core";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import type { GraphField } from "./graphLayout";
 
 defineProps<{

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import AiModelSwitcher from "./AiModelSwitcher.vue";
-import type { AiProviderSummary } from "../../api/ai";
+import type { AiProviderSummary } from "@/api/ai";
 
 function provider(over: Partial<AiProviderSummary> = {}): AiProviderSummary {
   return {

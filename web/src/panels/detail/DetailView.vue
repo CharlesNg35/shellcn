@@ -3,14 +3,14 @@ import { computed, ref, watch } from "vue";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
-import { interpolate } from "../../api/dataSource";
-import { KEEP_ALIVE_DETAIL_PANELS_MAX } from "../../stores/sessionLimits";
+import { interpolate } from "@/api/dataSource";
+import { KEEP_ALIVE_DETAIL_PANELS_MAX } from "@/stores/sessionLimits";
 import type {
   Action,
   DetailView as DetailViewSpec,
   Row,
-} from "../../types/projection";
-import AppIcon from "../../components/AppIcon.vue";
+} from "@/types/projection";
+import AppIcon from "@/components/AppIcon.vue";
 import PanelHost from "../core/PanelHost.vue";
 import ActionBar from "../shared/ActionBar.vue";
 import { badgeClassFor } from "../shared/severity";

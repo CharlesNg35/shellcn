@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Button from "primevue/button";
-import type { Field, ResourceRef } from "../../types/projection";
+import type { Field, ResourceRef } from "@/types/projection";
 import FieldGroup from "./FieldGroup.vue";
 import FormField from "./FormField.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import { defaultForField } from "./defaults";
 
 const props = defineProps<{

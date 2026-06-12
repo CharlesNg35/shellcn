@@ -2,17 +2,17 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import Tooltip from "primevue/tooltip";
-import AppIcon from "../../components/AppIcon.vue";
-import RecordingControls from "../../components/recordings/RecordingControls.vue";
+import AppIcon from "@/components/AppIcon.vue";
+import RecordingControls from "@/components/recordings/RecordingControls.vue";
 import PanelError from "../shared/PanelError.vue";
 import type { PanelProps } from "../core/types";
-import { channelKey } from "../../api/dataSource";
-import { useStreamChannelsStore } from "../../stores/streamChannels";
-import type { ChannelStatus } from "../../stores/streamChannels";
+import { channelKey } from "@/api/dataSource";
+import { useStreamChannelsStore } from "@/stores/streamChannels";
+import type { ChannelStatus } from "@/stores/streamChannels";
 import type {
   TerminalGridPanelConfig,
   TerminalPanelConfig,
-} from "../../types/projection";
+} from "@/types/projection";
 import TerminalGridNode, {
   type TerminalGridDirection,
   type TerminalGridLayoutNode,

@@ -7,8 +7,8 @@ import AiConversationList from "./AiConversationList.vue";
 import AiActionConfirm from "./AiActionConfirm.vue";
 import AiModelSwitcher from "./AiModelSwitcher.vue";
 import AiQueuedMessages from "./AiQueuedMessages.vue";
-import AppIcon from "../../components/AppIcon.vue";
-import { useAiChatStore } from "../../stores/aiChat";
+import AppIcon from "@/components/AppIcon.vue";
+import { useAiChatStore } from "@/stores/aiChat";
 
 const props = defineProps<{ connectionId: string }>();
 const emit = defineEmits<{ close: [] }>();

@@ -2,7 +2,7 @@
 import { onMounted, reactive, ref, watch } from "vue";
 import Tree from "primevue/tree";
 import type { TreeNode as PVNode } from "primevue/treenode";
-import { fetchDoc, fetchPage } from "../../api/dataSource";
+import { fetchDoc, fetchPage } from "@/api/dataSource";
 import type {
   DataSource,
   Icon,
@@ -10,8 +10,8 @@ import type {
   Row,
   TreeGroup,
   TreeNode,
-} from "../../types/projection";
-import AppIcon from "../../components/AppIcon.vue";
+} from "@/types/projection";
+import AppIcon from "@/components/AppIcon.vue";
 
 interface NodeData {
   isGroup?: boolean;

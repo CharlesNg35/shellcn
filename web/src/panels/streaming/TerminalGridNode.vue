@@ -2,8 +2,8 @@
 import Splitter from "primevue/splitter";
 import type { SplitterResizeEndEvent } from "primevue/splitter";
 import SplitterPanel from "primevue/splitterpanel";
-import type { DataSource, ResourceRef } from "../../types/projection";
-import type { ChannelStatus } from "../../stores/streamChannels";
+import type { DataSource, ResourceRef } from "@/types/projection";
+import type { ChannelStatus } from "@/stores/streamChannels";
 import TerminalPanel from "./TerminalPanel.vue";
 
 export type TerminalGridDirection = "horizontal" | "vertical";

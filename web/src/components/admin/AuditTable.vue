@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
-import type { AuditEntry } from "../../types/projection";
+import type { AuditEntry } from "@/types/projection";
 
 withDefaults(
   defineProps<{

@@ -1,4 +1,4 @@
-import type { Severity } from "../../types/projection";
+import type { Severity } from "@/types/projection";
 
 // Severity token -> Tailwind badge classes, shared by every value-driven status
 // (tables, detail headers) so the color contract lives in one place.

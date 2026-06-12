@@ -1,4 +1,4 @@
-import type { RemoteDesktopPanelConfig } from "../../../types/projection";
+import type { RemoteDesktopPanelConfig } from "@/types/projection";
 
 export type RemoteDesktopStatus =
   | "connecting"

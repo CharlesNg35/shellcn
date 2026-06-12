@@ -8,10 +8,10 @@ import {
   ref,
   watch,
 } from "vue";
-import { useStream } from "../../composables/useStream";
-import { useTheme } from "../../composables/useTheme";
-import PanelLoader from "../../components/PanelLoader.vue";
-import type { CanvasPanelConfig } from "../../types/projection";
+import { useStream } from "@/composables/useStream";
+import { useTheme } from "@/composables/useTheme";
+import PanelLoader from "@/components/PanelLoader.vue";
+import type { CanvasPanelConfig } from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import { parseCanvasFrame } from "./canvas/parser";
 import {

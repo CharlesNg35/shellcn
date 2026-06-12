@@ -2,18 +2,18 @@
 import { computed, onUnmounted, ref, watch } from "vue";
 import Panel from "primevue/panel";
 import Button from "primevue/button";
-import { fetchDoc } from "../../api/dataSource";
+import { fetchDoc } from "@/api/dataSource";
 import type {
   ColumnType,
   ObjectDetailField,
   ObjectDetailPanelConfig,
   ObjectDetailSection,
   Row,
-} from "../../types/projection";
+} from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
-import SkeletonList from "../../components/SkeletonList.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import SkeletonList from "@/components/SkeletonList.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import { badgeClassFor } from "../shared/severity";
 

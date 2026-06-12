@@ -2,7 +2,7 @@
 import { ref } from "vue";
 import Button from "primevue/button";
 import Popover from "primevue/popover";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 
 withDefaults(
   defineProps<{

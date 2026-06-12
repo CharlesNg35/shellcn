@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { Field, ResourceRef } from "../../types/projection";
+import type { Field, ResourceRef } from "@/types/projection";
 import FormField from "./FormField.vue";
 import { isVisible } from "./condition";
 

@@ -7,7 +7,7 @@ import type {
   DashboardCell,
   DashboardPanelConfig,
   Row,
-} from "../../types/projection";
+} from "@/types/projection";
 
 // `dashboard` panel type: a multi-panel grid usable as a detail/connection tab.
 // Cells come from the manifest config; rendering is delegated to DashboardGrid.

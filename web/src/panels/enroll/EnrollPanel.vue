@@ -9,11 +9,11 @@ import {
   watch,
 } from "vue";
 import Button from "primevue/button";
-import { agentApi } from "../../api/agent";
-import type { Enrollment, InstallArtifact } from "../../types/projection";
+import { agentApi } from "@/api/agent";
+import type { Enrollment, InstallArtifact } from "@/types/projection";
 import type { PanelProps } from "../core/types";
-import { useAgentState } from "../../composables/useAgentState";
-import AppIcon from "../../components/AppIcon.vue";
+import { useAgentState } from "@/composables/useAgentState";
+import AppIcon from "@/components/AppIcon.vue";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{ online: [] }>();

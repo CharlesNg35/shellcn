@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Button from "primevue/button";
-import SkeletonList from "../../components/SkeletonList.vue";
-import type { FileContent } from "../../types/projection";
+import SkeletonList from "@/components/SkeletonList.vue";
+import type { FileContent } from "@/types/projection";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import PanelError from "../shared/PanelError.vue";
 import { formatBytes, languageFor, viewerFor } from "./fileTypes";

@@ -2,15 +2,15 @@
 import { computed, ref, watch } from "vue";
 import Select from "primevue/select";
 import Button from "primevue/button";
-import { credentialsApi } from "../../api/credentials";
-import CredentialFormDialog from "../../components/CredentialFormDialog.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import { credentialsApi } from "@/api/credentials";
+import CredentialFormDialog from "@/components/CredentialFormDialog.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import type {
   CredentialKindInfo,
   CredentialRefState,
   CredentialSelector,
   CredentialSummary,
-} from "../../types/projection";
+} from "@/types/projection";
 
 const props = defineProps<{
   selector: CredentialSelector;

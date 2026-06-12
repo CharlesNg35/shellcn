@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import type { ChartData, ChartOptions } from "chart.js";
-import { useTheme } from "../../../composables/useTheme";
+import { useTheme } from "@/composables/useTheme";
 import { seriesColor } from "./chartTheme";
 import { useChart } from "./useChart";
 

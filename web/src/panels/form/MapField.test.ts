@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import MapField from "./MapField.vue";
-import type { Field } from "../../types/projection";
+import type { Field } from "@/types/projection";
 
 const configField: Field = {
   key: "config",

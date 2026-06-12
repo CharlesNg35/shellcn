@@ -5,7 +5,7 @@ import type {
   DashboardCell,
   Row,
   Tab as TabDef,
-} from "../../types/projection";
+} from "@/types/projection";
 
 // Connection-level `dashboard` layout: renders the manifest's connection tabs as
 // a grid. A thin adapter over the shared DashboardGrid — a Tab is structurally a

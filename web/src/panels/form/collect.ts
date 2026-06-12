@@ -1,4 +1,4 @@
-import type { Field } from "../../types/projection";
+import type { Field } from "@/types/projection";
 import { isVisible, validateField } from "./condition";
 
 export interface Collected {

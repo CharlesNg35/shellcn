@@ -4,12 +4,12 @@ import Button from "primevue/button";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import InputText from "primevue/inputtext";
-import { fetchDoc } from "../../api/dataSource";
-import type { TracePanelConfig } from "../../types/projection";
+import { fetchDoc } from "@/api/dataSource";
+import type { TracePanelConfig } from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
-import SkeletonList from "../../components/SkeletonList.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import SkeletonList from "@/components/SkeletonList.vue";
+import AppIcon from "@/components/AppIcon.vue";
 
 interface TraceSpan {
   id: string;

@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
-import { useStream } from "../../composables/useStream";
+import { useStream } from "@/composables/useStream";
 import type { PanelProps } from "../core/types";
 import type {
   MetricGauge,
   MetricSeries,
   MetricStat,
   MetricsPanelConfig,
-} from "../../types/projection";
+} from "@/types/projection";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import StatCard from "./metrics/StatCard.vue";
 import GaugeChart from "./metrics/GaugeChart.vue";

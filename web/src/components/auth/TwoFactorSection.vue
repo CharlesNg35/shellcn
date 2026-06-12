@@ -2,10 +2,10 @@
 import { ref } from "vue";
 import Dialog from "primevue/dialog";
 import Button from "primevue/button";
-import { totpApi } from "../../api/twofactor";
-import { useAuthStore } from "../../stores/auth";
-import { useNotify } from "../../composables/useNotify";
-import { dialogRoot, btnPrimary } from "../../primevue/preset";
+import { totpApi } from "@/api/twofactor";
+import { useAuthStore } from "@/stores/auth";
+import { useNotify } from "@/composables/useNotify";
+import { dialogRoot, btnPrimary } from "@/primevue/preset";
 import AppIcon from "../AppIcon.vue";
 import TwoFactorEnroll from "./TwoFactorEnroll.vue";
 import TwoFactorCodeDialog from "./TwoFactorCodeDialog.vue";

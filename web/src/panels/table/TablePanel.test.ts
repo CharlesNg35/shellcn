@@ -3,9 +3,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { defineComponent, h, KeepAlive } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
-import { installFetch } from "../../test/fetchMock";
+import { installFetch } from "@/test/fetchMock";
 import TablePanel from "./TablePanel.vue";
-import { RiskLevel, type Action, type Column } from "../../types/projection";
+import { RiskLevel, type Action, type Column } from "@/types/projection";
 
 const columns: Column[] = [
   { key: "name", label: "Name", sortable: true },

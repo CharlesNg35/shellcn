@@ -8,7 +8,7 @@ import type {
   Row,
   SplitChildPanel,
   SplitPanelConfig,
-} from "../../types/projection";
+} from "@/types/projection";
 import PanelHost from "../core/PanelHost.vue";
 
 const props = defineProps<PanelProps>();

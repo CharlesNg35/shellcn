@@ -3,15 +3,15 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import Menu from "primevue/menu";
-import { fetchDoc, interpolate, runAction } from "../../api/dataSource";
+import { fetchDoc, interpolate, runAction } from "@/api/dataSource";
 import { exportMatrix, type ExportFormat } from "../shared/exportData";
-import type { QueryEditorConfig } from "../../types/projection";
-import { useStream } from "../../composables/useStream";
+import type { QueryEditorConfig } from "@/types/projection";
+import { useStream } from "@/composables/useStream";
 import type { PanelProps } from "../core/types";
-import SkeletonList from "../../components/SkeletonList.vue";
+import SkeletonList from "@/components/SkeletonList.vue";
 import StreamStatusBar from "./StreamStatusBar.vue";
-import { useTheme } from "../../composables/useTheme";
-import type { CodeMirrorCompletion, CodeMirrorEditor } from "../../codemirror";
+import { useTheme } from "@/composables/useTheme";
+import type { CodeMirrorCompletion, CodeMirrorEditor } from "@/codemirror";
 
 const props = defineProps<PanelProps>();
 const queryConfig = computed(
@@ -51,7 +51,7 @@ const pendingConfirmation = ref(false);
 const confirmationMessage = ref("");
 const completionItems = ref<CodeMirrorCompletion[]>([]);
 let editor: CodeMirrorEditor | null = null;
-let codeMirror: typeof import("../../codemirror") | null = null;
+let codeMirror: typeof import("@/codemirror") | null = null;
 const { isDark } = useTheme();
 const editorLanguage = computed(
   () => queryConfig.value?.language ?? "plaintext",
@@ -193,7 +193,7 @@ onMounted(async () => {
   }
   editorLoading.value = true;
   try {
-    const helpers = await import("../../codemirror");
+    const helpers = await import("@/codemirror");
     codeMirror = helpers;
     completionItems.value = await loadCompletions();
     editor = helpers.createCodeMirrorEditor(container.value, {

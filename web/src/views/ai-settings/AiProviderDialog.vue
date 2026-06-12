@@ -6,15 +6,15 @@ import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import Password from "primevue/password";
 import Select from "primevue/select";
-import { ApiError } from "../../api/client";
+import { ApiError } from "@/api/client";
 import {
   aiApi,
   type AiProviderInput,
   type AiProviderKind,
   type AiProviderSummary,
-} from "../../api/ai";
-import AppIcon from "../../components/AppIcon.vue";
-import { btnGhost, btnPrimary, dialogRoot } from "../../primevue/preset";
+} from "@/api/ai";
+import AppIcon from "@/components/AppIcon.vue";
+import { btnGhost, btnPrimary, dialogRoot } from "@/primevue/preset";
 import {
   defaultProviderName,
   requiresApiKey,

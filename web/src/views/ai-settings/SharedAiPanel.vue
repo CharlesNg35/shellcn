@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Tag from "primevue/tag";
-import type { AiGlobalStatus } from "../../api/ai";
-import AppIcon from "../../components/AppIcon.vue";
+import type { AiGlobalStatus } from "@/api/ai";
+import AppIcon from "@/components/AppIcon.vue";
 import { providerKindLabel } from "./providerKinds";
 
 defineProps<{ global: AiGlobalStatus | null }>();

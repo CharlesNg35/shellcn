@@ -7,14 +7,14 @@ import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Tag from "primevue/tag";
 import { useToast } from "primevue/usetoast";
-import { runFormAction } from "../../api/dataSource";
-import type { HTTPClientConfig } from "../../types/projection";
-import AppIcon from "../../components/AppIcon.vue";
-import SkeletonList from "../../components/SkeletonList.vue";
+import { runFormAction } from "@/api/dataSource";
+import type { HTTPClientConfig } from "@/types/projection";
+import AppIcon from "@/components/AppIcon.vue";
+import SkeletonList from "@/components/SkeletonList.vue";
 import type { PanelProps } from "../core/types";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import PanelError from "../shared/PanelError.vue";
-import { inputClass } from "../../primevue/preset";
+import { inputClass } from "@/primevue/preset";
 
 interface HeaderRow {
   key: string;

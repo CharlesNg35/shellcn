@@ -1,6 +1,6 @@
 import { computed, watch, type Ref } from "vue";
 import { useStickToBottom } from "vue-stick-to-bottom";
-import type { AiMessage } from "../../stores/aiChat";
+import type { AiMessage } from "@/stores/aiChat";
 
 export function useAiMessageScroll(
   messages: Ref<AiMessage[]>,

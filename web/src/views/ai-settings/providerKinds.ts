@@ -1,4 +1,4 @@
-import type { AiProviderKind } from "../../api/ai";
+import type { AiProviderKind } from "@/api/ai";
 
 const labels: Record<AiProviderKind, string> = {
   openrouter: "OpenRouter",

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import Button from "primevue/button";
-import { prepareStream, resolveParams } from "../../api/dataSource";
+import { prepareStream, resolveParams } from "@/api/dataSource";
 import {
   useDesktopRecorder,
   desktopRecordingSupported,
-} from "../../composables/useDesktopRecorder";
-import AppIcon from "../../components/AppIcon.vue";
-import PanelLoader from "../../components/PanelLoader.vue";
-import type { RemoteDesktopPanelConfig } from "../../types/projection";
+} from "@/composables/useDesktopRecorder";
+import AppIcon from "@/components/AppIcon.vue";
+import PanelLoader from "@/components/PanelLoader.vue";
+import type { RemoteDesktopPanelConfig } from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import {
   connectRemoteDesktop,

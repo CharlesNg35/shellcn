@@ -3,8 +3,8 @@ import { ref } from "vue";
 import Button from "primevue/button";
 import Popover from "primevue/popover";
 import Tag from "primevue/tag";
-import AppIcon from "../../components/AppIcon.vue";
-import type { MarketEntry } from "../../types/projection";
+import AppIcon from "@/components/AppIcon.vue";
+import type { MarketEntry } from "@/types/projection";
 import { marketAction, marketStatus, marketVersionLabel } from "./market";
 import MarketPluginDetails from "./MarketPluginDetails.vue";
 

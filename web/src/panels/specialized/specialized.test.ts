@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import Button from "primevue/button";
 import ToastService from "primevue/toastservice";
-import { installFetch } from "../../test/fetchMock";
+import { installFetch } from "@/test/fetchMock";
 import { toPng } from "html-to-image";
 import GraphPanel from "./GraphPanel.vue";
 import TracePanel from "./TracePanel.vue";

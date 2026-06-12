@@ -6,7 +6,7 @@ import type {
   Field,
   ResourceRef,
   Schema,
-} from "../../types/projection";
+} from "@/types/projection";
 import FormField from "./FormField.vue";
 import { isVisible } from "./condition";
 import { collectField } from "./collect";

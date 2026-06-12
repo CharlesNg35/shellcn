@@ -1,4 +1,4 @@
-import type { Field, Schema } from "../../types/projection";
+import type { Field, Schema } from "@/types/projection";
 
 // defaultForField seeds an initial value, recursing object sub-fields and the
 // minItems rows of an array so a composite field renders ready to edit.

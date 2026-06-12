@@ -7,14 +7,14 @@ import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import { useToast } from "primevue/usetoast";
-import { fetchDoc, fetchPage, runFormAction } from "../../api/dataSource";
-import type { KVPanelConfig, Page } from "../../types/projection";
+import { fetchDoc, fetchPage, runFormAction } from "@/api/dataSource";
+import type { KVPanelConfig, Page } from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import PanelError from "../shared/PanelError.vue";
-import SkeletonList from "../../components/SkeletonList.vue";
-import AppIcon from "../../components/AppIcon.vue";
-import { dialogRoot } from "../../primevue/preset";
+import SkeletonList from "@/components/SkeletonList.vue";
+import AppIcon from "@/components/AppIcon.vue";
+import { dialogRoot } from "@/primevue/preset";
 
 interface KVEntry {
   key: string;

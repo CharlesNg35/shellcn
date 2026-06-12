@@ -2,7 +2,7 @@
 import { ref } from "vue";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
-import { btnPrimaryBlock } from "../../primevue/preset";
+import { btnPrimaryBlock } from "@/primevue/preset";
 import AuthAlert from "./AuthAlert.vue";
 
 defineProps<{ busy: boolean; error: string | null }>();

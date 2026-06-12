@@ -12,17 +12,17 @@ import {
   routeURL,
   runAction,
   uploadFiles,
-} from "../../api/dataSource";
-import type { UploadProgress } from "../../api/dataSource";
-import { apiFetch } from "../../api/client";
+} from "@/api/dataSource";
+import type { UploadProgress } from "@/api/dataSource";
+import { apiFetch } from "@/api/client";
 import type {
   FileBrowserConfig,
   FileContent,
   FileEntry,
   Page,
-} from "../../types/projection";
+} from "@/types/projection";
 import type { PanelProps } from "../core/types";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import FileCrumbs from "./FileCrumbs.vue";
 import FileEntryGrid from "./FileEntryGrid.vue";
 import FileEntryList from "./FileEntryList.vue";
@@ -36,7 +36,7 @@ import {
   viewerFor,
   type FileSortKey,
 } from "./fileTypes";
-import { dialogRoot } from "../../primevue/preset";
+import { dialogRoot } from "@/primevue/preset";
 
 const props = defineProps<PanelProps>();
 const toast = useToast();

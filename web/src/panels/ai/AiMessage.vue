@@ -3,10 +3,10 @@ import { ref } from "vue";
 import AiMarkdown from "./AiMarkdown.vue";
 import AiToolBadges from "./AiToolBadges.vue";
 import AiReasoning from "./AiReasoning.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import Button from "primevue/button";
 import Message from "primevue/message";
-import type { AiMessage } from "../../stores/aiChat";
+import type { AiMessage } from "@/stores/aiChat";
 
 const props = defineProps<{ message: AiMessage; streaming: boolean }>();
 const isUser = () => props.message.role === "user";

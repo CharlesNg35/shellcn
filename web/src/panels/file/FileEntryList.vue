@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import Checkbox from "primevue/checkbox";
-import AppIcon from "../../components/AppIcon.vue";
-import SkeletonList from "../../components/SkeletonList.vue";
+import AppIcon from "@/components/AppIcon.vue";
+import SkeletonList from "@/components/SkeletonList.vue";
 import PanelError from "../shared/PanelError.vue";
-import type { FileEntry } from "../../types/projection";
+import type { FileEntry } from "@/types/projection";
 import { formatBytes, formatDate, iconFor } from "./fileTypes";
 
 withDefaults(

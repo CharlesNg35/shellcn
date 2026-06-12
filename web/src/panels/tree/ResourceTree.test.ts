@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import ResourceTree from "./ResourceTree.vue";
-import { installFetch } from "../../test/fetchMock";
-import type { TreeGroup } from "../../types/projection";
+import { installFetch } from "@/test/fetchMock";
+import type { TreeGroup } from "@/types/projection";
 
 const groups: TreeGroup[] = [
   {

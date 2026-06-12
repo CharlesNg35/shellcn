@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import AiMessage from "./AiMessage.vue";
-import type { AiMessage as ChatMessage } from "../../stores/aiChat";
+import type { AiMessage as ChatMessage } from "@/stores/aiChat";
 
 function message(content: string): ChatMessage {
   return {

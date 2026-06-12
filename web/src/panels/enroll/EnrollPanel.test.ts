@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { defineComponent, ref } from "vue";
-import { installFetch } from "../../test/fetchMock";
+import { installFetch } from "@/test/fetchMock";
 import EnrollPanel from "./EnrollPanel.vue";
 
 let stateCalls = 0;

@@ -2,8 +2,8 @@
 import { computed, ref } from "vue";
 import Textarea from "primevue/textarea";
 import Button from "primevue/button";
-import AppIcon from "../../components/AppIcon.vue";
-import type { AiRunState } from "../../stores/aiChat";
+import AppIcon from "@/components/AppIcon.vue";
+import type { AiRunState } from "@/stores/aiChat";
 
 const props = defineProps<{
   runState: AiRunState;

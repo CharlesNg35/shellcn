@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import Dialog from "primevue/dialog";
-import { installFetch } from "../../test/fetchMock";
-import { useDockStore } from "../../stores/dock";
+import { installFetch } from "@/test/fetchMock";
+import { useDockStore } from "@/stores/dock";
 import ActionBar from "./ActionBar.vue";
-import { RiskLevel, type Action } from "../../types/projection";
+import { RiskLevel, type Action } from "@/types/projection";
 
 const stop: Action = {
   id: "stop",

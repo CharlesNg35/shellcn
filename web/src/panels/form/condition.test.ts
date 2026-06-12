@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isVisible, validateField } from "./condition";
-import type { Field } from "../../types/projection";
+import type { Field } from "@/types/projection";
 
 describe("form condition evaluation", () => {
   it("shows/hides via allOf and anyOf", () => {

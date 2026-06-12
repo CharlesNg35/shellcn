@@ -23,11 +23,7 @@ import Select from "primevue/select";
 import Menu from "primevue/menu";
 import { useToast } from "primevue/usetoast";
 import { exportRecords, type ExportFormat } from "../shared/exportData";
-import {
-  fetchPage,
-  runAction,
-  watch as watchResource,
-} from "../../api/dataSource";
+import { fetchPage, runAction, watch as watchResource } from "@/api/dataSource";
 import type {
   Action,
   Column as ColumnSpec,
@@ -39,11 +35,11 @@ import type {
   ResourceRef,
   Row,
   TablePanelConfig,
-} from "../../types/projection";
+} from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import { formatBytes } from "../file/fileTypes";
-import { dialogRoot, inputClass } from "../../primevue/preset";
-import { cn } from "../../utils/cn";
+import { dialogRoot, inputClass } from "@/primevue/preset";
+import { cn } from "@/utils/cn";
 import {
   deleteMutation,
   insertMutation,
@@ -52,13 +48,13 @@ import {
 } from "./mutation";
 import RowDetailDialog, { type DetailItem } from "./RowDetailDialog.vue";
 import { useNavigableKinds } from "../core/navigable";
-import { useWorkspaceStore } from "../../stores/workspace";
-import SkeletonList from "../../components/SkeletonList.vue";
+import { useWorkspaceStore } from "@/stores/workspace";
+import SkeletonList from "@/components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
 import { badgeClassFor } from "../shared/severity";
 import PanelError from "../shared/PanelError.vue";
 import FormField from "../form/FormField.vue";
-import AppIcon from "../../components/AppIcon.vue";
+import AppIcon from "@/components/AppIcon.vue";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{
