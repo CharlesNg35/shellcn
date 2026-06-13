@@ -176,6 +176,36 @@ func TestPodDetailHasMetricsLogsAndShell(t *testing.T) {
 	}
 }
 
+func TestWorkloadDetailsExposePodsAndLogs(t *testing.T) {
+	for _, name := range []string{"deployment", "statefulset", "daemonset", "replicaset", "job", "replicationcontroller"} {
+		k, ok := kindByName(name)
+		if !ok {
+			t.Fatalf("kind %q missing", name)
+		}
+		res := resourceType(k)
+		var keys []string
+		for _, tab := range res.Detail.Tabs {
+			keys = append(keys, tab.Key)
+		}
+		if !hasTab(res.Detail.Tabs, "pods", plugin.PanelTable, "kubernetes.workload.pods") {
+			t.Fatalf("%s tabs = %v, missing workload pod table", name, keys)
+		}
+		if !hasTab(res.Detail.Tabs, "logs", plugin.PanelLogStream, "kubernetes.workload.logs") {
+			t.Fatalf("%s tabs = %v, missing workload logs stream", name, keys)
+		}
+	}
+}
+
+func TestCronJobsDoNotExposeDirectWorkloadLogs(t *testing.T) {
+	k, ok := kindByName("cronjob")
+	if !ok {
+		t.Fatal("cronjob kind missing")
+	}
+	if hasTab(resourceType(k).Detail.Tabs, "logs", plugin.PanelLogStream, "kubernetes.workload.logs") {
+		t.Fatal("cronjob should not expose direct workload logs; users inspect the Jobs/Pods created by a run")
+	}
+}
+
 func TestPodOpenRequiresRunningPodWithPorts(t *testing.T) {
 	for _, a := range actions() {
 		if a.ID != "kubernetes.pod.open" {
@@ -275,6 +305,15 @@ func hasAction(actions []string, id string) bool {
 func hasColumn(columns []plugin.Column, key string) bool {
 	for _, got := range columns {
 		if got.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
+func hasTab(tabs []plugin.Panel, key string, typ plugin.PanelType, routeID string) bool {
+	for _, tab := range tabs {
+		if tab.Key == key && tab.Type == typ && tab.Source != nil && tab.Source.RouteID == routeID {
 			return true
 		}
 	}

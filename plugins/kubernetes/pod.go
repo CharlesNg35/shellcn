@@ -51,6 +51,7 @@ func podDetailTabs() []plugin.Panel {
 func streams() []plugin.Stream {
 	return []plugin.Stream{
 		{ID: "kubernetes.pod.logs", Kind: plugin.StreamLogs, RouteID: "kubernetes.pod.logs"},
+		{ID: "kubernetes.workload.logs", Kind: plugin.StreamLogs, RouteID: "kubernetes.workload.logs"},
 		{ID: "kubernetes.pod.exec", Kind: plugin.StreamTerminal, RouteID: "kubernetes.pod.exec"},
 		{ID: "kubernetes.cluster.shell", Kind: plugin.StreamTerminal, RouteID: "kubernetes.cluster.shell"},
 		{ID: "kubernetes.cluster.metrics", Kind: plugin.StreamMetrics, RouteID: "kubernetes.cluster.metrics"},
