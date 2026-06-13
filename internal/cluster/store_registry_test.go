@@ -64,3 +64,46 @@ func TestStoreOwnerRegistryRenewAndRelease(t *testing.T) {
 		t.Fatalf("released owner should be gone: ok=%v err=%v", ok, err)
 	}
 }
+
+func TestStoreOwnerRegistryStoresAndPromotesInternalURLs(t *testing.T) {
+	st := store.NewMemory()
+	reg := NewStoreOwnerRegistry(st.ClusterOwners)
+	lease, err := reg.Claim(context.Background(), "session:c:u", NewInstanceRef("a", "http://a1", "http://a2"), ClaimOptions{TTL: time.Minute})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+
+	owner, ok, err := reg.Get(context.Background(), "session:c:u")
+	if err != nil || !ok {
+		t.Fatalf("get owner: ok=%v err=%v", ok, err)
+	}
+	if got := owner.InternalURLCandidates(); len(got) != 2 || got[0] != "http://a1" || got[1] != "http://a2" {
+		t.Fatalf("candidates = %#v", got)
+	}
+	if err := reg.PreferInternalURL(context.Background(), owner, "http://a2"); err != nil {
+		t.Fatalf("prefer url: %v", err)
+	}
+	owner, ok, err = reg.Get(context.Background(), "session:c:u")
+	if err != nil || !ok {
+		t.Fatalf("get owner after prefer: ok=%v err=%v", ok, err)
+	}
+	if owner.Instance.PreferredInternalURL() != "http://a2" {
+		t.Fatalf("preferred URL = %q", owner.Instance.PreferredInternalURL())
+	}
+
+	stale := owner
+	stale.LeaseID = "old-lease"
+	if err := reg.PreferInternalURL(context.Background(), stale, "http://stale"); err != nil {
+		t.Fatalf("stale prefer url: %v", err)
+	}
+	owner, ok, err = reg.Get(context.Background(), "session:c:u")
+	if err != nil || !ok {
+		t.Fatalf("get owner after stale prefer: ok=%v err=%v", ok, err)
+	}
+	if owner.Instance.PreferredInternalURL() != "http://a2" {
+		t.Fatalf("stale prefer changed URL to %q", owner.Instance.PreferredInternalURL())
+	}
+	if err := lease.Release(context.Background()); err != nil {
+		t.Fatalf("release: %v", err)
+	}
+}

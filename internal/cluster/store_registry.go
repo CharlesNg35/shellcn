@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -34,11 +35,12 @@ func (r *StoreOwnerRegistry) Claim(ctx context.Context, key string, instance Ins
 	opts = opts.withDefaults()
 	now := r.now().UTC()
 	owner := &models.ClusterOwner{
-		Key:         key,
-		InstanceID:  instance.ID,
-		InternalURL: instance.InternalURL,
-		LeaseID:     randomLeaseID(),
-		ExpiresAt:   now.Add(opts.TTL),
+		Key:          key,
+		InstanceID:   instance.ID,
+		InternalURL:  instance.PreferredInternalURL(),
+		InternalURLs: encodeInternalURLCandidates(instance.InternalURLCandidates()),
+		LeaseID:      randomLeaseID(),
+		ExpiresAt:    now.Add(opts.TTL),
 	}
 	claimed, err := r.store.Claim(ctx, owner, opts.Mode == ClaimReplace, now)
 	if errors.Is(err, models.ErrConflict) {
@@ -60,6 +62,17 @@ func (r *StoreOwnerRegistry) Get(ctx context.Context, key string) (OwnerRef, boo
 		return OwnerRef{}, false, err
 	}
 	return ownerRefFromModel(owner), true, nil
+}
+
+func (r *StoreOwnerRegistry) PreferInternalURL(ctx context.Context, owner OwnerRef, internalURL string) error {
+	if r.store == nil {
+		return fmt.Errorf("cluster: owner store is required")
+	}
+	if owner.Key == "" || owner.LeaseID == "" || internalURL == "" {
+		return nil
+	}
+	_, err := r.store.PreferInternalURL(ctx, owner.Key, owner.LeaseID, internalURL, r.now().UTC())
+	return err
 }
 
 type storeLease struct {
@@ -92,10 +105,7 @@ func (l *storeLease) Release(ctx context.Context) error {
 
 func ownerRefFromModel(owner models.ClusterOwner) OwnerRef {
 	return OwnerRef{
-		Instance: InstanceRef{
-			ID:          owner.InstanceID,
-			InternalURL: owner.InternalURL,
-		},
+		Instance:  newInstanceRefWithPreferred(owner.InstanceID, owner.InternalURL, decodeInternalURLCandidates(owner.InternalURLs)),
 		Key:       owner.Key,
 		LeaseID:   owner.LeaseID,
 		ExpiresAt: owner.ExpiresAt,
@@ -108,4 +118,24 @@ func randomLeaseID() string {
 		panic("cluster: crypto/rand failed: " + err.Error())
 	}
 	return base64.RawURLEncoding.EncodeToString(b[:])
+}
+
+func encodeInternalURLCandidates(urls []string) string {
+	urls = uniqueNonEmpty(urls)
+	if len(urls) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(urls)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func decodeInternalURLCandidates(raw string) []string {
+	var urls []string
+	if err := json.Unmarshal([]byte(raw), &urls); err != nil {
+		return nil
+	}
+	return uniqueNonEmpty(urls)
 }

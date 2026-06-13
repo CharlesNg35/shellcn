@@ -28,16 +28,41 @@ const (
 
 type InstanceRef struct {
 	ID          string
-	InternalURL string
+	internalURL string
+	candidates  []string
 	StartedAt   time.Time
 }
 
-func NewInstanceRef(id, internalURL string) InstanceRef {
+func NewInstanceRef(id string, internalURLs ...string) InstanceRef {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		id = defaultInstanceID()
+		panic("cluster: instance ID is required")
 	}
-	return InstanceRef{ID: id, InternalURL: strings.TrimSpace(internalURL), StartedAt: time.Now().UTC()}
+	return newInstanceRef(id, internalURLs...)
+}
+
+func NewLocalInstanceRef(internalURLs ...string) InstanceRef {
+	return newInstanceRef(defaultInstanceID(), internalURLs...)
+}
+
+func newInstanceRef(id string, internalURLs ...string) InstanceRef {
+	return newInstanceRefWithPreferred(id, "", internalURLs)
+}
+
+func newInstanceRefWithPreferred(id, preferred string, internalURLs []string) InstanceRef {
+	urls := uniqueNonEmpty(append([]string{preferred}, internalURLs...))
+	if len(urls) > 0 {
+		preferred = urls[0]
+	}
+	return InstanceRef{ID: id, internalURL: preferred, candidates: urls, StartedAt: time.Now().UTC()}
+}
+
+func (i InstanceRef) PreferredInternalURL() string {
+	return i.internalURL
+}
+
+func (i InstanceRef) InternalURLCandidates() []string {
+	return append([]string(nil), i.candidates...)
 }
 
 func defaultInstanceID() string {
@@ -57,6 +82,10 @@ type OwnerRef struct {
 
 func (o OwnerRef) IsLocal(instance InstanceRef) bool {
 	return o.Instance.ID != "" && o.Instance.ID == instance.ID
+}
+
+func (o OwnerRef) InternalURLCandidates() []string {
+	return o.Instance.InternalURLCandidates()
 }
 
 type ClaimOptions struct {
@@ -83,6 +112,7 @@ type Lease interface {
 type OwnerRegistry interface {
 	Claim(ctx context.Context, key string, instance InstanceRef, opts ClaimOptions) (Lease, error)
 	Get(ctx context.Context, key string) (OwnerRef, bool, error)
+	PreferInternalURL(ctx context.Context, owner OwnerRef, internalURL string) error
 }
 
 func AgentOwnerKey(connectionID string) string {
@@ -94,19 +124,28 @@ func SessionOwnerKey(connectionID, ownerScope string) string {
 }
 
 func DiscoverInternalURL(port string, tlsEnabled bool) string {
+	urls := DiscoverInternalURLs(port, tlsEnabled)
+	if len(urls) == 0 {
+		return ""
+	}
+	return urls[0]
+}
+
+func DiscoverInternalURLs(port string, tlsEnabled bool) []string {
 	port = normalizePort(port)
 	if port == "" {
-		return ""
+		return nil
 	}
 	scheme := "http"
 	if tlsEnabled {
 		scheme = "https"
 	}
-	host := discoverInstanceHost()
-	if host == "" {
-		return ""
+	hosts := discoverInstanceHosts()
+	urls := make([]string, 0, len(hosts))
+	for _, host := range hosts {
+		urls = append(urls, scheme+"://"+net.JoinHostPort(host, port))
 	}
-	return scheme + "://" + net.JoinHostPort(host, port)
+	return uniqueNonEmpty(urls)
 }
 
 func PortFromListenAddress(addr string) string {
@@ -133,7 +172,8 @@ func normalizePort(port string) string {
 	return port
 }
 
-func discoverInstanceHost() string {
+func discoverInstanceHosts() []string {
+	hosts := make([]string, 0, 8)
 	for _, key := range []string{
 		"SHELLCN_INSTANCE_IP",
 		"POD_IP",
@@ -143,43 +183,41 @@ func discoverInstanceHost() string {
 		"HOST_IP",
 	} {
 		if host := cleanDiscoveredHost(os.Getenv(key)); host != "" {
-			return host
+			hosts = append(hosts, host)
 		}
 	}
-	if host := discoverECSHost(); host != "" {
-		return host
-	}
-	if host := discoverInterfaceHost(); host != "" {
-		return host
-	}
+	hosts = append(hosts, discoverECSHosts()...)
+	hosts = append(hosts, discoverInterfaceHosts()...)
 	host, err := os.Hostname()
-	if err != nil || strings.TrimSpace(host) == "" {
-		return ""
-	}
-	addrs, err := net.LookupHost(strings.TrimSpace(host))
-	if err == nil {
-		for _, addr := range addrs {
-			if host := cleanDiscoveredHost(addr); host != "" {
-				return host
+	if err == nil && strings.TrimSpace(host) != "" {
+		addrs, err := net.LookupHost(strings.TrimSpace(host))
+		if err == nil {
+			for _, addr := range addrs {
+				if host := cleanDiscoveredHost(addr); host != "" {
+					hosts = append(hosts, host)
+				}
 			}
 		}
+		if host := cleanDiscoveredHost(host); host != "" {
+			hosts = append(hosts, host)
+		}
 	}
-	return cleanDiscoveredHost(host)
+	return uniqueNonEmpty(hosts)
 }
 
-func discoverECSHost() string {
+func discoverECSHosts() []string {
 	metadataURL := strings.TrimSpace(os.Getenv("ECS_CONTAINER_METADATA_URI_V4"))
 	if metadataURL == "" {
-		return ""
+		return nil
 	}
 	client := http.Client{Timeout: 500 * time.Millisecond}
 	resp, err := client.Get(metadataURL)
 	if err != nil {
-		return ""
+		return nil
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return ""
+		return nil
 	}
 	var meta struct {
 		Networks []struct {
@@ -188,29 +226,31 @@ func discoverECSHost() string {
 		} `json:"Networks"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&meta); err != nil {
-		return ""
+		return nil
 	}
+	var hosts []string
 	for _, network := range meta.Networks {
 		for _, addr := range network.IPv4Addresses {
 			if host := cleanDiscoveredHost(addr); host != "" {
-				return host
+				hosts = append(hosts, host)
 			}
 		}
 		for _, addr := range network.IPv6Addresses {
 			if host := cleanDiscoveredHost(addr); host != "" {
-				return host
+				hosts = append(hosts, host)
 			}
 		}
 	}
-	return ""
+	return uniqueNonEmpty(hosts)
 }
 
-func discoverInterfaceHost() string {
+func discoverInterfaceHosts() []string {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return ""
+		return nil
 	}
-	var fallback string
+	var privateHosts []string
+	var fallbackHosts []string
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
 			continue
@@ -229,14 +269,13 @@ func discoverInterfaceHost() string {
 				continue
 			}
 			if ip.To4() != nil && isPrivateIPv4(ip) {
-				return host
-			}
-			if fallback == "" {
-				fallback = host
+				privateHosts = append(privateHosts, host)
+			} else {
+				fallbackHosts = append(fallbackHosts, host)
 			}
 		}
 	}
-	return fallback
+	return uniqueNonEmpty(append(privateHosts, fallbackHosts...))
 }
 
 func hostFromAddr(addr net.Addr) (string, bool) {
@@ -277,4 +316,18 @@ func isPrivateIPv4(ip net.IP) bool {
 	return ip4[0] == 10 ||
 		(ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31) ||
 		(ip4[0] == 192 && ip4[1] == 168)
+}
+
+func uniqueNonEmpty(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
 }

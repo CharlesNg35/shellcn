@@ -833,6 +833,7 @@ func (s *gormClusterOwnerStore) Claim(ctx context.Context, owner *models.Cluster
 		}
 		cur.InstanceID = owner.InstanceID
 		cur.InternalURL = owner.InternalURL
+		cur.InternalURLs = owner.InternalURLs
 		cur.LeaseID = owner.LeaseID
 		cur.ExpiresAt = owner.ExpiresAt
 		cur.UpdatedAt = now
@@ -858,6 +859,16 @@ func (s *gormClusterOwnerStore) Renew(ctx context.Context, key, leaseID string, 
 	res := s.db.WithContext(ctx).Model(&models.ClusterOwner{}).
 		Where("owner_key = ? AND lease_id = ? AND expires_at > ?", key, leaseID, now).
 		Updates(map[string]any{"expires_at": expiresAt, "updated_at": now})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected == 1, nil
+}
+
+func (s *gormClusterOwnerStore) PreferInternalURL(ctx context.Context, key, leaseID, internalURL string, now time.Time) (bool, error) {
+	res := s.db.WithContext(ctx).Model(&models.ClusterOwner{}).
+		Where("owner_key = ? AND lease_id = ? AND expires_at > ?", key, leaseID, now).
+		Updates(map[string]any{"internal_url": internalURL, "updated_at": now})
 	if res.Error != nil {
 		return false, res.Error
 	}

@@ -54,6 +54,11 @@ func WithURLs(openRouter, modelsDev string) Option {
 	return func(r *Registry) { r.orURL, r.mdURL = openRouter, modelsDev }
 }
 
+// WithoutRegistryFetch disables remote registry lookups.
+func WithoutRegistryFetch() Option {
+	return func(r *Registry) { r.orURL, r.mdURL = "", "" }
+}
+
 // WithLogger sets the logger.
 func WithLogger(l *slog.Logger) Option { return func(r *Registry) { r.logger = l } }
 

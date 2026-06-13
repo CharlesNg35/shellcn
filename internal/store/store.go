@@ -241,6 +241,7 @@ type ClusterOwnerStore interface {
 	Claim(ctx context.Context, owner *models.ClusterOwner, replace bool, now time.Time) (models.ClusterOwner, error)
 	Get(ctx context.Context, key string, now time.Time) (models.ClusterOwner, error)
 	Renew(ctx context.Context, key, leaseID string, expiresAt, now time.Time) (bool, error)
+	PreferInternalURL(ctx context.Context, key, leaseID, internalURL string, now time.Time) (bool, error)
 	Release(ctx context.Context, key, leaseID string) error
 }
 

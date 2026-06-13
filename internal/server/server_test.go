@@ -310,7 +310,7 @@ func newHarness(t *testing.T, opts ...func(*server.Deps)) *harness {
 		AI: aiconfig.New(st.AIProviders, vault, config.AIConfig{
 			Kind: "openai", Name: "Shared", APIKey: "sk-global-secret", Model: "gpt-4o",
 		}),
-		ModelRegistry: modelreg.New(modelreg.WithURLs("", "")),
+		ModelRegistry: modelreg.New(modelreg.WithoutRegistryFetch()),
 	}
 	for _, o := range opts {
 		o(&deps)
@@ -387,6 +387,10 @@ func (h *harness) doReq(t *testing.T, req *http.Request, userID string) apiResp 
 func TestClusterProxyForwardsRemoteOwner(t *testing.T) {
 	h := newHarness(t)
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			_, _ = w.Write([]byte("ok"))
+			return
+		}
 		if got := r.Header.Get("X-ShellCN-Cluster-Proxy"); got != "test-instance" {
 			t.Fatalf("cluster proxy header = %q, want test-instance", got)
 		}
@@ -410,6 +414,40 @@ func TestClusterProxyForwardsRemoteOwner(t *testing.T) {
 	}
 	if got, want := string(resp.Body), "/api/connections/c-op/session"; got != want {
 		t.Fatalf("proxied path = %q, want %q", got, want)
+	}
+}
+
+func TestClusterProxyFallsBackAndPromotesReachableOwnerURL(t *testing.T) {
+	h := newHarness(t)
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			_, _ = w.Write([]byte("ok"))
+			return
+		}
+		_, _ = w.Write([]byte(r.URL.Path))
+	}))
+	t.Cleanup(target.Close)
+
+	owners := cluster.NewStoreOwnerRegistry(h.store.ClusterOwners)
+	lease, err := owners.Claim(context.Background(), cluster.SessionOwnerKey("c-op", "op"), cluster.NewInstanceRef("remote-instance", "http://127.0.0.1:1", target.URL), cluster.ClaimOptions{
+		Mode: cluster.ClaimExclusive,
+		TTL:  time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("claim remote session owner: %v", err)
+	}
+	t.Cleanup(func() { _ = lease.Release(context.Background()) })
+
+	resp := h.do(t, http.MethodGet, "/api/connections/c-op/session", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("session status via fallback proxy: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	owner, ok, err := owners.Get(context.Background(), cluster.SessionOwnerKey("c-op", "op"))
+	if err != nil || !ok {
+		t.Fatalf("get owner: ok=%v err=%v", ok, err)
+	}
+	if owner.Instance.PreferredInternalURL() != target.URL {
+		t.Fatalf("preferred URL = %q, want %q", owner.Instance.PreferredInternalURL(), target.URL)
 	}
 }
 

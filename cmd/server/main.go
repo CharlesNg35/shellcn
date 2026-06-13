@@ -142,7 +142,8 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	}
 
 	// Live-state ownership and transports.
-	instance := cluster.NewInstanceRef("", cluster.DiscoverInternalURL(cluster.PortFromListenAddress(cfg.Server.Addr), false))
+	internalURLs := cluster.DiscoverInternalURLs(cluster.PortFromListenAddress(cfg.Server.Addr), false)
+	instance := cluster.NewLocalInstanceRef(internalURLs...)
 	owners := cluster.NewStoreOwnerRegistry(st.ClusterOwners)
 	leaseTTL := cfg.Cluster.LeaseTTLDuration()
 	renewInterval := cfg.Cluster.RenewIntervalDuration()

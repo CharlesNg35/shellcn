@@ -85,6 +85,19 @@ func (s *memClusterOwnerStore) Renew(_ context.Context, key, leaseID string, exp
 	return true, nil
 }
 
+func (s *memClusterOwnerStore) PreferInternalURL(_ context.Context, key, leaseID, internalURL string, now time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	owner, ok := s.m[key]
+	if !ok || owner.LeaseID != leaseID || !now.Before(owner.ExpiresAt) {
+		return false, nil
+	}
+	owner.InternalURL = internalURL
+	owner.UpdatedAt = now
+	s.m[key] = owner
+	return true, nil
+}
+
 func (s *memClusterOwnerStore) Release(_ context.Context, key, leaseID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

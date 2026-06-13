@@ -162,21 +162,23 @@ func testClusterOwners(t *testing.T, s *store.Store) {
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)
 	owner := &models.ClusterOwner{
-		Key:         "agent:c1",
-		InstanceID:  "instance-a",
-		InternalURL: "http://a",
-		LeaseID:     "lease-a",
-		ExpiresAt:   now.Add(time.Minute),
+		Key:          "agent:c1",
+		InstanceID:   "instance-a",
+		InternalURL:  "http://a",
+		InternalURLs: `["http://a","http://a2"]`,
+		LeaseID:      "lease-a",
+		ExpiresAt:    now.Add(time.Minute),
 	}
 	if _, err := s.ClusterOwners.Claim(ctx, owner, false, now); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
 	other := &models.ClusterOwner{
-		Key:         "agent:c1",
-		InstanceID:  "instance-b",
-		InternalURL: "http://b",
-		LeaseID:     "lease-b",
-		ExpiresAt:   now.Add(time.Minute),
+		Key:          "agent:c1",
+		InstanceID:   "instance-b",
+		InternalURL:  "http://b",
+		InternalURLs: `["http://b","http://b2"]`,
+		LeaseID:      "lease-b",
+		ExpiresAt:    now.Add(time.Minute),
 	}
 	if _, err := s.ClusterOwners.Claim(ctx, other, false, now); !errors.Is(err, models.ErrConflict) {
 		t.Fatalf("exclusive claim conflict: want ErrConflict, got %v", err)
@@ -188,7 +190,25 @@ func testClusterOwners(t *testing.T, s *store.Store) {
 	if got.InstanceID != "instance-b" || got.LeaseID != "lease-b" {
 		t.Fatalf("replace claim owner = %+v", got)
 	}
-	ok, err := s.ClusterOwners.Renew(ctx, "agent:c1", "lease-b", now.Add(2*time.Minute), now)
+	if got.InternalURLs != `["http://b","http://b2"]` {
+		t.Fatalf("replace claim candidates = %q", got.InternalURLs)
+	}
+	ok, err := s.ClusterOwners.PreferInternalURL(ctx, "agent:c1", "lease-a", "http://stale", now)
+	if err != nil || ok {
+		t.Fatalf("prefer stale lease should fail: ok=%v err=%v", ok, err)
+	}
+	ok, err = s.ClusterOwners.PreferInternalURL(ctx, "agent:c1", "lease-b", "http://b2", now)
+	if err != nil || !ok {
+		t.Fatalf("prefer active owner URL: ok=%v err=%v", ok, err)
+	}
+	got, err = s.ClusterOwners.Get(ctx, "agent:c1", now)
+	if err != nil {
+		t.Fatalf("get after prefer: %v", err)
+	}
+	if got.InternalURL != "http://b2" || got.InternalURLs != `["http://b","http://b2"]` {
+		t.Fatalf("preferred owner URL = %+v", got)
+	}
+	ok, err = s.ClusterOwners.Renew(ctx, "agent:c1", "lease-b", now.Add(2*time.Minute), now)
 	if err != nil || !ok {
 		t.Fatalf("renew active lease: ok=%v err=%v", ok, err)
 	}
