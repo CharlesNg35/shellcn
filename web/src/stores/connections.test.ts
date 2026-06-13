@@ -197,6 +197,7 @@ describe("connections store", () => {
       folderId: "f1",
       sortOrder: 2,
       canManage: true,
+      config: {},
       recording: { terminal: "manual" },
       aiMode: "read_only",
       aiAllowDestructive: false,

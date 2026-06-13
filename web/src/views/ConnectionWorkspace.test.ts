@@ -1,4 +1,4 @@
-import { defineComponent } from "vue";
+import { defineComponent, nextTick } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { createPinia, setActivePinia } from "pinia";
@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFetch } from "../test/fetchMock";
 import { channelKey } from "../api/dataSource";
 import { useWorkspaceStore } from "../stores/workspace";
+import { useConnectionsStore } from "../stores/connections";
 import { useConnectionStatusStore } from "../stores/connectionStatus";
 import {
   useStreamChannelsStore,
@@ -372,13 +373,18 @@ describe("ConnectionWorkspace", () => {
       return { status: 404, body: { error: "not found" } };
     });
 
+    const PanelHostStub = defineComponent({
+      props: { panel: { type: String, required: true } },
+      template: '<div data-test="panel-host">{{ panel }}</div>',
+    });
+
     const wrapper = mount(ConnectionWorkspace, {
       props: { id: "c1" },
       global: {
         plugins: [router()],
         stubs: {
           AppIcon: true,
-          PanelHost: true,
+          PanelHost: PanelHostStub,
           Tabs: TabsStub,
           TabList: TabListStub,
           Tab: TabStub,
@@ -392,6 +398,21 @@ describe("ConnectionWorkspace", () => {
       wrapper.findAll("button").filter((b) => b.text() === "Terminal"),
     ).toHaveLength(1);
     expect(ws.view("c1").activeTab).toBe("terminal");
+    expect(wrapper.get('[data-test="panel-host"]').text()).toBe(
+      PanelType.Terminal,
+    );
+
+    const conns = useConnectionsStore();
+    conns.connections = conns.connections.map((connection) =>
+      connection.id === "c1"
+        ? { ...connection, config: { terminal_layout: "grid" } }
+        : connection,
+    );
+    await nextTick();
+
+    expect(wrapper.get('[data-test="panel-host"]').text()).toBe(
+      PanelType.TerminalGrid,
+    );
   });
 
   it("sends snippet commands to the visible single terminal stream", async () => {

@@ -18,8 +18,15 @@ export interface SocketLike {
 }
 
 const WS_OPEN = 1;
+const DEFAULT_SEND_WAIT_ATTEMPTS = 40;
+const DEFAULT_SEND_WAIT_MS = 50;
 
 type Listener = (data: string) => void;
+
+export interface SendWhenOpenOptions {
+  attempts?: number;
+  intervalMs?: number;
+}
 
 interface Channel {
   socket: SocketLike;
@@ -57,7 +64,8 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     socket.addEventListener("close", (ev) => {
       statuses[key] = ChannelStatus.Closed;
       const reason =
-        (ev as { reason?: string }).reason || "The connection was closed.";
+        (ev as { reason?: string } | undefined)?.reason ||
+        "The connection was closed.";
       reasons[key] = reason;
     });
     socket.addEventListener("message", (ev) => {
@@ -86,6 +94,33 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     const channel = channels.get(key);
     if (channel && channel.socket.readyState === WS_OPEN)
       channel.socket.send(data);
+  }
+
+  async function sendWhenOpen(
+    key: string,
+    data: string,
+    options: SendWhenOpenOptions = {},
+  ): Promise<boolean> {
+    const attempts = options.attempts ?? DEFAULT_SEND_WAIT_ATTEMPTS;
+    const intervalMs = options.intervalMs ?? DEFAULT_SEND_WAIT_MS;
+
+    for (let i = 0; i <= attempts; i += 1) {
+      const channel = channels.get(key);
+      if (channel?.socket.readyState === WS_OPEN) {
+        channel.socket.send(data);
+        return true;
+      }
+      if (
+        status(key) === ChannelStatus.Error ||
+        status(key) === ChannelStatus.Closed
+      ) {
+        return false;
+      }
+      if (i < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      }
+    }
+    return false;
   }
 
   function buffer(key: string): string[] {
@@ -135,6 +170,7 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     has,
     subscribe,
     send,
+    sendWhenOpen,
     buffer,
     status,
     reason,

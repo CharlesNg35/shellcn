@@ -11,9 +11,6 @@ import {
   type TerminalInputEffect,
 } from "@/types/projection";
 
-const StreamOpenWaitAttempts = 40;
-const StreamOpenWaitMs = 50;
-
 export interface ActionSuccessRuntime {
   connectionId: () => string;
   tabs: ComputedRef<TabDef[]>;
@@ -75,15 +72,14 @@ export function useActionSuccess(runtime: ActionSuccessRuntime) {
     await nextTick();
 
     const key = terminalStreamKey(tab);
-    if (!key || !(await waitForOpenStreamKey(key))) {
+    const streams = useStreamChannelsStore();
+    if (!key || !(await streams.sendWhenOpen(key, text))) {
       notify.error(
         "Terminal is not ready",
         "Open the terminal and run the action again.",
       );
       return;
     }
-
-    useStreamChannelsStore().send(key, text);
   }
 
   function terminalStreamKey(tab: TabDef): string | null {
@@ -99,15 +95,6 @@ export function useActionSuccess(runtime: ActionSuccessRuntime) {
     const suffix =
       useStreamChannelsStore().preferredTerminalTarget(base) ?? "pane-1";
     return `${base}:${suffix}`;
-  }
-
-  async function waitForOpenStreamKey(key: string): Promise<boolean> {
-    const streams = useStreamChannelsStore();
-    for (let i = 0; i < StreamOpenWaitAttempts; i += 1) {
-      if (streams.status(key) === "open") return true;
-      await new Promise((resolve) => setTimeout(resolve, StreamOpenWaitMs));
-    }
-    return streams.status(key) === "open";
   }
 
   return { run };
