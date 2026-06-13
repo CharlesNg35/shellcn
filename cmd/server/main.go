@@ -144,11 +144,17 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	// Live-state ownership and transports.
 	instance := cluster.NewInstanceRef("", cluster.DiscoverInternalURL(cluster.PortFromListenAddress(cfg.Server.Addr), false))
 	owners := cluster.NewStoreOwnerRegistry(st.ClusterOwners)
-	sessions := session.New(session.Options{OwnerRegistry: owners, Instance: instance})
+	leaseTTL := cfg.Cluster.LeaseTTLDuration()
+	renewInterval := cfg.Cluster.RenewIntervalDuration()
+	sessions := session.New(session.Options{OwnerRegistry: owners, Instance: instance, LeaseTTL: leaseTTL, RenewInterval: renewInterval})
 	defer sessions.Shutdown()
 
 	metrics := telemetry.NewMetrics()
-	tunnels := transport.NewRegistry(transport.WithOwnerRegistry(owners, instance))
+	tunnels := transport.NewRegistry(
+		transport.WithOwnerRegistry(owners, instance),
+		transport.WithLeaseTTL(leaseTTL),
+		transport.WithRenewInterval(renewInterval),
+	)
 
 	// Connection services.
 	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg))

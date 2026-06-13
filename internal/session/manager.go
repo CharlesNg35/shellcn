@@ -62,6 +62,7 @@ type Options struct {
 	OwnerRegistry         cluster.OwnerRegistry
 	Instance              cluster.InstanceRef
 	LeaseTTL              time.Duration
+	RenewInterval         time.Duration
 }
 
 func (o Options) withDefaults() Options {
@@ -81,7 +82,10 @@ func (o Options) withDefaults() Options {
 		o.FailureRetention = 2 * time.Minute
 	}
 	if o.LeaseTTL <= 0 {
-		o.LeaseTTL = 45 * time.Second
+		o.LeaseTTL = 15 * time.Second
+	}
+	if o.RenewInterval <= 0 || o.RenewInterval >= o.LeaseTTL {
+		o.RenewInterval = o.LeaseTTL / 3
 	}
 	return o
 }
@@ -370,7 +374,11 @@ func (e *entry) shutdown() {
 
 func (m *Manager) janitor() {
 	defer m.wg.Done()
-	ticker := time.NewTicker(m.opts.HealthInterval)
+	interval := m.opts.HealthInterval
+	if m.opts.RenewInterval < interval {
+		interval = m.opts.RenewInterval
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {

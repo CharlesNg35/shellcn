@@ -264,6 +264,7 @@ type Registry struct {
 	ownerRegistry cluster.OwnerRegistry
 	instance      cluster.InstanceRef
 	leaseTTL      time.Duration
+	renewInterval time.Duration
 }
 
 // registration tags a dialer with a unique id so a teardown only removes its
@@ -290,11 +291,20 @@ func WithLeaseTTL(ttl time.Duration) RegistryOption {
 	}
 }
 
+func WithRenewInterval(interval time.Duration) RegistryOption {
+	return func(r *Registry) {
+		r.renewInterval = interval
+	}
+}
+
 // NewRegistry returns an empty tunnel registry.
 func NewRegistry(opts ...RegistryOption) *Registry {
-	r := &Registry{dialers: make(map[string]registration), leaseTTL: 45 * time.Second}
+	r := &Registry{dialers: make(map[string]registration), leaseTTL: 15 * time.Second, renewInterval: 5 * time.Second}
 	for _, opt := range opts {
 		opt(r)
+	}
+	if r.renewInterval <= 0 || r.renewInterval >= r.leaseTTL {
+		r.renewInterval = r.leaseTTL / 3
 	}
 	return r
 }
@@ -330,7 +340,7 @@ func (r *Registry) Register(ctx context.Context, connectionID string, dial DialF
 		}
 		renewCtx, cancel := context.WithCancel(ctx)
 		stop = cancel
-		go renewLease(renewCtx, r.leaseTTL, lease)
+		go renewLease(renewCtx, r.renewInterval, lease)
 	}
 	r.mu.Lock()
 	r.seq++
@@ -373,12 +383,11 @@ func (r *TunnelRegistration) Release() TunnelRelease {
 	return TunnelRelease{WasActive: wasActive}
 }
 
-func renewLease(ctx context.Context, ttl time.Duration, lease cluster.Lease) {
-	every := ttl / 3
-	if every <= 0 {
-		every = 10 * time.Second
+func renewLease(ctx context.Context, interval time.Duration, lease cluster.Lease) {
+	if interval <= 0 {
+		interval = 5 * time.Second
 	}
-	ticker := time.NewTicker(every)
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
