@@ -1,10 +1,9 @@
 package kubernetes
 
 import (
-	"strings"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	klabels "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -69,7 +68,7 @@ func WorkloadPods(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, apiErr(err)
 	}
-	sel := labelSelector(mapField(o.Object, "spec", "selector", "matchLabels"))
+	sel := workloadSelector(k, o.Object)
 	if sel == "" {
 		return pageRows(rc, nil)
 	}
@@ -80,14 +79,21 @@ func WorkloadPods(rc *plugin.RequestContext) (any, error) {
 	return pageRows(rc, mapPods(list.Items))
 }
 
-func labelSelector(labels map[string]any) string {
-	parts := make([]string, 0, len(labels))
-	for k, v := range labels {
+func labelSelector(values map[string]any) string {
+	set := klabels.Set{}
+	for k, v := range values {
 		if sv, ok := v.(string); ok {
-			parts = append(parts, k+"="+sv)
+			set[k] = sv
 		}
 	}
-	return strings.Join(parts, ",")
+	return set.AsSelector().String()
+}
+
+func workloadSelector(k kind, object map[string]any) string {
+	if k.name == "replicationcontroller" {
+		return labelSelector(mapField(object, "spec", "selector"))
+	}
+	return labelSelector(mapField(object, "spec", "selector", "matchLabels"))
 }
 
 // clusterResourceType is the Overview dashboard: live cluster metrics, the node
@@ -162,6 +168,20 @@ func workloadPodsTab(kindName string) plugin.Panel {
 		Source: &plugin.DataSource{RouteID: "kubernetes.workload.pods", Params: map[string]string{"kind": kindName, "namespace": "${resource.namespace}", "name": "${resource.name}"}},
 		Config: podsTableConfig(),
 	}
+}
+
+func workloadLogsTab(kindName string) plugin.Panel {
+	return plugin.Panel{
+		Key: "logs", Label: "Logs", Icon: lucide("scroll-text"), Type: plugin.PanelLogStream,
+		Source: &plugin.DataSource{
+			RouteID: "kubernetes.workload.logs", Method: plugin.MethodWS,
+			Params: map[string]string{"kind": kindName, "namespace": "${resource.namespace}", "name": "${resource.name}", "follow": "true", "tail": "500", "timestamps": "true"},
+		},
+	}
+}
+
+func workloadDetailTabs(kindName string) []plugin.Panel {
+	return []plugin.Panel{workloadPodsTab(kindName), workloadLogsTab(kindName)}
 }
 
 func clusterMetricsConfig() plugin.MetricsConfig {

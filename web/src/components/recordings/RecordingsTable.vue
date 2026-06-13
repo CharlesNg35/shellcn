@@ -10,7 +10,12 @@ import { useNotify } from "@/composables/useNotify";
 import { useConfirmAction } from "@/composables/useConfirmAction";
 import AppIcon from "../AppIcon.vue";
 import RecordingPlayerDialog from "./RecordingPlayerDialog.vue";
-import type { RecordingSummary } from "@/types/projection";
+import {
+  IconType,
+  RecordingClass,
+  RecordingStatus,
+  type RecordingSummary,
+} from "@/types/projection";
 
 defineProps<{ items: RecordingSummary[] }>();
 const emit = defineEmits<{ changed: [] }>();
@@ -22,7 +27,8 @@ const { confirmDanger } = useConfirmAction();
 const playing = ref<RecordingSummary | null>(null);
 const showPlayer = ref(false);
 
-const playable = (r: RecordingSummary): boolean => r.status === "finalized";
+const playable = (r: RecordingSummary): boolean =>
+  r.status === RecordingStatus.Finalized;
 const canDelete = (r: RecordingSummary): boolean => r.userId === auth.user?.id;
 
 function play(r: RecordingSummary): void {
@@ -52,16 +58,16 @@ async function onDelete(r: RecordingSummary): Promise<void> {
   }
 }
 
-const statusSeverity: Record<string, string> = {
-  finalized: "text-emerald-600 dark:text-emerald-400",
-  active: "text-sky-600 dark:text-sky-400",
-  pending: "text-amber-600 dark:text-amber-400",
-  failed: "text-rose-600 dark:text-rose-300",
-  discarded: "text-surface-400",
+const statusSeverity: Record<RecordingStatus, string> = {
+  [RecordingStatus.Finalized]: "text-emerald-600 dark:text-emerald-400",
+  [RecordingStatus.Active]: "text-sky-600 dark:text-sky-400",
+  [RecordingStatus.Pending]: "text-amber-600 dark:text-amber-400",
+  [RecordingStatus.Failed]: "text-rose-600 dark:text-rose-300",
+  [RecordingStatus.Discarded]: "text-surface-400",
 };
 
-function classLabel(c: string): string {
-  return c === "desktop" ? "Desktop" : "Terminal";
+function classLabel(c: RecordingClass): string {
+  return c === RecordingClass.Desktop ? "Desktop" : "Terminal";
 }
 
 function formatBytes(n: number): string {
@@ -108,9 +114,9 @@ function formatTime(iso: string): string {
         >
           <AppIcon
             :icon="{
-              type: 'lucide',
+              type: IconType.Lucide,
               value:
-                (data as RecordingSummary).class === 'desktop'
+                (data as RecordingSummary).class === RecordingClass.Desktop
                   ? 'server'
                   : 'terminal',
             }"

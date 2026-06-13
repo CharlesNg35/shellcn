@@ -164,6 +164,9 @@ func (s *Server) handleConnectionProxy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
+	if s.proxyIfRemoteOwner(w, r, conn, user.ID) {
+		return
+	}
 	handle, err := s.acquireSession(ctx, res)
 	if err != nil {
 		s.auditEvent(ctx, res, models.AuditError, err)
@@ -247,6 +250,10 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 			s.incAuthzFailure(err)
 		}
 		writeError(w, s.deps.Logger, err)
+		return
+	}
+
+	if s.proxyIfRemoteOwner(w, r, res.conn, res.user.ID) {
 		return
 	}
 
@@ -652,7 +659,10 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 		msgType = websocket.MessageBinary
 	}
 	conn := newActiveConn(websocket.NetConn(streamCtx, c, msgType))
-	if s.streamHasContinuousClientReader(res) {
+	if keepAlive := s.streamKeepAlivePolicy(res); keepAlive.enabled {
+		if keepAlive.controlReader {
+			go discardWebSocketReads(streamCtx, c, cancel)
+		}
 		go func() {
 			if err := transport.KeepAliveWebSocketWhenIdle(streamCtx, c, conn.LastActive); err != nil {
 				cancel()
@@ -674,20 +684,48 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 	_ = c.Close(websocket.StatusNormalClosure, "")
 }
 
-func (s *Server) streamHasContinuousClientReader(res resolved) bool {
+type streamKeepAlivePolicy struct {
+	enabled       bool
+	controlReader bool
+}
+
+func (s *Server) streamKeepAlivePolicy(res resolved) streamKeepAlivePolicy {
 	m, ok := s.deps.Plugins.Manifest(res.conn.Protocol)
 	if !ok {
-		return false
+		return streamKeepAlivePolicy{}
 	}
 	stream, ok := m.StreamByRoute(res.route.ID)
 	if !ok {
-		return false
+		return streamKeepAlivePolicy{}
 	}
-	return streamKindHasContinuousClientReader(stream.Kind)
+	return streamKindKeepAlivePolicy(stream.Kind)
 }
 
 func streamKindHasContinuousClientReader(kind plugin.StreamKind) bool {
 	return kind == plugin.StreamTerminal || kind == plugin.StreamDesktop || kind == plugin.StreamCanvas
+}
+
+func streamKindKeepAlivePolicy(kind plugin.StreamKind) streamKeepAlivePolicy {
+	if streamKindHasContinuousClientReader(kind) {
+		return streamKeepAlivePolicy{enabled: true}
+	}
+	if kind == plugin.StreamLogs {
+		return streamKeepAlivePolicy{enabled: true, controlReader: true}
+	}
+	return streamKeepAlivePolicy{}
+}
+
+func discardWebSocketReads(ctx context.Context, c *websocket.Conn, cancel context.CancelFunc) {
+	defer cancel()
+	for {
+		_, r, err := c.Reader(ctx)
+		if err != nil {
+			return
+		}
+		if _, err := io.Copy(io.Discard, r); err != nil {
+			return
+		}
+	}
 }
 
 // streamCloseReason fits an error into a WebSocket close reason.

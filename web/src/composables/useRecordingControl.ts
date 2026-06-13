@@ -6,6 +6,11 @@ import type {
   RecordingClass,
   RecordingPolicy,
 } from "../types/projection";
+import {
+  RecordingClass as RecordingClassEnum,
+  RecordingPolicy as RecordingPolicyEnum,
+  StreamKind,
+} from "../types/projection";
 
 export interface RecordingDescriptor {
   class: RecordingClass;
@@ -24,16 +29,17 @@ export function recordingForStream(
   const stream = projection.streams?.find((s) => s.routeId === routeId);
   if (!stream) return null;
   const cls: RecordingClass | null =
-    stream.kind === "terminal"
-      ? "terminal"
-      : stream.kind === "desktop"
-        ? "desktop"
+    stream.kind === StreamKind.Terminal
+      ? RecordingClassEnum.Terminal
+      : stream.kind === StreamKind.Desktop
+        ? RecordingClassEnum.Desktop
         : null;
   if (!cls) return null;
   const cap = projection.recording?.find((c) => c.class === cls);
   if (!cap) return null;
   const policy =
-    (connection?.recording?.[cls] as RecordingPolicy) ?? "disabled";
+    (connection?.recording?.[cls] as RecordingPolicy) ??
+    RecordingPolicyEnum.Disabled;
   return { class: cls, policy, authoritative: cap.authoritative };
 }
 
@@ -44,12 +50,14 @@ export function useRecordingControl(
   ref0: StreamRef,
   descriptor: RecordingDescriptor,
 ) {
-  const forced = descriptor.policy === "auto";
+  const forced = descriptor.policy === RecordingPolicyEnum.Auto;
   const recording = ref(forced);
   const failed = ref(false);
   const busy = ref(false);
 
-  const canControl = computed(() => descriptor.policy === "manual");
+  const canControl = computed(
+    () => descriptor.policy === RecordingPolicyEnum.Manual,
+  );
 
   async function start(): Promise<void> {
     if (busy.value || recording.value) return;

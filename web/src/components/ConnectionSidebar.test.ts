@@ -69,6 +69,63 @@ afterEach(() => {
 });
 
 describe("ConnectionSidebar", () => {
+  it("instantly scrolls the active root connection into view after load", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView =
+      scrollIntoView as unknown as typeof Element.prototype.scrollIntoView;
+    installFetch(() => ({ body: { ok: true } }));
+    const conns = useConnectionsStore();
+    conns.loaded = true;
+    conns.connections = connections;
+
+    mount(ConnectionSidebar, {
+      props: { activeId: "c-root", query: "" },
+      global: { plugins: [router()] },
+    });
+    await flushPromises();
+
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      block: "center",
+      inline: "nearest",
+      behavior: "auto",
+    });
+  });
+
+  it("instantly scrolls to the active connection folder when nested", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView =
+      scrollIntoView as unknown as typeof Element.prototype.scrollIntoView;
+    installFetch(() => ({ body: { ok: true } }));
+    const conns = useConnectionsStore();
+    conns.loaded = true;
+    conns.folders = [
+      { id: "f1", name: "Production", color: "blue", sortOrder: 0 },
+      {
+        id: "f2",
+        parentId: "f1",
+        name: "Databases",
+        color: "teal",
+        sortOrder: 0,
+      },
+    ];
+    conns.connections = connections;
+
+    const wrapper = mount(ConnectionSidebar, {
+      props: { activeId: "c-prod", query: "" },
+      global: { plugins: [router()] },
+    });
+    await flushPromises();
+
+    expect(wrapper.get('[data-folder-row-id="f2"]').element).toBe(
+      scrollIntoView.mock.contexts[0],
+    );
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      block: "center",
+      inline: "nearest",
+      behavior: "auto",
+    });
+  });
+
   it("renders folders and expands the active connection folder", async () => {
     installFetch(() => ({ body: { ok: true } }));
     const conns = useConnectionsStore();

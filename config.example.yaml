@@ -43,6 +43,10 @@ audit:
   retention_days: 0
   cleanup_interval: 1h
 
+cluster:
+  lease_ttl: 15s
+  renew_interval: 5s
+
 # Shared AI is optional. Supported kinds: openrouter, openai, anthropic, google,
 # openai_compatible. Users can also add personal providers in Settings.
 # ai:

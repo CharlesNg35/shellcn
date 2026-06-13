@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/cluster"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/store"
 )
@@ -79,8 +80,18 @@ func scope() auth.TicketScope {
 	return auth.TicketScope{ConnectionID: "c1", RouteID: "ssh.shell", UserID: "u1", Params: map[string]string{"path": "/a"}}
 }
 
+func newTicketStore(t *testing.T, ttl time.Duration) *auth.TicketStore {
+	t.Helper()
+	return auth.NewTicketStore(auth.TicketStoreOptions{
+		TTL:        ttl,
+		SigningKey: []byte("0123456789abcdef0123456789abcdef"),
+		Owners:     cluster.NewStoreOwnerRegistry(store.NewMemory().ClusterOwners),
+		Instance:   cluster.NewInstanceRef("test", "http://test"),
+	})
+}
+
 func TestTicketRedeemHappy(t *testing.T) {
-	ts := auth.NewTicketStore(0)
+	ts := newTicketStore(t, 0)
 	tok, exp := ts.Mint(scope())
 	if !exp.After(time.Now()) {
 		t.Error("expiry not in the future")
@@ -91,7 +102,7 @@ func TestTicketRedeemHappy(t *testing.T) {
 }
 
 func TestTicketSingleUse(t *testing.T) {
-	ts := auth.NewTicketStore(0)
+	ts := newTicketStore(t, 0)
 	tok, _ := ts.Mint(scope())
 	if err := ts.Redeem(tok, scope()); err != nil {
 		t.Fatalf("first redeem: %v", err)
@@ -102,7 +113,7 @@ func TestTicketSingleUse(t *testing.T) {
 }
 
 func TestTicketExpiry(t *testing.T) {
-	ts := auth.NewTicketStore(time.Millisecond)
+	ts := newTicketStore(t, time.Millisecond)
 	tok, _ := ts.Mint(scope())
 	time.Sleep(5 * time.Millisecond)
 	if err := ts.Redeem(tok, scope()); !errors.Is(err, auth.ErrTicketInvalid) {
@@ -111,7 +122,7 @@ func TestTicketExpiry(t *testing.T) {
 }
 
 func TestTicketParamMismatchRejected(t *testing.T) {
-	ts := auth.NewTicketStore(0)
+	ts := newTicketStore(t, 0)
 	tok, _ := ts.Mint(scope())
 	// Same connection + route + user, but a different resource param.
 	other := scope()
@@ -122,12 +133,41 @@ func TestTicketParamMismatchRejected(t *testing.T) {
 }
 
 func TestTicketRouteMismatchRejected(t *testing.T) {
-	ts := auth.NewTicketStore(0)
+	ts := newTicketStore(t, 0)
 	tok, _ := ts.Mint(scope())
 	other := scope()
 	other.RouteID = "ssh.sftp.read"
 	if err := ts.Redeem(tok, other); !errors.Is(err, auth.ErrTicketInvalid) {
 		t.Errorf("route-mismatch must be rejected: got %v", err)
+	}
+}
+
+func TestTicketRedeemsAcrossInstancesOnce(t *testing.T) {
+	key := []byte("0123456789abcdef0123456789abcdef")
+	owners := cluster.NewStoreOwnerRegistry(store.NewMemory().ClusterOwners)
+	a := auth.NewTicketStore(auth.TicketStoreOptions{TTL: time.Minute, SigningKey: key, Owners: owners, Instance: cluster.NewInstanceRef("a", "http://a")})
+	b := auth.NewTicketStore(auth.TicketStoreOptions{TTL: time.Minute, SigningKey: key, Owners: owners, Instance: cluster.NewInstanceRef("b", "http://b")})
+
+	tok, exp := a.Mint(scope())
+	if !exp.After(time.Now()) {
+		t.Error("expiry not in the future")
+	}
+	if err := b.Redeem(tok, scope()); err != nil {
+		t.Fatalf("redeem from another instance: %v", err)
+	}
+	if err := a.Redeem(tok, scope()); !errors.Is(err, auth.ErrTicketInvalid) {
+		t.Fatalf("replay must be rejected: got %v", err)
+	}
+}
+
+func TestTicketScopeMismatchRejected(t *testing.T) {
+	ts := newTicketStore(t, time.Minute)
+	tok, _ := ts.Mint(scope())
+
+	other := scope()
+	other.Params = map[string]string{"path": "/other"}
+	if err := ts.Redeem(tok, other); !errors.Is(err, auth.ErrTicketInvalid) {
+		t.Fatalf("param mismatch must be rejected: got %v", err)
 	}
 }
 

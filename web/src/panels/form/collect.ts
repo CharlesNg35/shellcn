@@ -1,4 +1,4 @@
-import type { Field } from "@/types/projection";
+import { FieldType, type Field } from "@/types/projection";
 import { isVisible, validateField } from "./condition";
 
 export interface Collected {
@@ -11,13 +11,13 @@ export interface Collected {
 // is surfaced prefixed with the row/sub-field that produced it.
 export function collectField(field: Field, value: unknown): Collected {
   switch (field.type) {
-    case "json":
+    case FieldType.Json:
       return collectJson(field, value);
-    case "object":
+    case FieldType.Object:
       return collectObject(field, value);
-    case "array":
+    case FieldType.Array:
       return collectArray(field, value);
-    case "map":
+    case FieldType.Map:
       return collectMap(field, value);
     default: {
       const msg = validateField(field, value);

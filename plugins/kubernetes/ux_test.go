@@ -176,6 +176,36 @@ func TestPodDetailHasMetricsLogsAndShell(t *testing.T) {
 	}
 }
 
+func TestWorkloadDetailsExposePodsAndLogs(t *testing.T) {
+	for _, name := range []string{"deployment", "statefulset", "daemonset", "replicaset", "job", "replicationcontroller"} {
+		k, ok := kindByName(name)
+		if !ok {
+			t.Fatalf("kind %q missing", name)
+		}
+		res := resourceType(k)
+		var keys []string
+		for _, tab := range res.Detail.Tabs {
+			keys = append(keys, tab.Key)
+		}
+		if !hasTab(res.Detail.Tabs, "pods", plugin.PanelTable, "kubernetes.workload.pods") {
+			t.Fatalf("%s tabs = %v, missing workload pod table", name, keys)
+		}
+		if !hasTab(res.Detail.Tabs, "logs", plugin.PanelLogStream, "kubernetes.workload.logs") {
+			t.Fatalf("%s tabs = %v, missing workload logs stream", name, keys)
+		}
+	}
+}
+
+func TestCronJobsDoNotExposeDirectWorkloadLogs(t *testing.T) {
+	k, ok := kindByName("cronjob")
+	if !ok {
+		t.Fatal("cronjob kind missing")
+	}
+	if hasTab(resourceType(k).Detail.Tabs, "logs", plugin.PanelLogStream, "kubernetes.workload.logs") {
+		t.Fatal("cronjob should not expose direct workload logs; users inspect the Jobs/Pods created by a run")
+	}
+}
+
 func TestPodOpenRequiresRunningPodWithPorts(t *testing.T) {
 	for _, a := range actions() {
 		if a.ID != "kubernetes.pod.open" {
@@ -275,6 +305,15 @@ func hasAction(actions []string, id string) bool {
 func hasColumn(columns []plugin.Column, key string) bool {
 	for _, got := range columns {
 		if got.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
+func hasTab(tabs []plugin.Panel, key string, typ plugin.PanelType, routeID string) bool {
+	for _, tab := range tabs {
+		if tab.Key == key && tab.Type == typ && tab.Source != nil && tab.Source.RouteID == routeID {
 			return true
 		}
 	}
@@ -435,11 +474,14 @@ func TestNamespaceIsAGlobalScope(t *testing.T) {
 	if scope.Param != "namespace" {
 		t.Errorf("namespace scope should set the namespace param, got %q", scope.Param)
 	}
-	if scope.Control != plugin.ScopeSelect {
-		t.Errorf("namespace scope should explicitly render as a select, got %q", scope.Control)
+	if scope.Control != plugin.ScopeAutoComplete || scope.Multiple {
+		t.Errorf("namespace scope should explicitly render as single autocomplete, got control=%q multiple=%v", scope.Control, scope.Multiple)
 	}
 	if scope.OptionsSource == nil || scope.OptionsSource.Params["kind"] != "namespace" {
 		t.Errorf("namespace scope should source options from the namespace list, got %+v", scope.OptionsSource)
+	}
+	if scope.WatchSource == nil || scope.WatchSource.Params["kind"] != "namespace" || scope.WatchSource.Method != plugin.MethodWS {
+		t.Errorf("namespace scope should refresh options from the namespace watch, got %+v", scope.WatchSource)
 	}
 	if scope.ValueField != "name" || scope.LabelField != "name" {
 		t.Errorf("namespace scope should use namespace names as option values/labels, got value=%q label=%q", scope.ValueField, scope.LabelField)
@@ -449,12 +491,18 @@ func TestNamespaceIsAGlobalScope(t *testing.T) {
 	}
 }
 
-func TestWatchFrameLowercasesEventType(t *testing.T) {
+func TestWatchFrameMapsEventTypeToRendererContract(t *testing.T) {
 	obj := &unstructured.Unstructured{Object: map[string]any{
 		"metadata": map[string]any{"name": "p1", "namespace": "ns", "uid": "u1"},
 	}}
-	frame := watchFrame(kind{name: "pod", namespaced: true}, watch.Event{Type: watch.Deleted, Object: obj})
-	if frame == nil || frame.Type != "deleted" {
-		t.Fatalf("watch frame type: want %q, got %+v", "deleted", frame)
+	for eventType, want := range map[watch.EventType]string{
+		watch.Added:    "added",
+		watch.Modified: "updated",
+		watch.Deleted:  "deleted",
+	} {
+		frame := watchFrame(kind{name: "pod", namespaced: true}, watch.Event{Type: eventType, Object: obj})
+		if frame == nil || frame.Type != want {
+			t.Fatalf("watch frame type: want %q, got %+v", want, frame)
+		}
 	}
 }

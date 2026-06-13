@@ -237,6 +237,15 @@ type AIMessageStore interface {
 	DeleteByConversation(ctx context.Context, conversationID string) error
 }
 
+type ClusterOwnerStore interface {
+	Claim(ctx context.Context, owner *models.ClusterOwner, replace bool, now time.Time) (models.ClusterOwner, error)
+	Get(ctx context.Context, key string, now time.Time) (models.ClusterOwner, error)
+	Renew(ctx context.Context, key, leaseID string, expiresAt, now time.Time) (bool, error)
+	PreferInternalURL(ctx context.Context, key, leaseID, internalURL string, now time.Time) (bool, error)
+	Release(ctx context.Context, key, leaseID string) error
+	DeleteExpired(ctx context.Context, now time.Time) (int64, error)
+}
+
 // Store aggregates every repository plus lifecycle controls.
 type Store struct {
 	Users                UserStore
@@ -257,6 +266,7 @@ type Store struct {
 	AIProviders          AIProviderStore
 	AIConversations      AIConversationStore
 	AIMessages           AIMessageStore
+	ClusterOwners        ClusterOwnerStore
 
 	close func() error
 }

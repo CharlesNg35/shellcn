@@ -8,15 +8,22 @@ import {
   type RecordingDescriptor,
 } from "@/composables/useRecordingControl";
 import AppIcon from "../AppIcon.vue";
-import type { DataSource, ResourceRef } from "@/types/projection";
-import type { ChannelStatus } from "@/stores/streamChannels";
+import {
+  RecordingClass,
+  type DataSource,
+  type ResourceRef,
+} from "@/types/projection";
+import {
+  ChannelStatus,
+  type ChannelStatus as ChannelStatusValue,
+} from "@/stores/streamChannels";
 
 const props = defineProps<{
   connectionId: string;
   source: DataSource;
   resource?: ResourceRef | null;
   descriptor: RecordingDescriptor;
-  streamStatus?: ChannelStatus;
+  streamStatus?: ChannelStatusValue;
   disabledReason?: string | null;
 }>();
 const emit = defineEmits<{
@@ -35,7 +42,7 @@ const { recording, forced, failed, busy, canControl, start, stop } =
 let resumeOnOpen = false;
 
 const typeLabel = computed(() =>
-  props.descriptor.class === "desktop" ? "desktop" : "terminal",
+  props.descriptor.class === RecordingClass.Desktop ? "desktop" : "terminal",
 );
 const controlDisabled = computed(() => Boolean(props.disabledReason));
 const disabledTooltip = computed(() => ({
@@ -58,12 +65,20 @@ watch(
   () => props.streamStatus,
   (next) => {
     if (!canControl.value || !next) return;
-    if ((next === "closed" || next === "error") && recording.value) {
+    if (
+      (next === ChannelStatus.Closed || next === ChannelStatus.Error) &&
+      recording.value
+    ) {
       resumeOnOpen = true;
       recording.value = false;
       return;
     }
-    if (next === "open" && resumeOnOpen && !recording.value && !busy.value) {
+    if (
+      next === ChannelStatus.Open &&
+      resumeOnOpen &&
+      !recording.value &&
+      !busy.value
+    ) {
       void start();
     }
   },

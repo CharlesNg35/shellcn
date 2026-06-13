@@ -10,13 +10,18 @@ import { channelKey } from "@/api/dataSource";
 import { useStreamChannelsStore } from "@/stores/streamChannels";
 import type { ChannelStatus } from "@/stores/streamChannels";
 import type {
+  RecordingPolicy,
   TerminalGridPanelConfig,
   TerminalPanelConfig,
 } from "@/types/projection";
+import { RecordingPolicy as RecordingPolicyEnum } from "@/types/projection";
 import TerminalGridNode, {
-  type TerminalGridDirection,
+  TerminalGridDirection,
+  type TerminalGridDirection as TerminalGridDirectionValue,
   type TerminalGridLayoutNode,
 } from "./TerminalGridNode.vue";
+
+const TerminalGridAutoDirection = "auto" as const;
 
 const props = defineProps<PanelProps>();
 const streams = useStreamChannelsStore();
@@ -81,12 +86,16 @@ const paneTitles = computed(() =>
 const activePaneLabel = computed(
   () => paneTitles.value[activePaneId.value] ?? "Terminal",
 );
-const recordingPolicy = computed(() => props.recording?.policy ?? "disabled");
+const recordingPolicy = computed<RecordingPolicy>(
+  () => props.recording?.policy ?? RecordingPolicyEnum.Disabled,
+);
 const showRecording = computed(
-  () => props.source && props.recording?.policy !== "disabled",
+  () =>
+    props.source && props.recording?.policy !== RecordingPolicyEnum.Disabled,
 );
 const recordingBlocksLayout = computed(
-  () => recordingPolicy.value === "auto" || recordingActive.value,
+  () =>
+    recordingPolicy.value === RecordingPolicyEnum.Auto || recordingActive.value,
 );
 const canSplit = computed(
   () => paneCount.value < maxPanes.value && !recordingBlocksLayout.value,
@@ -131,7 +140,7 @@ function layoutButtonTooltip(value: string): {
 function splitTree(
   node: TerminalGridLayoutNode,
   paneId: string,
-  direction: TerminalGridDirection,
+  direction: TerminalGridDirectionValue,
 ): TerminalGridLayoutNode {
   if (node.type === "leaf") {
     if (node.id !== paneId) return node;
@@ -177,16 +186,19 @@ function removeLeaf(
   return normalizeSplit({ ...node, children });
 }
 
-function paneDirection(paneId: string): TerminalGridDirection {
+function paneDirection(paneId: string): TerminalGridDirectionValue {
   const el = root.value?.querySelector<HTMLElement>(
     `[data-pane-id="${paneId}"]`,
   );
-  if (!el) return "horizontal";
+  if (!el) return TerminalGridDirection.Horizontal;
   const rect = el.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) return "horizontal";
+  if (rect.width <= 0 || rect.height <= 0)
+    return TerminalGridDirection.Horizontal;
   const horizontalRatio = aspectRatio(rect.width / 2, rect.height);
   const verticalRatio = aspectRatio(rect.width, rect.height / 2);
-  return horizontalRatio <= verticalRatio ? "horizontal" : "vertical";
+  return horizontalRatio <= verticalRatio
+    ? TerminalGridDirection.Horizontal
+    : TerminalGridDirection.Vertical;
 }
 
 function aspectRatio(width: number, height: number): number {
@@ -207,10 +219,13 @@ function closeAllPaneStreams(): void {
 
 function splitPane(
   paneId = activePaneId.value,
-  direction: TerminalGridDirection | "auto" = "auto",
+  direction:
+    | TerminalGridDirectionValue
+    | typeof TerminalGridAutoDirection = TerminalGridAutoDirection,
 ): void {
   if (!props.source || !canSplit.value) return;
-  const resolved = direction === "auto" ? paneDirection(paneId) : direction;
+  const resolved =
+    direction === TerminalGridAutoDirection ? paneDirection(paneId) : direction;
   layout.value = splitTree(layout.value, paneId, resolved);
 }
 
@@ -234,7 +249,12 @@ function resetLayout(force = false): void {
   layout.value = leaf();
   activePaneId.value = layout.value.id;
   for (let i = 1; i < defaultPanes.value; i += 1) {
-    splitPane(activePaneId.value, i % 2 === 0 ? "vertical" : "horizontal");
+    splitPane(
+      activePaneId.value,
+      i % 2 === 0
+        ? TerminalGridDirection.Vertical
+        : TerminalGridDirection.Horizontal,
+    );
   }
 }
 

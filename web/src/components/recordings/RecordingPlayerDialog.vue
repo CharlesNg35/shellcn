@@ -5,7 +5,7 @@ import { recordingsApi } from "@/api/recordings";
 import CastPlayer from "./CastPlayer.vue";
 import VideoPlayer from "./VideoPlayer.vue";
 import { dialogRoot } from "@/primevue/preset";
-import type { RecordingSummary } from "@/types/projection";
+import { RecordingClass, type RecordingSummary } from "@/types/projection";
 
 const props = defineProps<{
   visible: boolean;
@@ -16,7 +16,9 @@ defineEmits<{ "update:visible": [value: boolean] }>();
 const src = computed(() =>
   props.recording ? recordingsApi.contentUrl(props.recording.id) : "",
 );
-const isTerminal = computed(() => props.recording?.class === "terminal");
+const isTerminal = computed(
+  () => props.recording?.class === RecordingClass.Terminal,
+);
 const title = computed(
   () =>
     props.recording?.connectionName || props.recording?.protocol || "Recording",

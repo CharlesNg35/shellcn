@@ -1,11 +1,14 @@
 import { api } from "./client";
 
+export const ConnectionSessionState = {
+  Idle: "idle",
+  Connecting: "connecting",
+  Connected: "connected",
+  Closed: "closed",
+  Error: "error",
+} as const;
 export type ConnectionSessionState =
-  | "idle"
-  | "connecting"
-  | "connected"
-  | "closed"
-  | "error";
+  (typeof ConnectionSessionState)[keyof typeof ConnectionSessionState];
 
 export interface ConnectionSession {
   state: ConnectionSessionState;

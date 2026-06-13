@@ -1,6 +1,12 @@
 import type { Icon, PluginCategoryInfo, Transport } from "./core";
 
-export type ProtocolAvailability = "enabled" | "admin_only" | "disabled";
+export const ProtocolAvailability = {
+  Enabled: "enabled",
+  AdminOnly: "admin_only",
+  Disabled: "disabled",
+} as const;
+export type ProtocolAvailability =
+  (typeof ProtocolAvailability)[keyof typeof ProtocolAvailability];
 
 export interface ProtocolAdminItem {
   name: string;

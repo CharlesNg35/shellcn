@@ -67,7 +67,9 @@ func TestTunnelEndToEnd(t *testing.T) {
 		t.Fatalf("yamux client: %v", err)
 	}
 	defer func() { _ = sess.Close() }()
-	reg.Register("c1", func(context.Context, string, string) (net.Conn, error) { return sess.Open() })
+	if _, err := reg.Register(context.Background(), "c1", func(context.Context, string, string) (net.Conn, error) { return sess.Open() }); err != nil {
+		t.Fatalf("register tunnel: %v", err)
+	}
 
 	dial, ok := reg.Dialer("c1")
 	if !ok {

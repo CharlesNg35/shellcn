@@ -25,6 +25,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/cluster"
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/email"
 	"github.com/charlesng35/shellcn/internal/extplugin"
@@ -102,6 +103,7 @@ func main() {
 }
 
 func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
+	// Secrets and store.
 	// Master key: required in prod; generated (ephemeral) with a loud warning in dev.
 	masterKey, err := secrets.ResolveMasterKey(cfg.Secrets.MasterKey, cfg.Secrets.MasterKeyFile)
 	if err != nil {
@@ -127,6 +129,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		return err
 	}
 
+	// Core registries and policy.
 	reg := pluginregistry.New()
 	plugins.Register(reg)
 
@@ -138,12 +141,23 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		return fmt.Errorf("load policies: %w", err)
 	}
 
-	sessions := session.New(session.Options{})
+	// Live-state ownership and transports.
+	internalURLs := cluster.DiscoverInternalURLs(cluster.PortFromListenAddress(cfg.Server.Addr), false)
+	instance := cluster.NewLocalInstanceRef(internalURLs...)
+	owners := cluster.NewStoreOwnerRegistry(st.ClusterOwners)
+	leaseTTL := cfg.Cluster.LeaseTTLDuration()
+	renewInterval := cfg.Cluster.RenewIntervalDuration()
+	sessions := session.New(session.Options{OwnerRegistry: owners, Instance: instance, LeaseTTL: leaseTTL, RenewInterval: renewInterval})
 	defer sessions.Shutdown()
 
 	metrics := telemetry.NewMetrics()
-	tunnels := transport.NewRegistry()
+	tunnels := transport.NewRegistry(
+		transport.WithOwnerRegistry(owners, instance),
+		transport.WithLeaseTTL(leaseTTL),
+		transport.WithRenewInterval(renewInterval),
+	)
 
+	// Connection services.
 	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg))
 	creds.SetSecretAccessHook(metrics.IncSecretAccess)
 
@@ -185,6 +199,8 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	if cfg.Plugins.Market.Enabled && len(cfg.Plugins.Market.Indexes) > 0 && extPlugins != nil {
 		market = pluginmarket.New(cfg.Plugins.Market.Indexes)
 	}
+
+	// Recording, identity, and AI services.
 	recBlobs, err := recording.NewLocalBlobStore(cfg.Recordings.Dir)
 	if err != nil {
 		return fmt.Errorf("recording storage: %w", err)
@@ -214,11 +230,15 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	modelRegistry := modelreg.New(modelreg.WithLogger(logger))
 	aiConfig := aiconfig.New(st.AIProviders, vault, cfg.AI).WithModels(modelRegistry)
 
+	// Health and background jobs.
 	health := telemetry.NewHealth()
 	health.Register("store", func(ctx context.Context) error {
 		_, err := st.Users.Count(ctx)
 		return err
 	})
+
+	stopOwnerCleanup := startClusterOwnerCleanup(logger, st.ClusterOwners, clusterOwnerCleanupEvery(leaseTTL))
+	defer stopOwnerCleanup()
 
 	// Background maintenance: always reap abandoned chunked (browser-capture)
 	// recordings so partial blobs from vanished sessions don't leak; additionally
@@ -299,14 +319,25 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		}
 	}
 
+	// HTTP server.
+	authKey := cfg.Auth.JWTSigningKey(masterKey)
 	srv := server.New(server.Deps{
-		Plugins:           reg,
-		Store:             st,
-		Sessions:          sessions,
-		Auth:              auth.NewLocalAuthenticator(st.Users),
-		SessionMgr:        auth.NewSessionManagerWithKey(cfg.Auth.SessionTTLDuration(), cfg.Auth.JWTSigningKey(masterKey)),
-		Tickets:           auth.NewTicketStore(0),
-		ArtifactTickets:   auth.NewTicketStore(service.DefaultEnrollmentTTL),
+		Plugins:    reg,
+		Store:      st,
+		Sessions:   sessions,
+		Auth:       auth.NewLocalAuthenticator(st.Users),
+		SessionMgr: auth.NewSessionManagerWithKey(cfg.Auth.SessionTTLDuration(), authKey),
+		Tickets: auth.NewTicketStore(auth.TicketStoreOptions{
+			SigningKey: authKey,
+			Owners:     owners,
+			Instance:   instance,
+		}),
+		ArtifactTickets: auth.NewTicketStore(auth.TicketStoreOptions{
+			TTL:        service.DefaultEnrollmentTTL,
+			SigningKey: authKey,
+			Owners:     owners,
+			Instance:   instance,
+		}),
 		Policy:            pol,
 		Connector:         connector,
 		Connections:       connections,
@@ -320,6 +351,8 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		TwoFactor:         twoFactor,
 		Invitations:       invitations,
 		Tunnels:           tunnels,
+		Owners:            owners,
+		Instance:          instance,
 		Recording:         recEngine,
 		Recordings:        recordings,
 		RecordingMaxChunk: cfg.Recordings.MaxChunkBytes,
@@ -360,6 +393,38 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return httpServer.Shutdown(ctx)
+}
+
+func clusterOwnerCleanupEvery(leaseTTL time.Duration) time.Duration {
+	if leaseTTL < time.Minute {
+		return time.Minute
+	}
+	return leaseTTL
+}
+
+func startClusterOwnerCleanup(logger *slog.Logger, owners store.ClusterOwnerStore, every time.Duration) func() {
+	stop := make(chan struct{})
+	cleanup := func() {
+		if n, err := owners.DeleteExpired(context.Background(), time.Now().UTC()); err != nil {
+			logger.Warn("cluster owner cleanup failed", "err", err)
+		} else if n > 0 {
+			logger.Info("cluster owner cleanup removed expired owners", "count", n)
+		}
+	}
+	cleanup()
+	go func() {
+		t := time.NewTicker(every)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				cleanup()
+			}
+		}
+	}()
+	return func() { close(stop) }
 }
 
 // bootstrapAdmin creates a default admin on first run and logs generated credentials.

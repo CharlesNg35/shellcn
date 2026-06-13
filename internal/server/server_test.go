@@ -23,6 +23,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/cluster"
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/email"
 	"github.com/charlesng35/shellcn/internal/models"
@@ -271,9 +272,11 @@ func newHarness(t *testing.T, opts ...func(*server.Deps)) *harness {
 	if err != nil {
 		t.Fatalf("policy: %v", err)
 	}
-	sessMgr := session.New(session.Options{})
+	instance := cluster.NewInstanceRef("test-instance", "http://test-instance")
+	owners := cluster.NewStoreOwnerRegistry(st.ClusterOwners)
+	sessMgr := session.New(session.Options{OwnerRegistry: owners, Instance: instance})
 	t.Cleanup(sessMgr.Shutdown)
-	tunnels := transport.NewRegistry()
+	tunnels := transport.NewRegistry(transport.WithOwnerRegistry(owners, instance))
 	connector := service.NewConnector(reg, creds, vault, tunnels)
 	connections := service.NewConnectionService(st.Connections, reg, creds, vault)
 	recBlobs, err := recording.NewLocalBlobStore(t.TempDir())
@@ -284,6 +287,7 @@ func newHarness(t *testing.T, opts ...func(*server.Deps)) *harness {
 	recEngine.Register(plugin.FormatAsciicastV2, recording.NewAsciicastRecorder)
 	recordings := service.NewRecordingService(st.Recordings, recBlobs)
 	authMgr := auth.NewSessionManager(time.Hour)
+	ticketKey := []byte("0123456789abcdef0123456789abcdef")
 	enrollments := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
 	users := service.NewUserService(st.Users)
 	twoFactor := service.NewTwoFactorService(st.Users, vault, "ShellCN")
@@ -292,15 +296,21 @@ func newHarness(t *testing.T, opts ...func(*server.Deps)) *harness {
 	deps := server.Deps{
 		Plugins: reg, Store: st, Sessions: sessMgr,
 		Auth: auth.NewLocalAuthenticator(st.Users), SessionMgr: authMgr,
-		Tickets: auth.NewTicketStore(time.Minute), Policy: pol,
+		Tickets: auth.NewTicketStore(auth.TicketStoreOptions{
+			TTL:        time.Minute,
+			SigningKey: ticketKey,
+			Owners:     owners,
+			Instance:   instance,
+		}),
+		Policy:    pol,
 		Connector: connector, Connections: connections, Credentials: creds, Audit: audit.NewWriter(st.Audit),
-		Enrollments: enrollments, Tunnels: tunnels, Protocols: service.NewProtocolService(st.ProtocolSettings),
+		Enrollments: enrollments, Tunnels: tunnels, Owners: owners, Instance: instance, Protocols: service.NewProtocolService(st.ProtocolSettings),
 		Users: users, TwoFactor: twoFactor, Invitations: invitations,
 		Recording: recEngine, Recordings: recordings,
 		AI: aiconfig.New(st.AIProviders, vault, config.AIConfig{
 			Kind: "openai", Name: "Shared", APIKey: "sk-global-secret", Model: "gpt-4o",
 		}),
-		ModelRegistry: modelreg.New(modelreg.WithURLs("", "")),
+		ModelRegistry: modelreg.New(modelreg.WithoutRegistryFetch()),
 	}
 	for _, o := range opts {
 		o(&deps)
@@ -372,6 +382,91 @@ func (h *harness) doReq(t *testing.T, req *http.Request, userID string) apiResp 
 	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	return apiResp{Status: resp.StatusCode, Body: b}
+}
+
+func TestClusterProxyForwardsRemoteOwner(t *testing.T) {
+	h := newHarness(t)
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			_, _ = w.Write([]byte("ok"))
+			return
+		}
+		if got := r.Header.Get("X-ShellCN-Cluster-Proxy"); got != "test-instance" {
+			t.Fatalf("cluster proxy header = %q, want test-instance", got)
+		}
+		_, _ = w.Write([]byte(r.URL.Path))
+	}))
+	t.Cleanup(target.Close)
+
+	owners := cluster.NewStoreOwnerRegistry(h.store.ClusterOwners)
+	lease, err := owners.Claim(context.Background(), cluster.SessionOwnerKey("c-op", "op"), cluster.NewInstanceRef("remote-instance", target.URL), cluster.ClaimOptions{
+		Mode: cluster.ClaimExclusive,
+		TTL:  time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("claim remote session owner: %v", err)
+	}
+	t.Cleanup(func() { _ = lease.Release(context.Background()) })
+
+	resp := h.do(t, http.MethodGet, "/api/connections/c-op/session", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("session status via proxy: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	if got, want := string(resp.Body), "/api/connections/c-op/session"; got != want {
+		t.Fatalf("proxied path = %q, want %q", got, want)
+	}
+}
+
+func TestClusterProxyFallsBackAndPromotesReachableOwnerURL(t *testing.T) {
+	h := newHarness(t)
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			_, _ = w.Write([]byte("ok"))
+			return
+		}
+		_, _ = w.Write([]byte(r.URL.Path))
+	}))
+	t.Cleanup(target.Close)
+
+	owners := cluster.NewStoreOwnerRegistry(h.store.ClusterOwners)
+	lease, err := owners.Claim(context.Background(), cluster.SessionOwnerKey("c-op", "op"), cluster.NewInstanceRef("remote-instance", "http://127.0.0.1:1", target.URL), cluster.ClaimOptions{
+		Mode: cluster.ClaimExclusive,
+		TTL:  time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("claim remote session owner: %v", err)
+	}
+	t.Cleanup(func() { _ = lease.Release(context.Background()) })
+
+	resp := h.do(t, http.MethodGet, "/api/connections/c-op/session", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("session status via fallback proxy: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	owner, ok, err := owners.Get(context.Background(), cluster.SessionOwnerKey("c-op", "op"))
+	if err != nil || !ok {
+		t.Fatalf("get owner: ok=%v err=%v", ok, err)
+	}
+	if owner.Instance.PreferredInternalURL() != target.URL {
+		t.Fatalf("preferred URL = %q, want %q", owner.Instance.PreferredInternalURL(), target.URL)
+	}
+}
+
+func TestClusterProxyLoopGuard(t *testing.T) {
+	h := newHarness(t)
+	owners := cluster.NewStoreOwnerRegistry(h.store.ClusterOwners)
+	lease, err := owners.Claim(context.Background(), cluster.SessionOwnerKey("c-op", "op"), cluster.NewInstanceRef("remote-instance", h.ts.URL), cluster.ClaimOptions{
+		Mode: cluster.ClaimExclusive,
+		TTL:  time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("claim remote session owner: %v", err)
+	}
+	t.Cleanup(func() { _ = lease.Release(context.Background()) })
+
+	resp := h.do(t, http.MethodGet, "/api/connections/c-op/session", "op", nil)
+	if resp.Status != http.StatusServiceUnavailable {
+		t.Fatalf("loop guard: want 503, got %d (%s)", resp.Status, resp.Body)
+	}
 }
 
 func TestWrapperOrder(t *testing.T) {
@@ -759,6 +854,46 @@ func TestAgentStateTreatsTunnelRegistryAsAuthoritative(t *testing.T) {
 	}
 	if enr.Status != models.EnrollmentOffline {
 		t.Fatalf("stale enrollment should be persisted offline, got %s", enr.Status)
+	}
+}
+
+func TestAgentStateKeepsRemoteOwnerOnline(t *testing.T) {
+	h := newHarness(t)
+	now := time.Now()
+	if err := h.store.Enrollments.Create(context.Background(), &models.AgentEnrollment{
+		ID:           "remote-online",
+		ConnectionID: "c-op",
+		TokenHash:    "remote-online-token",
+		Status:       models.EnrollmentOnline,
+		ExpiresAt:    now.Add(time.Hour),
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}); err != nil {
+		t.Fatalf("seed enrollment: %v", err)
+	}
+	owners := cluster.NewStoreOwnerRegistry(h.store.ClusterOwners)
+	lease, err := owners.Claim(context.Background(), cluster.AgentOwnerKey("c-op"), cluster.NewInstanceRef("remote-instance", "http://remote"), cluster.ClaimOptions{
+		Mode: cluster.ClaimReplace,
+		TTL:  time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("claim remote owner: %v", err)
+	}
+	defer func() { _ = lease.Release(context.Background()) }()
+
+	resp := h.do(t, http.MethodGet, "/api/connections/c-op/agent/state", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("state: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	if !strings.Contains(string(resp.Body), `"status":"online"`) {
+		t.Fatalf("remote owner should keep agent online: %s", resp.Body)
+	}
+	enr, err := h.store.Enrollments.Get(context.Background(), "remote-online")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if enr.Status != models.EnrollmentOnline {
+		t.Fatalf("remote-owned enrollment should stay online, got %s", enr.Status)
 	}
 }
 

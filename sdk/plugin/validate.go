@@ -278,20 +278,41 @@ func validateScope(m Manifest, routes map[string]Route, add func(string, ...any)
 				add("scope filter %q optionsSource references unknown route %q", s.Param, s.OptionsSource.RouteID)
 			}
 		}
+		if s.WatchSource != nil {
+			rt, ok := routes[s.WatchSource.RouteID]
+			if !ok {
+				add("scope filter %q watchSource references unknown route %q", s.Param, s.WatchSource.RouteID)
+			} else if rt.Method != MethodWS {
+				add("scope filter %q watchSource route %q must use WS", s.Param, s.WatchSource.RouteID)
+			}
+		}
 		hasChoices := len(s.Options) > 0 || s.OptionsSource != nil
 		switch s.Control {
-		case ScopeSearch:
-			// free text — needs no choices.
-		case ScopeToggle:
-			if len(s.Options) == 0 {
-				add("scope filter %q is a toggle but declares no option for its on-value", s.Param)
-			}
-		default:
-			// select/multiselect (and unknown controls, which fall back to a select)
-			// need choices.
+		case "", ScopeSelect:
 			if !hasChoices {
 				add("scope filter %q has no choices (set options or optionsSource)", s.Param)
 			}
+		case ScopeSearch:
+			if s.Multiple {
+				add("scope filter %q is a search but declares multiple", s.Param)
+			}
+			// free text — needs no choices.
+		case ScopeToggle:
+			if s.Multiple {
+				add("scope filter %q is a toggle but declares multiple", s.Param)
+			}
+			if s.AllowCustom {
+				add("scope filter %q is a toggle but allows custom values", s.Param)
+			}
+			if len(s.Options) == 0 {
+				add("scope filter %q is a toggle but declares no option for its on-value", s.Param)
+			}
+		case ScopeAutoComplete:
+			if !hasChoices && !s.AllowCustom {
+				add("scope filter %q has no choices (set options or optionsSource)", s.Param)
+			}
+		default:
+			add("scope filter %q has invalid control %q", s.Param, s.Control)
 		}
 	}
 }

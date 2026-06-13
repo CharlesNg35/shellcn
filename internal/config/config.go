@@ -27,6 +27,7 @@ type Config struct {
 	Secrets    SecretsConfig    `mapstructure:"secrets"`
 	Email      EmailConfig      `mapstructure:"email"`
 	Audit      AuditConfig      `mapstructure:"audit"`
+	Cluster    ClusterConfig    `mapstructure:"cluster"`
 	Recordings RecordingsConfig `mapstructure:"recordings"`
 	Plugins    PluginsConfig    `mapstructure:"plugins"`
 	AI         AIConfig         `mapstructure:"ai"`
@@ -111,6 +112,26 @@ func (c AuditConfig) CleanupEvery() time.Duration {
 		return d
 	}
 	return time.Hour
+}
+
+type ClusterConfig struct {
+	LeaseTTL      string `mapstructure:"lease_ttl"`
+	RenewInterval string `mapstructure:"renew_interval"`
+}
+
+func (c ClusterConfig) LeaseTTLDuration() time.Duration {
+	if d, err := time.ParseDuration(c.LeaseTTL); err == nil && d > 0 {
+		return d
+	}
+	return 15 * time.Second
+}
+
+func (c ClusterConfig) RenewIntervalDuration() time.Duration {
+	ttl := c.LeaseTTLDuration()
+	if d, err := time.ParseDuration(c.RenewInterval); err == nil && d > 0 && d < ttl {
+		return d
+	}
+	return ttl / 3
 }
 
 // RecordingsConfig controls session-recording storage and retention. Retention
@@ -207,6 +228,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("audit.enabled", true)
 	v.SetDefault("audit.retention_days", 0) // disabled: keep audit entries forever
 	v.SetDefault("audit.cleanup_interval", "1h")
+	v.SetDefault("cluster.lease_ttl", "15s")
+	v.SetDefault("cluster.renew_interval", "5s")
 	v.SetDefault("recordings.dir", "recordings")
 	v.SetDefault("recordings.retention_days", 0) // disabled: keep recordings forever
 	v.SetDefault("recordings.cleanup_interval", "1h")

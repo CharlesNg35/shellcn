@@ -43,3 +43,4 @@ web/.vite/
 *~
 .DS_Store
 Thumbs.db
+.plugin-demo

@@ -179,6 +179,18 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.directives.tooltip.arrow).toContain("rotate-45");
   });
 
+  it("styles autocomplete token mode before it is used by scope controls", () => {
+    expect(primeVuePassthrough.autocomplete.inputMultiple).toContain("min-h-9");
+    expect(primeVuePassthrough.autocomplete.inputMultiple).toContain(
+      "focus-within:ring-2",
+    );
+    expect(primeVuePassthrough.autocomplete.inputChip).toContain("flex-1");
+    expect(primeVuePassthrough.autocomplete.pcChip.root).toContain(
+      "inline-flex",
+    );
+    expect(primeVuePassthrough.autocomplete.pcChip.label).toContain("truncate");
+  });
+
   it("merges conflicting button classes so size props take effect", () => {
     const small = primeVuePassthrough.button.root({
       props: { size: "small" },

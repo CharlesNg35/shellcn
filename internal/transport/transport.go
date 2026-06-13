@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/cluster"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
@@ -257,48 +258,163 @@ type TunnelRegistry interface {
 
 // Registry is the concurrent in-memory tunnel registry.
 type Registry struct {
-	mu      sync.RWMutex
-	seq     uint64
-	dialers map[string]registration
+	mu            sync.RWMutex
+	seq           uint64
+	dialers       map[string]registration
+	ownerRegistry cluster.OwnerRegistry
+	instance      cluster.InstanceRef
+	leaseTTL      time.Duration
+	renewInterval time.Duration
 }
 
 // registration tags a dialer with a unique id so a teardown only removes its
 // own entry — never a later tunnel that replaced it.
 type registration struct {
-	id   uint64
-	dial DialFunc
+	id    uint64
+	dial  DialFunc
+	lease cluster.Lease
+	stop  context.CancelFunc
+}
+
+type RegistryOption func(*Registry)
+
+func WithOwnerRegistry(reg cluster.OwnerRegistry, instance cluster.InstanceRef) RegistryOption {
+	return func(r *Registry) {
+		r.ownerRegistry = reg
+		r.instance = instance
+	}
+}
+
+func WithLeaseTTL(ttl time.Duration) RegistryOption {
+	return func(r *Registry) {
+		r.leaseTTL = ttl
+	}
+}
+
+func WithRenewInterval(interval time.Duration) RegistryOption {
+	return func(r *Registry) {
+		r.renewInterval = interval
+	}
 }
 
 // NewRegistry returns an empty tunnel registry.
-func NewRegistry() *Registry {
-	return &Registry{dialers: make(map[string]registration)}
+func NewRegistry(opts ...RegistryOption) *Registry {
+	r := &Registry{dialers: make(map[string]registration), leaseTTL: 15 * time.Second, renewInterval: 5 * time.Second}
+	for _, opt := range opts {
+		opt(r)
+	}
+	if r.renewInterval <= 0 || r.renewInterval >= r.leaseTTL {
+		r.renewInterval = r.leaseTTL / 3
+	}
+	return r
 }
 
-// Register binds an agent dialer and returns a release func for this registration.
-// The release func reports whether it removed this registration; false means a
-// newer tunnel replaced it first.
-func (r *Registry) Register(connectionID string, dial DialFunc) (release func() bool) {
+// TunnelRegistration is the lifecycle handle for one registered agent tunnel.
+type TunnelRegistration struct {
+	registry     *Registry
+	connectionID string
+	id           uint64
+	lease        cluster.Lease
+	stopRenewal  context.CancelFunc
+}
+
+// TunnelRelease reports what happened when a tunnel registration ended.
+type TunnelRelease struct {
+	// WasActive is true when this registration was still the active cluster owner.
+	// False means a newer tunnel had already replaced it.
+	WasActive bool
+}
+
+// Register binds an agent dialer for the lifetime of one tunnel.
+func (r *Registry) Register(ctx context.Context, connectionID string, dial DialFunc) (*TunnelRegistration, error) {
+	var lease cluster.Lease
+	var stop context.CancelFunc
+	if r.ownerRegistry != nil {
+		var err error
+		lease, err = r.ownerRegistry.Claim(ctx, cluster.AgentOwnerKey(connectionID), r.instance, cluster.ClaimOptions{
+			Mode: cluster.ClaimReplace,
+			TTL:  r.leaseTTL,
+		})
+		if err != nil {
+			return nil, err
+		}
+		renewCtx, cancel := context.WithCancel(ctx)
+		stop = cancel
+		go renewLease(renewCtx, r.renewInterval, lease)
+	}
 	r.mu.Lock()
 	r.seq++
 	id := r.seq
-	r.dialers[connectionID] = registration{id: id, dial: dial}
+	r.dialers[connectionID] = registration{id: id, dial: dial, lease: lease, stop: stop}
 	r.mu.Unlock()
-	return func() bool {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		if cur, ok := r.dialers[connectionID]; ok && cur.id == id {
-			delete(r.dialers, connectionID)
-			return true
+	return &TunnelRegistration{registry: r, connectionID: connectionID, id: id, lease: lease, stopRenewal: stop}, nil
+}
+
+// Release removes this tunnel registration and releases its ownership lease.
+func (r *TunnelRegistration) Release() TunnelRelease {
+	reg := r.registry
+	lease := r.lease
+	stop := r.stopRenewal
+
+	reg.mu.Lock()
+	removedLocal := false
+	if cur, ok := reg.dialers[r.connectionID]; ok && cur.id == r.id {
+		delete(reg.dialers, r.connectionID)
+		removedLocal = true
+		stop = cur.stop
+		lease = cur.lease
+	}
+	reg.mu.Unlock()
+
+	if stop != nil {
+		stop()
+	}
+	wasActive := removedLocal
+	if lease != nil && reg.ownerRegistry != nil {
+		wasActive = false
+		key := cluster.AgentOwnerKey(r.connectionID)
+		if owner, ok, err := reg.ownerRegistry.Get(context.Background(), key); err == nil && ok {
+			wasActive = owner.LeaseID == lease.Owner().LeaseID
 		}
-		return false
+	}
+	if lease != nil {
+		_ = lease.Release(context.Background())
+	}
+	return TunnelRelease{WasActive: wasActive}
+}
+
+func renewLease(ctx context.Context, interval time.Duration, lease cluster.Lease) {
+	if interval <= 0 {
+		interval = 5 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := lease.Renew(ctx); err != nil {
+				return
+			}
+		}
 	}
 }
 
 // Remove drops a connection's tunnel unconditionally (e.g. on revocation).
 func (r *Registry) Remove(connectionID string) {
 	r.mu.Lock()
-	delete(r.dialers, connectionID)
+	reg, ok := r.dialers[connectionID]
+	if ok {
+		delete(r.dialers, connectionID)
+	}
 	r.mu.Unlock()
+	if ok && reg.stop != nil {
+		reg.stop()
+	}
+	if ok && reg.lease != nil {
+		_ = reg.lease.Release(context.Background())
+	}
 }
 
 // Dialer returns the registered dialer for a connection, if any.

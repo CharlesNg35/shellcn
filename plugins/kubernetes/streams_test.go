@@ -59,6 +59,63 @@ func TestLogsStream(t *testing.T) {
 	}
 }
 
+func TestWorkloadLogsStreamAggregatesSelectedPods(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/apis/apps/v1/namespaces/default/deployments/web", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": obj{
+				"name":      "web",
+				"namespace": "default",
+			},
+			"spec": obj{"selector": obj{"matchLabels": obj{"app": "web"}}},
+		})
+	})
+	mux.HandleFunc("/api/v1/namespaces/default/pods", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "v1",
+			"kind":       "PodList",
+			"items": []obj{
+				{
+					"metadata": obj{"name": "web-1", "namespace": "default"},
+					"spec":     obj{"containers": []obj{{"name": "app"}}},
+				},
+				{
+					"metadata": obj{"name": "web-2", "namespace": "default"},
+					"spec":     obj{"containers": []obj{{"name": "app"}}},
+				},
+			},
+		})
+	})
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web-1/log", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("container"); got != "app" {
+			t.Fatalf("web-1 container = %q, want app", got)
+		}
+		_, _ = io.WriteString(w, "one\n")
+	})
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web-2/log", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("container"); got != "app" {
+			t.Fatalf("web-2 container = %q, want app", got)
+		}
+		_, _ = io.WriteString(w, "two\n")
+	})
+	sess := connectTo(t, mux)
+
+	cc := &captureClient{ctx: context.Background()}
+	rcx := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, sess,
+		map[string]string{"kind": "deployment", "namespace": "default", "name": "web", "follow": "false"}, nil, nil)
+	if err := WorkloadLogsStream(rcx, cc); err != nil {
+		t.Fatalf("workload logs: %v", err)
+	}
+	got := cc.out.String()
+	for _, want := range []string{"[web-1/app] one", "[web-2/app] two"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("workload logs = %q, missing %q", got, want)
+		}
+	}
+}
+
 func TestPodExecutorBuilds(t *testing.T) {
 	sess := connectTo(t, http.NewServeMux()).(*Session)
 	exec, err := sess.podExecutor("default", "web-1", &corev1.PodExecOptions{

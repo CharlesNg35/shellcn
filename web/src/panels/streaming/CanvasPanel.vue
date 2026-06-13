@@ -11,13 +11,17 @@ import {
 import { useStream } from "@/composables/useStream";
 import { useTheme } from "@/composables/useTheme";
 import PanelLoader from "@/components/PanelLoader.vue";
-import type { CanvasPanelConfig } from "@/types/projection";
+import {
+  CanvasScaleMode,
+  CanvasWheelMode,
+  type CanvasPanelConfig,
+  type CanvasScaleMode as ProjectionCanvasScaleMode,
+} from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import { parseCanvasFrame } from "./canvas/parser";
 import {
   Canvas2DRenderer,
   type CanvasResizeOptions,
-  type CanvasScaleMode,
 } from "./canvas/renderer2d";
 import type { CanvasModifierState, CanvasOutgoingEvent } from "./canvas/types";
 import StreamStatusBar from "./StreamStatusBar.vue";
@@ -60,21 +64,21 @@ const keyboardEnabled = computed(
   () => cfg.value?.keyboard ?? isInteractive.value,
 );
 const resizeEvents = computed(() => cfg.value?.resizeEvents ?? true);
-const scaleMode = computed<CanvasScaleMode>(() => {
+const scaleMode = computed<ProjectionCanvasScaleMode>(() => {
   if (cfg.value?.scaleMode) return cfg.value.scaleMode;
-  return "resize";
+  return CanvasScaleMode.Resize;
 });
-const scrollable = computed(() => scaleMode.value === "scroll");
+const scrollable = computed(() => scaleMode.value === CanvasScaleMode.Scroll);
 const wheelEnabled = computed(() => isInteractive.value && !scrollable.value);
-const wheelMode = computed(() => cfg.value?.wheelMode || "auto");
+const wheelMode = computed(() => cfg.value?.wheelMode || CanvasWheelMode.Auto);
 const canvasRole = computed(() =>
   isInteractive.value ? "application" : "img",
 );
 const viewportClass = computed(() => {
   switch (scaleMode.value) {
-    case "fit":
+    case CanvasScaleMode.Fit:
       return "grid place-items-center overflow-hidden";
-    case "scroll":
+    case CanvasScaleMode.Scroll:
       return "overflow-auto overscroll-contain";
     default:
       return "overflow-hidden";
@@ -219,11 +223,11 @@ function onWheel(ev: WheelEvent): void {
 
 function shouldSendWheel(ev: WheelEvent): boolean {
   switch (wheelMode.value) {
-    case "none":
+    case CanvasWheelMode.None:
       return false;
-    case "capture":
+    case CanvasWheelMode.Capture:
       return true;
-    case "modified":
+    case CanvasWheelMode.Modified:
       return ev.altKey || ev.ctrlKey || ev.metaKey;
     default:
       return Boolean(wheelEnabled.value);

@@ -1,12 +1,10 @@
-<script setup lang="ts">
-import Splitter from "primevue/splitter";
-import type { SplitterResizeEndEvent } from "primevue/splitter";
-import SplitterPanel from "primevue/splitterpanel";
-import type { DataSource, ResourceRef } from "@/types/projection";
-import type { ChannelStatus } from "@/stores/streamChannels";
-import TerminalPanel from "./TerminalPanel.vue";
-
-export type TerminalGridDirection = "horizontal" | "vertical";
+<script lang="ts">
+export const TerminalGridDirection = {
+  Horizontal: "horizontal",
+  Vertical: "vertical",
+} as const;
+export type TerminalGridDirection =
+  (typeof TerminalGridDirection)[keyof typeof TerminalGridDirection];
 
 export type TerminalGridLayoutNode =
   | { type: "leaf"; id: string }
@@ -16,6 +14,15 @@ export type TerminalGridLayoutNode =
       direction: TerminalGridDirection;
       children: TerminalGridLayoutNode[];
     };
+</script>
+
+<script setup lang="ts">
+import Splitter from "primevue/splitter";
+import type { SplitterResizeEndEvent } from "primevue/splitter";
+import SplitterPanel from "primevue/splitterpanel";
+import type { DataSource, ResourceRef } from "@/types/projection";
+import type { ChannelStatus } from "@/stores/streamChannels";
+import TerminalPanel from "./TerminalPanel.vue";
 
 defineOptions({ name: "TerminalGridNode" });
 

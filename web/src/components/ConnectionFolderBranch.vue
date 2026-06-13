@@ -142,6 +142,7 @@ function onEnd(event: unknown): void {
         <section v-else class="min-w-0" :data-folder-id="item.id">
           <div
             class="connection-sidebar-drag-item group mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-sm transition-colors"
+            :data-folder-row-id="item.id"
             :class="[
               !dragging && 'hover:bg-surface-100 dark:hover:bg-surface-800',
               item.id === droppedId && 'bg-surface-100 dark:bg-surface-800',

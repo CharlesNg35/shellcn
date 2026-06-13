@@ -393,8 +393,11 @@ type ScopeFilter struct {
     Param         string       // route param the value is injected as, e.g. "namespace"
     Label         string
     Icon          Icon
-    Control       ScopeControl // input widget: select (default) | multiselect | search | toggle | …
+    Control       ScopeControl // input widget: select (default) | autocomplete | search | toggle
+    Multiple      bool         // select/autocomplete cardinality; values join with ScopeSeparator
+    AllowCustom   bool         // autocomplete only: typed values may become route params
     OptionsSource *DataSource    // route whose rows are the choices (ValueField/LabelField)
+    WatchSource   *DataSource    // optional WS source that refreshes route-sourced choices
     Options       []FilterOption // or static choices
     ValueField    string
     LabelField    string
@@ -403,9 +406,14 @@ type ScopeFilter struct {
 }
 ```
 
-`Control` is an **open vocabulary**, not a fixed enum: the renderer maps known
-names (`select`, `multiselect`, `search`, `toggle`, …) to widgets and falls back
-to a select for anything it doesn't recognize, so a new control needs no core
+`Control` chooses the interaction family and `Multiple` chooses cardinality:
+`select + Multiple` renders a multi-select, while `autocomplete + Multiple`
+renders a multi-token autocomplete. `AllowCustom` is intentionally opt-in; by
+default autocomplete text filters choices but never becomes the route param until
+the user selects a real option. `WatchSource` is a generic
+live-options contract for selectors whose choices change while the workspace is
+open; it must reference a WebSocket route that emits normal `ResourceEvent`
+frames with `added`, `updated`, or `deleted` types.
 change. Every control encodes its value into the **single string** the param
 carries — a select stores one value, a multiselect joins members with the fixed
 `ScopeSeparator` wire convention, a search stores free text, a toggle stores the

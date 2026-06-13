@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/charlesng35/shellcn/internal/audit"
+	"github.com/charlesng35/shellcn/internal/cluster"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/internal/session"
@@ -64,7 +65,7 @@ func (s *Server) toConnectionDTO(c models.Connection) connectionDTO {
 	// tracked client-side, since a pooled session has no protocol-agnostic mark).
 	dto.Online = true
 	if dto.Transport == string(plugin.TransportAgent) {
-		dto.Online = s.tunnelRegistered(c.ID)
+		dto.Online = s.agentReachable(context.Background(), c.ID)
 	}
 	if !dto.Online {
 		dto.Status = connStatusOffline
@@ -84,6 +85,17 @@ func (s *Server) tunnelRegistered(connID string) bool {
 	}
 	_, ok := s.deps.Tunnels.Dialer(connID)
 	return ok
+}
+
+func (s *Server) agentReachable(ctx context.Context, connID string) bool {
+	if s.tunnelRegistered(connID) {
+		return true
+	}
+	if s.deps.Owners == nil {
+		return false
+	}
+	_, ok, err := s.deps.Owners.Get(ctx, cluster.AgentOwnerKey(connID))
+	return err == nil && ok
 }
 
 func (s *Server) auditConnEvent(ctx context.Context, user models.User, connID, event string, risk plugin.RiskLevel, result models.AuditResult, err error) {
@@ -216,6 +228,9 @@ func (s *Server) handleConnectionSessionStatus(w http.ResponseWriter, r *http.Re
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
 	}
+	if s.proxyIfRemoteOwner(w, r, conn, user.ID) {
+		return
+	}
 	key := session.Key{ConnectionID: conn.ID, OwnerScope: user.ID}
 	snap, ok := s.deps.Sessions.Status(key)
 	if !ok {
@@ -235,6 +250,9 @@ func (s *Server) handleKeepaliveConnectionSession(w http.ResponseWriter, r *http
 	}
 	if !s.canAccessConnection(ctx, user, conn) {
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
+		return
+	}
+	if s.proxyIfRemoteOwner(w, r, conn, user.ID) {
 		return
 	}
 	res := resolved{user: user, conn: conn, route: plugin.Route{
@@ -281,6 +299,9 @@ func (s *Server) handleDisconnectConnectionSession(w http.ResponseWriter, r *htt
 	if !s.canAccessConnection(ctx, user, conn) {
 		s.auditConnEvent(ctx, user, conn.ID, connSessionDisconnectEvent, plugin.RiskWrite, models.AuditDenied, plugin.ErrForbidden)
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
+		return
+	}
+	if s.proxyIfRemoteOwner(w, r, conn, user.ID) {
 		return
 	}
 	s.deps.Sessions.Close(session.Key{ConnectionID: conn.ID, OwnerScope: user.ID})

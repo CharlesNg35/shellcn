@@ -31,7 +31,93 @@ func NewMemory() *Store {
 		AIProviders:          &memAIProviderStore{m: map[string]models.AIProviderConfig{}},
 		AIConversations:      &memAIConversationStore{m: map[string]models.AIConversation{}},
 		AIMessages:           &memAIMessageStore{m: map[string][]models.AIMessage{}},
+		ClusterOwners:        &memClusterOwnerStore{m: map[string]models.ClusterOwner{}},
 	}
+}
+
+type memClusterOwnerStore struct {
+	mu sync.Mutex
+	m  map[string]models.ClusterOwner
+}
+
+func (s *memClusterOwnerStore) Claim(_ context.Context, owner *models.ClusterOwner, replace bool, now time.Time) (models.ClusterOwner, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cur, ok := s.m[owner.Key]
+	if ok && now.Before(cur.ExpiresAt) && !replace {
+		return cur, models.ErrConflict
+	}
+	next := *owner
+	if ok {
+		next.CreatedAt = cur.CreatedAt
+	} else {
+		next.CreatedAt = now
+	}
+	next.UpdatedAt = now
+	s.m[owner.Key] = next
+	return next, nil
+}
+
+func (s *memClusterOwnerStore) Get(_ context.Context, key string, now time.Time) (models.ClusterOwner, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	owner, ok := s.m[key]
+	if !ok {
+		return models.ClusterOwner{}, ErrNotFound
+	}
+	if !now.Before(owner.ExpiresAt) {
+		delete(s.m, key)
+		return models.ClusterOwner{}, ErrNotFound
+	}
+	return owner, nil
+}
+
+func (s *memClusterOwnerStore) Renew(_ context.Context, key, leaseID string, expiresAt, now time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	owner, ok := s.m[key]
+	if !ok || owner.LeaseID != leaseID || !now.Before(owner.ExpiresAt) {
+		return false, nil
+	}
+	owner.ExpiresAt = expiresAt
+	owner.UpdatedAt = now
+	s.m[key] = owner
+	return true, nil
+}
+
+func (s *memClusterOwnerStore) PreferInternalURL(_ context.Context, key, leaseID, internalURL string, now time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	owner, ok := s.m[key]
+	if !ok || owner.LeaseID != leaseID || !now.Before(owner.ExpiresAt) {
+		return false, nil
+	}
+	owner.InternalURL = internalURL
+	owner.UpdatedAt = now
+	s.m[key] = owner
+	return true, nil
+}
+
+func (s *memClusterOwnerStore) Release(_ context.Context, key, leaseID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if owner, ok := s.m[key]; ok && owner.LeaseID == leaseID {
+		delete(s.m, key)
+	}
+	return nil
+}
+
+func (s *memClusterOwnerStore) DeleteExpired(_ context.Context, now time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var deleted int64
+	for key, owner := range s.m {
+		if !now.Before(owner.ExpiresAt) {
+			delete(s.m, key)
+			deleted++
+		}
+	}
+	return deleted, nil
 }
 
 type memAIConversationStore struct {

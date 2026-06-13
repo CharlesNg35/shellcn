@@ -117,7 +117,7 @@ func ServeGatewayTunnel(ctx context.Context, c *websocket.Conn, connectionID str
 
 	// In forward mode each opened stream names its dial target; otherwise the
 	// agent proxies to its single declared Address.
-	release := reg.Register(connectionID, func(_ context.Context, network, addr string) (net.Conn, error) {
+	registration, err := reg.Register(ctx, connectionID, func(_ context.Context, network, addr string) (net.Conn, error) {
 		st, err := sess.Open()
 		if err != nil {
 			return nil, err
@@ -130,14 +130,18 @@ func ServeGatewayTunnel(ctx context.Context, c *websocket.Conn, connectionID str
 		}
 		return st, nil
 	})
+	if err != nil {
+		_ = sess.Close()
+		return false, err
+	}
 	if onRegistered != nil {
 		if err := onRegistered(); err != nil {
-			releasedActive := release()
+			released := registration.Release()
 			_ = sess.Close()
-			return releasedActive, err
+			return released.WasActive, err
 		}
 	}
 
 	<-sess.CloseChan()
-	return release(), nil
+	return registration.Release().WasActive, nil
 }

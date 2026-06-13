@@ -3,7 +3,10 @@ import {
   type AsyncComponentLoader,
   type Component,
 } from "vue";
-import type { PanelType } from "@/types/projection";
+import {
+  PanelType,
+  type PanelType as ProjectionPanelType,
+} from "@/types/projection";
 import PanelLoader from "@/components/PanelLoader.vue";
 import TablePanel from "../table/TablePanel.vue";
 import FormPanel from "../form/FormPanel.vue";
@@ -19,32 +22,46 @@ const lazy = (loader: AsyncComponentLoader): Component =>
 // dynamically imported on first use so first paint stays constant regardless of
 // how many plugins exist.
 export const panelRegistry: Record<string, Component> = {
-  table: TablePanel,
-  form: FormPanel,
-  enroll: EnrollPanel,
-  file_browser: FileBrowserPanel,
-  document: DocumentPanel,
-  dashboard: DashboardPanel,
-  object_detail: lazy(() => import("../specialized/ObjectDetailPanel.vue")),
-  timeline: lazy(() => import("../specialized/TimelinePanel.vue")),
-  task_progress: lazy(() => import("../streaming/TaskProgressPanel.vue")),
-  split: lazy(() => import("../specialized/SplitPanel.vue")),
-  canvas: lazy(() => import("../streaming/CanvasPanel.vue")),
-  wasm: lazy(() => import("../wasm/WasmPanel.vue")),
-  terminal: lazy(() => import("../streaming/TerminalPanel.vue")),
-  terminal_grid: lazy(() => import("../streaming/TerminalGridPanel.vue")),
-  log_stream: lazy(() => import("../streaming/LogStreamPanel.vue")),
-  metrics: lazy(() => import("../streaming/MetricsPanel.vue")),
-  code_editor: lazy(() => import("../streaming/CodeEditorPanel.vue")),
-  diff: lazy(() => import("../specialized/DiffPanel.vue")),
-  query_editor: lazy(() => import("../streaming/QueryEditorPanel.vue")),
-  remote_desktop: lazy(() => import("../streaming/RemoteDesktopPanel.vue")),
-  graph: lazy(() => import("../specialized/GraphPanel.vue")),
-  trace: lazy(() => import("../specialized/TracePanel.vue")),
-  kv: lazy(() => import("../specialized/KVPanel.vue")),
-  http_client: lazy(() => import("../specialized/HTTPClientPanel.vue")),
+  [PanelType.Table]: TablePanel,
+  [PanelType.Form]: FormPanel,
+  [PanelType.Enroll]: EnrollPanel,
+  [PanelType.FileBrowser]: FileBrowserPanel,
+  [PanelType.Document]: DocumentPanel,
+  [PanelType.Dashboard]: DashboardPanel,
+  [PanelType.ObjectDetail]: lazy(
+    () => import("../specialized/ObjectDetailPanel.vue"),
+  ),
+  [PanelType.Timeline]: lazy(() => import("../specialized/TimelinePanel.vue")),
+  [PanelType.TaskProgress]: lazy(
+    () => import("../streaming/TaskProgressPanel.vue"),
+  ),
+  [PanelType.Split]: lazy(() => import("../specialized/SplitPanel.vue")),
+  [PanelType.Canvas]: lazy(() => import("../streaming/CanvasPanel.vue")),
+  [PanelType.Wasm]: lazy(() => import("../wasm/WasmPanel.vue")),
+  [PanelType.Terminal]: lazy(() => import("../streaming/TerminalPanel.vue")),
+  [PanelType.TerminalGrid]: lazy(
+    () => import("../streaming/TerminalGridPanel.vue"),
+  ),
+  [PanelType.LogStream]: lazy(() => import("../streaming/LogStreamPanel.vue")),
+  [PanelType.Metrics]: lazy(() => import("../streaming/MetricsPanel.vue")),
+  [PanelType.CodeEditor]: lazy(
+    () => import("../streaming/CodeEditorPanel.vue"),
+  ),
+  [PanelType.Diff]: lazy(() => import("../specialized/DiffPanel.vue")),
+  [PanelType.QueryEditor]: lazy(
+    () => import("../streaming/QueryEditorPanel.vue"),
+  ),
+  [PanelType.RemoteDesktop]: lazy(
+    () => import("../streaming/RemoteDesktopPanel.vue"),
+  ),
+  [PanelType.Graph]: lazy(() => import("../specialized/GraphPanel.vue")),
+  [PanelType.Trace]: lazy(() => import("../specialized/TracePanel.vue")),
+  [PanelType.KV]: lazy(() => import("../specialized/KVPanel.vue")),
+  [PanelType.HTTPClient]: lazy(
+    () => import("../specialized/HTTPClientPanel.vue"),
+  ),
 };
 
-export function resolvePanel(type: PanelType): Component | undefined {
+export function resolvePanel(type: ProjectionPanelType): Component | undefined {
   return panelRegistry[type];
 }

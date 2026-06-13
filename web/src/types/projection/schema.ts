@@ -1,27 +1,29 @@
 import type { DataSource } from "./core";
 
-export type FieldType =
-  | "text"
-  | "email"
-  | "url"
-  | "tel"
-  | "number"
-  | "stepper"
-  | "slider"
-  | "password"
-  | "select"
-  | "radio"
-  | "multiselect"
-  | "file"
-  | "toggle"
-  | "textarea"
-  | "json"
-  | "duration"
-  | "credential_ref"
-  | "object"
-  | "array"
-  | "autocomplete"
-  | "map";
+export const FieldType = {
+  Text: "text",
+  Email: "email",
+  Url: "url",
+  Tel: "tel",
+  Number: "number",
+  Stepper: "stepper",
+  Slider: "slider",
+  Password: "password",
+  Select: "select",
+  Radio: "radio",
+  MultiSelect: "multiselect",
+  File: "file",
+  Toggle: "toggle",
+  Textarea: "textarea",
+  Json: "json",
+  Duration: "duration",
+  CredentialRef: "credential_ref",
+  Object: "object",
+  Array: "array",
+  AutoComplete: "autocomplete",
+  Map: "map",
+} as const;
+export type FieldType = (typeof FieldType)[keyof typeof FieldType];
 
 export interface Option {
   label: string;
@@ -45,7 +47,15 @@ export interface CredentialSelector {
   required?: boolean;
 }
 
-export type Operator = "eq" | "neq" | "in" | "nin" | "empty" | "notEmpty";
+export const Operator = {
+  Eq: "eq",
+  Neq: "neq",
+  In: "in",
+  Nin: "nin",
+  Empty: "empty",
+  NotEmpty: "notEmpty",
+} as const;
+export type Operator = (typeof Operator)[keyof typeof Operator];
 
 export interface Rule {
   field: string;
@@ -58,7 +68,13 @@ export interface Condition {
   anyOf?: Rule[];
 }
 
-export type ValidatorType = "min" | "max" | "regex" | "oneOf";
+export const ValidatorType = {
+  Min: "min",
+  Max: "max",
+  Regex: "regex",
+  OneOf: "oneOf",
+} as const;
+export type ValidatorType = (typeof ValidatorType)[keyof typeof ValidatorType];
 
 export interface Validator {
   type: ValidatorType;

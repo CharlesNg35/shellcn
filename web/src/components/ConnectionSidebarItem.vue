@@ -2,8 +2,11 @@
 import { computed } from "vue";
 import AppIcon from "./AppIcon.vue";
 import { useWorkspaceStore } from "../stores/workspace";
-import { useConnectionStatusStore } from "../stores/connectionStatus";
-import type { ConnectionSummary } from "../types/projection";
+import {
+  ConnLiveState,
+  useConnectionStatusStore,
+} from "../stores/connectionStatus";
+import { ConnectionStatus, type ConnectionSummary } from "../types/projection";
 
 const props = defineProps<{
   connection: ConnectionSummary;
@@ -19,27 +22,34 @@ const emit = defineEmits<{
 const ws = useWorkspaceStore();
 const live = useConnectionStatusStore();
 
-type DotState = "offline" | "error" | "connecting" | "connected" | "idle";
+const DotState = {
+  Offline: "offline",
+  Error: "error",
+  Connecting: "connecting",
+  Connected: "connected",
+  Idle: "idle",
+} as const;
+type DotState = (typeof DotState)[keyof typeof DotState];
 // The dot reflects the pooled backend session: agent reachability first, then
 // the workspace keepalive/HTTP health state.
 const dotState = computed<DotState>(() => {
   const c = props.connection;
-  if (c.status === "offline") return "offline";
+  if (c.status === ConnectionStatus.Offline) return DotState.Offline;
   const state = live.get(c.id)?.state;
-  if (state === "error") return "error";
-  if (!ws.isConnected(c.id)) return "idle";
-  if (state === "connected") return "connected";
-  return "connecting";
+  if (state === ConnLiveState.Error) return DotState.Error;
+  if (!ws.isConnected(c.id)) return DotState.Idle;
+  if (state === ConnLiveState.Connected) return DotState.Connected;
+  return DotState.Connecting;
 });
 
 const dotClass = computed(() => {
   switch (dotState.value) {
-    case "connected":
+    case DotState.Connected:
       return "bg-emerald-400";
-    case "connecting":
+    case DotState.Connecting:
       return "bg-amber-400 animate-pulse";
-    case "error":
-    case "offline":
+    case DotState.Error:
+    case DotState.Offline:
       return "bg-rose-400";
     default:
       return "bg-surface-300 dark:bg-surface-600";
@@ -48,13 +58,13 @@ const dotClass = computed(() => {
 
 const dotTitle = computed(() => {
   switch (dotState.value) {
-    case "connected":
+    case DotState.Connected:
       return "Connected";
-    case "connecting":
+    case DotState.Connecting:
       return "Connecting…";
-    case "error":
+    case DotState.Error:
       return live.get(props.connection.id)?.reason ?? "Connection failed";
-    case "offline":
+    case DotState.Offline:
       return "Agent offline";
     default:
       return "Idle";

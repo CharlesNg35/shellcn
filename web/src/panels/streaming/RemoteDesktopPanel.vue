@@ -9,7 +9,10 @@ import {
 } from "@/composables/useDesktopRecorder";
 import AppIcon from "@/components/AppIcon.vue";
 import PanelLoader from "@/components/PanelLoader.vue";
-import type { RemoteDesktopPanelConfig } from "@/types/projection";
+import {
+  RecordingPolicy,
+  type RemoteDesktopPanelConfig,
+} from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import {
   connectRemoteDesktop,
@@ -35,9 +38,12 @@ const remoteConfig = computed(
 );
 const descriptor = computed(() => props.recording ?? null);
 const recordable = computed(
-  () => descriptor.value && descriptor.value.policy !== "disabled",
+  () =>
+    descriptor.value && descriptor.value.policy !== RecordingPolicy.Disabled,
 );
-const forced = computed(() => descriptor.value?.policy === "auto");
+const forced = computed(
+  () => descriptor.value?.policy === RecordingPolicy.Auto,
+);
 const unsupported = computed(
   () => Boolean(recordable.value) && !desktopRecordingSupported(),
 );

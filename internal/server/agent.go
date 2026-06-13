@@ -154,7 +154,7 @@ func (s *Server) handleAgentState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := s.deps.Enrollments.State(ctx, conn.ID)
-	if state.Status == string(models.EnrollmentOnline) && !s.tunnelRegistered(conn.ID) {
+	if state.Status == string(models.EnrollmentOnline) && !s.agentReachable(ctx, conn.ID) {
 		s.deps.Enrollments.MarkOffline(ctx, conn.ID)
 		state = s.deps.Enrollments.State(ctx, conn.ID)
 	}

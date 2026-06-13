@@ -2,7 +2,13 @@ import { defineStore } from "pinia";
 import { reactive, ref } from "vue";
 import { STREAM_CHANNEL_BUFFER_LIMIT } from "./sessionLimits";
 
-export type ChannelStatus = "connecting" | "open" | "closed" | "error";
+export const ChannelStatus = {
+  Connecting: "connecting",
+  Open: "open",
+  Closed: "closed",
+  Error: "error",
+} as const;
+export type ChannelStatus = (typeof ChannelStatus)[keyof typeof ChannelStatus];
 
 export interface SocketLike {
   readyState: number;
@@ -37,18 +43,18 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     const socket = factory();
     const channel: Channel = { socket, listeners: new Set(), buffer: [] };
     channels.set(key, channel);
-    statuses[key] = "connecting";
+    statuses[key] = ChannelStatus.Connecting;
 
     socket.addEventListener("open", () => {
-      statuses[key] = "open";
+      statuses[key] = ChannelStatus.Open;
       delete reasons[key];
     });
     socket.addEventListener("error", () => {
-      statuses[key] = "error";
+      statuses[key] = ChannelStatus.Error;
       reasons[key] = "The stream connection failed.";
     });
     socket.addEventListener("close", (ev) => {
-      statuses[key] = "closed";
+      statuses[key] = ChannelStatus.Closed;
       const reason =
         (ev as { reason?: string }).reason || "The connection was closed.";
       reasons[key] = reason;
