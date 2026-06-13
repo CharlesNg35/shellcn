@@ -12,7 +12,7 @@ func lucide(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucid
 // to one namespace; options are the cluster's namespaces, empty means all.
 func namespaceScope() plugin.ScopeFilter {
 	return plugin.ScopeFilter{
-		Param: "namespace", Label: "Namespace", Icon: lucide("layers"), Control: plugin.ScopeSelect,
+		Param: "namespace", Label: "Namespace", Icon: lucide("layers"), Control: plugin.ScopeAutoComplete,
 		OptionsSource: &plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": "namespace"}},
 		WatchSource:   &plugin.DataSource{RouteID: "kubernetes.resource.watch", Method: plugin.MethodWS, Params: map[string]string{"kind": "namespace"}},
 		ValueField:    "name",

@@ -2,6 +2,7 @@
 import { onUnmounted, reactive, ref, watch } from "vue";
 import Select from "primevue/select";
 import MultiSelect from "primevue/multiselect";
+import AutoComplete from "primevue/autocomplete";
 import InputText from "primevue/inputtext";
 import ToggleSwitch from "primevue/toggleswitch";
 import { fetchPage, watch as watchResource } from "@/api/dataSource";
@@ -21,6 +22,7 @@ const props = defineProps<{
 
 const store = useScopeStore();
 const options = reactive<Record<string, FilterOption[]>>({});
+const suggestions = reactive<Record<string, FilterOption[]>>({});
 const loading = ref(false);
 let stops: (() => void)[] = [];
 let loadVersion = 0;
@@ -44,6 +46,10 @@ function set(f: ScopeFilter, v: string): void {
   store.set(props.connectionId, f.param, v);
 }
 
+function multiple(f: ScopeFilter): boolean {
+  return f.multiple === true;
+}
+
 function ensureDefault(f: ScopeFilter): void {
   if (!f.defaultValue || value(f)) return;
   if (choices(f).some((option) => option.value === f.defaultValue)) {
@@ -58,7 +64,7 @@ function members(f: ScopeFilter): string[] {
 }
 
 function setMembers(f: ScopeFilter, vs: string[]): void {
-  set(f, vs.join(SCOPE_SEPARATOR));
+  set(f, [...new Set(vs)].join(SCOPE_SEPARATOR));
 }
 
 // Toggle on = the first option's value; off clears the scope.
@@ -82,6 +88,7 @@ function setOptions(f: ScopeFilter, rows: Row[]): void {
   options[f.param] = rows
     .map((row) => optionFromRow(f, row))
     .filter((option): option is FilterOption => Boolean(option));
+  suggestions[f.param] = choicesForControl(f);
   ensureDefault(f);
 }
 
@@ -93,6 +100,7 @@ async function loadOptions(): Promise<void> {
       if (f.options) {
         if (version !== loadVersion) return;
         options[f.param] = f.options;
+        suggestions[f.param] = choicesForControl(f);
         ensureDefault(f);
         continue;
       }
@@ -117,7 +125,7 @@ function applyOptionEvent(f: ScopeFilter, ev: ResourceEvent): boolean {
   if (type === "deleted") {
     if (index === -1) return true;
     options[f.param] = current.filter((_, i) => i !== index);
-    if (f.control === "multiselect") {
+    if (multiple(f)) {
       const next = members(f).filter((member) => member !== value);
       if (next.length !== members(f).length) setMembers(f, next);
     } else if (value === valueForFilter(f)) {
@@ -134,6 +142,68 @@ function applyOptionEvent(f: ScopeFilter, ev: ResourceEvent): boolean {
     );
   ensureDefault(f);
   return true;
+}
+
+function choicesForControl(f: ScopeFilter): FilterOption[] {
+  return multiple(f) ? loaded(f) : choices(f);
+}
+
+function selectedOption(f: ScopeFilter): FilterOption | null {
+  const v = value(f);
+  if (!v) return null;
+  return (
+    choicesForControl(f).find((option) => option.value === v) ??
+    (f.allowCustom ? { value: v, label: v } : null)
+  );
+}
+
+function selectedOptions(f: ScopeFilter): FilterOption[] {
+  return members(f)
+    .map(
+      (member) =>
+        loaded(f).find((option) => option.value === member) ??
+        (f.allowCustom ? { value: member, label: member } : null),
+    )
+    .filter((option): option is FilterOption => Boolean(option));
+}
+
+function optionValue(f: ScopeFilter, raw: unknown): string | null {
+  if (raw == null) return "";
+  if (typeof raw === "string") return f.allowCustom ? raw.trim() : null;
+  if (typeof raw !== "object") return null;
+  const value = (raw as Partial<FilterOption>).value;
+  return typeof value === "string" ? value : null;
+}
+
+function autoCompleteValue(
+  f: ScopeFilter,
+): FilterOption | FilterOption[] | null {
+  return multiple(f) ? selectedOptions(f) : selectedOption(f);
+}
+
+function setAutoCompleteValue(f: ScopeFilter, raw: unknown): void {
+  if (multiple(f)) {
+    if (!Array.isArray(raw)) return;
+    const next = raw
+      .map((item) => optionValue(f, item))
+      .filter((item): item is string => item !== null && item !== "");
+    setMembers(f, next);
+    return;
+  }
+  const next = optionValue(f, raw);
+  if (next !== null) set(f, next);
+}
+
+function complete(f: ScopeFilter, event: { query?: string }): void {
+  const query = (event.query ?? "").trim().toLowerCase();
+  const source = choicesForControl(f);
+  suggestions[f.param] = query
+    ? source.filter((option) =>
+        `${option.label ?? option.value} ${option.value}`
+          .toLowerCase()
+          .includes(query),
+      )
+    : source;
 }
 
 function valueForFilter(f: ScopeFilter): string {
@@ -203,15 +273,32 @@ onUnmounted(stopWatches);
         />
 
         <MultiSelect
-          v-else-if="f.control === 'multiselect'"
+          v-else-if="multiple(f) && f.control !== 'autocomplete'"
           :model-value="members(f)"
           :options="loaded(f)"
           option-label="label"
           option-value="value"
+          filter
           :placeholder="f.allLabel ?? f.label"
           :loading="loading"
           :aria-label="f.label"
           @update:model-value="setMembers(f, $event)"
+        />
+
+        <AutoComplete
+          v-else-if="f.control === 'autocomplete'"
+          :model-value="autoCompleteValue(f)"
+          :suggestions="suggestions[f.param] ?? choicesForControl(f)"
+          option-label="label"
+          dropdown
+          complete-on-focus
+          :multiple="multiple(f)"
+          :force-selection="!f.allowCustom"
+          :placeholder="f.allLabel ?? f.label"
+          :loading="loading"
+          :aria-label="f.label"
+          @complete="complete(f, $event)"
+          @update:model-value="setAutoCompleteValue(f, $event)"
         />
 
         <Select
@@ -220,6 +307,7 @@ onUnmounted(stopWatches);
           :options="choices(f)"
           option-label="label"
           option-value="value"
+          filter
           :placeholder="f.allLabel ?? f.label"
           :loading="loading"
           :aria-label="f.label"

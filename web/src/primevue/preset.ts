@@ -355,6 +355,15 @@ export const primeVuePassthrough = {
   autocomplete: {
     root: "relative block w-full",
     pcInputText: { root: inputBase },
+    inputMultiple: cn(
+      "flex min-h-9 w-full min-w-0 flex-wrap items-center gap-1.5 px-2 py-1 text-sm transition duration-150",
+      fieldSurface,
+      focusWithinRing,
+    ),
+    chipItem: "min-w-0",
+    inputChip: "min-w-16 flex-1",
+    input:
+      "w-full min-w-16 bg-transparent px-0.5 py-1 text-sm text-surface-800 outline-none placeholder:text-surface-400 dark:text-surface-100",
     dropdown:
       "absolute right-0 top-0 flex h-full items-center px-2 text-surface-400",
     overlay,
@@ -363,6 +372,12 @@ export const primeVuePassthrough = {
     option,
     optionLabel: "min-w-0 flex-1 truncate",
     emptyMessage: "px-3 py-2 text-sm text-surface-400",
+    pcChip: {
+      root: "inline-flex max-w-full items-center gap-1 rounded bg-surface-100 py-0.5 pl-2 pr-1 text-xs text-surface-700 dark:bg-surface-800 dark:text-surface-200 data-[p-focused=true]:ring-2 data-[p-focused=true]:ring-primary-500/40",
+      label: "min-w-0 truncate",
+      removeIcon:
+        "h-3.5 w-3.5 shrink-0 cursor-pointer text-surface-400 transition-colors hover:text-surface-700 dark:hover:text-surface-200",
+    },
   },
 
   fileupload: {

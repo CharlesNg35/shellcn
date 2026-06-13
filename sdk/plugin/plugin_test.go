@@ -248,8 +248,14 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"scope watchSource must be websocket", "watchSource route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", OptionsSource: &plugin.DataSource{RouteID: "x.list"}, WatchSource: &plugin.DataSource{RouteID: "x.list"}}}
 		}},
-		{"scope multiselect without choices", "has no choices", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", Control: plugin.ScopeMultiSelect}}
+		{"scope multiple select without choices", "has no choices", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", Control: plugin.ScopeSelect, Multiple: true}}
+		}},
+		{"scope autocomplete without choices", "has no choices", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", Control: plugin.ScopeAutoComplete}}
+		}},
+		{"scope search cannot be multiple", "is a search but declares multiple", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Scope = []plugin.ScopeFilter{{Param: "q", Label: "Search", Control: plugin.ScopeSearch, Multiple: true}}
 		}},
 		{"scope toggle without option", "declares no option", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Scope = []plugin.ScopeFilter{{Param: "sys", Label: "System", Control: plugin.ScopeToggle}}

@@ -721,10 +721,10 @@ type ResourceType struct {
 type ScopeControl string
 
 const (
-	ScopeSelect      ScopeControl = "select" // default
-	ScopeMultiSelect ScopeControl = "multiselect"
-	ScopeSearch      ScopeControl = "search"
-	ScopeToggle      ScopeControl = "toggle" // on sets the first Option's value
+	ScopeSelect       ScopeControl = "select" // default
+	ScopeAutoComplete ScopeControl = "autocomplete"
+	ScopeSearch       ScopeControl = "search"
+	ScopeToggle       ScopeControl = "toggle" // on sets the first Option's value
 )
 
 // ScopeSeparator joins multiselect scope values in one route param.
@@ -736,6 +736,8 @@ type ScopeFilter struct {
 	Label         string         `json:"label"`
 	Icon          Icon           `json:"icon,omitzero"`
 	Control       ScopeControl   `json:"control,omitempty"`
+	Multiple      bool           `json:"multiple,omitempty"`
+	AllowCustom   bool           `json:"allowCustom,omitempty"`
 	OptionsSource *DataSource    `json:"optionsSource,omitempty"`
 	WatchSource   *DataSource    `json:"watchSource,omitempty"`
 	Options       []FilterOption `json:"options,omitempty"`

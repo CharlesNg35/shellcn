@@ -474,8 +474,8 @@ func TestNamespaceIsAGlobalScope(t *testing.T) {
 	if scope.Param != "namespace" {
 		t.Errorf("namespace scope should set the namespace param, got %q", scope.Param)
 	}
-	if scope.Control != plugin.ScopeSelect {
-		t.Errorf("namespace scope should explicitly render as a select, got %q", scope.Control)
+	if scope.Control != plugin.ScopeAutoComplete || scope.Multiple {
+		t.Errorf("namespace scope should explicitly render as single autocomplete, got control=%q multiple=%v", scope.Control, scope.Multiple)
 	}
 	if scope.OptionsSource == nil || scope.OptionsSource.Params["kind"] != "namespace" {
 		t.Errorf("namespace scope should source options from the namespace list, got %+v", scope.OptionsSource)

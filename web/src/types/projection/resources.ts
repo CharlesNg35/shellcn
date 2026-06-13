@@ -11,6 +11,8 @@ export interface ScopeFilter {
   label: string;
   icon?: Icon;
   control?: string;
+  multiple?: boolean;
+  allowCustom?: boolean;
   optionsSource?: DataSource;
   watchSource?: DataSource;
   options?: FilterOption[];

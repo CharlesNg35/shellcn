@@ -2,6 +2,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ScopeBar from "./ScopeBar.vue";
+import { SCOPE_SEPARATOR, useScopeStore } from "@/stores/scope";
 import type { FilterOption, ResourceEvent } from "@/types/projection";
 
 const data = vi.hoisted(() => ({
@@ -104,5 +105,70 @@ describe("ScopeBar", () => {
       "",
       "ops",
     ]);
+  });
+
+  it("uses autocomplete as selection-only input unless custom values are allowed", async () => {
+    const wrapper = mount(ScopeBar, {
+      props: {
+        connectionId: "c1",
+        scope: [
+          {
+            param: "environment",
+            label: "Environment",
+            control: "autocomplete",
+            options: [
+              { value: "default", label: "default" },
+              { value: "ops", label: "ops" },
+            ],
+          },
+        ],
+      },
+    });
+    await flushPromises();
+
+    const autocomplete = wrapper.findComponent({ name: "AutoComplete" });
+    expect(autocomplete.props("forceSelection")).toBe(true);
+    expect(autocomplete.props("multiple")).toBe(false);
+
+    await autocomplete.vm.$emit("update:modelValue", "typed");
+    expect(useScopeStore().params("c1")).toEqual({});
+
+    await autocomplete.vm.$emit("update:modelValue", {
+      value: "ops",
+      label: "ops",
+    });
+    expect(useScopeStore().params("c1")).toEqual({ environment: "ops" });
+  });
+
+  it("supports multiple autocomplete scopes without a separate control name", async () => {
+    const wrapper = mount(ScopeBar, {
+      props: {
+        connectionId: "c1",
+        scope: [
+          {
+            param: "environment",
+            label: "Environment",
+            control: "autocomplete",
+            multiple: true,
+            options: [
+              { value: "default", label: "default" },
+              { value: "ops", label: "ops" },
+            ],
+          },
+        ],
+      },
+    });
+    await flushPromises();
+
+    const autocomplete = wrapper.findComponent({ name: "AutoComplete" });
+    expect(autocomplete.props("multiple")).toBe(true);
+
+    await autocomplete.vm.$emit("update:modelValue", [
+      { value: "default", label: "default" },
+      { value: "ops", label: "ops" },
+    ]);
+    expect(useScopeStore().params("c1")).toEqual({
+      environment: ["default", "ops"].join(SCOPE_SEPARATOR),
+    });
   });
 });
