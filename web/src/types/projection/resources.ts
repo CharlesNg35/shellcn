@@ -12,6 +12,7 @@ export interface ScopeFilter {
   icon?: Icon;
   control?: string;
   optionsSource?: DataSource;
+  watchSource?: DataSource;
   options?: FilterOption[];
   valueField?: string;
   labelField?: string;

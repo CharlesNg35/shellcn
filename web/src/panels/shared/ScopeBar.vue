@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from "vue";
+import { onUnmounted, reactive, ref, watch } from "vue";
 import Select from "primevue/select";
 import MultiSelect from "primevue/multiselect";
 import InputText from "primevue/inputtext";
 import ToggleSwitch from "primevue/toggleswitch";
-import { fetchPage } from "@/api/dataSource";
+import { fetchPage, watch as watchResource } from "@/api/dataSource";
 import { SCOPE_SEPARATOR, useScopeStore } from "@/stores/scope";
-import type { FilterOption, Row, ScopeFilter } from "@/types/projection";
+import type {
+  FilterOption,
+  ResourceEvent,
+  Row,
+  ScopeFilter,
+} from "@/types/projection";
 import AppIcon from "@/components/AppIcon.vue";
 
 const props = defineProps<{
@@ -17,6 +22,8 @@ const props = defineProps<{
 const store = useScopeStore();
 const options = reactive<Record<string, FilterOption[]>>({});
 const loading = ref(false);
+let stops: (() => void)[] = [];
+let loadVersion = 0;
 
 function loaded(f: ScopeFilter): FilterOption[] {
   return options[f.param] ?? [];
@@ -59,32 +66,94 @@ function onValue(f: ScopeFilter): string {
   return f.options?.[0]?.value ?? loaded(f)[0]?.value ?? "";
 }
 
+function optionFromRow(f: ScopeFilter, row: unknown): FilterOption | null {
+  if (!f.valueField || !row || typeof row !== "object") return null;
+  const record = row as Record<string, unknown>;
+  const value = String(record[f.valueField] ?? "");
+  if (!value) return null;
+  const labelField = f.labelField ?? f.valueField;
+  return {
+    value,
+    label: String(record[labelField] ?? record[f.valueField] ?? value),
+  };
+}
+
+function setOptions(f: ScopeFilter, rows: Row[]): void {
+  options[f.param] = rows
+    .map((row) => optionFromRow(f, row))
+    .filter((option): option is FilterOption => Boolean(option));
+  ensureDefault(f);
+}
+
 async function loadOptions(): Promise<void> {
+  const version = ++loadVersion;
   loading.value = true;
   try {
     for (const f of props.scope) {
       if (f.options) {
+        if (version !== loadVersion) return;
         options[f.param] = f.options;
         ensureDefault(f);
         continue;
       }
       if (!f.optionsSource || !f.valueField) continue;
-      const valueField = f.valueField;
-      const labelField = f.labelField ?? valueField;
       const page = await fetchPage<Row>(props.connectionId, f.optionsSource);
-      options[f.param] = page.items
-        .map((r) => {
-          const row = r as Record<string, unknown>;
-          return {
-            value: String(row[valueField] ?? ""),
-            label: String(row[labelField] ?? row[valueField] ?? ""),
-          };
-        })
-        .filter((o) => o.value);
-      ensureDefault(f);
+      if (version !== loadVersion) return;
+      setOptions(f, page.items);
     }
   } finally {
-    loading.value = false;
+    if (version === loadVersion) loading.value = false;
+  }
+}
+
+function applyOptionEvent(f: ScopeFilter, ev: ResourceEvent): boolean {
+  const value =
+    optionFromRow(f, ev.resource)?.value ??
+    (ev.ref.name ? String(ev.ref.name) : "");
+  if (!value) return false;
+  const current = loaded(f);
+  const index = current.findIndex((option) => option.value === value);
+  const type = String(ev.type).toLowerCase();
+  if (type === "deleted") {
+    if (index === -1) return true;
+    options[f.param] = current.filter((_, i) => i !== index);
+    if (f.control === "multiselect") {
+      const next = members(f).filter((member) => member !== value);
+      if (next.length !== members(f).length) setMembers(f, next);
+    } else if (value === valueForFilter(f)) {
+      set(f, "");
+    }
+    return true;
+  }
+  const option = optionFromRow(f, ev.resource);
+  if (!option) return false;
+  if (index === -1) options[f.param] = [...current, option];
+  else
+    options[f.param] = current.map((existing, i) =>
+      i === index ? option : existing,
+    );
+  ensureDefault(f);
+  return true;
+}
+
+function valueForFilter(f: ScopeFilter): string {
+  return value(f);
+}
+
+function stopWatches(): void {
+  for (const stop of stops) stop();
+  stops = [];
+}
+
+function startWatches(): void {
+  stopWatches();
+  for (const f of props.scope) {
+    if (!f.watchSource) continue;
+    stops.push(
+      watchResource(props.connectionId, f.watchSource, {}, (ev) => {
+        if (!applyOptionEvent(f, ev)) void loadOptions();
+      }),
+    );
   }
 }
 
@@ -93,9 +162,12 @@ watch(
   () => {
     store.configure(props.connectionId, props.scope);
     void loadOptions();
+    startWatches();
   },
   { immediate: true },
 );
+
+onUnmounted(stopWatches);
 </script>
 
 <template>

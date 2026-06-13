@@ -278,6 +278,14 @@ func validateScope(m Manifest, routes map[string]Route, add func(string, ...any)
 				add("scope filter %q optionsSource references unknown route %q", s.Param, s.OptionsSource.RouteID)
 			}
 		}
+		if s.WatchSource != nil {
+			rt, ok := routes[s.WatchSource.RouteID]
+			if !ok {
+				add("scope filter %q watchSource references unknown route %q", s.Param, s.WatchSource.RouteID)
+			} else if rt.Method != MethodWS {
+				add("scope filter %q watchSource route %q must use WS", s.Param, s.WatchSource.RouteID)
+			}
+		}
 		hasChoices := len(s.Options) > 0 || s.OptionsSource != nil
 		switch s.Control {
 		case ScopeSearch:

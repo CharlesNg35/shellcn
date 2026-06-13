@@ -395,6 +395,7 @@ type ScopeFilter struct {
     Icon          Icon
     Control       ScopeControl // input widget: select (default) | multiselect | search | toggle | …
     OptionsSource *DataSource    // route whose rows are the choices (ValueField/LabelField)
+    WatchSource   *DataSource    // optional WS source that refreshes route-sourced choices
     Options       []FilterOption // or static choices
     ValueField    string
     LabelField    string
@@ -406,6 +407,10 @@ type ScopeFilter struct {
 `Control` is an **open vocabulary**, not a fixed enum: the renderer maps known
 names (`select`, `multiselect`, `search`, `toggle`, …) to widgets and falls back
 to a select for anything it doesn't recognize, so a new control needs no core
+branch unless it needs genuinely new interaction. `WatchSource` is a generic
+live-options contract for selectors whose choices change while the workspace is
+open; it must reference a WebSocket route that emits normal `ResourceEvent`
+frames with `added`, `updated`, or `deleted` types.
 change. Every control encodes its value into the **single string** the param
 carries — a select stores one value, a multiselect joins members with the fixed
 `ScopeSeparator` wire convention, a search stores free text, a toggle stores the

@@ -441,6 +441,9 @@ func TestNamespaceIsAGlobalScope(t *testing.T) {
 	if scope.OptionsSource == nil || scope.OptionsSource.Params["kind"] != "namespace" {
 		t.Errorf("namespace scope should source options from the namespace list, got %+v", scope.OptionsSource)
 	}
+	if scope.WatchSource == nil || scope.WatchSource.Params["kind"] != "namespace" || scope.WatchSource.Method != plugin.MethodWS {
+		t.Errorf("namespace scope should refresh options from the namespace watch, got %+v", scope.WatchSource)
+	}
 	if scope.ValueField != "name" || scope.LabelField != "name" {
 		t.Errorf("namespace scope should use namespace names as option values/labels, got value=%q label=%q", scope.ValueField, scope.LabelField)
 	}
@@ -449,12 +452,18 @@ func TestNamespaceIsAGlobalScope(t *testing.T) {
 	}
 }
 
-func TestWatchFrameLowercasesEventType(t *testing.T) {
+func TestWatchFrameMapsEventTypeToRendererContract(t *testing.T) {
 	obj := &unstructured.Unstructured{Object: map[string]any{
 		"metadata": map[string]any{"name": "p1", "namespace": "ns", "uid": "u1"},
 	}}
-	frame := watchFrame(kind{name: "pod", namespaced: true}, watch.Event{Type: watch.Deleted, Object: obj})
-	if frame == nil || frame.Type != "deleted" {
-		t.Fatalf("watch frame type: want %q, got %+v", "deleted", frame)
+	for eventType, want := range map[watch.EventType]string{
+		watch.Added:    "added",
+		watch.Modified: "updated",
+		watch.Deleted:  "deleted",
+	} {
+		frame := watchFrame(kind{name: "pod", namespaced: true}, watch.Event{Type: eventType, Object: obj})
+		if frame == nil || frame.Type != want {
+			t.Fatalf("watch frame type: want %q, got %+v", want, frame)
+		}
 	}
 }

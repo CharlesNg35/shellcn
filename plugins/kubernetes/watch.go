@@ -2,7 +2,6 @@ package kubernetes
 
 import (
 	"encoding/json"
-	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
@@ -71,8 +70,7 @@ func watchFrame(k kind, ev watch.Event) *plugin.ResourceEvent {
 		}
 	}
 	return &plugin.ResourceEvent{
-		// k8s emits ADDED/MODIFIED/DELETED; the renderer's contract is lowercase.
-		Type: strings.ToLower(string(ev.Type)),
+		Type: resourceEventType(ev.Type),
 		Ref: plugin.ResourceRef{
 			Kind:      k.name,
 			Namespace: refNS(o),
@@ -80,5 +78,16 @@ func watchFrame(k kind, ev watch.Event) *plugin.ResourceEvent {
 			UID:       str(o, "metadata", "uid"),
 		},
 		Resource: row,
+	}
+}
+
+func resourceEventType(t watch.EventType) string {
+	switch t {
+	case watch.Added:
+		return "added"
+	case watch.Deleted:
+		return "deleted"
+	default:
+		return "updated"
 	}
 }

@@ -737,6 +737,7 @@ type ScopeFilter struct {
 	Icon          Icon           `json:"icon,omitzero"`
 	Control       ScopeControl   `json:"control,omitempty"`
 	OptionsSource *DataSource    `json:"optionsSource,omitempty"`
+	WatchSource   *DataSource    `json:"watchSource,omitempty"`
 	Options       []FilterOption `json:"options,omitempty"`
 	ValueField    string         `json:"valueField,omitempty"`
 	LabelField    string         `json:"labelField,omitempty"`

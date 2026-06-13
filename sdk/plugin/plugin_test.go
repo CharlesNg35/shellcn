@@ -242,6 +242,12 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"scope optionsSource unknown route", "optionsSource references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", OptionsSource: &plugin.DataSource{RouteID: "ghost"}}}
 		}},
+		{"scope watchSource unknown route", "watchSource references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", OptionsSource: &plugin.DataSource{RouteID: "x.list"}, WatchSource: &plugin.DataSource{RouteID: "ghost"}}}
+		}},
+		{"scope watchSource must be websocket", "watchSource route", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", OptionsSource: &plugin.DataSource{RouteID: "x.list"}, WatchSource: &plugin.DataSource{RouteID: "x.list"}}}
+		}},
 		{"scope multiselect without choices", "has no choices", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", Control: plugin.ScopeMultiSelect}}
 		}},

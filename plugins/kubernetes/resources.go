@@ -14,6 +14,7 @@ func namespaceScope() plugin.ScopeFilter {
 	return plugin.ScopeFilter{
 		Param: "namespace", Label: "Namespace", Icon: lucide("layers"), Control: plugin.ScopeSelect,
 		OptionsSource: &plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": "namespace"}},
+		WatchSource:   &plugin.DataSource{RouteID: "kubernetes.resource.watch", Method: plugin.MethodWS, Params: map[string]string{"kind": "namespace"}},
 		ValueField:    "name",
 		LabelField:    "name",
 		AllLabel:      "All namespaces",
