@@ -12,9 +12,10 @@ func lucide(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucid
 // to one namespace; options are the cluster's namespaces, empty means all.
 func namespaceScope() plugin.ScopeFilter {
 	return plugin.ScopeFilter{
-		Param: "namespace", Label: "Namespace", Icon: lucide("layers"),
+		Param: "namespace", Label: "Namespace", Icon: lucide("layers"), Control: plugin.ScopeSelect,
 		OptionsSource: &plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": "namespace"}},
 		ValueField:    "name",
+		LabelField:    "name",
 		AllLabel:      "All namespaces",
 	}
 }
@@ -72,8 +73,8 @@ func customResourceType() plugin.ResourceType {
 		ColumnsSource: &plugin.DataSource{RouteID: "kubernetes.resource.columns"},
 		Actions: plugin.ResourceActions{
 			Toolbar: []string{"kubernetes.create.customresource"},
-			Row:     []string{"kubernetes.resource.delete"},
-			Detail:  []string{"kubernetes.resource.delete"},
+			Row:     []string{"kubernetes.customresource.delete"},
+			Detail:  []string{"kubernetes.customresource.delete"},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
@@ -83,6 +84,8 @@ func customResourceType() plugin.ResourceType {
 					Source: &plugin.DataSource{RouteID: "kubernetes.resource.overview", Params: map[string]string{"kind": "${resource.scope}", "namespace": "${resource.namespace}", "name": "${resource.name}"}},
 					Config: genericOverviewDetailConfig(),
 				},
+				customResourceYAMLTab(),
+				customResourceEventsTab(),
 			},
 		},
 	}
@@ -98,17 +101,19 @@ func overviewTab(k kind, params map[string]string) plugin.Panel {
 
 func actions() []plugin.Action {
 	uid := map[string]string{"kind": "${resource.kind}", "namespace": "${resource.namespace}", "name": "${resource.name}"}
+	customUID := map[string]string{"kind": "${resource.scope}", "namespace": "${resource.namespace}", "name": "${resource.name}"}
 	base := []plugin.Action{
-		{ID: "kubernetes.resource.delete", Label: "Delete", Icon: lucide("trash"), RouteID: "kubernetes.resource.delete", Params: uid, Confirm: true, ConfirmText: "Delete this resource?", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
-		{ID: "kubernetes.resource.scale", Label: "Scale", Icon: lucide("move-vertical"), RouteID: "kubernetes.resource.scale", Params: uid},
-		{ID: "kubernetes.resource.restart", Label: "Restart", Icon: lucide("refresh-cw"), RouteID: "kubernetes.resource.restart", Params: uid, Confirm: true, ConfirmText: "Roll out a restart?"},
+		{ID: "kubernetes.resource.delete", Label: "Delete", Icon: lucide("trash"), RouteID: "kubernetes.resource.delete", Params: uid, Confirm: true, ConfirmText: "Delete this Kubernetes resource? This cannot be undone.", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
+		{ID: "kubernetes.customresource.delete", Label: "Delete", Icon: lucide("trash"), RouteID: "kubernetes.resource.delete", Params: customUID, Confirm: true, ConfirmText: "Delete this custom resource? This cannot be undone.", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
+		{ID: "kubernetes.resource.scale", Label: "Scale replicas", Icon: lucide("move-vertical"), RouteID: "kubernetes.resource.scale", Params: uid},
+		{ID: "kubernetes.resource.restart", Label: "Restart rollout", Icon: lucide("refresh-cw"), RouteID: "kubernetes.resource.restart", Params: uid, Confirm: true, ConfirmText: "Restart this workload by updating its pod template?"},
 		{ID: "kubernetes.node.cordon", Label: "Cordon", Icon: lucide("ban"), RouteID: "kubernetes.node.cordon", Params: uid, Confirm: true, ConfirmText: "Mark this node unschedulable?", EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "unschedulable", Op: plugin.OpNeq, Value: true}}}, Group: "Scheduling"},
 		{ID: "kubernetes.node.uncordon", Label: "Uncordon", Icon: lucide("circle-check"), RouteID: "kubernetes.node.uncordon", Params: uid, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "unschedulable", Op: plugin.OpEq, Value: true}}}, Group: "Scheduling"},
-		{ID: "kubernetes.node.drain", Label: "Drain", Icon: lucide("trash-2"), RouteID: "kubernetes.node.drain", Params: uid, Confirm: true, ConfirmText: "Cordon this node and evict its pods?", Group: "Scheduling"},
-		{ID: "kubernetes.rollout.undo", Label: "Rollout undo", Icon: lucide("undo-2"), RouteID: "kubernetes.rollout.undo", Params: uid, Confirm: true, ConfirmText: "Roll back to the previous revision?"},
+		{ID: "kubernetes.node.drain", Label: "Drain", Icon: lucide("trash-2"), RouteID: "kubernetes.node.drain", Params: uid, Confirm: true, ConfirmText: "Cordon this node and evict eligible pods? Workloads may be disrupted.", Group: "Scheduling"},
+		{ID: "kubernetes.rollout.undo", Label: "Undo rollout", Icon: lucide("undo-2"), RouteID: "kubernetes.rollout.undo", Params: uid, Confirm: true, ConfirmText: "Roll back this workload to its previous revision?"},
 		{ID: "kubernetes.cronjob.trigger", Label: "Trigger", Icon: lucide("play"), RouteID: "kubernetes.cronjob.trigger", Params: uid, Confirm: true, ConfirmText: "Create a Job from this CronJob now?"},
 		{ID: "kubernetes.service.open", Label: "Open", Icon: lucide("external-link"), RouteID: "kubernetes.service.open", Open: plugin.OpenURL, Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}}}},
-		{ID: "kubernetes.pod.open", Label: "Open", Icon: lucide("external-link"), RouteID: "kubernetes.pod.open", Open: plugin.OpenURL, Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}}}},
+		{ID: "kubernetes.pod.open", Label: "Open", Icon: lucide("external-link"), RouteID: "kubernetes.pod.open", Open: plugin.OpenURL, Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}, {Field: "status", Op: plugin.OpEq, Value: "Running"}}}},
 	}
 	base = append(base, clusterShellAction(), applyYAMLAction())
 	for _, k := range kinds {

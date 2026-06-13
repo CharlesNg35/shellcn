@@ -81,6 +81,11 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	} else if cfg, ok := inspect.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
 		t.Fatalf("container inspect config = %#v, want raw-toggle object detail", inspect.Config)
 	}
+	if env := containerRes.Detail.Tabs[4]; env.Type != plugin.PanelTable {
+		t.Fatalf("container env should render a table, got %s", env.Type)
+	} else if cfg, ok := env.Config.(plugin.TableConfig); !ok || cfg.EmptyText == "" {
+		t.Fatalf("container env table config = %#v, want empty text", env.Config)
+	}
 	var composeRes *plugin.ResourceType
 	for i := range m.Resources {
 		if m.Resources[i].Kind == "compose" {
@@ -100,6 +105,12 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 			t.Fatalf("compose tab %d = %q, want %q", i, composeRes.Detail.Tabs[i].Key, want)
 		}
 	}
+	for _, tab := range composeRes.Detail.Tabs[1:] {
+		cfg, ok := tab.Config.(plugin.TableConfig)
+		if !ok || cfg.EmptyText == "" {
+			t.Fatalf("compose table %s config = %#v, want empty text", tab.Key, tab.Config)
+		}
+	}
 	var createAction *plugin.Action
 	for i := range m.Actions {
 		if m.Actions[i].ID == "docker.container.create" {
@@ -109,6 +120,12 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	}
 	if createAction == nil || createAction.RouteID != "docker.container.create" {
 		t.Fatalf("missing create container action: %+v", createAction)
+	}
+	for _, id := range []string{"docker.container.remove", "docker.image.remove", "docker.volume.remove", "docker.network.remove", "docker.compose.down"} {
+		action := findAction(m.Actions, id)
+		if action == nil || action.OnSuccess == nil || action.OnSuccess.Navigate != plugin.NavigateList {
+			t.Fatalf("%s should return to the resource list after success: %+v", id, action)
+		}
 	}
 	var createRoute *plugin.Route
 	routes := New().Routes()
@@ -209,6 +226,15 @@ func contains(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func findAction(actions []plugin.Action, id string) *plugin.Action {
+	for i := range actions {
+		if actions[i].ID == id {
+			return &actions[i]
+		}
+	}
+	return nil
 }
 
 type directNet struct{}

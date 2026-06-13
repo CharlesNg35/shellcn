@@ -39,6 +39,8 @@ func TestManifestUsesObjectDetailForSystemOverview(t *testing.T) {
 	}
 	if cfg, ok := dashboardSystem.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
 		t.Fatalf("dashboard system config = %#v, want raw-toggle object detail", dashboardSystem.Config)
+	} else if len(cfg.Sections) == 0 {
+		t.Fatalf("dashboard system detail should declare focused sections")
 	}
 	var systemTab *plugin.Panel
 	for i := range m.Tabs {
@@ -49,6 +51,45 @@ func TestManifestUsesObjectDetailForSystemOverview(t *testing.T) {
 	}
 	if systemTab == nil || systemTab.Type != plugin.PanelObjectDetail {
 		t.Fatalf("system tab = %+v, want object_detail", systemTab)
+	}
+}
+
+func TestTablesDeclareUsefulEmptyStates(t *testing.T) {
+	for _, tab := range New().Manifest().Tabs {
+		if tab.Type != plugin.PanelTable {
+			continue
+		}
+		cfg, ok := tab.Config.(plugin.TableConfig)
+		if !ok {
+			t.Fatalf("%s config = %T, want TableConfig", tab.Key, tab.Config)
+		}
+		if cfg.EmptyText == "" {
+			t.Fatalf("%s table is missing empty text", tab.Key)
+		}
+	}
+}
+
+func TestCollectionLimitsUseBoundedSteppers(t *testing.T) {
+	fields := map[string]plugin.Field{}
+	for _, group := range New().Manifest().Config.Groups {
+		for _, field := range group.Fields {
+			fields[field.Key] = field
+		}
+	}
+	for _, key := range []string{"metrics_interval_seconds", "process_limit", "connection_limit"} {
+		field, ok := fields[key]
+		if !ok {
+			t.Fatalf("missing field %s", key)
+		}
+		if field.Type != plugin.FieldStepper {
+			t.Fatalf("%s type = %q, want stepper", key, field.Type)
+		}
+		if field.Step == nil {
+			t.Fatalf("%s should declare a step", key)
+		}
+		if len(field.Validators) < 2 {
+			t.Fatalf("%s should declare min/max validators", key)
+		}
 	}
 }
 

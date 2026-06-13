@@ -546,13 +546,13 @@ func RemoveNetwork(rc *plugin.RequestContext) (any, error) {
 
 func ImagePullSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Image", Fields: []plugin.Field{
-		{Key: "image", Label: "Image", Type: plugin.FieldText, Required: true, Placeholder: "nginx:latest", Help: "Image reference (repository:tag)."},
+		{Key: "image", Label: "Image", Type: plugin.FieldAutocomplete, Required: true, Placeholder: "nginx:latest", Help: "Image reference (repository:tag)."},
 	}}}}
 }
 
 func VolumeCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Volume", Fields: []plugin.Field{
-		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
+		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true, Validators: nameValidators()},
 		{Key: "driver", Label: "Driver", Type: plugin.FieldAutocomplete, Default: "local", Placeholder: "local", Options: []plugin.Option{{Label: "Local", Value: "local"}}, Help: "Volume driver. Use local unless a custom volume plugin is installed."},
 	}}}}
 }
@@ -582,9 +582,13 @@ func PodmanNetworkCreateSchema() *plugin.Schema {
 
 func networkCreateSchema(driver plugin.Field) *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Network", Fields: []plugin.Field{
-		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
+		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true, Validators: nameValidators()},
 		driver,
 	}}}}
+}
+
+func nameValidators() []plugin.Validator {
+	return []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^[A-Za-z0-9][A-Za-z0-9_.-]*$`, Message: "Use letters, numbers, dots, underscores, or dashes."}}
 }
 
 func dockerNetworkDriverOptions() []plugin.Option {
@@ -646,10 +650,11 @@ func CreateVolume(rc *plugin.RequestContext) (any, error) {
 	if err := rc.Bind(&req); err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(req.Name) == "" {
-		return nil, fmt.Errorf("%w: volume name is required", plugin.ErrInvalidInput)
+	name := strings.TrimSpace(req.Name)
+	if err := validateResourceName(name); err != nil {
+		return nil, err
 	}
-	if _, err := s.cli.VolumeCreate(rc.Ctx, dockerclient.VolumeCreateOptions{Name: strings.TrimSpace(req.Name), Driver: strings.TrimSpace(req.Driver)}); err != nil {
+	if _, err := s.cli.VolumeCreate(rc.Ctx, dockerclient.VolumeCreateOptions{Name: name, Driver: strings.TrimSpace(req.Driver)}); err != nil {
 		return nil, DockerErr(err)
 	}
 	return ActionResult{OK: true}, nil
@@ -668,8 +673,8 @@ func CreateNetwork(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	name := strings.TrimSpace(req.Name)
-	if name == "" {
-		return nil, fmt.Errorf("%w: network name is required", plugin.ErrInvalidInput)
+	if err := validateResourceName(name); err != nil {
+		return nil, err
 	}
 	if _, err := s.cli.NetworkCreate(rc.Ctx, name, dockerclient.NetworkCreateOptions{Driver: strings.TrimSpace(req.Driver)}); err != nil {
 		return nil, DockerErr(err)
@@ -1248,8 +1253,8 @@ func CreateContainerSchema() *plugin.Schema {
 	onFailure := plugin.Condition{AllOf: []plugin.Rule{{Field: "restart", Op: plugin.OpEq, Value: string(container.RestartPolicyOnFailure)}}}
 	return &plugin.Schema{Groups: []plugin.Group{
 		{Name: "Container", Fields: []plugin.Field{
-			{Key: "name", Label: "Name", Type: plugin.FieldText, Placeholder: "web", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^[A-Za-z0-9][A-Za-z0-9_.-]*$`, Message: "Use letters, numbers, dots, underscores, or dashes."}}},
-			{Key: "image", Label: "Image", Type: plugin.FieldText, Required: true, Placeholder: "nginx:latest"},
+			{Key: "name", Label: "Name", Type: plugin.FieldText, Placeholder: "web", Validators: nameValidators()},
+			{Key: "image", Label: "Image", Type: plugin.FieldAutocomplete, Required: true, Placeholder: "nginx:latest"},
 			{Key: "pull", Label: "Pull image first", Type: plugin.FieldToggle, Default: true},
 			{Key: "start", Label: "Start after create", Type: plugin.FieldToggle, Default: true},
 		}},
@@ -1287,18 +1292,18 @@ func containerNetworkOptions() []plugin.Option {
 
 func LogsSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Logs", Fields: []plugin.Field{
-		{Key: "tail", Label: "Tail", Type: plugin.FieldNumber},
-		{Key: "since", Label: "Since", Type: plugin.FieldText},
-		{Key: "follow", Label: "Follow", Type: plugin.FieldToggle},
-		{Key: "timestamps", Label: "Timestamps", Type: plugin.FieldToggle},
+		{Key: "tail", Label: "Tail", Type: plugin.FieldNumber, Default: 200, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}, {Type: plugin.ValidatorMax, Value: 10000}}},
+		{Key: "since", Label: "Since", Type: plugin.FieldText, Placeholder: "10m, 2026-06-13T12:00:00Z"},
+		{Key: "follow", Label: "Follow", Type: plugin.FieldToggle, Default: true},
+		{Key: "timestamps", Label: "Timestamps", Type: plugin.FieldToggle, Default: true},
 	}}}}
 }
 
 func ExecSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Exec", Fields: []plugin.Field{
-		{Key: "cols", Label: "Columns", Type: plugin.FieldNumber},
-		{Key: "rows", Label: "Rows", Type: plugin.FieldNumber},
-		{Key: "command", Label: "Command", Type: plugin.FieldText},
+		{Key: "cols", Label: "Columns", Type: plugin.FieldNumber, Default: 80, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 20}, {Type: plugin.ValidatorMax, Value: 300}}},
+		{Key: "rows", Label: "Rows", Type: plugin.FieldNumber, Default: 24, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 5}, {Type: plugin.ValidatorMax, Value: 120}}},
+		{Key: "command", Label: "Command", Type: plugin.FieldText, Placeholder: "/bin/sh"},
 	}}}}
 }
 

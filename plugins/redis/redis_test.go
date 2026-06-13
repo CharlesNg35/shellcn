@@ -49,7 +49,9 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 		t.Fatal("redis console should stay a single terminal panel")
 	}
 	var info *plugin.Panel
+	tabs := map[string]plugin.Panel{}
 	for i := range m.Tabs {
+		tabs[m.Tabs[i].Key] = m.Tabs[i]
 		if m.Tabs[i].Key == "info" {
 			info = &m.Tabs[i]
 			break
@@ -67,6 +69,19 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	}
 	if len(dash.Cells) == 0 || dash.Cells[0].Key != "server" || dash.Cells[0].Type != plugin.PanelObjectDetail {
 		t.Fatalf("server dashboard cell = %+v, want object_detail", dash.Cells)
+	}
+	for _, key := range []string{"clients", "channels"} {
+		tab, ok := tabs[key]
+		if !ok {
+			t.Fatalf("missing %s tab", key)
+		}
+		cfg, ok := tab.Config.(plugin.TableConfig)
+		if tab.Type != plugin.PanelTable || !ok {
+			t.Fatalf("%s tab should be a table, got %+v", key, tab)
+		}
+		if cfg.EmptyText == "" || cfg.RefreshIntervalMs == 0 || !cfg.Exportable || cfg.RowClick != plugin.RowClickDetail {
+			t.Fatalf("%s tab table config is not review-ready: %#v", key, cfg)
+		}
 	}
 }
 

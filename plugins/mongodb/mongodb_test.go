@@ -133,3 +133,112 @@ func TestIndexCreateKeysIsMapOfDirectionSelect(t *testing.T) {
 		}
 	}
 }
+
+func TestMongoNameFieldsValidateClientSide(t *testing.T) {
+	for _, tc := range []struct {
+		routeID string
+		field   string
+		valid   map[string]any
+		invalid map[string]any
+	}{
+		{
+			routeID: "mongodb.database.create",
+			field:   "name",
+			valid:   map[string]any{"name": "app", "collection": "users"},
+			invalid: map[string]any{"name": "$cmd", "collection": "users"},
+		},
+		{
+			routeID: "mongodb.collection.create",
+			field:   "name",
+			valid:   map[string]any{"name": "users"},
+			invalid: map[string]any{"name": "bad/name"},
+		},
+		{
+			routeID: "mongodb.index.create",
+			field:   "name",
+			valid:   map[string]any{"keys": map[string]any{"email": 1}, "name": "email_1"},
+			invalid: map[string]any{"keys": map[string]any{"email": 1}, "name": `bad\name`},
+		},
+	} {
+		schema := routeInputSchema(t, tc.routeID)
+		field := requireRouteField(t, schema, tc.field)
+		if len(field.Validators) == 0 {
+			t.Fatalf("%s.%s should declare a validator", tc.routeID, tc.field)
+		}
+		if err := schema.ValidateValues(tc.valid, nil); err != nil {
+			t.Fatalf("%s valid values rejected: %v", tc.routeID, err)
+		}
+		if err := schema.ValidateValues(tc.invalid, nil); !errors.Is(err, plugin.ErrInvalidInput) {
+			t.Fatalf("%s invalid values accepted: %v", tc.routeID, err)
+		}
+	}
+}
+
+func TestCollectionCreateCappedSizeOnlyVisibleWhenCapped(t *testing.T) {
+	schema := routeInputSchema(t, "mongodb.collection.create")
+	visible := schema.VisibleValues(map[string]any{"name": "events", "capped": false}, nil)
+	if _, ok := visible["size"]; ok {
+		t.Fatal("capped collection size should be hidden unless capped is enabled")
+	}
+	if err := schema.ValidateValues(map[string]any{"name": "events", "capped": false}, nil); err != nil {
+		t.Fatalf("uncapped collection should not require size: %v", err)
+	}
+	if err := schema.ValidateValues(map[string]any{"name": "events", "capped": true}, nil); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("capped collection without size should be invalid, got %v", err)
+	}
+}
+
+func TestDocumentDetailOpensReadOnlyViewFirst(t *testing.T) {
+	var document plugin.ResourceType
+	for _, res := range New().Manifest().Resources {
+		if res.Kind == "document" {
+			document = res
+		}
+	}
+	if document.Detail.DefaultTab != "document" {
+		t.Fatalf("document default tab = %q, want read-only document", document.Detail.DefaultTab)
+	}
+}
+
+func TestDestructiveResourceActionsNavigateAwayFromDeletedDetails(t *testing.T) {
+	actions := map[string]plugin.Action{}
+	for _, a := range New().Manifest().Actions {
+		actions[a.ID] = a
+	}
+	for _, id := range []string{"mongodb.collection.drop", "mongodb.document.delete"} {
+		action := actions[id]
+		if !action.Confirm {
+			t.Fatalf("%s must require confirmation", id)
+		}
+		if action.OnSuccess == nil || action.OnSuccess.Navigate != plugin.NavigateList {
+			t.Fatalf("%s should navigate back to the list after success: %#v", id, action.OnSuccess)
+		}
+	}
+}
+
+func routeInputSchema(t *testing.T, routeID string) *plugin.Schema {
+	t.Helper()
+	for _, r := range New().Routes() {
+		if r.ID == routeID {
+			if r.Input == nil {
+				t.Fatalf("%s has no input schema", routeID)
+			}
+			return r.Input
+		}
+	}
+	t.Fatalf("route %s not found", routeID)
+	return nil
+}
+
+func requireRouteField(t *testing.T, schema *plugin.Schema, key string) plugin.Field {
+	t.Helper()
+	for _, g := range schema.Groups {
+		for _, field := range g.Fields {
+			if field.Key == key {
+				return field
+			}
+		}
+	}
+	t.Fatalf("schema missing %s", key)
+	return plugin.Field{}
+}

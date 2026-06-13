@@ -155,7 +155,7 @@ func inspectDetailConfig() plugin.ObjectDetailConfig {
 func overviewResource() plugin.ResourceType {
 	dash := plugin.DashboardConfig{Cells: []plugin.Panel{
 		{Key: "stats", Label: "Environment", Type: plugin.PanelMetrics, Span: 2, Source: &plugin.DataSource{RouteID: "docker.overview.metrics", Method: plugin.MethodWS}, Config: dockerengine.OverviewMetricsConfig()},
-		{Key: "containers", Label: "Containers", Type: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "docker.containers.list"}, Config: plugin.TableConfig{Columns: containerColumns()}},
+		{Key: "containers", Label: "Containers", Type: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "docker.containers.list"}, Config: plugin.TableConfig{Columns: containerColumns(), EmptyText: "No containers found."}},
 	}}
 	return plugin.ResourceType{
 		Kind: dockerengine.OverviewKind, Title: "Overview",
@@ -212,7 +212,7 @@ func containerResource() plugin.ResourceType {
 				{Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"}, Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "docker.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24"}}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
 				{Key: "logs", Label: "Logs", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "scroll-text"}, Type: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "docker.container.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "code"}, Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "docker.container.inspect", Params: map[string]string{"id": "${resource.uid}"}}, Config: inspectDetailConfig()},
-				{Key: "env", Label: "Env", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "list"}, Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.container.env", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: []plugin.Column{{Key: "key", Label: "Key", Sortable: true}, {Key: "value", Label: "Value"}}}},
+				{Key: "env", Label: "Env", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "list"}, Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.container.env", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: []plugin.Column{{Key: "key", Label: "Key", Sortable: true}, {Key: "value", Label: "Value"}}, EmptyText: "No environment variables found."}},
 			},
 		},
 	}
@@ -313,8 +313,8 @@ func composeResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "docker.compose.overview", Params: map[string]string{"project": "${resource.uid}"}}, Config: dockerengine.ComposeOverviewDetailConfig()},
-				{Key: "containers", Label: "Containers", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "box"}, Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.containers", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: containerColumns()}},
-				{Key: "services", Label: "Services", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "workflow"}, Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.services", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns()}},
+				{Key: "containers", Label: "Containers", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "box"}, Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.containers", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: containerColumns(), EmptyText: "No containers found in this project."}},
+				{Key: "services", Label: "Services", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "workflow"}, Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.services", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns(), EmptyText: "No Compose services found in this project."}},
 			},
 		},
 	}
@@ -332,20 +332,20 @@ func actions() []plugin.Action {
 		{ID: "docker.container.unpause", Label: "Unpause", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"}, RouteID: "docker.container.unpause", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: dockerengine.WhenState("paused"), Group: "Lifecycle"},
 		{ID: "docker.container.kill", Label: "Kill", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "skull"}, RouteID: "docker.container.kill", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Send a kill signal to this container?", EnabledWhen: dockerengine.WhenState("running", "paused", "restarting"), Group: "Lifecycle"},
 		{ID: "docker.container.rename", Label: "Rename", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "pencil"}, RouteID: "docker.container.rename", Params: map[string]string{"id": "${resource.uid}"}},
-		{ID: "docker.container.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.container.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this container and anonymous volumes?"},
+		{ID: "docker.container.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.container.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this container and anonymous volumes?", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 		{ID: "docker.image.build", Label: "Build image", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "hammer"}, RouteID: "docker.image.build"},
 		{ID: "docker.image.tag", Label: "Tag", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "tag"}, RouteID: "docker.image.tag", Params: map[string]string{"id": "${resource.uid}"}},
 		{ID: "docker.image.push", Label: "Push", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "upload"}, RouteID: "docker.image.push", Params: map[string]string{"id": "${resource.uid}"}},
-		{ID: "docker.image.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.image.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this image?"},
-		{ID: "docker.volume.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.volume.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this volume?"},
-		{ID: "docker.network.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.network.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this network?"},
+		{ID: "docker.image.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.image.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this image and untagged children?", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
+		{ID: "docker.volume.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.volume.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this volume and its data?", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
+		{ID: "docker.network.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.network.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this network?", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 		{ID: "docker.image.pull", Label: "Pull image", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "download"}, RouteID: "docker.image.pull"},
 		{ID: "docker.volume.create", Label: "Create volume", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "plus"}, RouteID: "docker.volume.create"},
 		{ID: "docker.network.create", Label: "Create network", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "plus"}, RouteID: "docker.network.create"},
 		{ID: "docker.network.connect", Label: "Connect container", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "link"}, RouteID: "docker.network.connect", Params: map[string]string{"id": "${resource.uid}"}},
 		{ID: "docker.network.disconnect", Label: "Disconnect container", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "unlink"}, RouteID: "docker.network.disconnect", Params: map[string]string{"id": "${resource.uid}"}},
-		{ID: "docker.compose.up", Label: "Up", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"}, RouteID: "docker.compose.up", Params: map[string]string{"project": "${resource.uid}"}, Confirm: true, ConfirmText: "Start all containers in this project?"},
-		{ID: "docker.compose.down", Label: "Down", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "square"}, RouteID: "docker.compose.down", Params: map[string]string{"project": "${resource.uid}"}, Confirm: true, ConfirmText: "Stop and remove all containers in this project?"},
+		{ID: "docker.compose.up", Label: "Start project", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"}, RouteID: "docker.compose.up", Params: map[string]string{"project": "${resource.uid}"}, Confirm: true, ConfirmText: "Start all containers in this project?"},
+		{ID: "docker.compose.down", Label: "Remove project", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.compose.down", Params: map[string]string{"project": "${resource.uid}"}, Confirm: true, ConfirmText: "Stop and remove all containers and anonymous volumes in this project?", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 		{ID: "docker.containers.prune", Label: "Prune stopped", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "eraser"}, RouteID: "docker.containers.prune", Confirm: true, ConfirmText: "Remove all stopped containers?"},
 		{ID: "docker.images.prune", Label: "Prune dangling", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "eraser"}, RouteID: "docker.images.prune", Confirm: true, ConfirmText: "Remove all dangling images?"},
 		{ID: "docker.volumes.prune", Label: "Prune unused", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "eraser"}, RouteID: "docker.volumes.prune", Confirm: true, ConfirmText: "Remove all unused volumes?"},

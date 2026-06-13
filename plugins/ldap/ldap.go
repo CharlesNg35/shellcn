@@ -66,7 +66,7 @@ func entryResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
 				{Key: "attributes", Label: "Attributes", Icon: icon("table"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.attributes", Params: dnParams}, Config: attributeGridConfig(dnParams)},
-				{Key: "children", Label: "Children", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.children", Params: dnParams}, Config: plugin.TableConfig{Columns: entryColumns(), RowActionIDs: []string{"ldap.entry.delete"}, EmptyText: "No child entries.", Exportable: true}},
+				{Key: "children", Label: "Children", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.children", Params: dnParams}, Config: plugin.TableConfig{Columns: entryColumns(), RowActionIDs: []string{"ldap.entry.delete"}, EmptyText: "No child entries.", Exportable: true, RowClick: plugin.RowClickNavigate}},
 				{Key: "subtree", Label: "Subtree", Icon: icon("search"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entries.search", Params: map[string]string{"base": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: entryColumns(), EmptyText: "No matching entries. Type an LDAP filter to search.", Exportable: true}},
 				{Key: "ldif", Label: "LDIF", Icon: icon("file-text"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "ldap.entry.ldif", Params: dnParams}},
 			},
@@ -104,9 +104,10 @@ func attributeColumns() []plugin.Column {
 }
 
 func actions() []plugin.Action {
+	writable := &plugin.Condition{AllOf: []plugin.Rule{{Field: "readOnly", Op: plugin.OpNeq, Value: true}}}
 	return []plugin.Action{
-		{ID: "ldap.entry.add", Label: "Add entry", Icon: icon("plus"), RouteID: "ldap.entry.add", Params: map[string]string{"parent": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "children"}},
-		{ID: "ldap.entry.rename", Label: "Rename / move", Icon: icon("pencil"), RouteID: "ldap.entry.rename", Params: map[string]string{"dn": "${resource.uid}"}},
-		{ID: "ldap.entry.delete", Label: "Delete entry", Icon: icon("trash-2"), RouteID: "ldap.entry.delete", Params: map[string]string{"dn": "${resource.uid}"}, Confirm: true, ConfirmText: "Delete this entry? This permanently removes it from the directory."},
+		{ID: "ldap.entry.add", Label: "Add child entry", Icon: icon("plus"), RouteID: "ldap.entry.add", Params: map[string]string{"parent": "${resource.uid}"}, EnabledWhen: writable, OnSuccess: &plugin.ActionSuccess{SelectTab: "children"}},
+		{ID: "ldap.entry.rename", Label: "Rename or move", Icon: icon("pencil"), RouteID: "ldap.entry.rename", Params: map[string]string{"dn": "${resource.uid}"}, Confirm: true, ConfirmText: "Rename or move this entry? Existing references to its DN may need to be updated.", EnabledWhen: writable},
+		{ID: "ldap.entry.delete", Label: "Delete entry", Icon: icon("trash-2"), RouteID: "ldap.entry.delete", Params: map[string]string{"dn": "${resource.uid}"}, Confirm: true, ConfirmText: "Delete this entry? This permanently removes it from the directory.", EnabledWhen: writable, OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 	}
 }

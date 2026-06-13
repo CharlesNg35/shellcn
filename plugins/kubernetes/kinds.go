@@ -97,7 +97,7 @@ func ageCol() plugin.Column {
 	return col("age", "Age", func(c *plugin.Column) { c.Type = plugin.ColumnRelativeTime })
 }
 
-// Action sets referenced by kinds. Edit/logs/exec are added by steps 3–4.
+// Action sets referenced by kinds.
 var (
 	scalable   = []string{"kubernetes.resource.scale", "kubernetes.resource.restart", "kubernetes.resource.delete"}
 	justDelete = []string{"kubernetes.resource.delete"}

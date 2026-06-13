@@ -25,8 +25,11 @@ func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 		return err
 	}
 	ns, pod := rc.Param("namespace"), rc.Param("name")
-	if pod == "" {
-		return errors.New("pod name is required")
+	if err := validateNamespace(ns); err != nil {
+		return err
+	}
+	if err := validateName(pod); err != nil {
+		return err
 	}
 	tty := boolParam(rc, "tty", true)
 	opts := corev1.PodExecOptions{

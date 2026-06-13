@@ -48,18 +48,45 @@ func routes() []plugin.Route {
 
 func entryAddSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Entry", Fields: []plugin.Field{
-		{Key: "rdn", Label: "RDN", Type: plugin.FieldText, Required: true, Placeholder: "uid=jdoe", Help: "Relative DN of the new entry, e.g. uid=jdoe or cn=Engineers."},
-		{Key: "object_class", Label: "Object classes", Type: plugin.FieldText, Required: true, Default: "top", Help: "Comma-separated objectClass values, e.g. top,inetOrgPerson."},
-		{Key: "attributes", Label: "Attributes", Type: plugin.FieldMap, KeyPlaceholder: "cn", AddLabel: "Add attribute", Item: &plugin.Field{Type: plugin.FieldArray, ItemLabel: "Value", MinItems: 1, Item: &plugin.Field{Type: plugin.FieldText}}},
+		{Key: "rdn", Label: "RDN", Type: plugin.FieldText, Required: true, Placeholder: "uid=jdoe", Help: "Relative DN of the new entry, e.g. uid=jdoe or cn=Engineers.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^[^=]+=.+$`, Message: "Use attribute=value, for example uid=jdoe."}}},
+		{Key: "object_class", Label: "Object classes", Type: plugin.FieldArray, Required: true, Default: []string{"top"}, MinItems: 1, ItemLabel: "Object class", AddLabel: "Add object class", Item: &plugin.Field{Type: plugin.FieldAutocomplete, Options: commonObjectClassOptions()}},
+		{Key: "attributes", Label: "Attributes", Type: plugin.FieldMap, KeyLabel: "Attribute", KeyPlaceholder: "cn", AddLabel: "Add attribute", Item: &plugin.Field{Type: plugin.FieldArray, ItemLabel: "Value", MinItems: 1, Item: &plugin.Field{Type: plugin.FieldText}}},
 	}}}}
 }
 
 func entryRenameSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Rename / move", Fields: []plugin.Field{
-		{Key: "new_rdn", Label: "New RDN", Type: plugin.FieldText, Required: true, Placeholder: "uid=johndoe", Help: "New relative DN for the entry."},
+		{Key: "new_rdn", Label: "New RDN", Type: plugin.FieldText, Required: true, Placeholder: "uid=johndoe", Help: "New relative DN for the entry.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^[^=]+=.+$`, Message: "Use attribute=value, for example uid=johndoe."}}},
 		{Key: "new_superior", Label: "New parent DN", Type: plugin.FieldText, Help: "Move the entry under this parent DN. Leave empty to rename in place."},
 		{Key: "delete_old_rdn", Label: "Delete old RDN", Type: plugin.FieldToggle, Default: true, Help: "Remove the previous RDN attribute value after the rename."},
 	}}}}
+}
+
+func commonObjectClassOptions() []plugin.Option {
+	values := []string{
+		"top",
+		"domain",
+		"dcObject",
+		"organization",
+		"organizationalUnit",
+		"container",
+		"person",
+		"organizationalPerson",
+		"inetOrgPerson",
+		"user",
+		"group",
+		"groupOfNames",
+		"groupOfUniqueNames",
+		"posixAccount",
+		"posixGroup",
+		"device",
+		"computer",
+	}
+	options := make([]plugin.Option, 0, len(values))
+	for _, value := range values {
+		options = append(options, plugin.Option{Label: value, Value: value})
+	}
+	return options
 }
 
 // --- session helpers ----------------------------------------------------
@@ -110,7 +137,7 @@ func treeRoot(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	node := treeNode(entry)
+	node := treeNode(entry, s.opts.ReadOnly)
 	total := 1
 	return plugin.Page[plugin.TreeNode]{Items: []plugin.TreeNode{node}, Total: &total}, nil
 }
@@ -130,7 +157,7 @@ func treeChildren(rc *plugin.RequestContext) (any, error) {
 	}
 	nodes := make([]plugin.TreeNode, 0, len(entries))
 	for _, entry := range entries {
-		nodes = append(nodes, treeNode(entry))
+		nodes = append(nodes, treeNode(entry, s.opts.ReadOnly))
 	}
 	total := len(nodes)
 	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: &total}, nil
@@ -151,14 +178,20 @@ func searchEntries(rc *plugin.RequestContext) (any, error) {
 	if base == "" {
 		base = s.opts.BaseDN
 	}
-	filter := searchFilter(req.Search())
+	if err := validateDN(base, "base DN"); err != nil {
+		return nil, err
+	}
+	filter, err := searchFilter(req.Search())
+	if err != nil {
+		return nil, err
+	}
 	entries, err := search(s, base, ldapv3.ScopeWholeSubtree, filter, structAttrs)
 	if err != nil {
 		return nil, err
 	}
 	rows := make([]row, 0, len(entries))
 	for _, entry := range entries {
-		rows = append(rows, entryRow(entry))
+		rows = append(rows, entryRow(entry, s.opts.ReadOnly))
 	}
 	return paginate(rc, rows)
 }
@@ -178,7 +211,7 @@ func childEntries(rc *plugin.RequestContext) (any, error) {
 	}
 	rows := make([]row, 0, len(entries))
 	for _, entry := range entries {
-		rows = append(rows, entryRow(entry))
+		rows = append(rows, entryRow(entry, s.opts.ReadOnly))
 	}
 	return pageRows(rc, rows)
 }
@@ -332,30 +365,37 @@ func addEntry(rc *plugin.RequestContext) (any, error) {
 	if parent == "" {
 		parent = s.opts.BaseDN
 	}
+	if err := validateDN(parent, "parent DN"); err != nil {
+		return nil, err
+	}
 	var req struct {
-		RDN         string              `json:"rdn" validate:"required"`
-		ObjectClass string              `json:"object_class" validate:"required"`
-		Attributes  map[string][]string `json:"attributes"`
+		RDN         string         `json:"rdn" validate:"required"`
+		ObjectClass any            `json:"object_class" validate:"required"`
+		Attributes  map[string]any `json:"attributes"`
 	}
 	if err := rc.Bind(&req); err != nil {
 		return nil, err
 	}
 	rdn := strings.TrimSpace(req.RDN)
-	attrName, attrValue, ok := strings.Cut(rdn, "=")
-	if !ok || strings.TrimSpace(attrName) == "" || strings.TrimSpace(attrValue) == "" {
-		return nil, fmt.Errorf("%w: RDN must be in attribute=value form", plugin.ErrInvalidInput)
+	if err := validateRDN(rdn, "RDN"); err != nil {
+		return nil, err
 	}
+	attrName, attrValue, _ := strings.Cut(rdn, "=")
 	add := ldapv3.NewAddRequest(rdn+","+parent, nil)
-	add.Attribute("objectClass", splitList(req.ObjectClass))
+	objectClasses := stringList(req.ObjectClass)
+	if len(objectClasses) == 0 {
+		return nil, fmt.Errorf("%w: at least one object class is required", plugin.ErrInvalidInput)
+	}
+	add.Attribute("objectClass", objectClasses)
 	merged := map[string][]string{}
 	for name, values := range req.Attributes {
-		merged[strings.ToLower(name)] = values
+		merged[strings.ToLower(name)] = attributeValues(values)
 	}
 	for name, values := range req.Attributes {
 		if strings.EqualFold(name, "objectClass") {
 			continue
 		}
-		add.Attribute(name, values)
+		add.Attribute(name, attributeValues(values))
 	}
 	if _, exists := merged[strings.ToLower(attrName)]; !exists {
 		add.Attribute(strings.TrimSpace(attrName), []string{strings.TrimSpace(attrValue)})
@@ -386,7 +426,15 @@ func renameEntry(rc *plugin.RequestContext) (any, error) {
 	if err := rc.Bind(&req); err != nil {
 		return nil, err
 	}
-	move := ldapv3.NewModifyDNRequest(dn, strings.TrimSpace(req.NewRDN), req.DeleteOldRDN, strings.TrimSpace(req.NewSuperior))
+	newRDN := strings.TrimSpace(req.NewRDN)
+	if err := validateRDN(newRDN, "new RDN"); err != nil {
+		return nil, err
+	}
+	newSuperior := strings.TrimSpace(req.NewSuperior)
+	if err := validateOptionalDN(newSuperior, "new parent DN"); err != nil {
+		return nil, err
+	}
+	move := ldapv3.NewModifyDNRequest(dn, newRDN, req.DeleteOldRDN, newSuperior)
 	if err := s.conn.ModifyDN(move); err != nil {
 		return nil, ldapErr(err)
 	}
@@ -494,7 +542,7 @@ func lookupEntry(s *Session, dn string) (*ldapv3.Entry, error) {
 	return res.Entries[0], nil
 }
 
-func treeNode(entry *ldapv3.Entry) plugin.TreeNode {
+func treeNode(entry *ldapv3.Entry, readOnly bool) plugin.TreeNode {
 	classes := entry.GetAttributeValues("objectClass")
 	leaf := strings.EqualFold(entry.GetAttributeValue("hasSubordinates"), "FALSE")
 	node := plugin.TreeNode{
@@ -503,6 +551,7 @@ func treeNode(entry *ldapv3.Entry) plugin.TreeNode {
 		Icon:  iconForEntry(classes),
 		Ref:   entryRef(entry.DN),
 		Leaf:  leaf,
+		Data:  map[string]any{"readOnly": readOnly},
 	}
 	if !leaf {
 		node.ChildrenSource = &plugin.DataSource{RouteID: "ldap.tree.children", Params: map[string]string{"dn": entry.DN}}
@@ -510,12 +559,13 @@ func treeNode(entry *ldapv3.Entry) plugin.TreeNode {
 	return node
 }
 
-func entryRow(entry *ldapv3.Entry) row {
+func entryRow(entry *ldapv3.Entry, readOnly bool) row {
 	ref := entryRef(entry.DN)
 	return row{
 		"name":        ref.Name,
 		"dn":          entry.DN,
 		"objectClass": strings.Join(entry.GetAttributeValues("objectClass"), ", "),
+		"readOnly":    readOnly,
 		"ref":         *ref,
 	}
 }
@@ -541,31 +591,41 @@ func iconForEntry(classes []string) plugin.Icon {
 }
 
 func rdnOf(dn string) string {
-	dn = strings.TrimSpace(dn)
-	if dn == "" {
-		return dn
+	parsed, err := ldapv3.ParseDN(strings.TrimSpace(dn))
+	if err == nil && len(parsed.RDNs) > 0 {
+		return parsed.RDNs[0].String()
 	}
-	return strings.SplitN(dn, ",", 2)[0]
-}
-
-func parentOf(dn string) string {
-	parts := strings.SplitN(strings.TrimSpace(dn), ",", 2)
-	if len(parts) == 2 {
-		return parts[1]
+	if dn = strings.TrimSpace(dn); dn != "" {
+		return strings.SplitN(dn, ",", 2)[0]
 	}
 	return ""
 }
 
-func searchFilter(q string) string {
+func parentOf(dn string) string {
+	parsed, err := ldapv3.ParseDN(strings.TrimSpace(dn))
+	if err == nil && len(parsed.RDNs) > 1 {
+		return (&ldapv3.DN{RDNs: parsed.RDNs[1:]}).String()
+	}
+	parts := strings.SplitN(strings.TrimSpace(dn), ",", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	return parts[1]
+}
+
+func searchFilter(q string) (string, error) {
 	q = strings.TrimSpace(q)
 	if q == "" {
-		return "(objectClass=*)"
+		return "(objectClass=*)", nil
 	}
 	if strings.HasPrefix(q, "(") {
-		return q
+		if _, err := ldapv3.CompileFilter(q); err != nil {
+			return "", fmt.Errorf("%w: invalid LDAP filter", plugin.ErrInvalidInput)
+		}
+		return q, nil
 	}
 	esc := ldapv3.EscapeFilter(q)
-	return fmt.Sprintf("(|(cn=*%s*)(uid=*%s*)(ou=*%s*)(mail=*%s*)(sn=*%s*))", esc, esc, esc, esc, esc)
+	return fmt.Sprintf("(|(cn=*%s*)(uid=*%s*)(ou=*%s*)(mail=*%s*)(sn=*%s*))", esc, esc, esc, esc, esc), nil
 }
 
 // attributeValue collapses an attribute's values for the grid cell: a single
@@ -617,8 +677,27 @@ func attributeValues(v any) []string {
 	}
 }
 
-func splitList(raw string) []string {
-	parts := strings.Split(raw, ",")
+func stringList(raw any) []string {
+	switch v := raw.(type) {
+	case []string:
+		return compactStrings(v)
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			out = append(out, fmt.Sprint(item))
+		}
+		return compactStrings(out)
+	case string:
+		return compactStrings(strings.Split(v, ","))
+	default:
+		if raw == nil {
+			return nil
+		}
+		return compactStrings([]string{fmt.Sprint(raw)})
+	}
+}
+
+func compactStrings(parts []string) []string {
 	out := make([]string, 0, len(parts))
 	for _, part := range parts {
 		if p := strings.TrimSpace(part); p != "" {
@@ -626,6 +705,28 @@ func splitList(raw string) []string {
 		}
 	}
 	return out
+}
+
+func validateOptionalDN(dn, label string) error {
+	if strings.TrimSpace(dn) == "" {
+		return nil
+	}
+	return validateDN(dn, label)
+}
+
+func validateDN(dn, label string) error {
+	if _, err := ldapv3.ParseDN(strings.TrimSpace(dn)); err != nil {
+		return fmt.Errorf("%w: %s is not a valid DN", plugin.ErrInvalidInput, label)
+	}
+	return nil
+}
+
+func validateRDN(rdn, label string) error {
+	parsed, err := ldapv3.ParseDN(strings.TrimSpace(rdn))
+	if err != nil || len(parsed.RDNs) != 1 {
+		return fmt.Errorf("%w: %s must be a valid relative DN", plugin.ErrInvalidInput, label)
+	}
+	return nil
 }
 
 func ldapErr(err error) error {

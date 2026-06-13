@@ -130,10 +130,21 @@ func TestVolumeDriverAndContainerNetworkUseAutocomplete(t *testing.T) {
 	if err := VolumeCreateSchema().ValidateValues(map[string]any{"name": "data", "driver": "custom-volume-plugin"}, nil); err != nil {
 		t.Fatalf("volume schema should allow custom driver names: %v", err)
 	}
+	if err := VolumeCreateSchema().ValidateValues(map[string]any{"name": "bad name", "driver": "local"}, nil); err == nil {
+		t.Fatal("volume schema accepted a whitespace-bearing name")
+	}
 
 	containerNetwork := requireSchemaField(t, CreateContainerSchema(), "network")
 	if containerNetwork.Type != plugin.FieldAutocomplete {
 		t.Fatalf("container network field type = %q, want autocomplete", containerNetwork.Type)
+	}
+	containerImage := requireSchemaField(t, CreateContainerSchema(), "image")
+	if containerImage.Type != plugin.FieldAutocomplete {
+		t.Fatalf("container image field type = %q, want autocomplete", containerImage.Type)
+	}
+	pullImage := requireSchemaField(t, ImagePullSchema(), "image")
+	if pullImage.Type != plugin.FieldAutocomplete {
+		t.Fatalf("pull image field type = %q, want autocomplete", pullImage.Type)
 	}
 	got := make([]any, 0, len(containerNetwork.Options))
 	for _, option := range containerNetwork.Options {
@@ -142,6 +153,28 @@ func TestVolumeDriverAndContainerNetworkUseAutocomplete(t *testing.T) {
 	want := []any{"bridge", "host", "none"}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("container network options = %#v, want %#v", got, want)
+	}
+}
+
+func TestStreamSchemasConstrainTerminalAndLogInputs(t *testing.T) {
+	logTail := requireSchemaField(t, LogsSchema(), "tail")
+	if logTail.Default != 200 {
+		t.Fatalf("log tail default = %#v, want 200", logTail.Default)
+	}
+	if err := LogsSchema().ValidateValues(map[string]any{"tail": float64(-1)}, nil); err == nil {
+		t.Fatal("logs schema accepted a negative tail")
+	}
+	if err := LogsSchema().ValidateValues(map[string]any{"tail": float64(10001)}, nil); err == nil {
+		t.Fatal("logs schema accepted an excessive tail")
+	}
+
+	cols := requireSchemaField(t, ExecSchema(), "cols")
+	rows := requireSchemaField(t, ExecSchema(), "rows")
+	if cols.Default != 80 || rows.Default != 24 {
+		t.Fatalf("exec defaults = %#v/%#v, want 80/24", cols.Default, rows.Default)
+	}
+	if err := ExecSchema().ValidateValues(map[string]any{"cols": float64(10), "rows": float64(24)}, nil); err == nil {
+		t.Fatal("exec schema accepted too few columns")
 	}
 }
 

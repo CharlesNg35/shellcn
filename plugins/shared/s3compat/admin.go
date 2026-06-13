@@ -81,7 +81,8 @@ func BucketTab(protocol string) plugin.Panel {
 				routeID(protocol, "bucket.delete"),
 			},
 			Exportable: true,
-			EmptyText:  "No buckets.",
+			EmptyText:  "No buckets. Create one to start browsing objects.",
+			RowClick:   plugin.RowClickDetail,
 		},
 	}
 }
@@ -98,7 +99,7 @@ func Actions(protocol string) []plugin.Action {
 	return []plugin.Action{
 		{ID: routeID(protocol, "bucket.create"), Label: "Create bucket", Icon: icon("plus"), RouteID: routeID(protocol, "bucket.create")},
 		{ID: routeID(protocol, "bucket.delete"), Label: "Delete", Icon: icon("trash-2"), RouteID: routeID(protocol, "bucket.delete"), Params: bucketParams(), Confirm: true, ConfirmText: "Delete this bucket? The bucket must be empty."},
-		{ID: routeID(protocol, "bucket.versioning.set"), Label: "Set versioning", Icon: icon("history"), RouteID: routeID(protocol, "bucket.versioning.set"), Params: bucketParams()},
+		{ID: routeID(protocol, "bucket.versioning.set"), Label: "Versioning", Icon: icon("history"), RouteID: routeID(protocol, "bucket.versioning.set"), Params: bucketParams(), Confirm: true, ConfirmText: "Change bucket versioning? After versioning is enabled, S3 only allows suspending it."},
 	}
 }
 
@@ -120,7 +121,9 @@ func AdminRoutes(protocol string) []plugin.Route {
 
 func bucketCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Bucket", Fields: []plugin.Field{
-		{Key: "name", Label: "Bucket name", Type: plugin.FieldText, Required: true, Placeholder: "my-bucket", Help: "Lowercase letters, numbers, dots and hyphens; 3-63 characters."},
+		{Key: "name", Label: "Bucket name", Type: plugin.FieldText, Required: true, Placeholder: "my-bucket", Help: "Lowercase letters, numbers, dots and hyphens; 3-63 characters.", Validators: []plugin.Validator{
+			{Type: plugin.ValidatorRegex, Value: `^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`, Message: "Use 3-63 lowercase letters, numbers, dots, or hyphens, starting and ending with a letter or number."},
+		}},
 		{Key: "region", Label: "Region", Type: plugin.FieldAutocomplete, Placeholder: "us-east-1", Options: AWSRegionOptions()},
 	}}}}
 }

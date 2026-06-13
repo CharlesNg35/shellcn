@@ -213,6 +213,11 @@ func resourceTarget(rc *plugin.RequestContext) (*Session, kind, string, error) {
 	if name == "" {
 		return nil, kind{}, "", fmt.Errorf("%w: name is required", plugin.ErrInvalidInput)
 	}
+	if k.namespaced {
+		if err := validateNamespace(rc.Param("namespace")); err != nil {
+			return nil, kind{}, "", err
+		}
+	}
 	return s, k, name, nil
 }
 

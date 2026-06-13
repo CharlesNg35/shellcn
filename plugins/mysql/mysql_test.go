@@ -330,6 +330,65 @@ func TestUserActionsWiredToRoutes(t *testing.T) {
 	}
 }
 
+func TestQueryPanelsCarryDatabaseScopedParams(t *testing.T) {
+	for _, res := range New().Manifest().Resources {
+		if res.Kind != "database" && res.Kind != "table" && res.Kind != "view" {
+			continue
+		}
+		for _, tab := range res.Detail.Tabs {
+			if tab.Type != plugin.PanelQueryEditor {
+				continue
+			}
+			cfg, ok := tab.Config.(plugin.QueryEditorConfig)
+			if !ok {
+				t.Fatalf("%s query tab has %T config", res.Kind, tab.Config)
+			}
+			if res.Kind == "database" && cfg.CompletionParams["database"] != "${resource.uid}" {
+				t.Fatalf("database query completion params = %#v", cfg.CompletionParams)
+			}
+			if (res.Kind == "table" || res.Kind == "view") && cfg.CompletionParams["database"] != "${resource.namespace}" {
+				t.Fatalf("%s query completion params = %#v", res.Kind, cfg.CompletionParams)
+			}
+			if len(cfg.CancelParams) == 0 {
+				t.Fatalf("%s query tab should cancel in the same database scope", res.Kind)
+			}
+		}
+	}
+}
+
+func TestDestructiveResourceActionsNavigateAwayFromDeletedDetails(t *testing.T) {
+	actions := map[string]plugin.Action{}
+	for _, a := range New().Manifest().Actions {
+		actions[a.ID] = a
+	}
+	for _, id := range []string{"mysql.database.drop", "mysql.table.drop", "mysql.view.drop", "mysql.user.drop"} {
+		action := actions[id]
+		if !action.Confirm {
+			t.Fatalf("%s must require confirmation", id)
+		}
+		if action.OnSuccess == nil || action.OnSuccess.Navigate != plugin.NavigateList {
+			t.Fatalf("%s should navigate back to the list after success: %#v", id, action.OnSuccess)
+		}
+	}
+}
+
+func TestBrowseTablesDeclareEmptyStatesAndExport(t *testing.T) {
+	for _, res := range New().Manifest().Resources {
+		for _, tab := range res.Detail.Tabs {
+			tc, ok := tab.Config.(plugin.TableConfig)
+			if !ok {
+				continue
+			}
+			if tab.Key != "data" && tc.EmptyText == "" {
+				t.Fatalf("%s/%s table is missing an empty state", res.Kind, tab.Key)
+			}
+			if tab.Key != "data" && !tc.Exportable {
+				t.Fatalf("%s/%s browse table should be exportable", res.Kind, tab.Key)
+			}
+		}
+	}
+}
+
 func contains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

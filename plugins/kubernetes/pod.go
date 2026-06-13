@@ -11,7 +11,11 @@ func podRefParams(extra map[string]string) map[string]string {
 	return p
 }
 
-// podDetailTabs adds Logs and Shell tabs to the pod detail view.
+func runningPod() *plugin.Condition {
+	return &plugin.Condition{AllOf: []plugin.Rule{{Field: "status", Op: plugin.OpEq, Value: "Running"}}}
+}
+
+// podDetailTabs adds workload diagnostics to the pod detail view.
 func podDetailTabs() []plugin.Panel {
 	return []plugin.Panel{
 		{
@@ -20,7 +24,8 @@ func podDetailTabs() []plugin.Panel {
 				RouteID: "kubernetes.pod.metrics", Method: plugin.MethodWS,
 				Params: podRefParams(nil),
 			},
-			Config: podMetricsConfig(),
+			Config:      podMetricsConfig(),
+			VisibleWhen: runningPod(),
 		},
 		{
 			Key: "logs", Label: "Logs", Icon: lucide("scroll-text"), Type: plugin.PanelLogStream,
@@ -35,7 +40,8 @@ func podDetailTabs() []plugin.Panel {
 				RouteID: "kubernetes.pod.exec", Method: plugin.MethodWS,
 				Params: podRefParams(map[string]string{"tty": "true", "cols": "80", "rows": "24"}),
 			},
-			Config: plugin.TerminalConfig{Zoom: true, Search: true},
+			Config:      plugin.TerminalConfig{Zoom: true, Search: true},
+			VisibleWhen: runningPod(),
 		},
 	}
 }

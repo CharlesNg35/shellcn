@@ -3,7 +3,10 @@ package sshsftp
 
 import (
 	"context"
+	"crypto/subtle"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -26,6 +29,7 @@ type connectOptions struct {
 	Password   string
 	PrivateKey string
 	Passphrase string
+	HostKey    string
 }
 
 // Connect opens one SSH client for either the SSH or SFTP plugin.
@@ -38,6 +42,10 @@ func Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, err
 	if err != nil {
 		return nil, err
 	}
+	hostKeyCallback, err := hostKeyCallback(opts.HostKey)
+	if err != nil {
+		return nil, err
+	}
 
 	addr := net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
 	conn, err := cfg.Net.DialContext(ctx, "tcp", addr)
@@ -47,7 +55,7 @@ func Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, err
 	sshCfg := &ssh.ClientConfig{
 		User:            opts.User,
 		Auth:            auth,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         15 * time.Second,
 	}
 	cc, chans, reqs, err := ssh.NewClientConn(conn, addr, sshCfg)
@@ -75,6 +83,7 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 		Password:   cfg.String("password"),
 		PrivateKey: cfg.String("private_key"),
 		Passphrase: cfg.String("passphrase"),
+		HostKey:    strings.TrimSpace(cfg.String("host_key")),
 	}
 	if opts.Auth == "" {
 		opts.Auth = "password"
@@ -98,6 +107,32 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 		opts.User = identity
 	}
 	return opts, nil
+}
+
+func hostKeyCallback(raw string) (ssh.HostKeyCallback, error) {
+	if raw == "" {
+		return ssh.InsecureIgnoreHostKey(), nil
+	}
+	if strings.HasPrefix(raw, "SHA256:") {
+		return func(_ string, _ net.Addr, key ssh.PublicKey) error {
+			if subtle.ConstantTimeCompare([]byte(ssh.FingerprintSHA256(key)), []byte(raw)) != 1 {
+				return fmt.Errorf("%w: ssh host key fingerprint mismatch", plugin.ErrUnauthorized)
+			}
+			return nil
+		}, nil
+	}
+	if _, _, pubKey, _, _, err := ssh.ParseKnownHosts([]byte(raw)); err == nil {
+		return ssh.FixedHostKey(pubKey), nil
+	} else if !errors.Is(err, io.EOF) {
+		if pubKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(raw)); err == nil {
+			return ssh.FixedHostKey(pubKey), nil
+		}
+		return nil, fmt.Errorf("%w: parse ssh host key: %v", plugin.ErrInvalidInput, err)
+	}
+	if pubKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(raw)); err == nil {
+		return ssh.FixedHostKey(pubKey), nil
+	}
+	return nil, fmt.Errorf("%w: ssh host key must be an OpenSSH public key, known_hosts line, or SHA256 fingerprint", plugin.ErrInvalidInput)
 }
 
 func authMethods(opts connectOptions) ([]ssh.AuthMethod, error) {

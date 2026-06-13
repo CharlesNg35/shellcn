@@ -5,9 +5,11 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"golang.org/x/crypto/ssh"
 )
 
 func TestConnectPasswordSucceeds(t *testing.T) {
@@ -24,6 +26,56 @@ func TestConnectPasswordSucceeds(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 	if err := sess.HealthCheck(context.Background()); err != nil {
 		t.Fatalf("HealthCheck: %v", err)
+	}
+}
+
+func TestConnectVerifiesPinnedHostKey(t *testing.T) {
+	srv := newSSHServer(t)
+	defer srv.Close()
+
+	cfg := srv.config()
+	cfg["host_key"] = ssh.FingerprintSHA256(srv.PublicKey)
+	sess, err := Connect(context.Background(), plugin.ConnectConfig{
+		Config: cfg,
+		Net:    pluginNet{},
+	})
+	if err != nil {
+		t.Fatalf("Connect with matching host key: %v", err)
+	}
+	_ = sess.Close()
+
+	cfg = srv.config()
+	cfg["host_key"] = "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	_, err = Connect(context.Background(), plugin.ConnectConfig{
+		Config: cfg,
+		Net:    pluginNet{},
+	})
+	if !errors.Is(err, plugin.ErrUnauthorized) {
+		t.Fatalf("Connect with mismatched host key error = %v, want ErrUnauthorized", err)
+	}
+}
+
+func TestHostKeyCallbackParsesOpenSSHKeys(t *testing.T) {
+	srv := newSSHServer(t)
+	defer srv.Close()
+
+	for name, hostKey := range map[string]string{
+		"public key":  string(ssh.MarshalAuthorizedKey(srv.PublicKey)),
+		"known hosts": srv.Host + " " + strings.TrimSpace(string(ssh.MarshalAuthorizedKey(srv.PublicKey))),
+	} {
+		t.Run(name, func(t *testing.T) {
+			cb, err := hostKeyCallback(hostKey)
+			if err != nil {
+				t.Fatalf("hostKeyCallback: %v", err)
+			}
+			if err := cb(srv.Host, nil, srv.PublicKey); err != nil {
+				t.Fatalf("callback rejected matching key: %v", err)
+			}
+		})
+	}
+
+	if _, err := hostKeyCallback("not-a-key"); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("invalid host key error = %v, want ErrInvalidInput", err)
 	}
 }
 

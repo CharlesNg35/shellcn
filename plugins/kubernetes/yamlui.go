@@ -37,6 +37,22 @@ func eventsTab(k kind) plugin.Panel {
 	}
 }
 
+func customResourceYAMLTab() plugin.Panel {
+	return plugin.Panel{
+		Key: "yaml", Label: "YAML", Icon: lucide("file-code"), Type: plugin.PanelCodeEditor,
+		Source: &plugin.DataSource{RouteID: "kubernetes.resource.yaml", Params: map[string]string{"kind": "${resource.scope}", "namespace": "${resource.namespace}", "name": "${resource.name}"}},
+		Config: yamlEditorConfig(),
+	}
+}
+
+func customResourceEventsTab() plugin.Panel {
+	return plugin.Panel{
+		Key: "events", Label: "Events", Icon: lucide("bell"), Type: plugin.PanelTimeline,
+		Source: &plugin.DataSource{RouteID: "kubernetes.resource.events", Params: map[string]string{"kind": "${resource.scope}", "namespace": "${resource.namespace}", "name": "${resource.name}"}},
+		Config: eventTimelineConfig(),
+	}
+}
+
 func eventTimelineConfig() plugin.TimelineConfig {
 	return plugin.TimelineConfig{
 		TimestampField:    "createdAt",

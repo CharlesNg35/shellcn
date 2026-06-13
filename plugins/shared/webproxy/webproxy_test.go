@@ -156,6 +156,43 @@ func TestServeRewritesCSSAndSrcset(t *testing.T) {
 	}
 }
 
+func TestServeRewritesSingleQuotedHTMLURLs(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, `<html><head><meta http-equiv='refresh' content='0; url=/next'></head><body>`+
+			`<a href='/'>home</a><script src='/app.js'></script><img srcset='/a.png 1x, /b.png 2x'></body></html>`)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	rec := httptest.NewRecorder()
+	webproxy.Serve(rec, httptest.NewRequest(http.MethodGet, "/", nil), webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/", PublicPrefix: "/proxy/x",
+	})
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`href='/proxy/x/'`,
+		`src='/proxy/x/app.js'`,
+		`srcset='/proxy/x/a.png 1x, /proxy/x/b.png 2x'`,
+		`content='0; url=/proxy/x/next'`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("single-quoted URL rewrite missing %q in %s", want, body)
+		}
+	}
+}
+
+func TestServeWorkerQuotesPrefixSafely(t *testing.T) {
+	rec := httptest.NewRecorder()
+	webproxy.ServeWorker(rec, `/proxy/"x\y`)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `var P="/proxy/\"x\\y"`) {
+		t.Fatalf("worker prefix not safely quoted: %s", body)
+	}
+}
+
 func TestServeRewritesCookiePath(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Add("Set-Cookie", "sid=abc; Path=/; HttpOnly")

@@ -213,6 +213,42 @@ func TestDatabaseTablesTabHasCreate(t *testing.T) {
 	}
 }
 
+func TestDestructiveResourceActionsNavigateAwayFromDeletedDetails(t *testing.T) {
+	actions := map[string]plugin.Action{}
+	for _, a := range New().Manifest().Actions {
+		actions[a.ID] = a
+	}
+	for _, id := range []string{"postgresql.database.drop", "postgresql.table.drop", "postgresql.view.drop"} {
+		action := actions[id]
+		if !action.Confirm {
+			t.Fatalf("%s must require confirmation", id)
+		}
+		if action.OnSuccess == nil || action.OnSuccess.Navigate != plugin.NavigateList {
+			t.Fatalf("%s should navigate back to the list after success: %#v", id, action.OnSuccess)
+		}
+	}
+	if action := actions["postgresql.table.rename"]; action.OnSuccess == nil || action.OnSuccess.Navigate != plugin.NavigateList {
+		t.Fatalf("table rename should navigate back to the list because the resource identity changes: %#v", action.OnSuccess)
+	}
+}
+
+func TestBrowseTablesDeclareEmptyStatesAndExport(t *testing.T) {
+	for _, res := range New().Manifest().Resources {
+		for _, tab := range res.Detail.Tabs {
+			tc, ok := tab.Config.(plugin.TableConfig)
+			if !ok {
+				continue
+			}
+			if tab.Key != "data" && tc.EmptyText == "" {
+				t.Fatalf("%s/%s table is missing an empty state", res.Kind, tab.Key)
+			}
+			if tab.Key != "data" && !tc.Exportable {
+				t.Fatalf("%s/%s browse table should be exportable", res.Kind, tab.Key)
+			}
+		}
+	}
+}
+
 func TestRenameTableSQL(t *testing.T) {
 	got, err := renameTableSQL("public", "people", "persons")
 	if err != nil {

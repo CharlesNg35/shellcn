@@ -37,6 +37,25 @@ func validUPID(s string) bool     { return upidRe.MatchString(s) }
 
 func validPowerCommand(s string) bool { return powerOk[s] }
 
+func validBackupMode(s string) bool {
+	return map[string]bool{"snapshot": true, "suspend": true, "stop": true}[s]
+}
+
+func validCompression(s string) bool {
+	return map[string]bool{"zstd": true, "lzo": true, "gzip": true, "0": true}[s]
+}
+
+func validBackupVolume(storage, volume string) bool {
+	if !validStorage(storage) {
+		return false
+	}
+	volume = strings.TrimSpace(volume)
+	if strings.ContainsAny(volume, "?#") {
+		return false
+	}
+	return strings.HasPrefix(volume, storage+":backup/")
+}
+
 // post sends a body and decodes the PVE `data` field, which for lifecycle
 // endpoints is the spawned task's UPID string.
 func (s *Session) postUPID(ctx context.Context, path string, body any) (string, error) {
@@ -106,7 +125,7 @@ func guestClone(kind string) plugin.Handler {
 			return nil, fmt.Errorf("%w: invalid node or vmid", plugin.ErrInvalidInput)
 		}
 		var in struct {
-			NewID   string `json:"newid" validate:"required"`
+			NewID   any    `json:"newid"`
 			Name    string `json:"name"`
 			Target  string `json:"target"`
 			Storage string `json:"storage"`
@@ -115,7 +134,7 @@ func guestClone(kind string) plugin.Handler {
 		if err := rc.Bind(&in); err != nil {
 			return nil, err
 		}
-		body, err := cloneBody(kind, in.NewID, in.Name, in.Target, in.Storage, in.Full)
+		body, err := cloneBody(kind, bodyString(in.NewID), in.Name, in.Target, in.Storage, in.Full)
 		if err != nil {
 			return nil, err
 		}
@@ -185,7 +204,7 @@ func guestRestore(kind string) plugin.Handler {
 			return nil, fmt.Errorf("%w: invalid node", plugin.ErrInvalidInput)
 		}
 		var in struct {
-			VMID    string `json:"vmid" validate:"required"`
+			VMID    any    `json:"vmid"`
 			Archive string `json:"archive" validate:"required"`
 			Storage string `json:"storage"`
 			Force   bool   `json:"force"`
@@ -193,7 +212,7 @@ func guestRestore(kind string) plugin.Handler {
 		if err := rc.Bind(&in); err != nil {
 			return nil, err
 		}
-		body, err := restoreBody(kind, in.VMID, in.Archive, in.Storage, in.Force)
+		body, err := restoreBody(kind, bodyString(in.VMID), in.Archive, in.Storage, in.Force)
 		if err != nil {
 			return nil, err
 		}

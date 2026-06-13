@@ -143,5 +143,36 @@ func TestAdminRoutesMetadata(t *testing.T) {
 	}
 }
 
+func TestAdminManifestUX(t *testing.T) {
+	tab := BucketTab("minio")
+	cfg, ok := tab.Config.(plugin.TableConfig)
+	if !ok {
+		t.Fatalf("bucket tab config = %T", tab.Config)
+	}
+	if cfg.EmptyText == "" || cfg.RowClick != plugin.RowClickDetail {
+		t.Fatalf("bucket tab should declare empty text and row detail behavior: %#v", cfg)
+	}
+
+	actions := Actions("minio")
+	byID := map[string]plugin.Action{}
+	for _, action := range actions {
+		byID[action.ID] = action
+	}
+	if a := byID["minio.bucket.versioning.set"]; !a.Confirm || a.Label != "Versioning" {
+		t.Fatalf("versioning action should be explicit and confirmed: %+v", a)
+	}
+}
+
+func TestBucketCreateSchemaValidatesPortableNames(t *testing.T) {
+	schema := bucketCreateSchema()
+	field := schema.Groups[0].Fields[0]
+	if field.Key != "name" || len(field.Validators) == 0 {
+		t.Fatalf("bucket name field missing validator: %+v", field)
+	}
+	if field.Validators[0].Type != plugin.ValidatorRegex || field.Validators[0].Message == "" {
+		t.Fatalf("bucket name validator should be a user-facing regex: %+v", field.Validators[0])
+	}
+}
+
 // ensure the SDK paginator constructor exists for the version we build against.
 var _ = awss3.NewListObjectVersionsPaginator

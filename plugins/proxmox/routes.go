@@ -25,6 +25,7 @@ func Routes() []plugin.Route {
 		{ID: "proxmox.lxc.list", Method: plugin.MethodGet, Path: "/lxc", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.lxc.list", Handle: listGuests("lxc")},
 		{ID: "proxmox.node.list", Method: plugin.MethodGet, Path: "/nodes", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.list", Handle: listNodes},
 		{ID: "proxmox.node.options", Method: plugin.MethodGet, Path: "/nodes/options", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.options", Handle: nodeOptions},
+		{ID: "proxmox.node.backup_storage.options", Method: plugin.MethodGet, Path: "/nodes/{node}/backup-storage/options", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.backup_storage.options", Handle: backupStorageOptions},
 		{ID: "proxmox.storage.list", Method: plugin.MethodGet, Path: "/storage", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.storage.list", Handle: listStorage},
 		{ID: "proxmox.node.storage", Method: plugin.MethodGet, Path: "/nodes/{node}/storage", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.storage", Handle: listNodeStorage},
 		{ID: "proxmox.node.tasks", Method: plugin.MethodGet, Path: "/nodes/{node}/tasks", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.tasks", Handle: listTasks},
@@ -354,6 +355,38 @@ func nodeOptions(rc *plugin.RequestContext) (any, error) {
 	return pageRows(rc, rows)
 }
 
+func backupStorageOptions(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	node, err := requireNode(rc)
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.list(rc.Ctx, pvePath("nodes", node, "storage"))
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]row, 0, len(items))
+	for _, st := range items {
+		storage := str(st["storage"])
+		if storage == "" || !validStorage(storage) || !strings.Contains(str(st["content"]), "backup") {
+			continue
+		}
+		label := storage
+		if typ := str(st["type"]); typ != "" {
+			label += " (" + typ + ")"
+		}
+		rows = append(rows, row{
+			"name":  storage,
+			"label": label,
+			"value": storage,
+		})
+	}
+	return pageRows(rc, rows)
+}
+
 func listStorage(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
@@ -455,13 +488,14 @@ func listStorageContent(rc *plugin.RequestContext) (any, error) {
 	for _, it := range items {
 		volid := str(it["volid"])
 		rows = append(rows, row{
-			"name":    volid,
-			"content": str(it["content"]),
-			"format":  str(it["format"]),
-			"size":    numInt(it["size"]),
-			"vmid":    str(it["vmid"]),
-			"ctime":   rfcTime(it["ctime"]),
-			"ref":     refForVolume("volume", node, storage, volid),
+			"name":      volid,
+			"content":   str(it["content"]),
+			"format":    str(it["format"]),
+			"protected": rowBool(it["protected"]),
+			"size":      numInt(it["size"]),
+			"vmid":      str(it["vmid"]),
+			"ctime":     rfcTime(it["ctime"]),
+			"ref":       refForVolume("volume", node, storage, volid),
 		})
 	}
 	return pageRows(rc, rows)
@@ -493,6 +527,7 @@ func listTasks(rc *plugin.RequestContext) (any, error) {
 			"user":      str(t["user"]),
 			"status":    status,
 			"starttime": rfcTime(t["starttime"]),
+			"endtime":   rfcTime(t["endtime"]),
 			"_id":       upid,
 			"ref":       plugin.ResourceRef{Kind: "task", Namespace: node, Name: node, UID: upid},
 		})
@@ -520,10 +555,9 @@ func listSnapshots(kind string) plugin.Handler {
 			rows = append(rows, row{
 				"name":        name,
 				"description": str(sn["description"]),
-				"parent":      str(sn["parent"]),
+				"vmstate":     rowBool(sn["vmstate"]),
 				"snaptime":    rfcTime(sn["snaptime"]),
-				// Pack node/vmid/snapname across the ref so row actions resolve them.
-				"ref": plugin.ResourceRef{Kind: "snapshot", Namespace: node, Name: vmid, UID: name},
+				"ref":         plugin.ResourceRef{Kind: "snapshot", Namespace: node, Name: vmid, UID: name},
 			})
 		}
 		return pageRows(rc, rows)
@@ -562,13 +596,15 @@ func listBackups(rc *plugin.RequestContext) (any, error) {
 			}
 			volid := str(it["volid"])
 			rows = append(rows, row{
-				"name":    volid,
-				"storage": storage,
-				"size":    numInt(it["size"]),
-				"format":  str(it["format"]),
-				"notes":   str(it["notes"]),
-				"ctime":   rfcTime(it["ctime"]),
-				"ref":     refForVolume("backup", node, storage, volid),
+				"name":      volid,
+				"content":   "backup",
+				"storage":   storage,
+				"protected": rowBool(it["protected"]),
+				"size":      numInt(it["size"]),
+				"format":    str(it["format"]),
+				"notes":     str(it["notes"]),
+				"ctime":     rfcTime(it["ctime"]),
+				"ref":       refForVolume("backup", node, storage, volid),
 			})
 		}
 	}
@@ -619,6 +655,8 @@ func guestOverview(kind string) plugin.Handler {
 			"mem":      numInt(status["mem"]),
 			"maxmem":   numInt(status["maxmem"]),
 			"uptime":   numInt(status["uptime"]),
+			"lock":     str(status["lock"]),
+			"ha":       str(status["ha"]),
 			"tags":     str(cfg["tags"]),
 			"cores":    numInt(cfg["cores"]),
 			"sockets":  numInt(cfg["sockets"]),
@@ -798,6 +836,12 @@ func backupCreate(rc *plugin.RequestContext) (any, error) {
 		"mode":     stringOr(in.Mode, "snapshot"),
 		"compress": stringOr(in.Compress, "zstd"),
 	}
+	if !validBackupMode(str(body["mode"])) {
+		return nil, fmt.Errorf("%w: invalid backup mode", plugin.ErrInvalidInput)
+	}
+	if !validCompression(str(body["compress"])) {
+		return nil, fmt.Errorf("%w: invalid compression", plugin.ErrInvalidInput)
+	}
 	if err := s.post(rc.Ctx, pvePath("nodes", node, "vzdump"), body); err != nil {
 		return nil, err
 	}
@@ -814,8 +858,8 @@ func backupDelete(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	volume := rc.Param("volume")
-	if strings.TrimSpace(volume) == "" {
-		return nil, fmt.Errorf("%w: volume is required", plugin.ErrInvalidInput)
+	if !validBackupVolume(storage, volume) {
+		return nil, fmt.Errorf("%w: invalid backup volume", plugin.ErrInvalidInput)
 	}
 	path := pvePath("nodes", node, "storage", storage, "content", volume)
 	if err := s.del(rc.Ctx, path); err != nil {
@@ -846,7 +890,7 @@ func migrateSchema() *plugin.Schema {
 
 func backupSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Backup", Fields: []plugin.Field{
-		{Key: "storage", Label: "Storage", Type: plugin.FieldText, Required: true},
+		{Key: "storage", Label: "Storage", Type: plugin.FieldSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "proxmox.node.backup_storage.options", Params: map[string]string{"node": "${resource.namespace}"}}},
 		{Key: "mode", Label: "Mode", Type: plugin.FieldSelect, Default: "snapshot", Options: []plugin.Option{
 			{Label: "Snapshot", Value: "snapshot"},
 			{Label: "Suspend", Value: "suspend"},

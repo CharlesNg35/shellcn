@@ -39,6 +39,28 @@ func TestAttributesTabIsStagedEditableGrid(t *testing.T) {
 	}
 }
 
+func TestEntryActionsAreGatedAndConfirmRiskyOperations(t *testing.T) {
+	actions := map[string]plugin.Action{}
+	for _, action := range New().Manifest().Actions {
+		actions[action.ID] = action
+	}
+	for _, id := range []string{"ldap.entry.add", "ldap.entry.rename", "ldap.entry.delete"} {
+		action, ok := actions[id]
+		if !ok {
+			t.Fatalf("missing action %s", id)
+		}
+		if action.EnabledWhen == nil {
+			t.Fatalf("%s should be disabled when the connection is read-only", id)
+		}
+	}
+	if !actions["ldap.entry.rename"].Confirm {
+		t.Fatal("rename/move should require confirmation")
+	}
+	if actions["ldap.entry.delete"].OnSuccess == nil || actions["ldap.entry.delete"].OnSuccess.Navigate != plugin.NavigateList {
+		t.Fatal("delete should navigate back to the list after success")
+	}
+}
+
 func attributesTab(t *testing.T) plugin.Panel {
 	t.Helper()
 	for _, res := range New().Manifest().Resources {
@@ -101,19 +123,31 @@ func TestParseOptionsRequiresHost(t *testing.T) {
 }
 
 func TestSearchFilter(t *testing.T) {
-	if got := searchFilter(""); got != "(objectClass=*)" {
+	got, err := searchFilter("")
+	if err != nil || got != "(objectClass=*)" {
 		t.Fatalf("empty filter = %q", got)
 	}
-	if got := searchFilter("(uid=jdoe)"); got != "(uid=jdoe)" {
+	got, err = searchFilter("(uid=jdoe)")
+	if err != nil || got != "(uid=jdoe)" {
 		t.Fatalf("raw filter should pass through, got %q", got)
 	}
-	got := searchFilter("ada")
+	got, err = searchFilter("ada")
+	if err != nil {
+		t.Fatalf("free-text filter returned error: %v", err)
+	}
 	if !strings.Contains(got, "(cn=*ada*)") || !strings.HasPrefix(got, "(|") {
 		t.Fatalf("free-text filter = %q", got)
 	}
 	// Injection metacharacters must be escaped, not passed raw.
-	if strings.Contains(searchFilter("a)(uid=*"), "a)(uid=*") {
-		t.Fatalf("filter value was not escaped: %q", searchFilter("a)(uid=*"))
+	got, err = searchFilter("a)(uid=*")
+	if err != nil {
+		t.Fatalf("escaped free-text returned error: %v", err)
+	}
+	if strings.Contains(got, "a)(uid=*") {
+		t.Fatalf("filter value was not escaped: %q", got)
+	}
+	if _, err := searchFilter("(uid=jdoe"); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("invalid raw filter should fail as invalid input, got %v", err)
 	}
 }
 
@@ -153,6 +187,16 @@ func TestRDNAndParent(t *testing.T) {
 	if got := parentOf("dc=com"); got != "" {
 		t.Fatalf("parentOf root = %q, want empty", got)
 	}
+	escaped := `cn=Doe\, Jane,ou=people,dc=example,dc=com`
+	if got := rdnOf(escaped); got != `cn=Doe\, Jane` {
+		t.Fatalf("rdnOf escaped = %q", got)
+	}
+	if got := parentOf(escaped); got != "ou=people,dc=example,dc=com" {
+		t.Fatalf("parentOf escaped = %q", got)
+	}
+	if err := validateRDN("cn=Jane,Doe", "RDN"); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("multi-part RDN should fail, got %v", err)
+	}
 }
 
 func TestEnsureWritableBlocksReadOnly(t *testing.T) {
@@ -183,7 +227,7 @@ func TestIconForEntry(t *testing.T) {
 	}
 }
 
-func TestEntryAddAttributesIsMapOfTextArray(t *testing.T) {
+func TestEntryAddUsesStructuredObjectClassAndAttributeFields(t *testing.T) {
 	var schema *plugin.Schema
 	for _, r := range New().Routes() {
 		if r.ID == "ldap.entry.add" {
@@ -193,24 +237,40 @@ func TestEntryAddAttributesIsMapOfTextArray(t *testing.T) {
 	if schema == nil {
 		t.Fatal("ldap.entry.add has no input schema")
 	}
-	var field *plugin.Field
+	var attributes *plugin.Field
+	var objectClass *plugin.Field
 	for _, g := range schema.Groups {
 		for i := range g.Fields {
 			if g.Fields[i].Key == "attributes" {
-				field = &g.Fields[i]
+				attributes = &g.Fields[i]
+			}
+			if g.Fields[i].Key == "object_class" {
+				objectClass = &g.Fields[i]
 			}
 		}
 	}
-	if field == nil {
+	if objectClass == nil || objectClass.Type != plugin.FieldArray || objectClass.Item == nil || objectClass.Item.Type != plugin.FieldAutocomplete {
+		t.Fatalf("object_class field = %#v, want array of autocomplete values", objectClass)
+	}
+	if attributes == nil {
 		t.Fatal("no attributes field")
 	}
-	if field.Type != plugin.FieldMap {
-		t.Fatalf("attributes is %q, want map", field.Type)
+	if attributes.Type != plugin.FieldMap {
+		t.Fatalf("attributes is %q, want map", attributes.Type)
 	}
-	if field.Item == nil || field.Item.Type != plugin.FieldArray {
+	if attributes.Item == nil || attributes.Item.Type != plugin.FieldArray {
 		t.Fatalf("attributes value item is not an array")
 	}
-	if field.Item.Item == nil || field.Item.Item.Type != plugin.FieldText {
+	if attributes.Item.Item == nil || attributes.Item.Item.Type != plugin.FieldText {
 		t.Fatalf("attributes value array element is not text")
+	}
+}
+
+func TestStringListAcceptsLegacyCommaStringAndArrayValues(t *testing.T) {
+	if got := stringList("top, inetOrgPerson"); !reflect.DeepEqual(got, []string{"top", "inetOrgPerson"}) {
+		t.Fatalf("comma list = %#v", got)
+	}
+	if got := stringList([]any{"top", "person"}); !reflect.DeepEqual(got, []string{"top", "person"}) {
+		t.Fatalf("array list = %#v", got)
 	}
 }

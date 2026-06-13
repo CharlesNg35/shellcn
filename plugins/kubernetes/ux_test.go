@@ -163,6 +163,102 @@ func TestPodDetailHasMetricsLogsAndShell(t *testing.T) {
 	if !ok || len(cfg.Stats) == 0 || len(cfg.Series) == 0 {
 		t.Fatalf("pod metrics config = %#v", metrics.Config)
 	}
+	if !conditionRequiresStatus(metrics.VisibleWhen, "Running") {
+		t.Fatalf("pod metrics should only show for running pods, got %#v", metrics.VisibleWhen)
+	}
+	terminal := res.Detail.Tabs[4]
+	if !conditionRequiresStatus(terminal.VisibleWhen, "Running") {
+		t.Fatalf("pod shell should only show for running pods, got %#v", terminal.VisibleWhen)
+	}
+	logs := res.Detail.Tabs[3]
+	if logs.VisibleWhen != nil {
+		t.Fatalf("pod logs should stay available for terminated/crashing pods, got %#v", logs.VisibleWhen)
+	}
+}
+
+func TestPodOpenRequiresRunningPodWithPorts(t *testing.T) {
+	for _, a := range actions() {
+		if a.ID != "kubernetes.pod.open" {
+			continue
+		}
+		if a.EnabledWhen == nil || len(a.EnabledWhen.AllOf) != 2 {
+			t.Fatalf("pod open should require ports and running status, got %#v", a.EnabledWhen)
+		}
+		if !conditionHasRule(a.EnabledWhen, "ports", plugin.OpNotEmpty, nil) {
+			t.Fatalf("pod open should require exposed ports, got %#v", a.EnabledWhen)
+		}
+		if !conditionRequiresStatus(a.EnabledWhen, "Running") {
+			t.Fatalf("pod open should require a running pod, got %#v", a.EnabledWhen)
+		}
+		return
+	}
+	t.Fatal("pod open action missing")
+}
+
+func conditionRequiresStatus(c *plugin.Condition, status string) bool {
+	return conditionHasRule(c, "status", plugin.OpEq, status)
+}
+
+func conditionHasRule(c *plugin.Condition, field string, op plugin.Operator, value any) bool {
+	if c == nil {
+		return false
+	}
+	for _, r := range append(c.AllOf, c.AnyOf...) {
+		if r.Field == field && r.Op == op {
+			if value == nil {
+				return true
+			}
+			return r.Value == value
+		}
+	}
+	return false
+}
+
+func TestCustomResourceDetailHasYAMLAndEvents(t *testing.T) {
+	res := customResourceType()
+	if strings.Join(res.Actions.Row, ",") != "kubernetes.customresource.delete" || strings.Join(res.Actions.Detail, ",") != "kubernetes.customresource.delete" {
+		t.Fatalf("custom resource should use scope-aware delete actions, got row=%v detail=%v", res.Actions.Row, res.Actions.Detail)
+	}
+	var keys []string
+	for _, tab := range res.Detail.Tabs {
+		keys = append(keys, tab.Key)
+		switch tab.Key {
+		case "yaml":
+			if tab.Type != plugin.PanelCodeEditor || tab.Source == nil || tab.Source.Params["kind"] != "${resource.scope}" {
+				t.Fatalf("custom resource YAML tab should edit the concrete CRD kind, got %+v", tab)
+			}
+		case "events":
+			if tab.Type != plugin.PanelTimeline || tab.Source == nil || tab.Source.Params["kind"] != "${resource.scope}" {
+				t.Fatalf("custom resource events tab should use the concrete CRD kind, got %+v", tab)
+			}
+			if _, ok := tab.Config.(plugin.TimelineConfig); !ok {
+				t.Fatalf("custom resource events config = %T, want TimelineConfig", tab.Config)
+			}
+		}
+	}
+	want := []string{"overview", "yaml", "events"}
+	if strings.Join(keys, ",") != strings.Join(want, ",") {
+		t.Fatalf("custom resource detail tabs = %v, want %v", keys, want)
+	}
+}
+
+func TestCustomResourceDeleteUsesConcreteScopeKind(t *testing.T) {
+	for _, a := range actions() {
+		if a.ID != "kubernetes.customresource.delete" {
+			continue
+		}
+		if a.RouteID != "kubernetes.resource.delete" {
+			t.Fatalf("custom resource delete route = %q", a.RouteID)
+		}
+		if a.Params["kind"] != "${resource.scope}" {
+			t.Fatalf("custom resource delete kind param = %q, want concrete scope", a.Params["kind"])
+		}
+		if !a.Confirm || a.OnSuccess == nil || a.OnSuccess.Navigate != plugin.NavigateList {
+			t.Fatalf("custom resource delete should confirm and navigate to list, got %+v", a)
+		}
+		return
+	}
+	t.Fatal("custom resource delete action missing")
 }
 
 func TestAuditShellRBACUsesStreamAuditHook(t *testing.T) {
@@ -253,8 +349,17 @@ func TestNamespaceIsAGlobalScope(t *testing.T) {
 	if scope.Param != "namespace" {
 		t.Errorf("namespace scope should set the namespace param, got %q", scope.Param)
 	}
+	if scope.Control != plugin.ScopeSelect {
+		t.Errorf("namespace scope should explicitly render as a select, got %q", scope.Control)
+	}
 	if scope.OptionsSource == nil || scope.OptionsSource.Params["kind"] != "namespace" {
 		t.Errorf("namespace scope should source options from the namespace list, got %+v", scope.OptionsSource)
+	}
+	if scope.ValueField != "name" || scope.LabelField != "name" {
+		t.Errorf("namespace scope should use namespace names as option values/labels, got value=%q label=%q", scope.ValueField, scope.LabelField)
+	}
+	if scope.AllLabel != "All namespaces" {
+		t.Errorf("namespace scope should expose an all-namespaces option, got %q", scope.AllLabel)
 	}
 }
 

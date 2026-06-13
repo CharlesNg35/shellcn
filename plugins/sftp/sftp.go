@@ -44,6 +44,7 @@ func configSchema() plugin.Schema {
 			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, Placeholder: "10.0.0.1"},
 			{Key: "port", Label: "Port", Type: plugin.FieldNumber, Default: 22, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}},
 			{Key: "user", Label: "Username", Type: plugin.FieldText, Required: true, Default: "root"},
+			{Key: "host_key", Label: "Pinned host key", Type: plugin.FieldTextarea, Placeholder: "SHA256:...", Help: "Optional OpenSSH public key, known_hosts line, or SHA256 fingerprint. When blank, the host key is not verified."},
 		}},
 		{Name: "Auth", Fields: []plugin.Field{
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: "password", Options: []plugin.Option{

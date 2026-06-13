@@ -3,6 +3,7 @@ package vnc
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -73,3 +74,39 @@ func serveVNCNoAuth(t *testing.T, conn net.Conn, closed chan<- struct{}) {
 }
 
 var _ plugin.NetTransport = fakeNetTransport{}
+
+func TestParseConnectOptionsRejectsURLHostAndUnknownAuth(t *testing.T) {
+	base := map[string]any{"host": "https://vnc.example", "password": "p"}
+	if _, err := parseConnectOptions(plugin.ConnectConfig{Config: base}); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("URL host should fail as invalid input, got %v", err)
+	}
+	base["host"] = "vnc.example"
+	base["auth"] = "token"
+	if _, err := parseConnectOptions(plugin.ConnectConfig{Config: base}); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("unknown auth should fail as invalid input, got %v", err)
+	}
+}
+
+func TestParseConnectOptionsRequiresPasswordUnlessAuthNone(t *testing.T) {
+	if _, err := parseConnectOptions(plugin.ConnectConfig{Config: map[string]any{"host": "vnc.example"}}); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("missing password should fail as invalid input, got %v", err)
+	}
+	opts, err := parseConnectOptions(plugin.ConnectConfig{Config: map[string]any{"host": "vnc.example", "auth": "none"}})
+	if err != nil {
+		t.Fatalf("auth none should not require password: %v", err)
+	}
+	if opts.Password != "" {
+		t.Fatalf("auth none password = %q, want empty", opts.Password)
+	}
+}
+
+func TestManifestEnablesVNCClipboard(t *testing.T) {
+	tab := New().Manifest().Tabs[0]
+	cfg, ok := tab.Config.(plugin.RemoteDesktopConfig)
+	if !ok {
+		t.Fatalf("remote desktop config = %T", tab.Config)
+	}
+	if !cfg.Resize || !cfg.Clipboard {
+		t.Fatalf("vnc remote desktop config = %#v, want resize and clipboard enabled", cfg)
+	}
+}

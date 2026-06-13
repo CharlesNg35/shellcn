@@ -149,6 +149,9 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		if len(page.Items) != 1 {
 			t.Fatalf("snapshot rows = %+v", page.Items)
 		}
+		if page.Items[0]["vmstate"] != true {
+			t.Fatalf("snapshot vmstate = %+v", page.Items[0]["vmstate"])
+		}
 		ref := page.Items[0]["ref"].(plugin.ResourceRef)
 		if ref.Namespace != "pve" || ref.Name != "100" || ref.UID != "pre-upgrade" {
 			t.Fatalf("snapshot ref = %+v", ref)
@@ -198,6 +201,13 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		ref := page.Items[0]["ref"].(plugin.ResourceRef)
 		if ref.Kind != "storage" || ref.Namespace != "pve" || ref.UID != "local" {
 			t.Fatalf("storage ref = %+v", ref)
+		}
+	})
+
+	t.Run("backup storage options are node scoped", func(t *testing.T) {
+		page := callList(t, sess, backupStorageOptions, map[string]string{"node": "pve"})
+		if len(page.Items) != 1 || page.Items[0]["value"] != "local" {
+			t.Fatalf("backup storage options = %+v", page.Items)
 		}
 	})
 }
@@ -261,6 +271,71 @@ func TestMigrateUsesNodeOptions(t *testing.T) {
 	}
 }
 
+func TestBackupUXContract(t *testing.T) {
+	m := New().Manifest()
+	actions := map[string]plugin.Action{}
+	for _, action := range m.Actions {
+		actions[action.ID] = action
+	}
+	deleteBackup := actions["act.backup.delete"]
+	if deleteBackup.Label != "Delete backup" || deleteBackup.VisibleWhen == nil {
+		t.Fatalf("backup delete action = %+v", deleteBackup)
+	}
+
+	var qemu plugin.ResourceType
+	var node plugin.ResourceType
+	for _, resource := range m.Resources {
+		switch resource.Kind {
+		case "qemu":
+			qemu = resource
+		case "node":
+			node = resource
+		}
+	}
+	if qemu.Kind == "" || node.Kind == "" {
+		t.Fatalf("missing resources: qemu=%q node=%q", qemu.Kind, node.Kind)
+	}
+	for _, tab := range qemu.Detail.Tabs {
+		if tab.Key == "backups" {
+			cfg := tab.Config.(plugin.TableConfig)
+			if cfg.EmptyText == "" {
+				t.Fatalf("backup table missing empty text")
+			}
+			if len(cfg.Columns) < 3 || cfg.Columns[2].Key != "protected" {
+				t.Fatalf("backup columns = %+v", cfg.Columns)
+			}
+		}
+	}
+	for _, tab := range node.Detail.Tabs {
+		if tab.Key == "tasks" {
+			cfg := tab.Config.(plugin.TableConfig)
+			if tab.Label != "Task History" || cfg.DefaultSort == nil || cfg.DefaultSort.Field != "starttime" || !cfg.DefaultSort.Desc {
+				t.Fatalf("task tab/config = %+v %+v", tab.Label, cfg.DefaultSort)
+			}
+		}
+	}
+}
+
+func TestBackupSchemaUsesStoragePicker(t *testing.T) {
+	var field *plugin.Field
+	for _, group := range backupSchema().Groups {
+		for i := range group.Fields {
+			if group.Fields[i].Key == "storage" {
+				field = &group.Fields[i]
+			}
+		}
+	}
+	if field == nil {
+		t.Fatal("storage field missing")
+	}
+	if field.Type != plugin.FieldSelect {
+		t.Fatalf("storage field type = %q", field.Type)
+	}
+	if field.OptionsSource == nil || field.OptionsSource.RouteID != "proxmox.node.backup_storage.options" {
+		t.Fatalf("storage options source = %+v", field.OptionsSource)
+	}
+}
+
 // --- helpers --------------------------------------------------------------
 
 func fakeProxmox(t *testing.T) *httptest.Server {
@@ -279,7 +354,7 @@ func fakeProxmox(t *testing.T) *httptest.Server {
 	})
 	mux.HandleFunc("/api2/json/nodes", jsonHandler(`{"data":[{"node":"pve","status":"online","cpu":0.1,"mem":1073741824,"maxmem":4294967296,"uptime":7200}]}`))
 	mux.HandleFunc("/api2/json/nodes/pve/storage", jsonHandler(`{"data":[{"storage":"local","type":"dir","content":"backup,iso","used":10,"total":100,"active":1}]}`))
-	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/snapshot", jsonHandler(`{"data":[{"name":"pre-upgrade","description":"before update","snaptime":1700000000,"parent":""}]}`))
+	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/snapshot", jsonHandler(`{"data":[{"name":"pre-upgrade","description":"before update","snaptime":1700000000,"vmstate":1}]}`))
 	srv := httptest.NewTLSServer(mux)
 	return srv
 }

@@ -31,8 +31,13 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities:        []plugin.Capability{"filesystem", "object_storage"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
-		Tabs:                []plugin.Panel{filesystem.FilesTab(protocolName), s3compat.BucketTab(protocolName)},
-		Actions:             s3compat.Actions(protocolName),
+		Tabs: []plugin.Panel{filesystem.FilesTab(
+			protocolName,
+			filesystem.WithMove(protocolName),
+			filesystem.WithCopy(protocolName),
+			filesystem.WithArchive(protocolName),
+		), s3compat.BucketTab(protocolName)},
+		Actions: s3compat.Actions(protocolName),
 	}
 }
 
@@ -47,9 +52,11 @@ func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.
 func configSchema() plugin.Schema {
 	return plugin.Schema{Groups: []plugin.Group{
 		{Name: "Bucket", Fields: []plugin.Field{
-			{Key: "bucket", Label: "Bucket", Type: plugin.FieldText, Required: true, Placeholder: "my-bucket"},
+			{Key: "bucket", Label: "Bucket", Type: plugin.FieldText, Required: true, Placeholder: "my-bucket", Validators: []plugin.Validator{
+				{Type: plugin.ValidatorRegex, Value: `^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`, Message: "Use 3-63 lowercase letters, numbers, dots, or hyphens, starting and ending with a letter or number."},
+			}},
 			{Key: "region", Label: "Region", Type: plugin.FieldAutocomplete, Required: true, Default: "us-east-1", Placeholder: "us-east-1", Options: s3compat.AWSRegionOptions()},
-			{Key: "prefix", Label: "Prefix", Type: plugin.FieldText, Placeholder: "optional/folder"},
+			{Key: "prefix", Label: "Prefix", Type: plugin.FieldText, Placeholder: "optional/folder", Help: "Optional object-key prefix to use as the file browser root."},
 		}},
 		{Name: "Endpoint", Fields: []plugin.Field{
 			{Key: "endpoint", Label: "Custom endpoint", Type: plugin.FieldText, Placeholder: "https://s3.us-east-1.amazonaws.com"},

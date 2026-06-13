@@ -154,7 +154,18 @@ func writeSchema() *plugin.Schema {
 }
 
 func nameSchema(label string) *plugin.Schema {
-	return &plugin.Schema{Groups: []plugin.Group{{Name: label, Fields: []plugin.Field{{Key: "name", Label: label, Type: plugin.FieldText, Required: true}}}}}
+	return &plugin.Schema{Groups: []plugin.Group{{Name: label, Fields: []plugin.Field{{
+		Key: "name", Label: label, Type: plugin.FieldText, Required: true,
+		Placeholder: labelNamePlaceholder(label),
+		Validators:  []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^[^/\\]+$`, Message: "Use a single name without slashes."}},
+	}}}}}
+}
+
+func labelNamePlaceholder(label string) string {
+	if label == "Folder" {
+		return "new-folder"
+	}
+	return "new-name.txt"
 }
 
 func fsSession(rc *plugin.RequestContext) (Client, error) {

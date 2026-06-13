@@ -78,11 +78,14 @@ func Serve(w http.ResponseWriter, r *http.Request, o Options) {
 // URL-bearing HTML attributes whose root-relative value (incl. a bare "/") needs
 // prefixing; protocol-relative "//host" is excluded.
 var (
-	rootRelAttr = regexp.MustCompile(`(\s(?:href|src|action|formaction|poster)=")(/(?:[^"/][^"]*)?)"`)
-	srcsetAttr  = regexp.MustCompile(`(\ssrcset=")([^"]*)"`)
-	metaRefresh = regexp.MustCompile(`(?i)(content="\s*\d+\s*;\s*url=)(/[^"/][^"]*)"`)
-	metaCSP     = regexp.MustCompile(`(?i)<meta[^>]+http-equiv="content-security-policy"[^>]*>`)
-	cssURL      = regexp.MustCompile(`url\(\s*(['"]?)(/[^'")\s]*)(['"]?)\s*\)`)
+	rootRelAttr       = regexp.MustCompile(`(\s(?:href|src|action|formaction|poster)=")(/(?:[^"/][^"]*)?)"`)
+	rootRelSingleAttr = regexp.MustCompile(`(\s(?:href|src|action|formaction|poster)=')(/(?:[^'/][^']*)?)'`)
+	srcsetAttr        = regexp.MustCompile(`(\ssrcset=")([^"]*)"`)
+	srcsetSingleAttr  = regexp.MustCompile(`(\ssrcset=')([^']*)'`)
+	metaRefresh       = regexp.MustCompile(`(?i)(content="\s*\d+\s*;\s*url=)(/[^"/][^"]*)"`)
+	metaRefreshSingle = regexp.MustCompile(`(?i)(content='\s*\d+\s*;\s*url=)(/[^'/][^']*)'`)
+	metaCSP           = regexp.MustCompile(`(?i)<meta[^>]+http-equiv="content-security-policy"[^>]*>`)
+	cssURL            = regexp.MustCompile(`url\(\s*(['"]?)(/[^'")\s]*)(['"]?)\s*\)`)
 )
 
 // rewriteResponse adapts an upstream response to live under prefix: Location +
@@ -148,13 +151,25 @@ func rewriteHTML(html, sourcePrefix, upstreamOrigin, prefix string) string {
 		g := rootRelAttr.FindStringSubmatch(m)
 		return g[1] + prefixRootRel(g[2], prefix) + `"`
 	})
+	html = rootRelSingleAttr.ReplaceAllStringFunc(html, func(m string) string {
+		g := rootRelSingleAttr.FindStringSubmatch(m)
+		return g[1] + prefixRootRel(g[2], prefix) + `'`
+	})
 	html = srcsetAttr.ReplaceAllStringFunc(html, func(m string) string {
 		g := srcsetAttr.FindStringSubmatch(m)
 		return g[1] + rewriteSrcset(g[2], prefix) + `"`
 	})
+	html = srcsetSingleAttr.ReplaceAllStringFunc(html, func(m string) string {
+		g := srcsetSingleAttr.FindStringSubmatch(m)
+		return g[1] + rewriteSrcset(g[2], prefix) + `'`
+	})
 	html = metaRefresh.ReplaceAllStringFunc(html, func(m string) string {
 		g := metaRefresh.FindStringSubmatch(m)
 		return g[1] + prefixRootRel(g[2], prefix) + `"`
+	})
+	html = metaRefreshSingle.ReplaceAllStringFunc(html, func(m string) string {
+		g := metaRefreshSingle.FindStringSubmatch(m)
+		return g[1] + prefixRootRel(g[2], prefix) + `'`
 	})
 	html = rewriteInlineCSS(html, prefix)
 	// The PWA manifest is fetched without credentials by default, which the
@@ -277,7 +292,7 @@ func headInsertIndex(html string) int {
 	return -1
 }
 
-func jsString(s string) string { return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"` }
+func jsString(s string) string { return strconv.Quote(s) }
 
 // ServeWorker returns the service worker. Served from under the prefix, its
 // default scope is the proxy path, so it controls the app's page and rewrites any

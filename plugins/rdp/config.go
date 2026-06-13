@@ -26,9 +26,10 @@ func credentialKinds() []plugin.CredentialKindInfo {
 }
 
 func configSchema(protocol string) plugin.Schema {
+	hostValidators := []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^[^\s/]+$`, Message: "Enter a host name or IP address, not a URL."}}
 	return plugin.Schema{Groups: []plugin.Group{
 		{Name: "Basic", Fields: []plugin.Field{
-			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, Placeholder: "10.0.0.1"},
+			{Key: "host", Label: "Host name or IP", Type: plugin.FieldText, Required: true, Placeholder: "10.0.0.1", Validators: hostValidators},
 			{Key: "port", Label: "Port", Type: plugin.FieldNumber, Default: defaultPort, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}},
 			{Key: "domain", Label: "Domain", Type: plugin.FieldText, Placeholder: "WORKGROUP"},
 		}},
@@ -44,7 +45,7 @@ func configSchema(protocol string) plugin.Schema {
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 		}},
 		{Name: "Display", Fields: []plugin.Field{
-			{Key: "resolution", Label: "Resolution", Type: plugin.FieldSelect, Default: "1280x800", Help: "Remote desktop size; the browser scales it to fit.", Options: []plugin.Option{
+			{Key: "resolution", Label: "Desktop size", Type: plugin.FieldSelect, Default: "1280x800", Help: "Initial remote desktop size. The browser scales this fixed session to fit the panel.", Options: []plugin.Option{
 				{Label: "1280 x 800", Value: "1280x800"},
 				{Label: "1920 x 1080", Value: "1920x1080"},
 				{Label: "1600 x 900", Value: "1600x900"},
@@ -85,6 +86,15 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	if !ok || port == 0 {
 		port = defaultPort
 	}
+	auth := strings.TrimSpace(cfg.String("auth"))
+	if auth == "" {
+		auth = "password"
+	}
+	switch auth {
+	case "password", "credential":
+	default:
+		return connectOptions{}, fmt.Errorf("%w: unsupported authentication method", plugin.ErrInvalidInput)
+	}
 	w, h := parseResolution(cfg.String("resolution"))
 	opts := connectOptions{
 		Host:     strings.TrimSpace(cfg.String("host")),
@@ -95,7 +105,7 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 		Width:    w,
 		Height:   h,
 	}
-	if strings.TrimSpace(cfg.String("auth")) == "credential" {
+	if auth == "credential" {
 		if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
 			opts.Password = secret
 		}
@@ -109,8 +119,14 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	if opts.Port < 1 || opts.Port > 65535 {
 		return connectOptions{}, fmt.Errorf("%w: port must be between 1 and 65535", plugin.ErrInvalidInput)
 	}
+	if strings.ContainsAny(opts.Host, " \t\r\n/") {
+		return connectOptions{}, fmt.Errorf("%w: host must be a host name or IP address, not a URL", plugin.ErrInvalidInput)
+	}
 	if opts.User == "" {
 		return connectOptions{}, fmt.Errorf("%w: username is required", plugin.ErrInvalidInput)
+	}
+	if strings.TrimSpace(opts.Password) == "" {
+		return connectOptions{}, fmt.Errorf("%w: password is required for the selected authentication method", plugin.ErrInvalidInput)
 	}
 	return opts, nil
 }

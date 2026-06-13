@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -170,6 +171,30 @@ func TestPodProxyURL(t *testing.T) {
 	}
 	if url, _ := out.(map[string]any)["url"].(string); url != "/api/connections/c1/proxy/pods/default/web/8080/" {
 		t.Fatalf("http container port should win: %q", url)
+	}
+}
+
+func TestOpenURLRoutesValidateIdentityBeforeLookup(t *testing.T) {
+	sess := connectTo(t, http.NewServeMux())
+	cases := []struct {
+		name   string
+		handle func(*plugin.RequestContext) (any, error)
+		params map[string]string
+	}{
+		{"service namespace", ServiceProxyURL, map[string]string{"name": "web"}},
+		{"service name", ServiceProxyURL, map[string]string{"namespace": "default"}},
+		{"pod namespace", PodProxyURL, map[string]string{"name": "web"}},
+		{"pod name", PodProxyURL, map[string]string{"namespace": "default"}},
+		{"service ports namespace", ServiceOpenPorts, map[string]string{"name": "web"}},
+		{"pod ports name", PodOpenPorts, map[string]string{"namespace": "default"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := c.handle(rc(sess, c.params))
+			if !errors.Is(err, plugin.ErrInvalidInput) {
+				t.Fatalf("error = %v, want invalid input", err)
+			}
+		})
 	}
 }
 

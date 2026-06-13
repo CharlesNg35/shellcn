@@ -74,16 +74,19 @@ func configSchema() plugin.Schema {
 		Name: "Collection",
 		Fields: []plugin.Field{
 			{
-				Key: "metrics_interval_seconds", Label: "Metrics interval", Type: plugin.FieldNumber,
-				Default: 5, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 60}},
+				Key: "metrics_interval_seconds", Label: "Metrics interval", Type: plugin.FieldStepper,
+				Default: 5, Step: 1, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 60}},
+				Help: "Seconds between live metric samples.",
 			},
 			{
-				Key: "process_limit", Label: "Process limit", Type: plugin.FieldNumber,
-				Default: 1000, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 50}, {Type: plugin.ValidatorMax, Value: 5000}},
+				Key: "process_limit", Label: "Process limit", Type: plugin.FieldStepper,
+				Default: 1000, Step: 50, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 50}, {Type: plugin.ValidatorMax, Value: 5000}},
+				Help: "Maximum process rows collected per refresh.",
 			},
 			{
-				Key: "connection_limit", Label: "Connection limit", Type: plugin.FieldNumber,
-				Default: 1000, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 50}, {Type: plugin.ValidatorMax, Value: 10000}},
+				Key: "connection_limit", Label: "Connection limit", Type: plugin.FieldStepper,
+				Default: 1000, Step: 50, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 50}, {Type: plugin.ValidatorMax, Value: 10000}},
+				Help: "Maximum network connection rows collected per refresh.",
 			},
 		},
 	}}}
@@ -137,7 +140,46 @@ func tabs() []plugin.Panel {
 func lucide(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide, Value: name} }
 
 func systemDetailConfig() plugin.ObjectDetailConfig {
-	return plugin.ObjectDetailConfig{RawToggle: true}
+	return plugin.ObjectDetailConfig{
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Host", Fields: []plugin.ObjectDetailField{
+				{Key: "hostname", Label: "Hostname", Copy: true},
+				{Key: "os", Label: "OS"},
+				{Key: "platform", Label: "Platform"},
+				{Key: "platformVersion", Label: "Platform version"},
+				{Key: "kernelVersion", Label: "Kernel"},
+				{Key: "kernelArch", Label: "Architecture"},
+				{Key: "bootTime", Label: "Boot time", Type: plugin.ColumnDateTime},
+				{Key: "uptimeSeconds", Label: "Uptime (seconds)", Type: plugin.ColumnNumber},
+			}},
+			{Title: "Compute", Fields: []plugin.ObjectDetailField{
+				{Key: "cpuModel", Label: "CPU model"},
+				{Key: "cpuVendor", Label: "CPU vendor"},
+				{Key: "cpuCores", Label: "CPU cores", Type: plugin.ColumnNumber},
+				{Key: "cpuMhz", Label: "CPU MHz", Type: plugin.ColumnNumber},
+				{Key: "cpuPct", Label: "CPU used", Type: plugin.ColumnPercent},
+				{Key: "load1", Label: "Load 1m", Type: plugin.ColumnNumber},
+				{Key: "load5", Label: "Load 5m", Type: plugin.ColumnNumber},
+				{Key: "load15", Label: "Load 15m", Type: plugin.ColumnNumber},
+			}},
+			{Title: "Memory", Fields: []plugin.ObjectDetailField{
+				{Key: "memTotal", Label: "Memory total", Type: plugin.ColumnBytes},
+				{Key: "memUsed", Label: "Memory used", Type: plugin.ColumnBytes},
+				{Key: "memAvailable", Label: "Memory available", Type: plugin.ColumnBytes},
+				{Key: "memPct", Label: "Memory used", Type: plugin.ColumnPercent},
+				{Key: "swapTotal", Label: "Swap total", Type: plugin.ColumnBytes},
+				{Key: "swapUsed", Label: "Swap used", Type: plugin.ColumnBytes},
+				{Key: "swapPct", Label: "Swap used", Type: plugin.ColumnPercent},
+			}},
+			{Title: "Virtualization", Fields: []plugin.ObjectDetailField{
+				{Key: "virtualizationSystem", Label: "System"},
+				{Key: "virtualizationRole", Label: "Role"},
+				{Key: "processes", Label: "Processes", Type: plugin.ColumnNumber},
+				{Key: "sessions", Label: "Sessions", Type: plugin.ColumnNumber},
+			}},
+		},
+		RawToggle: true,
+	}
 }
 
 // summaryConfig is the full-width header card: the CPU/Mem/Swap gauges plus the
@@ -185,7 +227,7 @@ func throughputConfig() plugin.MetricsConfig {
 }
 
 func tableConfig(columns []plugin.Column) plugin.TableConfig {
-	return plugin.TableConfig{Columns: columns, Exportable: true, RowClick: plugin.RowClickDetail}
+	return plugin.TableConfig{Columns: columns, EmptyText: "No rows collected.", Exportable: true, RowClick: plugin.RowClickDetail}
 }
 
 func liveTableConfig(columns []plugin.Column, intervalMs int, sort *plugin.SortKey) plugin.TableConfig {
@@ -193,6 +235,7 @@ func liveTableConfig(columns []plugin.Column, intervalMs int, sort *plugin.SortK
 		Columns:           columns,
 		RefreshIntervalMs: intervalMs,
 		DefaultSort:       sort,
+		EmptyText:         "No rows collected.",
 		Exportable:        true,
 		RowClick:          plugin.RowClickDetail,
 	}

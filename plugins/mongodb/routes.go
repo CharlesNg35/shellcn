@@ -32,6 +32,8 @@ type confirmationError struct {
 
 func (e confirmationError) Error() string { return e.message }
 
+const mongoNamePattern = `^[^$/\\\x00][^/\\\x00]*$`
+
 func routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "mongodb.databases.tree", Method: plugin.MethodGet, Path: "/tree/databases", Permission: "mongodb.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.databases.tree", Handle: treeDatabases},
@@ -62,23 +64,24 @@ func mongoSession(rc *plugin.RequestContext) (*Session, error) {
 
 func databaseCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Database", Fields: []plugin.Field{
-		{Key: "name", Label: "Database name", Type: plugin.FieldText, Required: true},
-		{Key: "collection", Label: "First collection", Type: plugin.FieldText, Required: true, Help: "A database is created with its first collection."},
+		{Key: "name", Label: "Database name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: mongoNamePattern}}},
+		{Key: "collection", Label: "First collection", Type: plugin.FieldText, Required: true, Help: "A database is created with its first collection.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: mongoNamePattern}}},
 	}}}}
 }
 
 func collectionCreateSchema() *plugin.Schema {
+	capped := plugin.Condition{AllOf: []plugin.Rule{{Field: "capped", Op: plugin.OpEq, Value: true}}}
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Collection", Fields: []plugin.Field{
-		{Key: "name", Label: "Collection name", Type: plugin.FieldText, Required: true},
+		{Key: "name", Label: "Collection name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: mongoNamePattern}}},
 		{Key: "capped", Label: "Capped", Type: plugin.FieldToggle, Default: false},
-		{Key: "size", Label: "Max size bytes", Type: plugin.FieldNumber, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}}},
+		{Key: "size", Label: "Max size bytes", Type: plugin.FieldNumber, Required: true, VisibleWhen: &capped, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}}},
 	}}}}
 }
 
 func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "keys", Label: "Keys", Type: plugin.FieldMap, Required: true, KeyPlaceholder: "fieldName", AddLabel: "Add key", Item: &plugin.Field{Type: plugin.FieldSelect, Default: 1, Options: []plugin.Option{{Label: "Ascending", Value: 1}, {Label: "Descending", Value: -1}}}},
-		{Key: "name", Label: "Index name", Type: plugin.FieldText, Help: "Optional; derived from the keys when blank."},
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Help: "Optional; derived from the keys when blank.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: mongoNamePattern}}},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
 		{Key: "sparse", Label: "Sparse", Type: plugin.FieldToggle},
 	}}}}
