@@ -19,8 +19,9 @@ import type {
   Option,
   ResourceRef,
   Row,
-  ValidatorType,
+  ValidatorType as ValidatorTypeValue,
 } from "@/types/projection";
+import { FieldType, ValidatorType } from "@/types/projection";
 import { fetchPage } from "@/api/dataSource";
 import AppIcon from "@/components/AppIcon.vue";
 import CredentialSelect from "./CredentialSelect.vue";
@@ -80,22 +81,22 @@ const showSecretValue = computed(
   () => !props.field.secret || !props.secretSet || editingSecret.value,
 );
 
-function bound(type: ValidatorType): number | undefined {
+function bound(type: ValidatorTypeValue): number | undefined {
   const v = props.field.validators?.find((x) => x.type === type);
   const n = v === undefined ? NaN : Number(v.value);
   return Number.isFinite(n) ? n : undefined;
 }
-const min = computed(() => bound("min"));
-const max = computed(() => bound("max"));
+const min = computed(() => bound(ValidatorType.Min));
+const max = computed(() => bound(ValidatorType.Max));
 const step = computed(() => props.field.step ?? 1);
 const sliderValue = computed(() =>
   typeof props.modelValue === "number" ? props.modelValue : (min.value ?? 0),
 );
 
-const TEXT_INPUT_TYPES: Record<string, string> = {
-  email: "email",
-  url: "url",
-  tel: "tel",
+const TEXT_INPUT_TYPES: Partial<Record<Field["type"], string>> = {
+  [FieldType.Email]: "email",
+  [FieldType.Url]: "url",
+  [FieldType.Tel]: "tel",
 };
 const inputType = computed(() => TEXT_INPUT_TYPES[props.field.type] ?? "text");
 
@@ -143,7 +144,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     </label>
 
     <CredentialSelect
-      v-if="field.type === 'credential_ref' && field.credential"
+      v-if="field.type === FieldType.CredentialRef && field.credential"
       :selector="field.credential"
       :protocol="protocol"
       :model-value="(modelValue as string) ?? ''"
@@ -164,7 +165,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     </Button>
 
     <Select
-      v-else-if="field.type === 'select'"
+      v-else-if="field.type === FieldType.Select"
       :model-value="modelValue"
       :options="options"
       option-label="label"
@@ -174,7 +175,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     />
 
     <MultiSelect
-      v-else-if="field.type === 'multiselect'"
+      v-else-if="field.type === FieldType.MultiSelect"
       :model-value="(modelValue as unknown[]) ?? []"
       :options="options"
       option-label="label"
@@ -187,13 +188,13 @@ function updateFiles(event: FileUploadSelectEvent): void {
     />
 
     <ToggleSwitch
-      v-else-if="field.type === 'toggle'"
+      v-else-if="field.type === FieldType.Toggle"
       :model-value="Boolean(modelValue)"
       @update:model-value="update"
     />
 
     <FileUpload
-      v-else-if="field.type === 'file'"
+      v-else-if="field.type === FieldType.File"
       mode="basic"
       custom-upload
       :multiple="true"
@@ -202,7 +203,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     />
 
     <div
-      v-else-if="field.type === 'json'"
+      v-else-if="field.type === FieldType.Json"
       class="h-56 overflow-hidden rounded-md border border-surface-300 dark:border-surface-700"
     >
       <CodeTextEditor
@@ -214,7 +215,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     </div>
 
     <Textarea
-      v-else-if="field.type === 'textarea'"
+      v-else-if="field.type === FieldType.Textarea"
       :model-value="(modelValue as string) ?? ''"
       rows="4"
       :placeholder="field.placeholder"
@@ -222,7 +223,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     />
 
     <Password
-      v-else-if="field.type === 'password'"
+      v-else-if="field.type === FieldType.Password"
       :model-value="(modelValue as string) ?? ''"
       :feedback="false"
       toggle-mask
@@ -231,7 +232,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     />
 
     <InputNumber
-      v-else-if="field.type === 'number'"
+      v-else-if="field.type === FieldType.Number"
       :model-value="(modelValue as number) ?? null"
       :use-grouping="false"
       :min="min"
@@ -241,7 +242,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     />
 
     <InputNumber
-      v-else-if="field.type === 'stepper'"
+      v-else-if="field.type === FieldType.Stepper"
       :model-value="(modelValue as number) ?? null"
       :use-grouping="false"
       show-buttons
@@ -259,7 +260,10 @@ function updateFiles(event: FileUploadSelectEvent): void {
       </template>
     </InputNumber>
 
-    <div v-else-if="field.type === 'slider'" class="flex items-center gap-3">
+    <div
+      v-else-if="field.type === FieldType.Slider"
+      class="flex items-center gap-3"
+    >
       <Slider
         :model-value="sliderValue"
         :min="min ?? 0"
@@ -274,7 +278,10 @@ function updateFiles(event: FileUploadSelectEvent): void {
       >
     </div>
 
-    <div v-else-if="field.type === 'radio'" class="flex flex-col gap-2 pt-1">
+    <div
+      v-else-if="field.type === FieldType.Radio"
+      class="flex flex-col gap-2 pt-1"
+    >
       <label
         v-for="opt in options"
         :key="String(opt.value)"
@@ -291,7 +298,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     </div>
 
     <AutoComplete
-      v-else-if="field.type === 'autocomplete'"
+      v-else-if="field.type === FieldType.AutoComplete"
       :model-value="(modelValue as string) ?? ''"
       :suggestions="suggestions"
       dropdown
@@ -301,7 +308,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     />
 
     <ObjectField
-      v-else-if="field.type === 'object'"
+      v-else-if="field.type === FieldType.Object"
       :field="field"
       :model-value="modelValue"
       :connection-id="connectionId"
@@ -310,7 +317,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     />
 
     <ArrayField
-      v-else-if="field.type === 'array'"
+      v-else-if="field.type === FieldType.Array"
       :field="field"
       :model-value="modelValue"
       :connection-id="connectionId"
@@ -319,7 +326,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     />
 
     <MapField
-      v-else-if="field.type === 'map'"
+      v-else-if="field.type === FieldType.Map"
       :field="field"
       :model-value="modelValue"
       :connection-id="connectionId"
@@ -328,7 +335,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     />
 
     <InputText
-      v-else-if="field.type === 'duration'"
+      v-else-if="field.type === FieldType.Duration"
       :model-value="(modelValue as string) ?? ''"
       :placeholder="field.placeholder ?? '30s, 5m, 1h'"
       @update:model-value="update"

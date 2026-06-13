@@ -1,59 +1,72 @@
 import type { DataSource, Icon, Method, RiskLevel, SortKey } from "./core";
 import type { Condition, Schema } from "./schema";
 
-export const KNOWN_PANEL_TYPES = [
-  "terminal",
-  "file_browser",
-  "table",
-  "metrics",
-  "log_stream",
-  "terminal_grid",
-  "code_editor",
-  "diff",
-  "document",
-  "query_editor",
-  "remote_desktop",
-  "form",
-  "enroll",
-  "object_detail",
-  "timeline",
-  "task_progress",
-  "split",
-  "canvas",
-  "wasm",
-  "graph",
-  "trace",
-  "kv",
-  "http_client",
-  "dashboard",
-] as const;
+export const PanelType = {
+  Terminal: "terminal",
+  FileBrowser: "file_browser",
+  Table: "table",
+  Metrics: "metrics",
+  LogStream: "log_stream",
+  TerminalGrid: "terminal_grid",
+  CodeEditor: "code_editor",
+  Diff: "diff",
+  Document: "document",
+  QueryEditor: "query_editor",
+  RemoteDesktop: "remote_desktop",
+  Form: "form",
+  Enroll: "enroll",
+  ObjectDetail: "object_detail",
+  Timeline: "timeline",
+  TaskProgress: "task_progress",
+  Split: "split",
+  Canvas: "canvas",
+  Wasm: "wasm",
+  Graph: "graph",
+  Trace: "trace",
+  KV: "kv",
+  HTTPClient: "http_client",
+  Dashboard: "dashboard",
+} as const;
 
-export type KnownPanelType = (typeof KNOWN_PANEL_TYPES)[number];
+export const KNOWN_PANEL_TYPES = Object.values(PanelType);
+
+export type KnownPanelType = (typeof PanelType)[keyof typeof PanelType];
 
 export type PanelType = KnownPanelType | (string & {});
 
-export type StreamKind =
-  | "terminal"
-  | "logs"
-  | "desktop"
-  | "metrics"
-  | "file"
-  | "task"
-  | "canvas";
+export const StreamKind = {
+  Terminal: "terminal",
+  Logs: "logs",
+  Desktop: "desktop",
+  Metrics: "metrics",
+  File: "file",
+  Task: "task",
+  Canvas: "canvas",
+} as const;
+export type StreamKind = (typeof StreamKind)[keyof typeof StreamKind];
 
-export type ColumnType =
-  | "text"
-  | "badge"
-  | "bytes"
-  | "datetime"
-  | "relative_time"
-  | "number"
-  | "percent"
-  | "bool"
-  | "json"
-  | "icon";
+export const ColumnType = {
+  Text: "text",
+  Badge: "badge",
+  Bytes: "bytes",
+  DateTime: "datetime",
+  RelativeTime: "relative_time",
+  Number: "number",
+  Percent: "percent",
+  Bool: "bool",
+  Json: "json",
+  Icon: "icon",
+} as const;
+export type ColumnType = (typeof ColumnType)[keyof typeof ColumnType];
 
-export type Severity = "info" | "success" | "warn" | "danger" | "secondary";
+export const Severity = {
+  Info: "info",
+  Success: "success",
+  Warn: "warn",
+  Danger: "danger",
+  Secondary: "secondary",
+} as const;
+export type Severity = (typeof Severity)[keyof typeof Severity];
 
 export interface Column {
   key: string;
@@ -67,7 +80,14 @@ export interface Column {
   severities?: Record<string, Severity>;
 }
 
-export type RowClickAction = "navigate" | "detail" | "select" | "none";
+export const RowClickAction = {
+  Navigate: "navigate",
+  Detail: "detail",
+  Select: "select",
+  None: "none",
+} as const;
+export type RowClickAction =
+  (typeof RowClickAction)[keyof typeof RowClickAction];
 
 export interface TablePanelConfig {
   columns?: Column[];
@@ -126,7 +146,11 @@ export interface CodeEditorConfig {
   saveExtra?: Record<string, unknown>;
 }
 
-export type DiffMode = "side_by_side" | "unified";
+export const DiffMode = {
+  SideBySide: "side_by_side",
+  Unified: "unified",
+} as const;
+export type DiffMode = (typeof DiffMode)[keyof typeof DiffMode];
 
 export interface DiffPanelConfig {
   language?: string;
@@ -154,12 +178,18 @@ export interface QueryEditorConfig {
 }
 
 export interface GraphPanelConfig {
-  layout?: "grid" | "manual";
+  layout?: GraphLayout;
   fitView?: boolean;
   expandRouteId?: string;
   expandParam?: string;
   exportable?: boolean;
 }
+
+export const GraphLayout = {
+  Grid: "grid",
+  Manual: "manual",
+} as const;
+export type GraphLayout = (typeof GraphLayout)[keyof typeof GraphLayout];
 
 export interface TracePanelConfig {
   serviceField?: string;
@@ -296,21 +326,28 @@ export interface SplitChildPanel extends DashboardCell {
 }
 
 export interface SplitPanelConfig {
-  orientation?: "horizontal" | "vertical";
+  orientation?: SplitOrientation;
   panels?: SplitChildPanel[];
 }
+
+export const SplitOrientation = {
+  Horizontal: "horizontal",
+  Vertical: "vertical",
+} as const;
+export type SplitOrientation =
+  (typeof SplitOrientation)[keyof typeof SplitOrientation];
 
 export interface CanvasPanelConfig {
   width?: number;
   height?: number;
-  scaleMode?: "resize" | "fit" | "scroll";
+  scaleMode?: CanvasScaleMode;
   minScale?: number;
   maxScale?: number;
   hidpi?: boolean;
   interactive?: boolean;
   keyboard?: boolean;
   pointer?: boolean;
-  wheelMode?: "auto" | "capture" | "modified" | "none";
+  wheelMode?: CanvasWheelMode;
   resizeEvents?: boolean;
   background?: string;
   focusOnPointer?: boolean;
@@ -318,8 +355,30 @@ export interface CanvasPanelConfig {
   instructions?: string;
 }
 
-export type WasmRuntime = "go" | "generic";
-export type WasmScaleMode = "fit" | "resize" | "scroll";
+export const CanvasScaleMode = {
+  Resize: "resize",
+  Fit: "fit",
+  Scroll: "scroll",
+} as const;
+export type CanvasScaleMode =
+  (typeof CanvasScaleMode)[keyof typeof CanvasScaleMode];
+
+export const CanvasWheelMode = {
+  Auto: "auto",
+  Capture: "capture",
+  Modified: "modified",
+  None: "none",
+} as const;
+export type CanvasWheelMode =
+  (typeof CanvasWheelMode)[keyof typeof CanvasWheelMode];
+
+export const WasmRuntime = {
+  Go: "go",
+  Generic: "generic",
+} as const;
+export type WasmRuntime = (typeof WasmRuntime)[keyof typeof WasmRuntime];
+
+export type WasmScaleMode = CanvasScaleMode;
 
 export interface WasmAsset {
   path: string;
@@ -386,8 +445,14 @@ export interface ResourceRef {
 
 export interface ActionSuccess {
   selectTab?: string;
-  navigate?: "list";
+  navigate?: NavigateTarget;
 }
+
+export const NavigateTarget = {
+  List: "list",
+} as const;
+export type NavigateTarget =
+  (typeof NavigateTarget)[keyof typeof NavigateTarget];
 
 export interface Action {
   id: string;
@@ -401,7 +466,7 @@ export interface Action {
   confirmText?: string;
   input?: Schema;
   onSuccess?: ActionSuccess;
-  open?: "view" | "dock" | "dialog" | "url";
+  open?: OpenTarget;
   panel?: PanelType;
   config?: Record<string, unknown>;
   enabledWhen?: Condition;
@@ -409,6 +474,14 @@ export interface Action {
   iconOnly?: boolean;
   group?: string;
 }
+
+export const OpenTarget = {
+  View: "view",
+  Dock: "dock",
+  Dialog: "dialog",
+  Url: "url",
+} as const;
+export type OpenTarget = (typeof OpenTarget)[keyof typeof OpenTarget];
 
 export interface Stream {
   id: string;
@@ -432,7 +505,7 @@ export interface DashboardPanelConfig {
 }
 
 export interface PanelConfigProperty {
-  type: "string" | "number" | "boolean" | "object" | "array";
+  type: PanelConfigPropertyType;
   items?: PanelConfigProperty;
   properties?: Record<string, PanelConfigProperty>;
   enum?: string[];
@@ -440,10 +513,20 @@ export interface PanelConfigProperty {
 }
 
 export interface PanelConfigSchema {
-  type: "object";
+  type: typeof PanelConfigPropertyType.Object;
   properties?: Record<string, PanelConfigProperty>;
   required?: string[];
 }
+
+export const PanelConfigPropertyType = {
+  String: "string",
+  Number: "number",
+  Boolean: "boolean",
+  Object: "object",
+  Array: "array",
+} as const;
+export type PanelConfigPropertyType =
+  (typeof PanelConfigPropertyType)[keyof typeof PanelConfigPropertyType];
 
 export type Row = Record<string, unknown> & {
   ref?: ResourceRef;
@@ -465,9 +548,18 @@ export interface FileEntry {
 export interface FileContent {
   path: string;
   mime?: string;
-  encoding?: "utf8" | "base64" | "url" | "binary";
+  encoding?: FileContentEncoding;
   content?: string;
   url?: string;
   size?: number;
   truncated?: boolean;
 }
+
+export const FileContentEncoding = {
+  UTF8: "utf8",
+  Base64: "base64",
+  Url: "url",
+  Binary: "binary",
+} as const;
+export type FileContentEncoding =
+  (typeof FileContentEncoding)[keyof typeof FileContentEncoding];

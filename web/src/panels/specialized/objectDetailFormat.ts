@@ -1,4 +1,9 @@
-import type { ColumnType, ObjectDetailField, Row } from "@/types/projection";
+import {
+  ColumnType,
+  type ColumnType as ColumnTypeValue,
+  type ObjectDetailField,
+  type Row,
+} from "@/types/projection";
 
 export function humanize(key: string): string {
   const spaced = key
@@ -18,15 +23,15 @@ export function formatBytes(value: number): string {
   return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-export function formatValue(value: unknown, type?: ColumnType): string {
+export function formatValue(value: unknown, type?: ColumnTypeValue): string {
   if (value === undefined || value === null || value === "") return "—";
   const numeric = numberValue(value);
-  if (type === "bytes" && numeric != null) return formatBytes(numeric);
-  if (type === "percent" && numeric != null) return `${numeric}%`;
-  if (type === "datetime" && typeof value === "string") {
+  if (type === ColumnType.Bytes && numeric != null) return formatBytes(numeric);
+  if (type === ColumnType.Percent && numeric != null) return `${numeric}%`;
+  if (type === ColumnType.DateTime && typeof value === "string") {
     return new Date(value).toLocaleString();
   }
-  if (type === "json" || typeof value === "object") {
+  if (type === ColumnType.Json || typeof value === "object") {
     return JSON.stringify(value, null, 2);
   }
   return String(value);

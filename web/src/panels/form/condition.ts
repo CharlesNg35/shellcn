@@ -1,4 +1,11 @@
-import type { Condition, Field, Rule, Validator } from "@/types/projection";
+import {
+  Operator,
+  ValidatorType,
+  type Condition,
+  type Field,
+  type Rule,
+  type Validator,
+} from "@/types/projection";
 
 type Values = Record<string, unknown>;
 
@@ -14,17 +21,17 @@ function isEmpty(v: unknown): boolean {
 export function evalRule(rule: Rule, values: Values): boolean {
   const v = values[rule.field];
   switch (rule.op) {
-    case "eq":
+    case Operator.Eq:
       return v === rule.value;
-    case "neq":
+    case Operator.Neq:
       return v !== rule.value;
-    case "in":
+    case Operator.In:
       return Array.isArray(rule.value) && rule.value.includes(v);
-    case "nin":
+    case Operator.Nin:
       return Array.isArray(rule.value) && !rule.value.includes(v);
-    case "empty":
+    case Operator.Empty:
       return isEmpty(v);
-    case "notEmpty":
+    case Operator.NotEmpty:
       return !isEmpty(v);
     default:
       return true;
@@ -50,24 +57,24 @@ export function isVisible(
 function runValidator(v: Validator, value: unknown): string | null {
   const n = Number(v.value);
   switch (v.type) {
-    case "min":
+    case ValidatorType.Min:
       if (typeof value === "number" && value < n)
         return `Must be at least ${v.value}.`;
       if (typeof value === "string" && value.length < n)
         return `Must be at least ${v.value} characters.`;
       return null;
-    case "max":
+    case ValidatorType.Max:
       if (typeof value === "number" && value > n)
         return `Must be at most ${v.value}.`;
       if (typeof value === "string" && value.length > n)
         return `Must be at most ${v.value} characters.`;
       return null;
-    case "regex":
+    case ValidatorType.Regex:
       return typeof value === "string" &&
         !new RegExp(String(v.value)).test(value)
         ? "Invalid format."
         : null;
-    case "oneOf":
+    case ValidatorType.OneOf:
       return Array.isArray(v.value) && !v.value.includes(value)
         ? "Invalid choice."
         : null;

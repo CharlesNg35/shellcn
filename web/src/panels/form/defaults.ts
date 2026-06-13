@@ -1,9 +1,9 @@
-import type { Field, Schema } from "@/types/projection";
+import { FieldType, type Field, type Schema } from "@/types/projection";
 
 // defaultForField seeds an initial value, recursing object sub-fields and the
 // minItems rows of an array so a composite field renders ready to edit.
 export function defaultForField(field: Field): unknown {
-  if (field.type === "object") {
+  if (field.type === FieldType.Object) {
     const out: Record<string, unknown> = {};
     for (const sub of field.fields ?? []) {
       const d = defaultForField(sub);
@@ -11,13 +11,13 @@ export function defaultForField(field: Field): unknown {
     }
     return out;
   }
-  if (field.type === "array") {
+  if (field.type === FieldType.Array) {
     const n = field.minItems ?? 0;
     return field.item
       ? Array.from({ length: n }, () => defaultForField(field.item as Field))
       : [];
   }
-  if (field.type === "map") {
+  if (field.type === FieldType.Map) {
     return field.default ?? {};
   }
   return field.default;

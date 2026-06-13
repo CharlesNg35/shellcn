@@ -2,6 +2,7 @@
 import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import SkeletonList from "@/components/SkeletonList.vue";
 import { useTheme } from "@/composables/useTheme";
+import { DiffMode } from "@/types/projection";
 import type { CodeMirrorDiffMode, CodeMirrorDiffView } from "@/codemirror";
 
 const props = withDefaults(
@@ -18,7 +19,7 @@ const props = withDefaults(
     language: "plaintext",
     originalLabel: "Original",
     modifiedLabel: "Modified",
-    mode: "side_by_side",
+    mode: DiffMode.SideBySide,
     collapseUnchanged: false,
   },
 );
@@ -81,13 +82,13 @@ onUnmounted(() => {
   <div class="flex h-full min-h-0 flex-col">
     <div
       class="grid shrink-0 grid-cols-2 border-b border-surface-200 bg-surface-0 text-xs font-medium text-surface-500 dark:border-surface-800 dark:bg-surface-950 dark:text-surface-400"
-      :class="{ 'grid-cols-1': mode === 'unified' }"
+      :class="{ 'grid-cols-1': mode === DiffMode.Unified }"
     >
       <div class="truncate px-3 py-2">
-        {{ mode === "unified" ? modifiedLabel : originalLabel }}
+        {{ mode === DiffMode.Unified ? modifiedLabel : originalLabel }}
       </div>
       <div
-        v-if="mode !== 'unified'"
+        v-if="mode !== DiffMode.Unified"
         class="truncate border-l border-surface-200 px-3 py-2 dark:border-surface-800"
       >
         {{ modifiedLabel }}
@@ -97,14 +98,14 @@ onUnmounted(() => {
     <div
       v-else-if="useFallback"
       class="grid min-h-0 flex-1 grid-cols-2 overflow-hidden text-xs"
-      :class="{ 'grid-cols-1': mode === 'unified' }"
+      :class="{ 'grid-cols-1': mode === DiffMode.Unified }"
     >
       <pre
         class="m-0 overflow-auto bg-surface-0 p-4 font-mono leading-relaxed whitespace-pre-wrap text-surface-700 dark:bg-surface-950 dark:text-surface-200"
-        >{{ mode === "unified" ? modified : original }}</pre
+        >{{ mode === DiffMode.Unified ? modified : original }}</pre
       >
       <pre
-        v-if="mode !== 'unified'"
+        v-if="mode !== DiffMode.Unified"
         class="m-0 overflow-auto border-l border-surface-200 bg-surface-0 p-4 font-mono leading-relaxed whitespace-pre-wrap text-surface-700 dark:border-surface-800 dark:bg-surface-950 dark:text-surface-200"
         >{{ modified }}</pre
       >

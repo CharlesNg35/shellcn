@@ -29,13 +29,14 @@ import type {
   Column as ColumnSpec,
   DataSource,
   Field,
-  FieldType,
+  FieldType as FieldTypeValue,
   Icon,
   ResourceEvent,
   ResourceRef,
   Row,
   TablePanelConfig,
 } from "@/types/projection";
+import { ColumnType, FieldType, RowClickAction } from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import { formatBytes } from "../file/fileTypes";
 import { dialogRoot, inputClass } from "@/primevue/preset";
@@ -182,14 +183,14 @@ const DEFAULT_COLUMN_WIDTH = "16rem";
 const TYPE_COLUMN_WIDTH: Partial<
   Record<NonNullable<ColumnSpec["type"]>, string>
 > = {
-  badge: "10rem",
-  bool: "8rem",
-  bytes: "9rem",
-  datetime: "14rem",
-  icon: "3rem",
-  number: "9rem",
-  json: "22rem",
-  relative_time: "9rem",
+  [ColumnType.Badge]: "10rem",
+  [ColumnType.Bool]: "8rem",
+  [ColumnType.Bytes]: "9rem",
+  [ColumnType.DateTime]: "14rem",
+  [ColumnType.Icon]: "3rem",
+  [ColumnType.Number]: "9rem",
+  [ColumnType.Json]: "22rem",
+  [ColumnType.RelativeTime]: "9rem",
 };
 
 const canExport = computed(() => Boolean(tableConfig.value?.exportable));
@@ -500,17 +501,17 @@ const insertDraft = ref<Record<string, unknown>>({});
 const inserting = ref(false);
 
 const COLUMN_FIELD_TYPE: Partial<
-  Record<NonNullable<ColumnSpec["type"]>, FieldType>
+  Record<NonNullable<ColumnSpec["type"]>, FieldTypeValue>
 > = {
-  number: "number",
-  bool: "toggle",
-  json: "json",
+  [ColumnType.Number]: FieldType.Number,
+  [ColumnType.Bool]: FieldType.Toggle,
+  [ColumnType.Json]: FieldType.Json,
 };
 const insertFields = computed<Field[]>(() =>
   columns.value.map((col) => ({
     key: col.key,
     label: col.label,
-    type: COLUMN_FIELD_TYPE[col.type ?? "text"] ?? "text",
+    type: COLUMN_FIELD_TYPE[col.type ?? ColumnType.Text] ?? FieldType.Text,
     placeholder: col.nullable ? "NULL" : undefined,
   })),
 );
@@ -580,11 +581,11 @@ function dynamicColumnLabel(row: Row, key: string): string {
 function mapColumnType(raw: unknown): ColumnSpec["type"] | undefined {
   const t = String(raw ?? "").toLowerCase();
   if (!t) return undefined;
-  if (/bool/.test(t)) return "bool";
-  if (/json/.test(t)) return "json";
+  if (/bool/.test(t)) return ColumnType.Bool;
+  if (/json/.test(t)) return ColumnType.Json;
   if (/(int|serial|numeric|decimal|real|double|float|money|number)/.test(t))
-    return "number";
-  if (/(date|time|timestamp)/.test(t)) return "datetime";
+    return ColumnType.Number;
+  if (/(date|time|timestamp)/.test(t)) return ColumnType.DateTime;
   return undefined;
 }
 
@@ -628,12 +629,12 @@ function openLink(ref: ResourceRef): void {
 
 function formatNumber(v: number, col: ColumnSpec): string {
   const n = col.precision != null ? v.toFixed(col.precision) : String(v);
-  return col.type === "percent" ? `${n}%` : n;
+  return col.type === ColumnType.Percent ? `${n}%` : n;
 }
 
 const relativeNow = ref(Date.now());
 const hasRelativeTimeColumn = computed(() =>
-  columns.value.some((col) => col.type === "relative_time"),
+  columns.value.some((col) => col.type === ColumnType.RelativeTime),
 );
 
 function formatRelativeTime(v: string): string {
@@ -651,20 +652,21 @@ function formatRelativeTime(v: string): string {
 function display(row: Row, col: ColumnSpec): string {
   const v = row[col.key];
   if (v === undefined || v === null || v === "") return "—";
-  if (col.type === "icon") {
+  if (col.type === ColumnType.Icon) {
     if (typeof v === "string") return v;
     if (typeof v === "object" && "value" in v) return String(v.value);
     return "—";
   }
-  if (col.type === "bytes" && typeof v === "number") return formatBytes(v);
+  if (col.type === ColumnType.Bytes && typeof v === "number")
+    return formatBytes(v);
   if (
-    (col.type === "number" || col.type === "percent") &&
+    (col.type === ColumnType.Number || col.type === ColumnType.Percent) &&
     typeof v === "number"
   )
     return formatNumber(v, col);
-  if (col.type === "relative_time" && typeof v === "string")
+  if (col.type === ColumnType.RelativeTime && typeof v === "string")
     return formatRelativeTime(v);
-  if (col.type === "datetime" && typeof v === "string")
+  if (col.type === ColumnType.DateTime && typeof v === "string")
     return new Date(v).toLocaleString();
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
@@ -692,21 +694,23 @@ function iconCell(row: Row, col: ColumnSpec): Icon | null {
 
 function columnWidth(col: ColumnSpec): string {
   return (
-    col.width || TYPE_COLUMN_WIDTH[col.type ?? "text"] || DEFAULT_COLUMN_WIDTH
+    col.width ||
+    TYPE_COLUMN_WIDTH[col.type ?? ColumnType.Text] ||
+    DEFAULT_COLUMN_WIDTH
   );
 }
 
 function columnStyle(col: ColumnSpec): Record<string, string> {
   const width = columnWidth(col);
   return {
-    minWidth: col.width || col.type === "icon" ? width : "7.5rem",
+    minWidth: col.width || col.type === ColumnType.Icon ? width : "7.5rem",
     width,
     maxWidth: width,
   };
 }
 
 function cellClass(row: Row, col: ColumnSpec): string {
-  if (col.type === "icon") return "flex min-w-0 justify-center";
+  if (col.type === ColumnType.Icon) return "flex min-w-0 justify-center";
   const base = "block min-w-0 truncate";
   if (staged.value && isEdited(row, col.key)) {
     return cn(
@@ -777,7 +781,9 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
 
 const navigableKinds = useNavigableKinds();
 const rowClickMode = computed(() => tableConfig.value?.rowClick);
-const detailEnabled = computed(() => rowClickMode.value === "detail");
+const detailEnabled = computed(
+  () => rowClickMode.value === RowClickAction.Detail,
+);
 const detailRow = ref<Row | null>(null);
 
 function navigates(row: Row): boolean {
@@ -813,15 +819,15 @@ function onRowClick(e: DataTableRowClickEvent): void {
   }
   if (editable.value) return; // body reserved for cell editing
   switch (rowClickMode.value) {
-    case "none":
+    case RowClickAction.None:
       return;
-    case "detail":
+    case RowClickAction.Detail:
       detailRow.value = row;
       return;
-    case "select":
+    case RowClickAction.Select:
       toggleSelection(row);
       return;
-    case "navigate":
+    case RowClickAction.Navigate:
       if (row.ref) emit("select", row);
       return;
   }
@@ -832,7 +838,7 @@ function onRowClick(e: DataTableRowClickEvent): void {
 function rowClickable(row: Row): boolean {
   if (editable.value) return false;
   const mode = rowClickMode.value;
-  if (mode) return mode !== "none";
+  if (mode) return mode !== RowClickAction.None;
   return navigates(row) || Boolean(row.ref) || selectable.value;
 }
 
@@ -861,7 +867,7 @@ const detailItems = computed<DetailItem[]>(() => {
       key: col.key,
       label: col.label,
       text: display(r, col),
-      badge: col.type === "badge" ? badgeClass(r, col) : undefined,
+      badge: col.type === ColumnType.Badge ? badgeClass(r, col) : undefined,
     });
   }
   for (const key of Object.keys(r)) {

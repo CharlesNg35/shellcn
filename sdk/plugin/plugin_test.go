@@ -254,6 +254,9 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"scope autocomplete without choices", "has no choices", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", Control: plugin.ScopeAutoComplete}}
 		}},
+		{"scope invalid control", "invalid control", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", Control: plugin.ScopeControl("combo"), Options: []plugin.FilterOption{{Value: "default"}}}}
+		}},
 		{"scope search cannot be multiple", "is a search but declares multiple", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Scope = []plugin.ScopeFilter{{Param: "q", Label: "Search", Control: plugin.ScopeSearch, Multiple: true}}
 		}},

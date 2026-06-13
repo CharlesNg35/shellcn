@@ -13,6 +13,7 @@ import type {
   Row,
   ScopeFilter,
 } from "@/types/projection";
+import { EventType, ScopeControl } from "@/types/projection";
 import AppIcon from "@/components/AppIcon.vue";
 
 const props = defineProps<{
@@ -122,7 +123,7 @@ function applyOptionEvent(f: ScopeFilter, ev: ResourceEvent): boolean {
   const current = loaded(f);
   const index = current.findIndex((option) => option.value === value);
   const type = String(ev.type).toLowerCase();
-  if (type === "deleted") {
+  if (type === EventType.Deleted) {
     if (index === -1) return true;
     options[f.param] = current.filter((_, i) => i !== index);
     if (multiple(f)) {
@@ -251,7 +252,7 @@ onUnmounted(stopWatches);
       />
 
       <label
-        v-if="f.control === 'toggle'"
+        v-if="f.control === ScopeControl.Toggle"
         class="flex items-center gap-1.5 text-sm text-surface-600 dark:text-surface-300"
       >
         {{ f.options?.[0]?.label ?? f.label }}
@@ -264,7 +265,7 @@ onUnmounted(stopWatches);
 
       <div v-else class="w-52">
         <InputText
-          v-if="f.control === 'search'"
+          v-if="f.control === ScopeControl.Search"
           :model-value="value(f)"
           :placeholder="f.allLabel ?? f.label"
           :aria-label="f.label"
@@ -273,7 +274,7 @@ onUnmounted(stopWatches);
         />
 
         <MultiSelect
-          v-else-if="multiple(f) && f.control !== 'autocomplete'"
+          v-else-if="multiple(f) && f.control !== ScopeControl.AutoComplete"
           :model-value="members(f)"
           :options="loaded(f)"
           option-label="label"
@@ -286,7 +287,7 @@ onUnmounted(stopWatches);
         />
 
         <AutoComplete
-          v-else-if="f.control === 'autocomplete'"
+          v-else-if="f.control === ScopeControl.AutoComplete"
           :model-value="autoCompleteValue(f)"
           :suggestions="suggestions[f.param] ?? choicesForControl(f)"
           option-label="label"

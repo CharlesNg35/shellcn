@@ -14,7 +14,13 @@ export interface Enrollment {
   downloadUrl: string;
 }
 
-export type AgentStatus = "pending" | "online" | "offline" | "error";
+export const AgentStatus = {
+  Pending: "pending",
+  Online: "online",
+  Offline: "offline",
+  Error: "error",
+} as const;
+export type AgentStatus = (typeof AgentStatus)[keyof typeof AgentStatus];
 
 export interface AgentState {
   status: AgentStatus;

@@ -1,7 +1,26 @@
 import type { Icon, Transport } from "./core";
 import type { CredentialKind } from "./schema";
 
-export type GrantAccess = "use" | "manage";
+export const GrantAccess = {
+  Use: "use",
+  Manage: "manage",
+} as const;
+export type GrantAccess = (typeof GrantAccess)[keyof typeof GrantAccess];
+
+export const ConnectionAccess = {
+  Owner: "owner",
+  Admin: "admin",
+  Use: GrantAccess.Use,
+  Manage: GrantAccess.Manage,
+} as const;
+export type ConnectionAccess =
+  (typeof ConnectionAccess)[keyof typeof ConnectionAccess];
+
+export const ConnectionStatus = {
+  Offline: "offline",
+} as const;
+export type ConnectionStatus =
+  (typeof ConnectionStatus)[keyof typeof ConnectionStatus];
 
 export interface ConnectionSummary {
   id: string;
@@ -10,10 +29,10 @@ export interface ConnectionSummary {
   icon?: Icon;
   transport: Transport;
   online?: boolean;
-  status?: "offline";
+  status?: ConnectionStatus;
   canManage?: boolean;
   canShare?: boolean;
-  access?: "owner" | "admin" | GrantAccess;
+  access?: ConnectionAccess;
   owned?: boolean;
   ownerName?: string;
   sharedWithMe?: boolean;
@@ -25,15 +44,17 @@ export interface ConnectionSummary {
   sortOrder?: number;
 }
 
-export type FolderColor =
-  | "slate"
-  | "blue"
-  | "teal"
-  | "emerald"
-  | "amber"
-  | "rose"
-  | "violet"
-  | "cyan";
+export const FolderColor = {
+  Slate: "slate",
+  Blue: "blue",
+  Teal: "teal",
+  Emerald: "emerald",
+  Amber: "amber",
+  Rose: "rose",
+  Violet: "violet",
+  Cyan: "cyan",
+} as const;
+export type FolderColor = (typeof FolderColor)[keyof typeof FolderColor];
 
 export interface ConnectionFolder {
   id: string;
@@ -77,10 +98,17 @@ export interface ConnectionDetail {
 }
 
 export interface CredentialRefState {
-  state: "set" | "not_set";
+  state: CredentialRefStateKind;
   readable: boolean;
   summary?: CredentialSummary;
 }
+
+export const CredentialRefStateKind = {
+  Set: "set",
+  NotSet: "not_set",
+} as const;
+export type CredentialRefStateKind =
+  (typeof CredentialRefStateKind)[keyof typeof CredentialRefStateKind];
 
 export interface UserConnectionSummary {
   id: string;

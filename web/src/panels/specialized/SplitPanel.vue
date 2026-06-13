@@ -9,6 +9,7 @@ import type {
   SplitChildPanel,
   SplitPanelConfig,
 } from "@/types/projection";
+import { SplitOrientation } from "@/types/projection";
 import PanelHost from "../core/PanelHost.vue";
 
 const props = defineProps<PanelProps>();
@@ -22,7 +23,9 @@ const cfg = computed(
 );
 const panels = computed<SplitChildPanel[]>(() => cfg.value.panels ?? []);
 const layout = computed(() =>
-  cfg.value.orientation === "vertical" ? "vertical" : "horizontal",
+  cfg.value.orientation === SplitOrientation.Vertical
+    ? SplitOrientation.Vertical
+    : SplitOrientation.Horizontal,
 );
 </script>
 

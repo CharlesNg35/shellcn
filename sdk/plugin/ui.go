@@ -716,8 +716,7 @@ type ResourceType struct {
 	Detail  DetailView      `json:"detail"`
 }
 
-// ScopeControl names the scope filter's input widget. Open vocabulary: the
-// renderer falls back to a select for names it doesn't recognize.
+// ScopeControl names the scope filter's input widget.
 type ScopeControl string
 
 const (

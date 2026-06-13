@@ -42,6 +42,10 @@ import { properties } from "@codemirror/legacy-modes/mode/properties";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
 import { toml } from "@codemirror/legacy-modes/mode/toml";
 import { xml } from "@codemirror/legacy-modes/mode/xml";
+import {
+  DiffMode,
+  type DiffMode as ProjectionDiffMode,
+} from "@/types/projection";
 
 export interface CodeMirrorEditor {
   view: EditorView;
@@ -67,7 +71,7 @@ export interface CodeMirrorOptions {
   onChange?: (value: string) => void;
 }
 
-export type CodeMirrorDiffMode = "side_by_side" | "unified";
+export type CodeMirrorDiffMode = ProjectionDiffMode;
 
 export interface CodeMirrorDiffView {
   destroy: () => void;
@@ -644,7 +648,7 @@ export function createCodeMirrorDiffView(
   parent: HTMLElement,
   options: CodeMirrorDiffOptions,
 ): CodeMirrorDiffView {
-  if (options.mode === "unified") {
+  if (options.mode === DiffMode.Unified) {
     const theme = new Compartment();
     const view = new EditorView({
       parent,

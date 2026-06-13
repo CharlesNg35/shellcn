@@ -10,7 +10,11 @@ import {
 } from "vue";
 import Button from "primevue/button";
 import { agentApi } from "@/api/agent";
-import type { Enrollment, InstallArtifact } from "@/types/projection";
+import {
+  AgentStatus,
+  type Enrollment,
+  type InstallArtifact,
+} from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import { useAgentState } from "@/composables/useAgentState";
 import AppIcon from "@/components/AppIcon.vue";
@@ -35,10 +39,10 @@ function clearCopiedTimer(): void {
 
 const statusTone = computed(() => {
   switch (status.value) {
-    case "online":
+    case AgentStatus.Online:
       return "bg-emerald-400";
-    case "offline":
-    case "error":
+    case AgentStatus.Offline:
+    case AgentStatus.Error:
       return "bg-rose-400";
     default:
       return "animate-pulse bg-amber-400";
@@ -47,10 +51,10 @@ const statusTone = computed(() => {
 
 const heading = computed(() => {
   switch (status.value) {
-    case "online":
+    case AgentStatus.Online:
       return "Agent online";
-    case "offline":
-    case "error":
+    case AgentStatus.Offline:
+    case AgentStatus.Error:
       return "Agent disconnected";
     default:
       return "Connect the agent";
@@ -71,7 +75,7 @@ const hostInstallKinds = [
 ];
 const showAgentDownload = computed(
   () =>
-    status.value !== "online" &&
+    status.value !== AgentStatus.Online &&
     Boolean(enrollment.value?.downloadUrl) &&
     (enrollment.value?.artifacts ?? []).some((artifact) =>
       hostInstallKinds.some((kind) =>
@@ -82,10 +86,10 @@ const showAgentDownload = computed(
 
 const guidance = computed(() => {
   switch (status.value) {
-    case "offline":
-    case "error":
+    case AgentStatus.Offline:
+    case AgentStatus.Error:
       return "Restart the installed agent on the target host. Generate a new command only if the previous install command was lost or intentionally rotated.";
-    case "online":
+    case AgentStatus.Online:
       return "";
     default:
       return "This connection reaches a private target through an agent. Run the command on the target host; this page updates when the agent dials back.";

@@ -1,4 +1,11 @@
-export type IconType = "lucide" | "url" | "base64" | "emoji" | "svg";
+export const IconType = {
+  Lucide: "lucide",
+  Url: "url",
+  Base64: "base64",
+  Emoji: "emoji",
+  Svg: "svg",
+} as const;
+export type IconType = (typeof IconType)[keyof typeof IconType];
 
 export interface Icon {
   type: IconType;
@@ -12,7 +19,15 @@ export interface PluginCategoryInfo {
   order: number;
 }
 
-export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "WS";
+export const Method = {
+  Get: "GET",
+  Post: "POST",
+  Put: "PUT",
+  Patch: "PATCH",
+  Delete: "DELETE",
+  WS: "WS",
+} as const;
+export type Method = (typeof Method)[keyof typeof Method];
 
 export const RiskLevel = {
   Safe: "safe",
@@ -22,10 +37,14 @@ export const RiskLevel = {
 } as const;
 export type RiskLevel = (typeof RiskLevel)[keyof typeof RiskLevel];
 
-export type Transport = "direct" | "agent";
+export const Transport = {
+  Direct: "direct",
+  Agent: "agent",
+} as const;
+export type Transport = (typeof Transport)[keyof typeof Transport];
 
-export const TRANSPORT_DIRECT: Transport = "direct";
-export const TRANSPORT_AGENT: Transport = "agent";
+export const TRANSPORT_DIRECT: Transport = Transport.Direct;
+export const TRANSPORT_AGENT: Transport = Transport.Agent;
 
 export const Layout = {
   Tabs: "tabs",

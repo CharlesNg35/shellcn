@@ -288,6 +288,10 @@ func validateScope(m Manifest, routes map[string]Route, add func(string, ...any)
 		}
 		hasChoices := len(s.Options) > 0 || s.OptionsSource != nil
 		switch s.Control {
+		case "", ScopeSelect:
+			if !hasChoices {
+				add("scope filter %q has no choices (set options or optionsSource)", s.Param)
+			}
 		case ScopeSearch:
 			if s.Multiple {
 				add("scope filter %q is a search but declares multiple", s.Param)
@@ -308,11 +312,7 @@ func validateScope(m Manifest, routes map[string]Route, add func(string, ...any)
 				add("scope filter %q has no choices (set options or optionsSource)", s.Param)
 			}
 		default:
-			// select/multiselect (and unknown controls, which fall back to a select)
-			// need choices.
-			if !hasChoices {
-				add("scope filter %q has no choices (set options or optionsSource)", s.Param)
-			}
+			add("scope filter %q has invalid control %q", s.Param, s.Control)
 		}
 	}
 }

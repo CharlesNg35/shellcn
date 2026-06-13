@@ -1,8 +1,16 @@
 import { defineStore } from "pinia";
 import { reactive } from "vue";
-import type { ConnectionSession } from "../api/connectionSession";
+import {
+  ConnectionSessionState,
+  type ConnectionSession,
+} from "../api/connectionSession";
 
-export type ConnLiveState = "connecting" | "connected" | "error";
+export const ConnLiveState = {
+  Connecting: "connecting",
+  Connected: "connected",
+  Error: "error",
+} as const;
+export type ConnLiveState = (typeof ConnLiveState)[keyof typeof ConnLiveState];
 
 export interface ConnLive {
   state: ConnLiveState;
@@ -17,27 +25,30 @@ export const useConnectionStatusStore = defineStore("connectionStatus", () => {
 
   function connecting(id: string): void {
     // Don't downgrade an already-established connection back to "connecting".
-    if (live[id]?.state === "connected") return;
-    live[id] = { state: "connecting" };
+    if (live[id]?.state === ConnLiveState.Connected) return;
+    live[id] = { state: ConnLiveState.Connecting };
   }
 
   function connected(id: string): void {
-    live[id] = { state: "connected" };
+    live[id] = { state: ConnLiveState.Connected };
   }
 
   function failed(id: string, reason?: string): void {
-    live[id] = { state: "error", reason: reason || live[id]?.reason };
+    live[id] = {
+      state: ConnLiveState.Error,
+      reason: reason || live[id]?.reason,
+    };
   }
 
   function applySession(id: string, session: ConnectionSession): void {
     switch (session.state) {
-      case "connected":
+      case ConnectionSessionState.Connected:
         connected(id);
         return;
-      case "connecting":
+      case ConnectionSessionState.Connecting:
         connecting(id);
         return;
-      case "error":
+      case ConnectionSessionState.Error:
         failed(id, session.reason);
         return;
       default:

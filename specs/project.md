@@ -393,7 +393,7 @@ type ScopeFilter struct {
     Param         string       // route param the value is injected as, e.g. "namespace"
     Label         string
     Icon          Icon
-    Control       ScopeControl // input widget: select (default) | autocomplete | search | toggle | …
+    Control       ScopeControl // input widget: select (default) | autocomplete | search | toggle
     Multiple      bool         // select/autocomplete cardinality; values join with ScopeSeparator
     AllowCustom   bool         // autocomplete only: typed values may become route params
     OptionsSource *DataSource    // route whose rows are the choices (ValueField/LabelField)

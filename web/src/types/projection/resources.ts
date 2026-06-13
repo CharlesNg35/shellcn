@@ -10,7 +10,7 @@ export interface ScopeFilter {
   param: string;
   label: string;
   icon?: Icon;
-  control?: string;
+  control?: ScopeControl;
   multiple?: boolean;
   allowCustom?: boolean;
   optionsSource?: DataSource;
@@ -21,6 +21,14 @@ export interface ScopeFilter {
   allLabel?: string;
   defaultValue?: string;
 }
+
+export const ScopeControl = {
+  Select: "select",
+  AutoComplete: "autocomplete",
+  Search: "search",
+  Toggle: "toggle",
+} as const;
+export type ScopeControl = (typeof ScopeControl)[keyof typeof ScopeControl];
 
 export interface TreeGroup {
   key: string;
@@ -75,7 +83,12 @@ export interface ResourceType {
   detail: DetailView;
 }
 
-export type EventType = "added" | "updated" | "deleted";
+export const EventType = {
+  Added: "added",
+  Updated: "updated",
+  Deleted: "deleted",
+} as const;
+export type EventType = (typeof EventType)[keyof typeof EventType];
 
 export interface ResourceEvent {
   type: EventType;
