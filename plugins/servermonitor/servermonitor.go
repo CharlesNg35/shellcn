@@ -218,10 +218,10 @@ func cpuMemConfig() plugin.MetricsConfig {
 func throughputConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
 		Series: []plugin.MetricSeries{
-			{Key: "netRecvRate", Label: "Net in", Unit: "bytes"},
-			{Key: "netSentRate", Label: "Net out", Unit: "bytes"},
-			{Key: "diskReadRate", Label: "Disk read", Unit: "bytes"},
-			{Key: "diskWriteRate", Label: "Disk write", Unit: "bytes"},
+			{Key: "netRecvRate", Label: "Net in", Unit: "bytes/s"},
+			{Key: "netSentRate", Label: "Net out", Unit: "bytes/s"},
+			{Key: "diskReadRate", Label: "Disk read", Unit: "bytes/s"},
+			{Key: "diskWriteRate", Label: "Disk write", Unit: "bytes/s"},
 		},
 		History: 120,
 	}

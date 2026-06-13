@@ -60,4 +60,30 @@ describe("MetricsPanel", () => {
     expect(w.text()).toContain("CPU");
     expect(w.text()).not.toContain("No metrics configured.");
   });
+
+  it("passes series units into chart labels", async () => {
+    const w = mount(MetricsPanel, {
+      props: {
+        connectionId: "c1",
+        config: { series: [{ key: "net", label: "Net in", unit: "bytes/s" }] },
+      },
+      global: {
+        stubs: {
+          StreamStatusBar: true,
+          StatCard: true,
+          GaugeChart: true,
+          SeriesChart: {
+            props: ["series"],
+            template: '<div class="series">{{ series[0].label }}</div>',
+          },
+        },
+      },
+    });
+
+    const vm = w.vm as unknown as { onFrame: (raw: string) => void };
+    vm.onFrame('{"net":2048}');
+    await w.vm.$nextTick();
+
+    expect(w.text()).toContain("Net in (bytes/s)");
+  });
 });

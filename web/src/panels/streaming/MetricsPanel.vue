@@ -80,7 +80,7 @@ function onFrame(raw: string): void {
 
 const seriesData = computed(() =>
   series.value.map((s) => ({
-    label: s.label ?? s.key,
+    label: s.unit ? `${s.label ?? s.key} (${s.unit})` : (s.label ?? s.key),
     data: histories[s.key] ?? [],
   })),
 );
