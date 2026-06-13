@@ -469,6 +469,7 @@ describe("SchemaForm", () => {
         schema: restoreSchema,
         submitLabel: "Restore",
         resource: {
+          kind: "backup",
           uid: "vzdump-qemu-101-2026_06_13-10_00_00.vma.zst",
           name: "VM 101 backup",
         },
