@@ -243,6 +243,7 @@ type ClusterOwnerStore interface {
 	Renew(ctx context.Context, key, leaseID string, expiresAt, now time.Time) (bool, error)
 	PreferInternalURL(ctx context.Context, key, leaseID, internalURL string, now time.Time) (bool, error)
 	Release(ctx context.Context, key, leaseID string) error
+	DeleteExpired(ctx context.Context, now time.Time) (int64, error)
 }
 
 // Store aggregates every repository plus lifecycle controls.

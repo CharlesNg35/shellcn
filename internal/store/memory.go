@@ -107,6 +107,19 @@ func (s *memClusterOwnerStore) Release(_ context.Context, key, leaseID string) e
 	return nil
 }
 
+func (s *memClusterOwnerStore) DeleteExpired(_ context.Context, now time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var deleted int64
+	for key, owner := range s.m {
+		if !now.Before(owner.ExpiresAt) {
+			delete(s.m, key)
+			deleted++
+		}
+	}
+	return deleted, nil
+}
+
 type memAIConversationStore struct {
 	mu sync.RWMutex
 	m  map[string]models.AIConversation

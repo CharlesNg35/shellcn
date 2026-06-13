@@ -208,6 +208,29 @@ func testClusterOwners(t *testing.T, s *store.Store) {
 	if got.InternalURL != "http://b2" || got.InternalURLs != `["http://b","http://b2"]` {
 		t.Fatalf("preferred owner URL = %+v", got)
 	}
+	expired := &models.ClusterOwner{
+		Key:         "agent:expired",
+		InstanceID:  "instance-old",
+		InternalURL: "http://old",
+		LeaseID:     "lease-old",
+		ExpiresAt:   now.Add(-time.Second),
+	}
+	if _, err := s.ClusterOwners.Claim(ctx, expired, false, now.Add(-time.Minute)); err != nil {
+		t.Fatalf("claim expired owner: %v", err)
+	}
+	deleted, err := s.ClusterOwners.DeleteExpired(ctx, now)
+	if err != nil {
+		t.Fatalf("delete expired owners: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("delete expired owners count = %d, want 1", deleted)
+	}
+	if _, err := s.ClusterOwners.Get(ctx, "agent:expired", now); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expired owner should be gone: %v", err)
+	}
+	if _, err := s.ClusterOwners.Get(ctx, "agent:c1", now); err != nil {
+		t.Fatalf("active owner should remain: %v", err)
+	}
 	ok, err = s.ClusterOwners.Renew(ctx, "agent:c1", "lease-b", now.Add(2*time.Minute), now)
 	if err != nil || !ok {
 		t.Fatalf("renew active lease: ok=%v err=%v", ok, err)

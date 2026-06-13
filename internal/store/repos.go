@@ -879,6 +879,11 @@ func (s *gormClusterOwnerStore) Release(ctx context.Context, key, leaseID string
 	return s.db.WithContext(ctx).Delete(&models.ClusterOwner{}, "owner_key = ? AND lease_id = ?", key, leaseID).Error
 }
 
+func (s *gormClusterOwnerStore) DeleteExpired(ctx context.Context, now time.Time) (int64, error) {
+	res := s.db.WithContext(ctx).Delete(&models.ClusterOwner{}, "expires_at <= ?", now)
+	return res.RowsAffected, res.Error
+}
+
 type gormEnrollmentStore struct{ db *gorm.DB }
 
 func (s *gormEnrollmentStore) Create(ctx context.Context, e *models.AgentEnrollment) error {

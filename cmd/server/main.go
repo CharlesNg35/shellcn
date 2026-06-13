@@ -237,6 +237,9 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		return err
 	})
 
+	stopOwnerCleanup := startClusterOwnerCleanup(logger, st.ClusterOwners, clusterOwnerCleanupEvery(leaseTTL))
+	defer stopOwnerCleanup()
+
 	// Background maintenance: always reap abandoned chunked (browser-capture)
 	// recordings so partial blobs from vanished sessions don't leak; additionally
 	// sweep expired recordings when an admin has opted into retention.
@@ -390,6 +393,38 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return httpServer.Shutdown(ctx)
+}
+
+func clusterOwnerCleanupEvery(leaseTTL time.Duration) time.Duration {
+	if leaseTTL < time.Minute {
+		return time.Minute
+	}
+	return leaseTTL
+}
+
+func startClusterOwnerCleanup(logger *slog.Logger, owners store.ClusterOwnerStore, every time.Duration) func() {
+	stop := make(chan struct{})
+	cleanup := func() {
+		if n, err := owners.DeleteExpired(context.Background(), time.Now().UTC()); err != nil {
+			logger.Warn("cluster owner cleanup failed", "err", err)
+		} else if n > 0 {
+			logger.Info("cluster owner cleanup removed expired owners", "count", n)
+		}
+	}
+	cleanup()
+	go func() {
+		t := time.NewTicker(every)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				cleanup()
+			}
+		}
+	}()
+	return func() { close(stop) }
 }
 
 // bootstrapAdmin creates a default admin on first run and logs generated credentials.
