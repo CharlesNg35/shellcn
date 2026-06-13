@@ -62,10 +62,10 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	}
 	if cfg, ok := info.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
 		t.Fatalf("info config = %#v, want raw-toggle object detail", info.Config)
-	} else if len(cfg.Sections) < 4 {
+	} else if len(cfg.Sections) < 3 {
 		t.Fatalf("info should expose structured overview sections, got %#v", cfg.Sections)
-	} else if !hasUsageField(cfg, "used_memory") {
-		t.Fatalf("info should render Redis memory as a generic usage field: %#v", cfg.Sections)
+	} else if hasSection(cfg, "Memory") {
+		t.Fatalf("info should not render Redis memory as a duplicate object detail card: %#v", cfg.Sections)
 	}
 	dash, ok := m.Tabs[0].Config.(plugin.DashboardConfig)
 	if !ok {
@@ -127,12 +127,10 @@ func TestOverviewInfoKeysCoverOperationalSummary(t *testing.T) {
 	}
 }
 
-func hasUsageField(cfg plugin.ObjectDetailConfig, key string) bool {
+func hasSection(cfg plugin.ObjectDetailConfig, title string) bool {
 	for _, section := range cfg.Sections {
-		for _, field := range section.Fields {
-			if field.Key == key && field.Usage != nil {
-				return true
-			}
+		if section.Title == title {
+			return true
 		}
 	}
 	return false

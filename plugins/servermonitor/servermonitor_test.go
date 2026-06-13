@@ -18,7 +18,7 @@ func TestManifestValidates(t *testing.T) {
 	}
 }
 
-func TestManifestUsesObjectDetailForSystemOverview(t *testing.T) {
+func TestManifestKeepsCompactHostSummaryInOverview(t *testing.T) {
 	m := New().Manifest()
 	if len(m.Tabs) == 0 {
 		t.Fatal("missing overview tab")
@@ -27,22 +27,22 @@ func TestManifestUsesObjectDetailForSystemOverview(t *testing.T) {
 	if !ok {
 		t.Fatalf("overview config = %T, want DashboardConfig", m.Tabs[0].Config)
 	}
-	var dashboardSystem *plugin.Panel
+	var hostSummary *plugin.Panel
 	for i := range dash.Cells {
-		if dash.Cells[i].Key == "system" {
-			dashboardSystem = &dash.Cells[i]
+		if dash.Cells[i].Key == "host" {
+			hostSummary = &dash.Cells[i]
 			break
 		}
 	}
-	if dashboardSystem == nil || dashboardSystem.Type != plugin.PanelObjectDetail {
-		t.Fatalf("dashboard system panel = %+v, want object_detail", dashboardSystem)
+	if hostSummary == nil || hostSummary.Type != plugin.PanelObjectDetail {
+		t.Fatalf("overview host summary = %+v, want object_detail", hostSummary)
 	}
-	if cfg, ok := dashboardSystem.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
-		t.Fatalf("dashboard system config = %#v, want raw-toggle object detail", dashboardSystem.Config)
-	} else if len(cfg.Sections) == 0 {
-		t.Fatalf("dashboard system detail should declare focused sections")
-	} else if !hasUsageField(cfg, "cpuPct") || !hasUsageField(cfg, "memPct") || !hasUsageField(cfg, "swapPct") {
-		t.Fatalf("system detail should use generic usage fields for cpu/memory/swap: %#v", cfg.Sections)
+	cfg, ok := hostSummary.Config.(plugin.ObjectDetailConfig)
+	if !ok {
+		t.Fatalf("host summary config = %T, want ObjectDetailConfig", hostSummary.Config)
+	}
+	if cfg.RawToggle || len(cfg.Sections) != 2 || !hasUsageField(cfg, "cpuPct") || !hasUsageField(cfg, "memPct") {
+		t.Fatalf("host summary should be compact and include CPU/RAM usage rows: %#v", cfg)
 	}
 	var systemTab *plugin.Panel
 	for i := range m.Tabs {
@@ -53,6 +53,35 @@ func TestManifestUsesObjectDetailForSystemOverview(t *testing.T) {
 	}
 	if systemTab == nil || systemTab.Type != plugin.PanelObjectDetail {
 		t.Fatalf("system tab = %+v, want object_detail", systemTab)
+	}
+	if cfg, ok := systemTab.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
+		t.Fatalf("system tab config = %#v, want full raw-toggle object detail", systemTab.Config)
+	}
+}
+
+func TestOverviewDashboardKeepsOriginalReadableShape(t *testing.T) {
+	m := New().Manifest()
+	dash, ok := m.Tabs[0].Config.(plugin.DashboardConfig)
+	if !ok {
+		t.Fatalf("overview config = %T, want DashboardConfig", m.Tabs[0].Config)
+	}
+	cells := map[string]plugin.Panel{}
+	for _, cell := range dash.Cells {
+		cells[cell.Key] = cell
+	}
+	for _, key := range []string{"host", "cpumem", "throughput"} {
+		if _, ok := cells[key]; !ok {
+			t.Fatalf("overview dashboard missing %q cell", key)
+		}
+	}
+	for _, key := range []string{"metrics", "health", "load", "system", "disks"} {
+		if _, ok := cells[key]; ok {
+			t.Fatalf("overview dashboard should not include duplicated %q cell", key)
+		}
+	}
+	cpumem, ok := cells["cpumem"].Config.(plugin.MetricsConfig)
+	if !ok || len(cpumem.Gauges) != 0 || len(cpumem.Usage) != 0 || len(cpumem.Series) != 2 {
+		t.Fatalf("cpu/memory overview cell should be trends only: %#v", cells["cpumem"].Config)
 	}
 }
 
@@ -65,38 +94,6 @@ func hasUsageField(cfg plugin.ObjectDetailConfig, key string) bool {
 		}
 	}
 	return false
-}
-
-func TestOverviewDashboardGroupsHealthLoadAndCapacity(t *testing.T) {
-	m := New().Manifest()
-	dash, ok := m.Tabs[0].Config.(plugin.DashboardConfig)
-	if !ok {
-		t.Fatalf("overview config = %T, want DashboardConfig", m.Tabs[0].Config)
-	}
-	cells := map[string]plugin.Panel{}
-	for _, cell := range dash.Cells {
-		cells[cell.Key] = cell
-	}
-	for _, key := range []string{"health", "cpumem", "throughput", "load", "system", "disks"} {
-		if _, ok := cells[key]; !ok {
-			t.Fatalf("overview dashboard missing %q cell", key)
-		}
-	}
-	health, ok := cells["health"].Config.(plugin.MetricsConfig)
-	if !ok {
-		t.Fatalf("health config = %T, want MetricsConfig", cells["health"].Config)
-	}
-	if len(health.Gauges) != 0 || len(health.Stats) < 4 {
-		t.Fatalf("health metrics should expose operational stats without duplicate gauges: %#v", health)
-	}
-	cpumem, ok := cells["cpumem"].Config.(plugin.MetricsConfig)
-	if !ok || len(cpumem.Gauges) != 0 || len(cpumem.Usage) != 3 {
-		t.Fatalf("cpu/memory metrics should use usage rows without duplicate gauges: %#v", cells["cpumem"].Config)
-	}
-	load, ok := cells["load"].Config.(plugin.MetricsConfig)
-	if !ok || len(load.Series) != 3 {
-		t.Fatalf("load metrics = %#v, want load1/load5/load15 series", cells["load"].Config)
-	}
 }
 
 func TestTablesDeclareUsefulEmptyStates(t *testing.T) {
