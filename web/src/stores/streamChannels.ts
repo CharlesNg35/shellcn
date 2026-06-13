@@ -18,8 +18,15 @@ export interface SocketLike {
 }
 
 const WS_OPEN = 1;
+const DEFAULT_SEND_WAIT_ATTEMPTS = 40;
+const DEFAULT_SEND_WAIT_MS = 50;
 
 type Listener = (data: string) => void;
+
+export interface SendWhenOpenOptions {
+  attempts?: number;
+  intervalMs?: number;
+}
 
 interface Channel {
   socket: SocketLike;
@@ -36,6 +43,7 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
   const channels = new Map<string, Channel>();
   const statuses = reactive<Record<string, ChannelStatus>>({});
   const reasons = reactive<Record<string, string>>({});
+  const preferredTerminalTargets = reactive<Record<string, string>>({});
   const generation = ref(0);
 
   function ensure(key: string, factory: () => SocketLike): void {
@@ -56,7 +64,8 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     socket.addEventListener("close", (ev) => {
       statuses[key] = ChannelStatus.Closed;
       const reason =
-        (ev as { reason?: string }).reason || "The connection was closed.";
+        (ev as { reason?: string } | undefined)?.reason ||
+        "The connection was closed.";
       reasons[key] = reason;
     });
     socket.addEventListener("message", (ev) => {
@@ -87,6 +96,33 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
       channel.socket.send(data);
   }
 
+  async function sendWhenOpen(
+    key: string,
+    data: string,
+    options: SendWhenOpenOptions = {},
+  ): Promise<boolean> {
+    const attempts = options.attempts ?? DEFAULT_SEND_WAIT_ATTEMPTS;
+    const intervalMs = options.intervalMs ?? DEFAULT_SEND_WAIT_MS;
+
+    for (let i = 0; i <= attempts; i += 1) {
+      const channel = channels.get(key);
+      if (channel?.socket.readyState === WS_OPEN) {
+        channel.socket.send(data);
+        return true;
+      }
+      if (
+        status(key) === ChannelStatus.Error ||
+        status(key) === ChannelStatus.Closed
+      ) {
+        return false;
+      }
+      if (i < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      }
+    }
+    return false;
+  }
+
   function buffer(key: string): string[] {
     return channels.get(key)?.buffer ?? [];
   }
@@ -109,6 +145,14 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     delete reasons[key];
   }
 
+  function setPreferredTerminalTarget(baseKey: string, suffix: string): void {
+    preferredTerminalTargets[baseKey] = suffix;
+  }
+
+  function preferredTerminalTarget(baseKey: string): string | undefined {
+    return preferredTerminalTargets[baseKey];
+  }
+
   function closeWhere(predicate: (key: string) => boolean): void {
     for (const key of [...channels.keys()]) {
       if (predicate(key)) close(key);
@@ -126,11 +170,14 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     has,
     subscribe,
     send,
+    sendWhenOpen,
     buffer,
     status,
     reason,
     close,
     closeWhere,
     closeForConnection,
+    setPreferredTerminalTarget,
+    preferredTerminalTarget,
   };
 });

@@ -33,8 +33,14 @@ import ShareDialog from "../components/ShareDialog.vue";
 import AiChatLauncher from "../components/AiChatLauncher.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { recordingForStream } from "../composables/useRecordingControl";
+import { useActionSuccess } from "../panels/core/actionSuccess";
 import { providePanelConfigSchemas } from "../panels/core/config";
 import { providePanelRecordingResolver } from "../panels/core/recording";
+import {
+  resolvedPanelConfig,
+  resolvedPanelType,
+} from "../panels/core/variants";
+import { isVisible } from "../panels/form/condition";
 import { Layout } from "../types/projection";
 import type {
   Action,
@@ -84,6 +90,9 @@ async function onDelete(): Promise<void> {
 
 const projection = ref<PluginProjection | null>(null);
 const connection = computed(() => conns.byId(props.id));
+const connectionConfig = computed<Record<string, unknown>>(
+  () => connection.value?.config ?? {},
+);
 providePanelConfigSchemas(
   computed(() => projection.value?.panelConfigSchemas ?? {}),
 );
@@ -122,8 +131,16 @@ async function load(): Promise<void> {
     projection.value = proj;
     scope.configure(props.id, proj.scope ?? []);
     workspaceUrl.restoreFromUrl();
-    if (!ws.view(props.id).activeTab && proj.tabs?.length) {
-      ws.setActiveTab(props.id, proj.tabs[0].key);
+    const firstVisibleTab = proj.tabs?.find((tab) =>
+      isVisible(tab.visibleWhen, c.config ?? {}),
+    );
+    const currentTab = ws.view(props.id).activeTab;
+    const currentVisible = proj.tabs?.some(
+      (tab) =>
+        tab.key === currentTab && isVisible(tab.visibleWhen, c.config ?? {}),
+    );
+    if ((!currentTab || !currentVisible) && firstVisibleTab) {
+      ws.setActiveTab(props.id, firstVisibleTab.key);
     }
   } catch (e) {
     error.value = (e as Error).message;
@@ -167,13 +184,30 @@ async function disconnect(): Promise<void> {
   }
 }
 
+const visibleTabs = computed(() =>
+  (projection.value?.tabs ?? []).filter((tab) =>
+    isVisible(tab.visibleWhen, connectionConfig.value),
+  ),
+);
+
 const activeTab = computed(() =>
-  projection.value?.tabs?.find((t) => t.key === view.value.activeTab),
+  visibleTabs.value.find((t) => t.key === view.value.activeTab),
 );
 
 function tabConfig(tab: TabDef): Record<string, unknown> {
-  return tab.config ?? {};
+  return resolvedPanelConfig(tab, connectionConfig.value);
 }
+
+function tabPanel(tab: TabDef) {
+  return resolvedPanelType(tab, connectionConfig.value);
+}
+
+const actionSuccess = useActionSuccess({
+  connectionId: () => props.id,
+  tabs: visibleTabs,
+  resolvePanel: tabPanel,
+  selectTab: (key) => ws.setActiveTab(props.id, key),
+});
 
 const scopeFilters = computed(() => projection.value?.scope ?? []);
 
@@ -183,12 +217,22 @@ const headerActions = computed<Action[]>(() => {
   return ids.map((id) => byId.get(id)).filter((a): a is Action => Boolean(a));
 });
 
-function onActionDone(action: Action): void {
-  const tabKey = action.onSuccess?.selectTab;
-  if (!tabKey || !projection.value?.tabs?.some((tab) => tab.key === tabKey)) {
-    return;
-  }
-  ws.setActiveTab(props.id, tabKey);
+watch(
+  visibleTabs,
+  (tabs) => {
+    if (!tabs.length) return;
+    if (!tabs.some((tab) => tab.key === view.value.activeTab)) {
+      ws.setActiveTab(props.id, tabs[0].key);
+    }
+  },
+  { flush: "post" },
+);
+
+async function onActionDone(
+  action: Action,
+  result?: Record<string, unknown>,
+): Promise<void> {
+  await actionSuccess.run(action, result);
 }
 </script>
 
@@ -331,7 +375,7 @@ function onActionDone(action: Action): void {
               @update:value="ws.setActiveTab(id, String($event))"
             >
               <TabList>
-                <Tab v-for="t in projection.tabs" :key="t.key" :value="t.key">
+                <Tab v-for="t in visibleTabs" :key="t.key" :value="t.key">
                   <AppIcon :icon="t.icon" :size="15" />
                   {{ t.label }}
                 </Tab>
@@ -342,7 +386,7 @@ function onActionDone(action: Action): void {
                 <PanelHost
                   v-if="activeTab"
                   :key="`${id}:${activeTab.key}`"
-                  :panel="activeTab.panel"
+                  :panel="tabPanel(activeTab)"
                   :connection-id="id"
                   :source="activeTab.source"
                   :config="tabConfig(activeTab)"
@@ -359,7 +403,7 @@ function onActionDone(action: Action): void {
           >
             <PanelHost
               :key="`${id}:${activeTab.key}`"
-              :panel="activeTab.panel"
+              :panel="tabPanel(activeTab)"
               :connection-id="id"
               :source="activeTab.source"
               :config="tabConfig(activeTab)"
@@ -371,9 +415,10 @@ function onActionDone(action: Action): void {
           <DashboardWorkspace
             v-else-if="projection.layout === Layout.Dashboard"
             :connection-id="id"
-            :tabs="projection.tabs ?? []"
+            :tabs="visibleTabs"
             :actions="projection.actions ?? []"
             :resolve-config="tabConfig"
+            :resolve-panel="tabPanel"
             @action-done="onActionDone"
           />
 

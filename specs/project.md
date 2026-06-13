@@ -358,6 +358,19 @@ type Action struct {
 type ActionSuccess struct {
     SelectTab string         // switch to this declared tab after a successful action
     Navigate  NavigateTarget // move the workbench after success, e.g. "list" — return a deleted resource's detail to its list so it doesn't linger
+    Effects   []ActionEffect // typed generic UI effects
+}
+
+type ActionEffect struct {
+    Type          ActionEffectType
+    TerminalInput *TerminalInputEffect // when Type == "terminal_input"
+}
+
+type TerminalInputEffect struct {
+    Tab           string // target tab key; PanelTerminalGrid uses the active pane, then first pane fallback
+    Text          string // static text to write
+    ResultField   string // or result JSON field to write, e.g. "command"
+    AppendNewline bool
 }
 
 type StreamKind string // terminal, logs, desktop, metrics, file, task
@@ -370,10 +383,14 @@ type Stream struct {
 
 `risk`, `requiresConfirm`, and `onSuccess` are projected to the browser for UI
 styling and flow control; the **enforced** permission/risk live on the route and
-are checked server-side. `onSuccess.selectTab` must reference a declared tab key
-and is validated at registration. `onSuccess.navigate` is a generic post-action
-move — `"list"` returns a resource detail to its list, so a deleted resource's
-detail doesn't linger; the renderer applies it without knowing the resource type.
+are checked server-side. `onSuccess.selectTab` and
+`onSuccess.effects[].terminalInput.tab` must reference declared tab keys and is
+validated at registration. `onSuccess.navigate` is a generic post-action move —
+`"list"` returns a resource detail to its list, so a deleted resource's detail
+doesn't linger; the renderer applies it without knowing the resource type. The
+`terminal_input` effect is for command-palette/snippet-style flows where the
+route returns text to inject into a visible terminal stream instead of running a
+hidden background exec.
 
 **Header actions.** `Manifest.HeaderActions` lists `Action` IDs the renderer pins
 to the **center of the connection workspace header**, visually grouped and set
@@ -796,6 +813,9 @@ const (
 //     can safely open one independent terminal channel per pane. Split workspaces
 //     use the same StreamTerminal route; mandatory recording keeps using the
 //     single terminal panel so audit capture is unambiguous.
+//   - Panel.Variants switch a panel's renderer/config without duplicating the
+//     logical tab. Use variants when connection or row state should choose
+//     between generic panels such as terminal vs terminal_grid.
 
 type PanelType string
 const (

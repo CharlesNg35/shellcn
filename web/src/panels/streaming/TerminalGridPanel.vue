@@ -54,6 +54,11 @@ const paneStatuses = ref<Record<string, ChannelStatus>>({});
 const recordingActive = ref(false);
 const root = ref<HTMLElement | null>(null);
 const initialized = ref(false);
+const terminalBaseKey = computed(() =>
+  props.source
+    ? channelKey(props.connectionId, props.source, { resource: props.resource })
+    : null,
+);
 
 function leaf(): TerminalGridLayoutNode {
   seq += 1;
@@ -284,6 +289,14 @@ watch(
     );
   },
   { deep: true },
+);
+
+watch(
+  [terminalBaseKey, activePaneId],
+  ([baseKey, paneId]) => {
+    if (baseKey) streams.setPreferredTerminalTarget(baseKey, paneId);
+  },
+  { immediate: true },
 );
 </script>
 

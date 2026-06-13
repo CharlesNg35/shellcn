@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"sync/atomic"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -68,32 +67,6 @@ func (s *Session) OpenChannel(ctx context.Context, req plugin.ChannelRequest) (p
 		return s.openTerminal(ctx, req.Params)
 	default:
 		return nil, plugin.ErrNotSupported
-	}
-}
-
-func (s *Session) RunCommand(ctx context.Context, command string) (string, bool, error) {
-	sshSess, err := s.client.NewSession()
-	if err != nil {
-		return "", false, fmt.Errorf("%w: open command session: %v", plugin.ErrUnavailable, err)
-	}
-	defer func() { _ = sshSess.Close() }()
-	var out limitedBuffer
-	sshSess.Stdout = &out
-	sshSess.Stderr = &out
-	if err := sshSess.Start(command); err != nil {
-		return "", false, fmt.Errorf("%w: start command: %v", plugin.ErrUnavailable, err)
-	}
-	done := make(chan error, 1)
-	go func() { done <- sshSess.Wait() }()
-	select {
-	case <-ctx.Done():
-		_ = sshSess.Close()
-		return out.String(), out.Truncated(), ctx.Err()
-	case err := <-done:
-		if err != nil {
-			return out.String(), out.Truncated(), fmt.Errorf("%w: command failed: %v", plugin.ErrUnavailable, err)
-		}
-		return out.String(), out.Truncated(), nil
 	}
 }
 
@@ -182,32 +155,6 @@ type terminalChannel struct {
 	done    chan struct{}
 	once    sync.Once
 }
-
-const maxCommandOutput = 1 << 20
-
-type limitedBuffer struct {
-	buf       []byte
-	truncated atomic.Bool
-}
-
-func (b *limitedBuffer) Write(p []byte) (int, error) {
-	remaining := maxCommandOutput - len(b.buf)
-	if remaining <= 0 {
-		b.truncated.Store(true)
-		return len(p), nil
-	}
-	if len(p) > remaining {
-		b.buf = append(b.buf, p[:remaining]...)
-		b.truncated.Store(true)
-		return len(p), nil
-	}
-	b.buf = append(b.buf, p...)
-	return len(p), nil
-}
-
-func (b *limitedBuffer) String() string { return string(b.buf) }
-
-func (b *limitedBuffer) Truncated() bool { return b.truncated.Load() }
 
 func (c *terminalChannel) Kind() plugin.StreamKind { return plugin.StreamTerminal }
 

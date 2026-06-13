@@ -94,6 +94,37 @@ describe("stream channels store", () => {
     expect(socket.sent).toEqual(["now"]);
   });
 
+  it("sends once a connecting socket opens", async () => {
+    const store = useStreamChannelsStore();
+    const socket = new FakeSocket();
+    socket.readyState = 0; // CONNECTING
+    store.ensure("conn:k", () => socket);
+
+    const sent = store.sendWhenOpen("conn:k", "ready", {
+      attempts: 5,
+      intervalMs: 1,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    socket.readyState = 1;
+    socket.emit("open");
+
+    await expect(sent).resolves.toBe(true);
+    expect(socket.sent).toEqual(["ready"]);
+  });
+
+  it("does not wait after a channel closes", async () => {
+    const store = useStreamChannelsStore();
+    const socket = new FakeSocket();
+    socket.readyState = 0; // CONNECTING
+    store.ensure("conn:k", () => socket);
+    socket.emit("close");
+
+    await expect(
+      store.sendWhenOpen("conn:k", "late", { attempts: 5, intervalMs: 1 }),
+    ).resolves.toBe(false);
+    expect(socket.sent).toEqual([]);
+  });
+
   it("closeWhere tears down matching channels only", () => {
     const store = useStreamChannelsStore();
     const a = new FakeSocket();

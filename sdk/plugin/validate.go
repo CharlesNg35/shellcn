@@ -240,6 +240,26 @@ func validateActions(m Manifest, routes map[string]Route, tabs map[string]bool, 
 		if a.OnSuccess != nil && a.OnSuccess.Navigate != "" && a.OnSuccess.Navigate != NavigateList {
 			add("action %q onSuccess.navigate %q is not a known target", a.ID, a.OnSuccess.Navigate)
 		}
+		if a.OnSuccess != nil {
+			for i, effect := range a.OnSuccess.Effects {
+				switch effect.Type {
+				case ActionEffectTerminalInput:
+					input := effect.TerminalInput
+					if input == nil {
+						add("action %q onSuccess.effects[%d].terminalInput is required", a.ID, i)
+						continue
+					}
+					if input.Tab != "" && !tabs[input.Tab] {
+						add("action %q onSuccess.effects[%d].terminalInput.tab references unknown tab %q", a.ID, i, input.Tab)
+					}
+					if input.Text == "" && input.ResultField == "" {
+						add("action %q onSuccess.effects[%d].terminalInput requires text or resultField", a.ID, i)
+					}
+				default:
+					add("action %q onSuccess.effects[%d].type %q is not known", a.ID, i, effect.Type)
+				}
+			}
+		}
 		if (a.Open == OpenDock || a.Open == OpenDialog) && a.Panel == "" {
 			add("action %q opens a panel (%s) but declares no panel type", a.ID, a.Open)
 		}
@@ -554,6 +574,27 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 				checkBridgeRoute,
 				add,
 			)
+			for i, variant := range t.Variants {
+				checkPanelSource(
+					fmt.Sprintf("%s tab %q variants[%d] source", ctx, t.Key, i),
+					variant.Type,
+					t.Source,
+				)
+				checkPanelConfigRoutes(
+					fmt.Sprintf("%s tab %q variants[%d]", ctx, t.Key, i),
+					variant.Config,
+					checkReadSource,
+					checkWriteSource,
+					checkRouteID,
+					checkWriteRouteID,
+					checkMultipartRouteID,
+					checkStreamSource,
+					checkPanelSource,
+					checkActionIDs,
+					checkBridgeRoute,
+					add,
+				)
+			}
 		}
 	}
 
@@ -791,6 +832,27 @@ func checkPanelConfigRoutes(
 				checkBridgeRoute,
 				add,
 			)
+			for i, variant := range cell.Variants {
+				checkPanelSource(
+					fmt.Sprintf("%s variants[%d] source", cellCtx, i),
+					variant.Type,
+					cell.Source,
+				)
+				checkPanelConfigRoutes(
+					fmt.Sprintf("%s variants[%d]", cellCtx, i),
+					variant.Config,
+					checkReadSource,
+					checkWriteSource,
+					checkRouteID,
+					checkWriteRouteID,
+					checkMultipartRouteID,
+					checkStreamSource,
+					checkPanelSource,
+					checkActionIDs,
+					checkBridgeRoute,
+					add,
+				)
+			}
 		}
 	case SplitConfig:
 		for _, child := range c.Panels {
@@ -813,6 +875,27 @@ func checkPanelConfigRoutes(
 				checkBridgeRoute,
 				add,
 			)
+			for i, variant := range child.Variants {
+				checkPanelSource(
+					fmt.Sprintf("%s variants[%d] source", childCtx, i),
+					variant.Type,
+					child.Source,
+				)
+				checkPanelConfigRoutes(
+					fmt.Sprintf("%s variants[%d]", childCtx, i),
+					variant.Config,
+					checkReadSource,
+					checkWriteSource,
+					checkRouteID,
+					checkWriteRouteID,
+					checkMultipartRouteID,
+					checkStreamSource,
+					checkPanelSource,
+					checkActionIDs,
+					checkBridgeRoute,
+					add,
+				)
+			}
 		}
 	}
 }

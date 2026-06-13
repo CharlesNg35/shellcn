@@ -13,12 +13,15 @@ import type {
 // Cells come from the manifest config; rendering is delegated to DashboardGrid.
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{
-  actionDone: [action: Action];
+  actionDone: [action: Action, result?: Record<string, unknown>];
   select: [row: Row];
 }>();
 
 const cells = computed<DashboardCell[]>(
   () => (props.config as DashboardPanelConfig | undefined)?.cells ?? [],
+);
+const variantData = computed<Record<string, unknown>>(() =>
+  props.resource ? { ...props.resource } : {},
 );
 </script>
 
@@ -27,7 +30,8 @@ const cells = computed<DashboardCell[]>(
     :connection-id="props.connectionId"
     :cells="cells"
     :actions="props.actions ?? []"
-    @action-done="(action) => emit('actionDone', action)"
+    :variant-data="variantData"
+    @action-done="(action, result) => emit('actionDone', action, result)"
     @select="(row) => emit('select', row)"
   />
 </template>

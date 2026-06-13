@@ -70,6 +70,7 @@ type snippetRequest struct {
 
 type snippetRunResult struct {
 	OK        bool   `json:"ok"`
+	Command   string `json:"command,omitempty"`
 	Output    string `json:"output"`
 	Truncated bool   `json:"truncated,omitempty"`
 }
@@ -513,15 +514,7 @@ func snippetRun() plugin.Handler {
 		if err != nil {
 			return nil, err
 		}
-		s, err := Unwrap(rc.Session)
-		if err != nil {
-			return nil, err
-		}
-		output, truncated, err := s.RunCommand(rc.Ctx, sn.Body)
-		if err != nil {
-			return nil, err
-		}
-		return snippetRunResult{OK: true, Output: output, Truncated: truncated}, nil
+		return snippetRunResult{OK: true, Command: sn.Body}, nil
 	}
 }
 

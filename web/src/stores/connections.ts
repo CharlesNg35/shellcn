@@ -200,6 +200,7 @@ function mergeConnectionSummary(
     name: updated.name || input.name,
     protocol: updated.protocol || existing.protocol,
     transport: updated.transport || input.transport,
+    config: updated.config ?? input.config ?? existing.config,
     recording: updated.recording ?? stringRecord(input.recording),
     aiMode: updated.aiMode ?? input.aiMode,
     aiAllowDestructive:

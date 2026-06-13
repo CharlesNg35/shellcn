@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import AppIcon from "@/components/AppIcon.vue";
 import PanelHost from "../core/PanelHost.vue";
-import type { Action, DashboardCell, Row } from "@/types/projection";
+import { resolvedPanelConfig, resolvedPanelType } from "../core/variants";
+import type { Action, DashboardCell, PanelType, Row } from "@/types/projection";
 
 // Presentational, layout-only: a responsive grid of panel cards rendered at once.
 // Shared by the connection-level `dashboard` layout and the `dashboard` panel
@@ -14,17 +15,21 @@ const props = withDefaults(
     // Optional config resolver for connection-level dashboard tabs; defaults to
     // the cell's own manifest config.
     resolveConfig?: (cell: DashboardCell) => Record<string, unknown>;
+    resolvePanel?: (cell: DashboardCell) => PanelType;
+    variantData?: Record<string, unknown> | null;
     emptyText?: string;
   }>(),
   {
     actions: () => [],
     resolveConfig: undefined,
+    resolvePanel: undefined,
+    variantData: null,
     emptyText: "No panels.",
   },
 );
 
 const emit = defineEmits<{
-  actionDone: [action: Action];
+  actionDone: [action: Action, result?: Record<string, unknown>];
   select: [row: Row];
 }>();
 
@@ -33,11 +38,19 @@ function spanClass(cell: DashboardCell): string {
 }
 
 function cellConfig(cell: DashboardCell): Record<string, unknown> {
-  return props.resolveConfig ? props.resolveConfig(cell) : (cell.config ?? {});
+  return props.resolveConfig
+    ? props.resolveConfig(cell)
+    : resolvedPanelConfig(cell, props.variantData ?? {});
 }
 
-function onCardAction(action: Action): void {
-  emit("actionDone", action);
+function cellPanel(cell: DashboardCell): PanelType {
+  return props.resolvePanel
+    ? props.resolvePanel(cell)
+    : resolvedPanelType(cell, props.variantData ?? {});
+}
+
+function onCardAction(action: Action, result?: Record<string, unknown>): void {
+  emit("actionDone", action, result);
 }
 </script>
 
@@ -61,7 +74,7 @@ function onCardAction(action: Action): void {
         </header>
         <div class="min-h-0 flex-1" style="min-height: 20rem">
           <PanelHost
-            :panel="cell.panel"
+            :panel="cellPanel(cell)"
             :connection-id="props.connectionId"
             :source="cell.source"
             :config="cellConfig(cell)"

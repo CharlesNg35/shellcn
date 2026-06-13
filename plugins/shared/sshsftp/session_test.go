@@ -105,25 +105,3 @@ func TestResolveRemotePathUsesSFTPHome(t *testing.T) {
 		t.Fatalf("home path = %q, want /", got)
 	}
 }
-
-func TestRunCommand(t *testing.T) {
-	srv := newSSHServer(t)
-	defer srv.Close()
-	cfg := srv.config()
-
-	sess, err := Connect(context.Background(), plugin.ConnectConfig{Config: cfg, Net: pluginNet{}})
-	if err != nil {
-		t.Fatalf("Connect: %v", err)
-	}
-	defer func() { _ = sess.Close() }()
-	out, truncated, err := sess.(*Session).RunCommand(context.Background(), "df -h")
-	if err != nil {
-		t.Fatalf("RunCommand: %v", err)
-	}
-	if truncated {
-		t.Fatal("small command output should not be truncated")
-	}
-	if out != "ran: df -h\n" {
-		t.Fatalf("output = %q", out)
-	}
-}

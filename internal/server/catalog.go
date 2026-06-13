@@ -54,6 +54,7 @@ type connectionDTO struct {
 	Protocol           string            `json:"protocol"`
 	Icon               *plugin.Icon      `json:"icon,omitempty"`
 	Transport          string            `json:"transport"`
+	Config             map[string]any    `json:"config,omitempty"`
 	Online             bool              `json:"online"`
 	Status             string            `json:"status,omitempty"`
 	CanManage          bool              `json:"canManage"`

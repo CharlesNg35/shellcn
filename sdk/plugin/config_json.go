@@ -48,9 +48,15 @@ func decodePanelConfig(t PanelType, raw json.RawMessage) (PanelConfig, error) {
 
 func (p *Panel) UnmarshalJSON(data []byte) error {
 	type wire Panel
+	type variantWire struct {
+		Type        PanelType       `json:"panel"`
+		Config      json.RawMessage `json:"config,omitempty"`
+		VisibleWhen *Condition      `json:"visibleWhen,omitempty"`
+	}
 	aux := struct {
 		*wire
-		Config json.RawMessage `json:"config,omitempty"`
+		Config   json.RawMessage `json:"config,omitempty"`
+		Variants []variantWire   `json:"variants,omitempty"`
 	}{wire: (*wire)(p)}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
@@ -60,6 +66,18 @@ func (p *Panel) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	p.Config = cfg
+	p.Variants = make([]PanelVariant, 0, len(aux.Variants))
+	for _, v := range aux.Variants {
+		cfg, err := decodePanelConfig(v.Type, v.Config)
+		if err != nil {
+			return err
+		}
+		p.Variants = append(p.Variants, PanelVariant{
+			Type:        v.Type,
+			Config:      cfg,
+			VisibleWhen: v.VisibleWhen,
+		})
+	}
 	return nil
 }
 

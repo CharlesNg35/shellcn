@@ -1,13 +1,19 @@
-import { defineComponent } from "vue";
+import { defineComponent, nextTick } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { createPinia, setActivePinia } from "pinia";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFetch } from "../test/fetchMock";
+import { channelKey } from "../api/dataSource";
 import { useWorkspaceStore } from "../stores/workspace";
+import { useConnectionsStore } from "../stores/connections";
 import { useConnectionStatusStore } from "../stores/connectionStatus";
+import {
+  useStreamChannelsStore,
+  type SocketLike,
+} from "../stores/streamChannels";
 import type { PluginProjection } from "../types/projection";
-import { Layout, RiskLevel } from "../types/projection";
+import { Layout, PanelType, RiskLevel } from "../types/projection";
 import ConnectionWorkspace from "./ConnectionWorkspace.vue";
 
 const projection: PluginProjection = {
@@ -78,6 +84,20 @@ const TabStub = defineComponent({
   props: { value: { type: [String, Number], required: true } },
   template: '<button type="button"><slot /></button>',
 });
+
+function openSocket(send: (data: string) => void): SocketLike {
+  const listeners = new Map<string, Array<(ev: unknown) => void>>();
+  const socket: SocketLike = {
+    readyState: 1,
+    send,
+    close: vi.fn(),
+    addEventListener(type, listener) {
+      listeners.set(type, [...(listeners.get(type) ?? []), listener]);
+      if (type === "open") queueMicrotask(() => listener({}));
+    },
+  };
+  return socket;
+}
 
 let requests: Array<{ url: string; init?: RequestInit }>;
 
@@ -299,6 +319,307 @@ describe("ConnectionWorkspace", () => {
         .findAll("button")
         .some((b) => b.attributes("aria-label") === "Cluster Shell"),
     ).toBe(true);
+  });
+
+  it("resolves top-level panel variants against connection config", async () => {
+    const ws = useWorkspaceStore();
+    ws.setConnected("c1", true);
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections"))
+        return {
+          body: [
+            {
+              id: "c1",
+              name: "ssh",
+              protocol: "ssh",
+              transport: "direct",
+              config: { terminal_layout: "single" },
+            },
+          ],
+        };
+      if (url.endsWith("/api/connections/c1/session"))
+        return { body: { state: "connected", channels: 0, streams: 0 } };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      if (url.endsWith("/api/plugins/ssh"))
+        return {
+          body: {
+            ...projection,
+            name: "ssh",
+            title: "SSH",
+            layout: Layout.Tabs,
+            tabs: [
+              {
+                key: "terminal",
+                label: "Terminal",
+                panel: PanelType.Terminal,
+                source: { routeId: "ssh.shell" },
+                variants: [
+                  {
+                    panel: PanelType.TerminalGrid,
+                    visibleWhen: {
+                      allOf: [
+                        { field: "terminal_layout", op: "eq", value: "grid" },
+                      ],
+                    },
+                  },
+                ],
+              },
+              { key: "snippets", label: "Snippets", panel: PanelType.Table },
+            ],
+          },
+        };
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+
+    const PanelHostStub = defineComponent({
+      props: { panel: { type: String, required: true } },
+      template: '<div data-test="panel-host">{{ panel }}</div>',
+    });
+
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: {
+          AppIcon: true,
+          PanelHost: PanelHostStub,
+          Tabs: TabsStub,
+          TabList: TabListStub,
+          Tab: TabStub,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Terminal");
+    expect(
+      wrapper.findAll("button").filter((b) => b.text() === "Terminal"),
+    ).toHaveLength(1);
+    expect(ws.view("c1").activeTab).toBe("terminal");
+    expect(wrapper.get('[data-test="panel-host"]').text()).toBe(
+      PanelType.Terminal,
+    );
+
+    const conns = useConnectionsStore();
+    conns.connections = conns.connections.map((connection) =>
+      connection.id === "c1"
+        ? { ...connection, config: { terminal_layout: "grid" } }
+        : connection,
+    );
+    await nextTick();
+
+    expect(wrapper.get('[data-test="panel-host"]').text()).toBe(
+      PanelType.TerminalGrid,
+    );
+  });
+
+  it("sends snippet commands to the visible single terminal stream", async () => {
+    const ws = useWorkspaceStore();
+    const streams = useStreamChannelsStore();
+    ws.setConnected("c1", true);
+    ws.open("c1");
+    ws.setActiveTab("c1", "snippets");
+    const sent = vi.fn();
+    const source = { routeId: "ssh.shell", params: { cols: "80", rows: "24" } };
+    streams.ensure(channelKey("c1", source), () => openSocket(sent));
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections"))
+        return {
+          body: [
+            {
+              id: "c1",
+              name: "ssh",
+              protocol: "ssh",
+              transport: "direct",
+              config: { terminal_layout: "single" },
+            },
+          ],
+        };
+      if (url.endsWith("/api/connections/c1/session"))
+        return { body: { state: "connected", channels: 0, streams: 0 } };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      if (url.endsWith("/api/plugins/ssh"))
+        return {
+          body: {
+            ...projection,
+            name: "ssh",
+            title: "SSH",
+            layout: Layout.Tabs,
+            tabs: [
+              {
+                key: "terminal",
+                label: "Terminal",
+                panel: PanelType.Terminal,
+                source,
+              },
+              { key: "snippets", label: "Snippets", panel: PanelType.Table },
+            ],
+          },
+        };
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+    const PanelHostStub = defineComponent({
+      emits: ["actionDone"],
+      setup() {
+        return {
+          action: {
+            id: "ssh.snippet.run",
+            label: "Run",
+            routeId: "ssh.snippet.run",
+            risk: RiskLevel.Privileged,
+            requiresConfirm: false,
+            onSuccess: {
+              selectTab: "terminal",
+              effects: [
+                {
+                  type: "terminal_input",
+                  terminalInput: {
+                    tab: "terminal",
+                    resultField: "command",
+                    appendNewline: true,
+                  },
+                },
+              ],
+            },
+          },
+        };
+      },
+      template:
+        "<button data-test=\"run\" @click=\"$emit('actionDone', action, { command: 'uptime' })\">run</button>",
+    });
+
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: {
+          AppIcon: true,
+          PanelHost: PanelHostStub,
+          Tabs: TabsStub,
+          TabList: TabListStub,
+          Tab: TabStub,
+        },
+      },
+    });
+    await flushPromises();
+    await wrapper.get('[data-test="run"]').trigger("click");
+    await flushPromises();
+
+    expect(ws.view("c1").activeTab).toBe("terminal");
+    expect(sent).toHaveBeenCalledWith("uptime\n");
+  });
+
+  it("sends snippet commands to the active terminal grid pane", async () => {
+    const ws = useWorkspaceStore();
+    const streams = useStreamChannelsStore();
+    ws.setConnected("c1", true);
+    ws.open("c1");
+    ws.setActiveTab("c1", "snippets");
+    const sent = vi.fn();
+    const source = { routeId: "ssh.shell", params: { cols: "80", rows: "24" } };
+    const baseKey = channelKey("c1", source);
+    streams.setPreferredTerminalTarget(baseKey, "pane-2");
+    streams.ensure(`${baseKey}:pane-2`, () => openSocket(sent));
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections"))
+        return {
+          body: [
+            {
+              id: "c1",
+              name: "ssh",
+              protocol: "ssh",
+              transport: "direct",
+              config: { terminal_layout: "grid" },
+            },
+          ],
+        };
+      if (url.endsWith("/api/connections/c1/session"))
+        return { body: { state: "connected", channels: 0, streams: 0 } };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      if (url.endsWith("/api/plugins/ssh"))
+        return {
+          body: {
+            ...projection,
+            name: "ssh",
+            title: "SSH",
+            layout: Layout.Tabs,
+            tabs: [
+              {
+                key: "terminal",
+                label: "Terminal",
+                panel: PanelType.Terminal,
+                source,
+                variants: [
+                  {
+                    panel: PanelType.TerminalGrid,
+                    visibleWhen: {
+                      allOf: [
+                        { field: "terminal_layout", op: "eq", value: "grid" },
+                      ],
+                    },
+                  },
+                ],
+              },
+              { key: "snippets", label: "Snippets", panel: PanelType.Table },
+            ],
+          },
+        };
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+    const PanelHostStub = defineComponent({
+      emits: ["actionDone"],
+      setup() {
+        return {
+          action: {
+            id: "ssh.snippet.run",
+            label: "Run",
+            routeId: "ssh.snippet.run",
+            risk: RiskLevel.Privileged,
+            requiresConfirm: false,
+            onSuccess: {
+              selectTab: "terminal",
+              effects: [
+                {
+                  type: "terminal_input",
+                  terminalInput: {
+                    tab: "terminal",
+                    resultField: "command",
+                    appendNewline: true,
+                  },
+                },
+              ],
+            },
+          },
+        };
+      },
+      template:
+        "<button data-test=\"run\" @click=\"$emit('actionDone', action, { command: 'df -h' })\">run</button>",
+    });
+
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: {
+          AppIcon: true,
+          PanelHost: PanelHostStub,
+          Tabs: TabsStub,
+          TabList: TabListStub,
+          Tab: TabStub,
+        },
+      },
+    });
+    await flushPromises();
+    await wrapper.get('[data-test="run"]').trigger("click");
+    await flushPromises();
+
+    expect(sent).toHaveBeenCalledWith("df -h\n");
   });
 
   it("opens the backend plugin session before entering the workspace", async () => {
