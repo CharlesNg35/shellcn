@@ -110,6 +110,52 @@ describe("ObjectDetailPanel", () => {
     });
   });
 
+  it("does not render zero totals as capacity", async () => {
+    fetchDoc.mockResolvedValue({
+      memPct: 0,
+      mem: 53896806,
+      maxmem: 0,
+    });
+    const wrapper = mount(ObjectDetailPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "x.object" },
+        config: {
+          sections: [
+            {
+              title: "Runtime",
+              fields: [
+                {
+                  key: "memPct",
+                  label: "Memory usage",
+                  type: "percent",
+                  usage: {
+                    percentKey: "memPct",
+                    usedKey: "mem",
+                    totalKey: "maxmem",
+                    usedType: "bytes",
+                    totalType: "bytes",
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+      global: {
+        stubs: {
+          CodeTextEditor: true,
+          AppIcon: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("51.4 MiB");
+    expect(wrapper.text()).not.toContain("of 0 B");
+    expect(wrapper.text()).not.toContain("0.0%");
+  });
+
   it("keeps existing fields visible during refresh", async () => {
     let resolveRefresh:
       | ((value: { name: string; status: string }) => void)

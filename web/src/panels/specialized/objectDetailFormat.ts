@@ -54,17 +54,26 @@ function withUnit(value: string, unit?: string): string {
   return unit && value !== "—" ? `${value} ${unit}` : value;
 }
 
+function usableTotal(record: Row, totalKey?: string): number | null {
+  if (!totalKey) return null;
+  const total = numberValue(record[totalKey]);
+  return total != null && total > 0 ? total : null;
+}
+
 export function usagePercent(
   record: Row,
   field: ObjectDetailField,
 ): number | null {
   const usage = field.usage;
   if (!usage) return null;
+  if (usage.totalKey && usableTotal(record, usage.totalKey) == null) {
+    return null;
+  }
   const direct = numberValue(record[usage.percentKey || field.key]);
   if (direct != null) return clampPercent(direct);
   const used = numberValue(record[usage.usedKey || field.key]);
-  const total = numberValue(record[usage.totalKey ?? ""]);
-  if (used == null || total == null || total <= 0) return null;
+  const total = usableTotal(record, usage.totalKey);
+  if (used == null || total == null) return null;
   return clampPercent((used / total) * 100);
 }
 
@@ -80,6 +89,9 @@ export function usageMainText(record: Row, field: ObjectDetailField): string {
     return percent == null
       ? withUnit(used, usage.unit)
       : `${percent.toFixed(1)}%`;
+  }
+  if (usableTotal(record, totalKey) == null) {
+    return withUnit(used, usage.unit);
   }
 
   const total = withUnit(
@@ -101,6 +113,7 @@ export function usageCaption(record: Row, field: ObjectDetailField): string {
   const usedKey = usage.usedKey || field.key;
   const totalKey = usage.totalKey;
   if (!totalKey || !usage.usedKey) return "";
+  if (usableTotal(record, totalKey) == null) return "";
   const used = formatValue(record[usedKey], usage.usedType ?? field.type);
   const total = withUnit(
     formatValue(record[totalKey], usage.totalType ?? field.type),

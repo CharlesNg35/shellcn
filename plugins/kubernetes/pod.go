@@ -66,12 +66,10 @@ func podMetricsConfig() plugin.MetricsConfig {
 			{Key: "mem", Label: "Memory", Unit: "bytes"},
 			{Key: "cpuRequest", Label: "CPU request", Unit: "cores"},
 			{Key: "memRequest", Label: "Memory request", Unit: "bytes"},
-			{Key: "cpuLimit", Label: "CPU limit", Unit: "cores"},
-			{Key: "memLimit", Label: "Memory limit", Unit: "bytes"},
 		},
 		Usage: []plugin.MetricUsage{
-			{Key: "cpuLimitPct", Label: "CPU limit usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpuLimitPct", UsedKey: "cpu", TotalKey: "cpuLimit", UsedType: plugin.ColumnNumber, TotalType: plugin.ColumnNumber, TotalLabel: "of", Unit: "core(s)", WarnAt: 75, CriticalAt: 90}},
-			{Key: "memLimitPct", Label: "Memory limit usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "memLimitPct", UsedKey: "mem", TotalKey: "memLimit", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 80, CriticalAt: 95}},
+			{Key: "cpuRequestPct", Label: "CPU request usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpuRequestPct", UsedKey: "cpu", TotalKey: "cpuRequest", UsedType: plugin.ColumnNumber, TotalType: plugin.ColumnNumber, TotalLabel: "of", Unit: "core(s)", WarnAt: 75, CriticalAt: 90}},
+			{Key: "memRequestPct", Label: "Memory request usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "memRequestPct", UsedKey: "mem", TotalKey: "memRequest", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 80, CriticalAt: 95}},
 		},
 		Series: []plugin.MetricSeries{
 			{Key: "cpu", Label: "CPU cores"},

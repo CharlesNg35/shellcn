@@ -153,8 +153,12 @@ func (s *Session) podFrame(ctx context.Context, namespace, name string) map[stri
 	reqCPU, reqMem, limCPU, limMem := podResourceTotals(podObj)
 	frame["cpuRequest"] = milliToCores(reqCPU)
 	frame["memRequest"] = reqMem
-	frame["cpuLimit"] = milliToCores(limCPU)
-	frame["memLimit"] = limMem
+	if limCPU > 0 {
+		frame["cpuLimit"] = milliToCores(limCPU)
+	}
+	if limMem > 0 {
+		frame["memLimit"] = limMem
+	}
 
 	pm, err := s.metrics.MetricsV1beta1().PodMetricses(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -170,8 +174,12 @@ func (s *Session) podFrame(ctx context.Context, namespace, name string) map[stri
 	frame["mem"] = memUse
 	frame["cpuRequestPct"] = pct(cpuUse, reqCPU)
 	frame["memRequestPct"] = pct(memUse, reqMem)
-	frame["cpuLimitPct"] = pct(cpuUse, limCPU)
-	frame["memLimitPct"] = pct(memUse, limMem)
+	if limCPU > 0 {
+		frame["cpuLimitPct"] = pct(cpuUse, limCPU)
+	}
+	if limMem > 0 {
+		frame["memLimitPct"] = pct(memUse, limMem)
+	}
 	return frame
 }
 
