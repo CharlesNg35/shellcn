@@ -1,18 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import Button from "primevue/button";
 import { ApiError } from "../api/client";
-import { channelKey } from "../api/dataSource";
 import { connectionsApi } from "../api/connections";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useConnectionSessionsStore } from "../stores/connectionSessions";
 import { useConnectionStatusStore } from "../stores/connectionStatus";
-import { useStreamChannelsStore } from "../stores/streamChannels";
 import { useScopeStore } from "../stores/scope";
 import { KEEP_ALIVE_TOP_LEVEL_PANELS_MAX } from "../stores/sessionLimits";
 import { useNotify } from "../composables/useNotify";
@@ -35,6 +33,7 @@ import ShareDialog from "../components/ShareDialog.vue";
 import AiChatLauncher from "../components/AiChatLauncher.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { recordingForStream } from "../composables/useRecordingControl";
+import { useActionEffects } from "../panels/core/actionEffects";
 import { providePanelConfigSchemas } from "../panels/core/config";
 import { providePanelRecordingResolver } from "../panels/core/recording";
 import {
@@ -42,12 +41,11 @@ import {
   resolvedPanelType,
 } from "../panels/core/variants";
 import { isVisible } from "../panels/form/condition";
-import { ActionEffectType, Layout, PanelType } from "../types/projection";
+import { Layout } from "../types/projection";
 import type {
   Action,
   PluginProjection,
   Tab as TabDef,
-  TerminalInputEffect,
 } from "../types/projection";
 import { dialogRoot } from "../primevue/preset";
 
@@ -56,7 +54,6 @@ const conns = useConnectionsStore();
 const ws = useWorkspaceStore();
 const dock = useDockStore();
 const scope = useScopeStore();
-const streams = useStreamChannelsStore();
 const dockState = computed(() => dock.state(props.id));
 const connectionSessions = useConnectionSessionsStore();
 const liveStatus = useConnectionStatusStore();
@@ -205,6 +202,13 @@ function tabPanel(tab: TabDef) {
   return resolvedPanelType(tab, connectionConfig.value);
 }
 
+const actionEffects = useActionEffects({
+  connectionId: () => props.id,
+  tabs: visibleTabs,
+  resolvePanel: tabPanel,
+  selectTab: (key) => ws.setActiveTab(props.id, key),
+});
+
 const scopeFilters = computed(() => projection.value?.scope ?? []);
 
 const headerActions = computed<Action[]>(() => {
@@ -224,59 +228,6 @@ watch(
   { flush: "post" },
 );
 
-function terminalInputText(
-  effect: TerminalInputEffect,
-  result?: Record<string, unknown>,
-): string | null {
-  const raw =
-    effect.text ??
-    (effect.resultField && result ? result[effect.resultField] : undefined);
-  if (typeof raw !== "string" || raw.length === 0) return null;
-  return effect.appendNewline && !raw.endsWith("\n") ? `${raw}\n` : raw;
-}
-
-function terminalStreamKey(tab: TabDef): string | null {
-  if (!tab.source) return null;
-  const base = channelKey(props.id, tab.source);
-  if (tabPanel(tab) !== PanelType.TerminalGrid) return base;
-  const suffix = streams.preferredTerminalTarget(base) ?? "pane-1";
-  return `${base}:${suffix}`;
-}
-
-async function waitForOpenStreamKey(key: string): Promise<boolean> {
-  for (let i = 0; i < 40; i += 1) {
-    if (streams.status(key) === "open") return true;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  return streams.status(key) === "open";
-}
-
-async function applyTerminalInput(
-  action: Action,
-  result?: Record<string, unknown>,
-): Promise<void> {
-  const effect = action.onSuccess?.effects?.find(
-    (candidate) => candidate.type === ActionEffectType.TerminalInput,
-  )?.terminalInput;
-  if (!effect) return;
-  const text = terminalInputText(effect, result);
-  if (!text) return;
-  const tabKey = effect.tab || action.onSuccess?.selectTab;
-  const tab = visibleTabs.value.find((t) => t.key === tabKey);
-  if (!tab) return;
-  ws.setActiveTab(props.id, tab.key);
-  await nextTick();
-  const key = terminalStreamKey(tab);
-  if (!key || !(await waitForOpenStreamKey(key))) {
-    notify.error(
-      "Terminal is not ready",
-      "Open the terminal and run the action again.",
-    );
-    return;
-  }
-  streams.send(key, text);
-}
-
 async function onActionDone(
   action: Action,
   result?: Record<string, unknown>,
@@ -285,7 +236,7 @@ async function onActionDone(
   if (tabKey && visibleTabs.value.some((tab) => tab.key === tabKey)) {
     ws.setActiveTab(props.id, tabKey);
   }
-  await applyTerminalInput(action, result);
+  await actionEffects.run(action, result);
 }
 </script>
 
