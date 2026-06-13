@@ -7,6 +7,7 @@ import AppLogo from "../components/AppLogo.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import LoginPasswordForm from "../components/auth/LoginPasswordForm.vue";
 import LoginOtpForm from "../components/auth/LoginOtpForm.vue";
+import { decodeRedirectTarget, encodeRedirectTarget } from "../router/redirect";
 
 const auth = useAuthStore();
 const route = useRoute();
@@ -21,10 +22,12 @@ const highlights = ["Self-hosted", "39+ protocols"];
 // After a completed sign-in, send users who haven't enabled 2FA to the nudge
 // page; everyone else continues to their original destination.
 async function finishLogin(): Promise<void> {
-  const redirect = route.query.redirect;
-  const dest = typeof redirect === "string" ? redirect : "/";
+  const dest = decodeRedirectTarget(route.query.redirect);
   if (auth.mfaReminder) {
-    await router.replace({ name: "secure-account", query: { redirect: dest } });
+    await router.replace({
+      name: "secure-account",
+      query: { redirect: encodeRedirectTarget(dest) },
+    });
   } else {
     await router.replace(dest);
   }

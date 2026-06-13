@@ -9,6 +9,7 @@ import AppToast from "./components/AppToast.vue";
 import AppIcon from "./components/AppIcon.vue";
 import AppRouteLoader from "./components/AppRouteLoader.vue";
 import WasmStage from "./panels/wasm/WasmStage.vue";
+import { encodeRedirectTarget } from "./router/redirect";
 
 const toast = useToast();
 const router = useRouter();
@@ -62,7 +63,9 @@ onMounted(() => {
         auth.clear();
         void router.push({
           name: "login",
-          query: { redirect: router.currentRoute.value.fullPath },
+          query: {
+            redirect: encodeRedirectTarget(router.currentRoute.value.fullPath),
+          },
         });
       }
       return;

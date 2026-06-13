@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import { encodeRedirectTarget } from "./redirect";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -99,7 +100,9 @@ router.beforeEach(async (to) => {
   await auth.ensureReady();
   if (!publicRoutes.has(String(to.name)) && !auth.isAuthenticated) {
     const redirect =
-      to.fullPath !== "/" ? { redirect: to.fullPath } : undefined;
+      to.fullPath !== "/"
+        ? { redirect: encodeRedirectTarget(to.fullPath) }
+        : undefined;
     return { name: "login", query: redirect };
   }
   if (to.name === "login" && auth.isAuthenticated) {
