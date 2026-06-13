@@ -295,7 +295,7 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
 			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
 				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{"made_up"}},
+				Credential: &plugin.CredentialSelector{Kind: "made_up"},
 			})
 		}},
 		{"credential kind duplicates existing catalog", "duplicate credential kind", func(m *plugin.Manifest, _ *[]plugin.Route) {
@@ -303,7 +303,7 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 			m.CredentialKinds = []plugin.CredentialKindInfo{{Kind: plugin.CredentialDBPassword, Label: "Database password", SecretLabel: "Password"}}
 			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
 				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}},
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialDBPassword},
 			})
 		}},
 		{"credential kind protocol list is derived", "must not declare CompatibleProtocols", func(m *plugin.Manifest, _ *[]plugin.Route) {
@@ -313,7 +313,7 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 			}}
 			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
 				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{"custom_password"}},
+				Credential: &plugin.CredentialSelector{Kind: "custom_password"},
 			})
 		}},
 		{"credential kind declared but unused", "declared but not used", func(m *plugin.Manifest, _ *[]plugin.Route) {

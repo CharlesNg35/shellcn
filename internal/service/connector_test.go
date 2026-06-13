@@ -30,7 +30,7 @@ func (credentialRefPlugin) Manifest() plugin.Manifest {
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Auth", Fields: []plugin.Field{
 			{
 				Key: "api_credential", Label: "API Credential", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialAPIToken}},
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialAPIToken},
 			},
 		}}}},
 		Tabs: []plugin.Panel{{Key: "main", Label: "Main", Type: plugin.PanelTable}},

@@ -32,22 +32,24 @@ func (credentialCatalogPlugin) Manifest() plugin.Manifest {
 		},
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Auth", Fields: []plugin.Field{
 			{
-				Key: "ssh_credential", Label: "SSH credential", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{
-					Kinds: []plugin.CredentialKind{plugin.CredentialSSHPrivateKey, plugin.CredentialSSHPassword}, Protocols: []string{"ssh"},
-				},
+				Key: "ssh_key_credential", Label: "SSH key credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialSSHPrivateKey, Protocols: []string{"ssh"}},
+			},
+			{
+				Key: "ssh_password_credential", Label: "SSH password credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialSSHPassword, Protocols: []string{"ssh"}},
 			},
 			{
 				Key: "db_credential", Label: "Database credential", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}, Protocols: []string{"postgres"}},
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialDBPassword, Protocols: []string{"postgres"}},
 			},
 			{
 				Key: "api_credential", Label: "API credential", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialAPIToken}, Protocols: []string{"http-api"}},
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialAPIToken, Protocols: []string{"http-api"}},
 			},
 			{
 				Key: "kube_credential", Label: "Kube credential", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{testCredentialKubeconfig}, Protocols: []string{"kubernetes"}},
+				Credential: &plugin.CredentialSelector{Kind: testCredentialKubeconfig, Protocols: []string{"kubernetes"}},
 			},
 		}}}},
 	}

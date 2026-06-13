@@ -658,14 +658,10 @@ func credentialRefKeys(schema plugin.Schema) []string {
 }
 
 func credentialSelectorKinds(selector *plugin.CredentialSelector) []string {
-	if selector == nil {
+	if selector == nil || selector.Kind == "" {
 		return nil
 	}
-	kinds := make([]string, 0, len(selector.Kinds))
-	for _, kind := range selector.Kinds {
-		kinds = append(kinds, string(kind))
-	}
-	return kinds
+	return []string{string(selector.Kind)}
 }
 
 // resolveTransport defaults to direct and rejects unsupported transports.

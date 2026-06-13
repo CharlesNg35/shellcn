@@ -69,7 +69,7 @@ func configSchema() plugin.Schema {
 			}},
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Placeholder: "default", VisibleWhen: &passwordAuth},
 			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
-				Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}, Protocols: []string{protocolName},
+				Kind: plugin.CredentialDBPassword, Protocols: []string{protocolName},
 			}, VisibleWhen: &credentialAuth, Help: "Reusable Redis password. The credential identity can also supply the ACL username."},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &passwordAuth},
 		}},
@@ -82,7 +82,7 @@ func configSchema() plugin.Schema {
 			}},
 			{Key: "ca_certificate", Label: "CA certificate", Type: plugin.FieldTextarea, Secret: true, VisibleWhen: &verifyTLS, Help: "PEM CA bundle used for verify-ca and verify-full."},
 			{Key: clientCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kinds: []plugin.CredentialKind{plugin.CredentialTLSClientCert}, Protocols: []string{protocolName},
+				Kind: plugin.CredentialTLSClientCert, Protocols: []string{protocolName},
 			}, VisibleWhen: &tlsEnabled, Help: "Optional PEM containing the client certificate and private key."},
 		}},
 		{Name: "Safety", Fields: []plugin.Field{

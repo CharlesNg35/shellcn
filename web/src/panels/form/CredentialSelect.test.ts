@@ -48,7 +48,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("CredentialSelect", () => {
-  it("loads selectable credentials using the manifest selector kinds and protocol", async () => {
+  it("loads selectable credentials using the manifest selector kind and protocol", async () => {
     const calls: string[] = [];
     vi.unstubAllGlobals();
     installFetch((url) => {
@@ -62,7 +62,7 @@ describe("CredentialSelect", () => {
       props: {
         protocol: "ssh",
         selector: {
-          kinds: ["ssh_private_key", "ssh_password"],
+          kind: "ssh_private_key",
           protocols: ["ssh"],
         },
       },
@@ -70,7 +70,7 @@ describe("CredentialSelect", () => {
     await flushPromises();
 
     const credentialCall = calls.find((url) => url.includes("/credentials?"));
-    expect(credentialCall).toContain("kind=ssh_private_key%2Cssh_password");
+    expect(credentialCall).toContain("kind=ssh_private_key");
     expect(credentialCall).toContain("protocol=ssh");
   });
 
@@ -87,7 +87,7 @@ describe("CredentialSelect", () => {
       props: {
         protocol: "ssh",
         selector: {
-          kinds: ["ssh_password"],
+          kind: "ssh_password",
           protocols: ["ssh", "sftp"],
         },
       },
@@ -107,7 +107,7 @@ describe("CredentialSelect", () => {
       props: {
         protocol: "ssh",
         selector: {
-          kinds: ["ssh_private_key", "ssh_password"],
+          kind: "ssh_private_key",
           protocols: ["ssh"],
         },
       },
@@ -123,13 +123,13 @@ describe("CredentialSelect", () => {
 
     const dialog = wrapper.findComponent(CredentialFormDialog);
     expect(dialog.props("selector")).toMatchObject({
-      kinds: ["ssh_private_key", "ssh_password"],
+      kind: "ssh_private_key",
       protocols: ["ssh"],
     });
     expect(dialog.props("protocol")).toBe("ssh");
   });
 
-  it("labels mixed-kind credential choices with credential kind display names", async () => {
+  it("labels credential choices with credential kind display names", async () => {
     vi.unstubAllGlobals();
     installFetch((url) => {
       if (url.includes("/credential-kinds")) return { body: credentialKinds };
@@ -145,7 +145,7 @@ describe("CredentialSelect", () => {
             {
               id: "db-cert",
               name: "database cert",
-              kind: "tls_client_cert",
+              kind: "db_password",
             },
           ],
         };
@@ -157,7 +157,7 @@ describe("CredentialSelect", () => {
       props: {
         protocol: "postgresql",
         selector: {
-          kinds: ["db_password", "tls_client_cert"],
+          kind: "db_password",
           protocols: ["postgresql"],
         },
       },
@@ -172,7 +172,7 @@ describe("CredentialSelect", () => {
       },
       {
         value: "db-cert",
-        label: "database cert · TLS client certificate",
+        label: "database cert · Database password",
       },
     ]);
   });
@@ -182,7 +182,7 @@ describe("CredentialSelect", () => {
       props: {
         protocol: "ssh",
         selector: {
-          kinds: ["ssh_password"],
+          kind: "ssh_password",
           protocols: ["ssh"],
         },
         state: { state: "set", readable: false },

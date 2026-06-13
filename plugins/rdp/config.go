@@ -41,7 +41,7 @@ func configSchema(protocol string) plugin.Schema {
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 			{Key: "credential_id", Label: "Stored password", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kinds: []plugin.CredentialKind{CredentialRDPPassword}, Protocols: []string{protocol}, Required: true,
+				Kind: CredentialRDPPassword, Protocols: []string{protocol}, Required: true,
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 		}},
 		{Name: "Display", Fields: []plugin.Field{

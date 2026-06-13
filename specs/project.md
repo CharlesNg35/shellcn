@@ -597,7 +597,7 @@ type CredentialKindInfo struct {
     CompatibleProtocols []string // derived by core from registered plugin selectors
 }
 type CredentialSelector struct {
-    Kinds     []CredentialKind // credential kinds this field accepts
+    Kind      CredentialKind   // the single credential kind this field accepts
     Protocols []string         // optional protocol filter; empty = any compatible kind
     Required  bool             // true when inline secret fallback is not allowed
 }
@@ -676,11 +676,10 @@ user's authorized reusable credentials. The service layer resolves the credentia
 and injects decrypted values into `ConnectConfig.Config` immediately before
 `Connect`, so plugin code does not learn whether the value came from an inline
 connection secret or a shared credential. It also injects the selected
-credential kind alongside the resolved material, so plugins that explicitly
-choose a multi-kind `credential_ref` can route each kind correctly. Manifests
-should still prefer separate fields when the user experience or protocol
-semantics differ, such as password authentication versus client-certificate
-authentication.
+credential kind alongside the resolved material. A `credential_ref` selector
+declares exactly one kind; manifests use separate fields when a protocol supports
+alternative credential types, such as password authentication versus
+client-certificate authentication.
 
 Connection sharing does not imply credential sharing. A user with connection
 `use` may open the shared connection even when they cannot list or use the
@@ -756,7 +755,10 @@ returns only `CredentialSummary` records the acting user may use (`id`, `name`,
 `kind`, optional `identity`, derived `protocols`, timestamps) and filters by the
 field selector plus the selected connection protocol. The response never contains
 secret material, encrypted blobs, storage keys, or values. Selecting one stores
-the credential ID in the connection config.
+the credential ID in the connection config. Each `credential_ref` field accepts
+exactly one credential kind. Protocols with alternative credential types expose
+separate fields, usually behind auth-mode visibility rules, so labels and
+stored config keys stay predictable.
 
 The credential create/edit UI gets kind metadata from the core
 `GET /api/credential-kinds` catalog. Core owns only broad reusable credential

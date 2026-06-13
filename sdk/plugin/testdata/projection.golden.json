@@ -65,9 +65,7 @@
             "label": "Credential",
             "type": "credential_ref",
             "credential": {
-              "kinds": [
-                "sample_private_key"
-              ],
+              "kind": "sample_private_key",
               "protocols": [
                 "ssh"
               ],

@@ -103,7 +103,7 @@ test("create a credential and select it from a connection credential_ref", async
   await page.locator("#conn-name").fill(connName);
   await page.getByPlaceholder("10.0.0.1").fill("10.0.0.7");
   await page.getByRole("combobox", { name: "Password" }).click();
-  await page.getByText("Stored credential", { exact: true }).click();
+  await page.getByText("Stored SSH private key", { exact: true }).click();
   await page.getByText("Select a credential").click();
   await page.getByText(`${credName} · SSH private key`).click();
   await page.getByRole("button", { name: /Create connection/ }).click();

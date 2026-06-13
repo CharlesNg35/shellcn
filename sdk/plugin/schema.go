@@ -77,11 +77,12 @@ type Option struct {
 }
 
 // CredentialSelector constrains which reusable credentials a credential_ref
-// field accepts. The field stores only the chosen credential id, never a value.
+// field accepts. Use separate credential_ref fields for alternative credential
+// types. The field stores only the chosen credential id, never a value.
 type CredentialSelector struct {
-	Kinds     []CredentialKind `json:"kinds"`
-	Protocols []string         `json:"protocols,omitempty"`
-	Required  bool             `json:"required,omitempty"`
+	Kind      CredentialKind `json:"kind"`
+	Protocols []string       `json:"protocols,omitempty"`
+	Required  bool           `json:"required,omitempty"`
 }
 
 type Rule struct {

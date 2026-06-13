@@ -67,7 +67,7 @@
             "label": "API token credential",
             "type": "credential_ref",
             "credential": {
-              "kinds": ["api_token"],
+              "kind": "api_token",
               "protocols": ["proxmox"]
             },
             "help": "Reuse a stored Proxmox API token without copying the secret into this connection."

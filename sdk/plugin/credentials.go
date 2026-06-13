@@ -251,10 +251,8 @@ func addFieldCredentialKindSupports(catalog *CredentialKindSet, pluginName strin
 		if len(protocols) == 0 && pluginName != "" {
 			protocols = []string{pluginName}
 		}
-		for _, kind := range field.Credential.Kinds {
-			for _, protocol := range protocols {
-				catalog.AddSupport(kind, protocol)
-			}
+		for _, protocol := range protocols {
+			catalog.AddSupport(field.Credential.Kind, protocol)
 		}
 	}
 	for _, child := range field.Fields {

@@ -275,7 +275,7 @@ func TestReplaceKeepsOwnCredentialKinds(t *testing.T) {
 	}}
 	m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth", Fields: []plugin.Field{{
 		Key: "credential", Label: "Credential", Type: plugin.FieldCredentialRef,
-		Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{"sample_token"}},
+		Credential: &plugin.CredentialSelector{Kind: "sample_token"},
 	}}}}}
 	reg := New()
 	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
@@ -299,7 +299,7 @@ func TestReplaceRecomputesCredentialProtocols(t *testing.T) {
 	updated := m
 	updated.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{{
 		Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
-		Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{testCredentialPrivateKey}, Protocols: []string{"sftp"}, Required: true},
+		Credential: &plugin.CredentialSelector{Kind: testCredentialPrivateKey, Protocols: []string{"sftp"}, Required: true},
 	}}}}}
 	if err := reg.Replace(&stubPlugin{manifest: updated, routes: routes}); err != nil {
 		t.Fatalf("replace: %v", err)
@@ -330,7 +330,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		Layout: plugin.LayoutTabs,
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{{
 			Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
-			Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{testCredentialPrivateKey}, Protocols: []string{"ssh"}, Required: true},
+			Credential: &plugin.CredentialSelector{Kind: testCredentialPrivateKey, Protocols: []string{"ssh"}, Required: true},
 		}}}}},
 	}
 	routes := []plugin.Route{
@@ -342,6 +342,13 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 
 func protocolCredentialManifest(name string, kinds []plugin.CredentialKind) (plugin.Manifest, []plugin.Route) {
 	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	fields := make([]plugin.Field, 0, len(kinds))
+	for _, kind := range kinds {
+		fields = append(fields, plugin.Field{
+			Key: string(kind) + "_credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
+			Credential: &plugin.CredentialSelector{Kind: kind, Protocols: []string{name}, Required: true},
+		})
+	}
 	m := plugin.Manifest{
 		APIVersion:          plugin.CurrentAPIVersion,
 		Name:                name,
@@ -349,10 +356,7 @@ func protocolCredentialManifest(name string, kinds []plugin.CredentialKind) (plu
 		Category:            plugin.CategoryShell,
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
-		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Auth", Fields: []plugin.Field{{
-			Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
-			Credential: &plugin.CredentialSelector{Kinds: kinds, Protocols: []string{name}, Required: true},
-		}}}}},
+		Config:              plugin.Schema{Groups: []plugin.Group{{Name: "Auth", Fields: fields}}},
 	}
 	routes := []plugin.Route{{
 		ID: name + ".list", Method: plugin.MethodGet, Permission: name + ".read",

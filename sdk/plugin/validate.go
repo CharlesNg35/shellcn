@@ -114,24 +114,24 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 func validateCredentialSelectors(schema Schema, catalog CredentialKindCatalog, add func(string, ...any)) map[CredentialKind]bool {
 	used := map[CredentialKind]bool{}
 	for _, group := range schema.Groups {
-		for _, field := range group.Fields {
+		walkFields(group.Fields, func(field Field) {
 			if field.Type != FieldCredentialRef {
-				continue
+				return
 			}
 			if field.Credential == nil {
 				add("credential_ref field %q is missing Credential selector", field.Key)
-				continue
+				return
 			}
-			if len(field.Credential.Kinds) == 0 {
-				add("credential_ref field %q declares no accepted credential kinds", field.Key)
+			kind := field.Credential.Kind
+			if kind == "" {
+				add("credential_ref field %q declares no accepted credential kind", field.Key)
+				return
 			}
-			for _, kind := range field.Credential.Kinds {
-				used[kind] = true
-				if _, ok := catalog.CredentialKindLookup(kind); !ok {
-					add("credential_ref field %q declares unknown credential kind %q", field.Key, kind)
-				}
+			used[kind] = true
+			if _, ok := catalog.CredentialKindLookup(kind); !ok {
+				add("credential_ref field %q declares unknown credential kind %q", field.Key, kind)
 			}
-		}
+		})
 	}
 	return used
 }

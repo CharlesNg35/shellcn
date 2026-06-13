@@ -72,20 +72,41 @@
             "options": [
               { "label": "Password", "value": "password" },
               { "label": "Private key", "value": "private_key" },
-              { "label": "Stored credential", "value": "credential" }
+              { "label": "Stored SSH password", "value": "stored_password" },
+              {
+                "label": "Stored SSH private key",
+                "value": "stored_private_key"
+              }
             ]
           },
           {
-            "key": "credential_id",
-            "label": "Credential",
+            "key": "credential_password_id",
+            "label": "Stored SSH password",
             "type": "credential_ref",
             "credential": {
-              "kinds": ["ssh_private_key", "ssh_password"],
+              "kind": "ssh_password",
               "protocols": ["ssh"],
               "required": true
             },
             "visibleWhen": {
-              "allOf": [{ "field": "auth", "op": "eq", "value": "credential" }]
+              "allOf": [
+                { "field": "auth", "op": "eq", "value": "stored_password" }
+              ]
+            }
+          },
+          {
+            "key": "credential_private_key_id",
+            "label": "Stored SSH private key",
+            "type": "credential_ref",
+            "credential": {
+              "kind": "ssh_private_key",
+              "protocols": ["ssh"],
+              "required": true
+            },
+            "visibleWhen": {
+              "allOf": [
+                { "field": "auth", "op": "eq", "value": "stored_private_key" }
+              ]
             }
           },
           {
@@ -113,7 +134,10 @@
             "type": "password",
             "secret": true,
             "visibleWhen": {
-              "allOf": [{ "field": "auth", "op": "eq", "value": "private_key" }]
+              "anyOf": [
+                { "field": "auth", "op": "eq", "value": "private_key" },
+                { "field": "auth", "op": "eq", "value": "stored_private_key" }
+              ]
             }
           }
         ]

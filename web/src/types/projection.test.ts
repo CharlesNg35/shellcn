@@ -44,7 +44,7 @@ describe("projection contract", () => {
                 label: "Saved credential",
                 type: "credential_ref",
                 credential: {
-                  kinds: ["ssh_private_key", "ssh_password"],
+                  kind: "ssh_private_key",
                   protocols: ["ssh"],
                 },
               },

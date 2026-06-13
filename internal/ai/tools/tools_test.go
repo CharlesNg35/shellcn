@@ -50,7 +50,7 @@ func (demoPlugin) Routes() []plugin.Route {
 				{Key: "password", Label: "Password", Type: plugin.FieldPassword},
 				{
 					Key: "credential_id", Label: "Stored credential", Type: plugin.FieldCredentialRef, Required: true,
-					Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialAPIToken}},
+					Credential: &plugin.CredentialSelector{Kind: plugin.CredentialAPIToken},
 				},
 				{Key: "profile", Label: "Profile", Type: plugin.FieldObject, Fields: []plugin.Field{
 					{Key: "display_name", Label: "Display name", Type: plugin.FieldText, Required: true},

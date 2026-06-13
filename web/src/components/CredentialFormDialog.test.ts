@@ -115,7 +115,7 @@ describe("CredentialFormDialog", () => {
     const wrapper = mount(CredentialFormDialog, {
       props: {
         visible: true,
-        selector: { kinds: ["kubeconfig"], protocols: ["kubernetes"] },
+        selector: { kind: "kubeconfig", protocols: ["kubernetes"] },
         protocol: "kubernetes",
       },
     });
@@ -128,7 +128,7 @@ describe("CredentialFormDialog", () => {
     wrapper.unmount();
   });
 
-  it("lets inline creation choose only protocol-compatible selector kinds", async () => {
+  it("scopes inline creation to the selector kind", async () => {
     installFetch((url) =>
       url.includes("/credential-kinds")
         ? { body: credentialKinds }
@@ -137,10 +137,7 @@ describe("CredentialFormDialog", () => {
     const wrapper = mount(CredentialFormDialog, {
       props: {
         visible: true,
-        selector: {
-          kinds: ["ssh_password", "kubeconfig"],
-          protocols: ["ssh", "kubernetes"],
-        },
+        selector: { kind: "kubeconfig", protocols: ["kubernetes"] },
         protocol: "kubernetes",
       },
     });

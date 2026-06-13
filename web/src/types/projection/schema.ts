@@ -42,7 +42,7 @@ export interface CredentialKindInfo {
 }
 
 export interface CredentialSelector {
-  kinds: CredentialKind[];
+  kind: CredentialKind;
   protocols?: string[];
   required?: boolean;
 }

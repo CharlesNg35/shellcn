@@ -41,7 +41,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 					AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}},
 				}},
 				{Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-					Kinds: []plugin.CredentialKind{testCredentialPrivateKey}, Protocols: []string{"ssh"}, Required: true,
+					Kind: testCredentialPrivateKey, Protocols: []string{"ssh"}, Required: true,
 				}},
 			},
 		}}},

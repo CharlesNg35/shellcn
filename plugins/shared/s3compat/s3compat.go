@@ -170,7 +170,7 @@ func AuthFields(protocol string) []plugin.Field {
 		{Key: "secret_access_key", Label: "Secret access key", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "access_key"}}}},
 		{Key: "session_token", Label: "Session token", Type: plugin.FieldPassword, Secret: true, VisibleWhen: staticCredentials},
 		{Key: "credential_id", Label: "Access key credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-			Kinds: []plugin.CredentialKind{plugin.CredentialCloudAccessKey}, Protocols: []string{protocol}, Required: true,
+			Kind: plugin.CredentialCloudAccessKey, Protocols: []string{protocol}, Required: true,
 		}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 	}
 }

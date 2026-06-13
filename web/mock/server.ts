@@ -31,7 +31,7 @@ interface CredentialKindInfo {
 interface CredentialField {
   type?: string;
   credential?: {
-    kinds?: string[];
+    kind?: string;
     protocols?: string[];
   };
 }
@@ -110,7 +110,8 @@ function credentialKinds(): CredentialKindInfo[] {
         const protocols = field.credential.protocols?.length
           ? field.credential.protocols
           : [plugin.name];
-        for (const kind of field.credential.kinds ?? []) {
+        const kind = field.credential.kind;
+        if (kind) {
           if (!supports.has(kind)) supports.set(kind, new Set<string>());
           for (const protocol of protocols) supports.get(kind)?.add(protocol);
         }

@@ -378,7 +378,7 @@ describe("ConnectionFormDialog", () => {
                 label: "Credential",
                 type: "credential_ref",
                 required: true,
-                credential: { kinds: ["ssh_password"], protocols: ["tester"] },
+                credential: { kind: "ssh_password", protocols: ["tester"] },
               },
             ],
           },

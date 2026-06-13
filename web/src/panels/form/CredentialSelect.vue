@@ -47,9 +47,7 @@ async function load(): Promise<void> {
   try {
     const [nextOptions, nextKinds] = await Promise.all([
       credentialsApi.list({
-        kind: props.selector.kinds.length
-          ? props.selector.kinds.join(",")
-          : undefined,
+        kind: props.selector.kind || undefined,
         protocol: requestProtocol.value || undefined,
       }),
       kindCatalog.value.length

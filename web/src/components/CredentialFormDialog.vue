@@ -46,18 +46,15 @@ const catalogLoading = ref(false);
 const catalogError = ref<string | null>(null);
 const showShare = ref(false);
 
-const selectorKinds = computed(() => props.selector?.kinds ?? []);
+const selectorKind = computed(() => props.selector?.kind ?? "");
 const scopedToSelector = computed(
-  () =>
-    !isEdit.value &&
-    (selectorKinds.value.length > 0 || Boolean(props.protocol)),
+  () => !isEdit.value && (selectorKind.value !== "" || Boolean(props.protocol)),
 );
 const kindOptions = computed(() => {
-  const allowed = new Set(selectorKinds.value);
   const requiredProtocol =
     props.protocol ?? props.selector?.protocols?.[0] ?? "";
   return kindCatalog.value
-    .filter((k) => !allowed.size || allowed.has(k.kind))
+    .filter((k) => !selectorKind.value || k.kind === selectorKind.value)
     .filter(
       (k) =>
         !requiredProtocol ||
