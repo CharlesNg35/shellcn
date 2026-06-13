@@ -563,6 +563,8 @@ type Panel struct {
 	Type   PanelType   `json:"panel"`
 	Source *DataSource `json:"source,omitempty"`
 	Config PanelConfig `json:"config,omitempty"`
+	// VisibleWhen hides this panel unless the active row/resource data matches.
+	VisibleWhen *Condition `json:"visibleWhen,omitempty"`
 	// Span is a dashboard-only sizing hint.
 	Span int `json:"span,omitempty"`
 }
@@ -624,6 +626,8 @@ type Action struct {
 	Config PanelConfig `json:"config,omitempty"`
 	// EnabledWhen disables the button unless active-row fields match.
 	EnabledWhen *Condition `json:"enabledWhen,omitempty"`
+	// VisibleWhen hides the action unless active-row fields match.
+	VisibleWhen *Condition `json:"visibleWhen,omitempty"`
 	// IconOnly renders the button as its icon alone; Label becomes the tooltip.
 	IconOnly bool `json:"iconOnly,omitempty"`
 	// Group clusters actions into a labeled dropdown.

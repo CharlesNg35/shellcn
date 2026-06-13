@@ -17,13 +17,21 @@ const metricsInterval = 2 * time.Second
 // panel.
 func guestMetrics(kind string) plugin.StreamHandler {
 	return func(rc *plugin.RequestContext, client plugin.ClientStream) error {
-		path := fmt.Sprintf("/nodes/%s/%s/%s/status/current", rc.Param("node"), kind, rc.Param("vmid"))
+		node, vmid, err := requireGuest(rc)
+		if err != nil {
+			return err
+		}
+		path := pvePath("nodes", node, kind, vmid, "status", "current")
 		return metricsLoop(rc, client, path)
 	}
 }
 
 func nodeMetrics(rc *plugin.RequestContext, client plugin.ClientStream) error {
-	return metricsLoop(rc, client, "/nodes/"+rc.Param("node")+"/status")
+	node, err := requireNode(rc)
+	if err != nil {
+		return err
+	}
+	return metricsLoop(rc, client, pvePath("nodes", node, "status"))
 }
 
 func metricsLoop(rc *plugin.RequestContext, client plugin.ClientStream, statusPath string) error {
@@ -35,10 +43,12 @@ func metricsLoop(rc *plugin.RequestContext, client plugin.ClientStream, statusPa
 	ticker := time.NewTicker(metricsInterval)
 	defer ticker.Stop()
 	for {
-		if status, err := s.object(rc.Ctx, statusPath); err == nil {
-			if err := enc.Encode(metricFrame(status)); err != nil {
-				return err
-			}
+		status, err := s.object(rc.Ctx, statusPath)
+		if err != nil {
+			return err
+		}
+		if err := enc.Encode(metricFrame(status)); err != nil {
+			return err
 		}
 		select {
 		case <-client.Context().Done():

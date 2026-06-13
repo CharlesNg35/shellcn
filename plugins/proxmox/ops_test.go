@@ -137,6 +137,14 @@ func TestRestoreBody(t *testing.T) {
 	})
 }
 
+func TestPVEPathEscapesDynamicSegments(t *testing.T) {
+	got := pvePath("nodes", "pve", "storage", "local", "content", "local:backup/vzdump-qemu-100.vma.zst")
+	want := "/nodes/pve/storage/local/content/local:backup%2Fvzdump-qemu-100.vma.zst"
+	if got != want {
+		t.Fatalf("pvePath = %q, want %q", got, want)
+	}
+}
+
 // --- httptest handler coverage --------------------------------------------
 
 func TestOpsAgainstFakeProxmox(t *testing.T) {

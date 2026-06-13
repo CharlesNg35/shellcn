@@ -270,6 +270,7 @@ export interface DashboardCell {
   panel: PanelType;
   source?: DataSource;
   config?: Record<string, unknown>;
+  visibleWhen?: Condition;
   span?: number;
 }
 
@@ -388,6 +389,7 @@ export interface Action {
   panel?: PanelType;
   config?: Record<string, unknown>;
   enabledWhen?: Condition;
+  visibleWhen?: Condition;
   iconOnly?: boolean;
   group?: string;
 }
@@ -405,6 +407,7 @@ export interface Tab {
   panel: PanelType;
   source?: DataSource;
   config?: Record<string, unknown>;
+  visibleWhen?: Condition;
   span?: number;
 }
 

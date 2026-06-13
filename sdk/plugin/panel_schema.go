@@ -276,6 +276,28 @@ func boolProp() PanelConfigProperty   { return PanelConfigProperty{Type: "boolea
 func number() PanelConfigProperty     { return PanelConfigProperty{Type: "number"} }
 func object() PanelConfigProperty     { return PanelConfigProperty{Type: "object"} }
 
+func conditionObject() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("allOf", array(ruleObject())),
+			prop("anyOf", array(ruleObject())),
+		),
+	}
+}
+
+func ruleObject() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("field", stringProp()),
+			prop("op", enum("eq", "neq", "in", "nin", "empty", "notEmpty")),
+			prop("value", object()),
+		),
+		Required: []string{"field", "op"},
+	}
+}
+
 func array(item PanelConfigProperty) PanelConfigProperty {
 	return PanelConfigProperty{Type: "array", Items: &item}
 }
@@ -426,6 +448,7 @@ func panelObject() PanelConfigProperty {
 			prop("source", dataSource()),
 			prop("config", object()),
 			prop("span", number()),
+			prop("visibleWhen", conditionObject()),
 		),
 		Required: []string{"key", "panel"},
 	}

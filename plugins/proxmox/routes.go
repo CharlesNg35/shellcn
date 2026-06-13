@@ -2,6 +2,7 @@ package proxmox
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ func Routes() []plugin.Route {
 		{ID: "proxmox.qemu.list", Method: plugin.MethodGet, Path: "/qemu", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.qemu.list", Handle: listGuests("qemu")},
 		{ID: "proxmox.lxc.list", Method: plugin.MethodGet, Path: "/lxc", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.lxc.list", Handle: listGuests("lxc")},
 		{ID: "proxmox.node.list", Method: plugin.MethodGet, Path: "/nodes", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.list", Handle: listNodes},
+		{ID: "proxmox.node.options", Method: plugin.MethodGet, Path: "/nodes/options", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.options", Handle: nodeOptions},
 		{ID: "proxmox.storage.list", Method: plugin.MethodGet, Path: "/storage", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.storage.list", Handle: listStorage},
 		{ID: "proxmox.node.storage", Method: plugin.MethodGet, Path: "/nodes/{node}/storage", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.storage", Handle: listNodeStorage},
 		{ID: "proxmox.node.tasks", Method: plugin.MethodGet, Path: "/nodes/{node}/tasks", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.tasks", Handle: listTasks},
@@ -35,6 +37,8 @@ func Routes() []plugin.Route {
 		// Documents.
 		{ID: "proxmox.qemu.config", Method: plugin.MethodGet, Path: "/nodes/{node}/qemu/{vmid}/config", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.qemu.config", Handle: guestConfig("qemu")},
 		{ID: "proxmox.lxc.config", Method: plugin.MethodGet, Path: "/nodes/{node}/lxc/{vmid}/config", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.lxc.config", Handle: guestConfig("lxc")},
+		{ID: "proxmox.qemu.overview", Method: plugin.MethodGet, Path: "/nodes/{node}/qemu/{vmid}/overview", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.qemu.overview", Handle: guestOverview("qemu")},
+		{ID: "proxmox.lxc.overview", Method: plugin.MethodGet, Path: "/nodes/{node}/lxc/{vmid}/overview", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.lxc.overview", Handle: guestOverview("lxc")},
 		{ID: "proxmox.node.status", Method: plugin.MethodGet, Path: "/nodes/{node}/status", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.status", Handle: nodeStatus},
 
 		// Metrics streams.
@@ -110,6 +114,58 @@ func snapshotRoutes(kind string) []plugin.Route {
 		{ID: fmt.Sprintf("proxmox.%s.snapshot.rollback", kind), Method: plugin.MethodPost, Path: fmt.Sprintf("/nodes/{node}/%s/{vmid}/snapshot/{snapname}/rollback", kind), Permission: fmt.Sprintf("proxmox.%s.snapshot", kind), Risk: plugin.RiskDestructive, AuditEvent: fmt.Sprintf("proxmox.%s.snapshot.rollback", kind), Handle: snapshotRollback(kind)},
 		{ID: fmt.Sprintf("proxmox.%s.snapshot.delete", kind), Method: plugin.MethodDelete, Path: fmt.Sprintf("/nodes/{node}/%s/{vmid}/snapshot/{snapname}", kind), Permission: fmt.Sprintf("proxmox.%s.snapshot", kind), Risk: plugin.RiskDestructive, AuditEvent: fmt.Sprintf("proxmox.%s.snapshot.delete", kind), Handle: snapshotDelete(kind)},
 	}
+}
+
+func pvePath(parts ...string) string {
+	escaped := make([]string, 0, len(parts))
+	for _, part := range parts {
+		escaped = append(escaped, url.PathEscape(part))
+	}
+	return "/" + strings.Join(escaped, "/")
+}
+
+func requireNode(rc *plugin.RequestContext) (string, error) {
+	node := rc.Param("node")
+	if !validNode(node) {
+		return "", fmt.Errorf("%w: invalid node", plugin.ErrInvalidInput)
+	}
+	return node, nil
+}
+
+func requireGuest(rc *plugin.RequestContext) (string, string, error) {
+	node, err := requireNode(rc)
+	if err != nil {
+		return "", "", err
+	}
+	vmid := rc.Param("vmid")
+	if !validVMID(vmid) {
+		return "", "", fmt.Errorf("%w: invalid vmid", plugin.ErrInvalidInput)
+	}
+	return node, vmid, nil
+}
+
+func requireStorage(rc *plugin.RequestContext) (string, string, error) {
+	node, err := requireNode(rc)
+	if err != nil {
+		return "", "", err
+	}
+	storage := rc.Param("storage")
+	if !validStorage(storage) {
+		return "", "", fmt.Errorf("%w: invalid storage", plugin.ErrInvalidInput)
+	}
+	return node, storage, nil
+}
+
+func requireSnapshot(rc *plugin.RequestContext) (string, string, string, error) {
+	node, vmid, err := requireGuest(rc)
+	if err != nil {
+		return "", "", "", err
+	}
+	snapname := rc.Param("snapname")
+	if !validSnapName(snapname) {
+		return "", "", "", fmt.Errorf("%w: invalid snapshot name", plugin.ErrInvalidInput)
+	}
+	return node, vmid, snapname, nil
 }
 
 // --- Tree -----------------------------------------------------------------
@@ -204,6 +260,7 @@ func listGuests(kind string) plugin.Handler {
 				"name":     name,
 				"type":     guestKind,
 				"mode":     guestMode(g),
+				"template": isTemplateValue(g["template"]),
 				"vmid":     numInt(g["vmid"]),
 				"node":     node,
 				"status":   str(g["status"]),
@@ -227,11 +284,18 @@ func guestKindIcon(kind string) string {
 }
 
 func guestMode(g row) string {
-	switch strings.ToLower(str(g["template"])) {
-	case "1", "true", "yes":
+	if isTemplateValue(g["template"]) {
 		return "Template"
+	}
+	return "Instance"
+}
+
+func isTemplateValue(v any) bool {
+	switch strings.ToLower(str(v)) {
+	case "1", "true", "yes":
+		return true
 	default:
-		return "Instance"
+		return false
 	}
 }
 
@@ -255,6 +319,36 @@ func listNodes(rc *plugin.RequestContext) (any, error) {
 			"maxmem": numInt(n["maxmem"]),
 			"uptime": numInt(n["uptime"]),
 			"ref":    plugin.ResourceRef{Kind: "node", Namespace: name, Name: name, UID: name},
+		})
+	}
+	return pageRows(rc, rows)
+}
+
+func nodeOptions(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.list(rc.Ctx, "/nodes")
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]row, 0, len(items))
+	source := rc.Param("node")
+	for _, n := range items {
+		name := str(n["node"])
+		if name == "" || name == source {
+			continue
+		}
+		label := name
+		if status := str(n["status"]); status != "" {
+			label += " (" + status + ")"
+		}
+		rows = append(rows, row{
+			"name":   name,
+			"label":  label,
+			"value":  name,
+			"status": str(n["status"]),
 		})
 	}
 	return pageRows(rc, rows)
@@ -284,8 +378,11 @@ func listNodeStorage(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	node := rc.Param("node")
-	items, err := s.list(rc.Ctx, "/nodes/"+node+"/storage")
+	node, err := requireNode(rc)
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.list(rc.Ctx, pvePath("nodes", node, "storage"))
 	if err != nil {
 		return nil, err
 	}
@@ -346,8 +443,11 @@ func listStorageContent(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	node, storage := rc.Param("node"), rc.Param("storage")
-	items, err := s.list(rc.Ctx, fmt.Sprintf("/nodes/%s/storage/%s/content", node, storage))
+	node, storage, err := requireStorage(rc)
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.list(rc.Ctx, pvePath("nodes", node, "storage", storage, "content"))
 	if err != nil {
 		return nil, err
 	}
@@ -372,8 +472,11 @@ func listTasks(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	node := rc.Param("node")
-	items, err := s.list(rc.Ctx, "/nodes/"+node+"/tasks")
+	node, err := requireNode(rc)
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.list(rc.Ctx, pvePath("nodes", node, "tasks"))
 	if err != nil {
 		return nil, err
 	}
@@ -403,8 +506,11 @@ func listSnapshots(kind string) plugin.Handler {
 		if err != nil {
 			return nil, err
 		}
-		node, vmid := rc.Param("node"), rc.Param("vmid")
-		items, err := s.list(rc.Ctx, fmt.Sprintf("/nodes/%s/%s/%s/snapshot", node, kind, vmid))
+		node, vmid, err := requireGuest(rc)
+		if err != nil {
+			return nil, err
+		}
+		items, err := s.list(rc.Ctx, pvePath("nodes", node, kind, vmid, "snapshot"))
 		if err != nil {
 			return nil, err
 		}
@@ -429,8 +535,11 @@ func listBackups(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	node, vmid := rc.Param("node"), rc.Param("vmid")
-	stores, err := s.list(rc.Ctx, "/nodes/"+node+"/storage")
+	node, vmid, err := requireGuest(rc)
+	if err != nil {
+		return nil, err
+	}
+	stores, err := s.list(rc.Ctx, pvePath("nodes", node, "storage"))
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +549,10 @@ func listBackups(rc *plugin.RequestContext) (any, error) {
 			continue
 		}
 		storage := str(st["storage"])
-		items, err := s.list(rc.Ctx, fmt.Sprintf("/nodes/%s/storage/%s/content?content=backup", node, storage))
+		if !validStorage(storage) {
+			continue
+		}
+		items, err := s.list(rc.Ctx, pvePath("nodes", node, "storage", storage, "content")+"?content=backup")
 		if err != nil {
 			continue
 		}
@@ -471,7 +583,52 @@ func guestConfig(kind string) plugin.Handler {
 		if err != nil {
 			return nil, err
 		}
-		return s.object(rc.Ctx, fmt.Sprintf("/nodes/%s/%s/%s/config", rc.Param("node"), kind, rc.Param("vmid")))
+		node, vmid, err := requireGuest(rc)
+		if err != nil {
+			return nil, err
+		}
+		return s.object(rc.Ctx, pvePath("nodes", node, kind, vmid, "config"))
+	}
+}
+
+func guestOverview(kind string) plugin.Handler {
+	return func(rc *plugin.RequestContext) (any, error) {
+		s, err := sess(rc)
+		if err != nil {
+			return nil, err
+		}
+		node, vmid, err := requireGuest(rc)
+		if err != nil {
+			return nil, err
+		}
+		status, err := s.object(rc.Ctx, pvePath("nodes", node, kind, vmid, "status", "current"))
+		if err != nil {
+			return nil, err
+		}
+		cfg, err := s.object(rc.Ctx, pvePath("nodes", node, kind, vmid, "config"))
+		if err != nil {
+			return nil, err
+		}
+		out := row{
+			"node":     node,
+			"vmid":     vmid,
+			"name":     stringOr(str(cfg["name"]), str(cfg["hostname"])),
+			"status":   str(status["status"]),
+			"template": isTemplateValue(cfg["template"]),
+			"cpu":      round1(numFloat(status["cpu"]) * 100),
+			"mem":      numInt(status["mem"]),
+			"maxmem":   numInt(status["maxmem"]),
+			"uptime":   numInt(status["uptime"]),
+			"tags":     str(cfg["tags"]),
+			"cores":    numInt(cfg["cores"]),
+			"sockets":  numInt(cfg["sockets"]),
+			"memory":   numInt(cfg["memory"]) * 1024 * 1024,
+			"ostype":   str(cfg["ostype"]),
+		}
+		if out["name"] == "" {
+			out["name"] = kind + "/" + vmid
+		}
+		return out, nil
 	}
 }
 
@@ -480,7 +637,11 @@ func nodeStatus(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s.object(rc.Ctx, "/nodes/"+rc.Param("node")+"/status")
+	node, err := requireNode(rc)
+	if err != nil {
+		return nil, err
+	}
+	return s.object(rc.Ctx, pvePath("nodes", node, "status"))
 }
 
 // --- Actions --------------------------------------------------------------
@@ -491,7 +652,11 @@ func guestStatus(kind, action string) plugin.Handler {
 		if err != nil {
 			return nil, err
 		}
-		path := fmt.Sprintf("/nodes/%s/%s/%s/status/%s", rc.Param("node"), kind, rc.Param("vmid"), action)
+		node, vmid, err := requireGuest(rc)
+		if err != nil {
+			return nil, err
+		}
+		path := pvePath("nodes", node, kind, vmid, "status", action)
 		if err := s.post(rc.Ctx, path, nil); err != nil {
 			return nil, err
 		}
@@ -512,6 +677,13 @@ func guestMigrate(kind string) plugin.Handler {
 		if err := rc.Bind(&in); err != nil {
 			return nil, err
 		}
+		node, vmid, err := requireGuest(rc)
+		if err != nil {
+			return nil, err
+		}
+		if !validNode(in.Target) {
+			return nil, fmt.Errorf("%w: invalid target node", plugin.ErrInvalidInput)
+		}
 		body := map[string]any{"target": in.Target}
 		if in.Online {
 			if kind == "lxc" {
@@ -520,7 +692,7 @@ func guestMigrate(kind string) plugin.Handler {
 				body["online"] = 1
 			}
 		}
-		path := fmt.Sprintf("/nodes/%s/%s/%s/migrate", rc.Param("node"), kind, rc.Param("vmid"))
+		path := pvePath("nodes", node, kind, vmid, "migrate")
 		if err := s.post(rc.Ctx, path, body); err != nil {
 			return nil, err
 		}
@@ -542,6 +714,9 @@ func snapshotCreate(kind string) plugin.Handler {
 		if err := rc.Bind(&in); err != nil {
 			return nil, err
 		}
+		if !validSnapName(in.Snapname) {
+			return nil, fmt.Errorf("%w: invalid snapshot name", plugin.ErrInvalidInput)
+		}
 		body := map[string]any{"snapname": in.Snapname}
 		if in.Description != "" {
 			body["description"] = in.Description
@@ -549,7 +724,11 @@ func snapshotCreate(kind string) plugin.Handler {
 		if in.VMState && kind == "qemu" {
 			body["vmstate"] = 1
 		}
-		path := fmt.Sprintf("/nodes/%s/%s/%s/snapshot", rc.Param("node"), kind, rc.Param("vmid"))
+		node, vmid, err := requireGuest(rc)
+		if err != nil {
+			return nil, err
+		}
+		path := pvePath("nodes", node, kind, vmid, "snapshot")
 		if err := s.post(rc.Ctx, path, body); err != nil {
 			return nil, err
 		}
@@ -563,7 +742,11 @@ func snapshotRollback(kind string) plugin.Handler {
 		if err != nil {
 			return nil, err
 		}
-		path := fmt.Sprintf("/nodes/%s/%s/%s/snapshot/%s/rollback", rc.Param("node"), kind, rc.Param("vmid"), rc.Param("snapname"))
+		node, vmid, snapname, err := requireSnapshot(rc)
+		if err != nil {
+			return nil, err
+		}
+		path := pvePath("nodes", node, kind, vmid, "snapshot", snapname, "rollback")
 		if err := s.post(rc.Ctx, path, nil); err != nil {
 			return nil, err
 		}
@@ -577,7 +760,11 @@ func snapshotDelete(kind string) plugin.Handler {
 		if err != nil {
 			return nil, err
 		}
-		path := fmt.Sprintf("/nodes/%s/%s/%s/snapshot/%s", rc.Param("node"), kind, rc.Param("vmid"), rc.Param("snapname"))
+		node, vmid, snapname, err := requireSnapshot(rc)
+		if err != nil {
+			return nil, err
+		}
+		path := pvePath("nodes", node, kind, vmid, "snapshot", snapname)
 		if err := s.del(rc.Ctx, path); err != nil {
 			return nil, err
 		}
@@ -598,13 +785,20 @@ func backupCreate(rc *plugin.RequestContext) (any, error) {
 	if err := rc.Bind(&in); err != nil {
 		return nil, err
 	}
+	node, vmid, err := requireGuest(rc)
+	if err != nil {
+		return nil, err
+	}
+	if !validStorage(in.Storage) {
+		return nil, fmt.Errorf("%w: invalid storage", plugin.ErrInvalidInput)
+	}
 	body := map[string]any{
-		"vmid":     rc.Param("vmid"),
+		"vmid":     vmid,
 		"storage":  in.Storage,
 		"mode":     stringOr(in.Mode, "snapshot"),
 		"compress": stringOr(in.Compress, "zstd"),
 	}
-	if err := s.post(rc.Ctx, "/nodes/"+rc.Param("node")+"/vzdump", body); err != nil {
+	if err := s.post(rc.Ctx, pvePath("nodes", node, "vzdump"), body); err != nil {
 		return nil, err
 	}
 	return actionResult{OK: true}, nil
@@ -615,7 +809,15 @@ func backupDelete(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	path := fmt.Sprintf("/nodes/%s/storage/%s/content/%s", rc.Param("node"), rc.Param("storage"), rc.Param("volume"))
+	node, storage, err := requireStorage(rc)
+	if err != nil {
+		return nil, err
+	}
+	volume := rc.Param("volume")
+	if strings.TrimSpace(volume) == "" {
+		return nil, fmt.Errorf("%w: volume is required", plugin.ErrInvalidInput)
+	}
+	path := pvePath("nodes", node, "storage", storage, "content", volume)
 	if err := s.del(rc.Ctx, path); err != nil {
 		return nil, err
 	}
@@ -626,7 +828,7 @@ func backupDelete(rc *plugin.RequestContext) (any, error) {
 
 func snapshotSchema(kind string) *plugin.Schema {
 	fields := []plugin.Field{
-		{Key: "snapname", Label: "Name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^[A-Za-z][A-Za-z0-9_-]+$`, Message: "letters, digits, dash and underscore only"}}},
+		{Key: "snapname", Label: "Name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: snapRe.String(), Message: "letters, digits, dash and underscore only"}}},
 		{Key: "description", Label: "Description", Type: plugin.FieldTextarea},
 	}
 	if kind == "qemu" {
@@ -637,7 +839,7 @@ func snapshotSchema(kind string) *plugin.Schema {
 
 func migrateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Migrate", Fields: []plugin.Field{
-		{Key: "target", Label: "Target node", Type: plugin.FieldText, Required: true},
+		{Key: "target", Label: "Target node", Type: plugin.FieldSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "proxmox.node.options", Params: map[string]string{"node": "${resource.namespace}"}}},
 		{Key: "online", Label: "Live / online migration", Type: plugin.FieldToggle},
 	}}}}
 }

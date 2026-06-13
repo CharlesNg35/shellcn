@@ -130,9 +130,10 @@ func qemuResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("activity"), Type: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.qemu.metrics", Method: plugin.MethodWS, Params: guestParams()}, Config: cpuMemMetrics()},
-				{Key: "console", Label: "Console", Icon: icon("monitor"), Type: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "proxmox.qemu.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.RemoteDesktopConfig{Resize: true, Clipboard: true}},
-				{Key: "snapshots", Label: "Snapshots", Icon: icon("camera"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.snapshots", Params: guestParams()}, Config: plugin.TableConfig{Columns: snapshotColumns(), RowActionIDs: []string{"act.qemu.snapshot.rollback", "act.qemu.snapshot.delete"}}},
+				{Key: "summary", Label: "Summary", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.qemu.overview", Params: guestParams()}, Config: guestOverviewConfig()},
+				{Key: "metrics", Label: "Metrics", Icon: icon("activity"), Type: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.qemu.metrics", Method: plugin.MethodWS, Params: guestParams()}, Config: cpuMemMetrics(), VisibleWhen: instanceOnly()},
+				{Key: "console", Label: "Console", Icon: icon("monitor"), Type: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "proxmox.qemu.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.RemoteDesktopConfig{Resize: true, Clipboard: true}, VisibleWhen: instanceOnly()},
+				{Key: "snapshots", Label: "Snapshots", Icon: icon("camera"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.snapshots", Params: guestParams()}, Config: plugin.TableConfig{Columns: snapshotColumns(), RowActionIDs: []string{"act.qemu.snapshot.rollback", "act.qemu.snapshot.delete"}}, VisibleWhen: instanceOnly()},
 				{Key: "backups", Label: "Backups", Icon: icon("save"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.backups", Params: guestParams()}, Config: plugin.TableConfig{Columns: backupColumns(), RowActionIDs: []string{"act.backup.delete"}, RowClick: plugin.RowClickDetail}},
 				{Key: "hardware", Label: "Hardware", Icon: icon("cpu"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.qemu.config", Params: guestParams()}, Config: plugin.ObjectDetailConfig{RawToggle: true}},
 			},
@@ -151,9 +152,10 @@ func lxcResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("activity"), Type: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.lxc.metrics", Method: plugin.MethodWS, Params: guestParams()}, Config: cpuMemMetrics()},
-				{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "proxmox.lxc.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
-				{Key: "snapshots", Label: "Snapshots", Icon: icon("camera"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.snapshots", Params: guestParams()}, Config: plugin.TableConfig{Columns: snapshotColumns(), RowActionIDs: []string{"act.lxc.snapshot.rollback", "act.lxc.snapshot.delete"}}},
+				{Key: "summary", Label: "Summary", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.lxc.overview", Params: guestParams()}, Config: guestOverviewConfig()},
+				{Key: "metrics", Label: "Metrics", Icon: icon("activity"), Type: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.lxc.metrics", Method: plugin.MethodWS, Params: guestParams()}, Config: cpuMemMetrics(), VisibleWhen: instanceOnly()},
+				{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "proxmox.lxc.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.TerminalConfig{Zoom: true, Search: true}, VisibleWhen: instanceOnly()},
+				{Key: "snapshots", Label: "Snapshots", Icon: icon("camera"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.snapshots", Params: guestParams()}, Config: plugin.TableConfig{Columns: snapshotColumns(), RowActionIDs: []string{"act.lxc.snapshot.rollback", "act.lxc.snapshot.delete"}}, VisibleWhen: instanceOnly()},
 				{Key: "backups", Label: "Backups", Icon: icon("save"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.backups", Params: guestParams()}, Config: plugin.TableConfig{Columns: backupColumns(), RowActionIDs: []string{"act.backup.delete"}, RowClick: plugin.RowClickDetail}},
 				{Key: "config", Label: "Config", Icon: icon("code"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.lxc.config", Params: guestParams()}, Config: plugin.ObjectDetailConfig{RawToggle: true}},
 			},
@@ -237,6 +239,38 @@ func guestParams() map[string]string {
 	return map[string]string{"node": "${resource.namespace}", "vmid": "${resource.uid}"}
 }
 
+func instanceOnly() *plugin.Condition {
+	return &plugin.Condition{AllOf: []plugin.Rule{{Field: "template", Op: plugin.OpNeq, Value: true}}}
+}
+
+func guestOverviewConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Identity", Fields: []plugin.ObjectDetailField{
+				{Key: "name", Label: "Name"},
+				{Key: "vmid", Label: "VMID"},
+				{Key: "node", Label: "Node"},
+				{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Severities: statusSeverities},
+				{Key: "template", Label: "Template", Type: plugin.ColumnBool},
+				{Key: "tags", Label: "Tags"},
+			}},
+			{Title: "Runtime", Fields: []plugin.ObjectDetailField{
+				{Key: "cpu", Label: "CPU %", Type: plugin.ColumnNumber},
+				{Key: "mem", Label: "Memory", Type: plugin.ColumnBytes},
+				{Key: "maxmem", Label: "Max memory", Type: plugin.ColumnBytes},
+				{Key: "uptime", Label: "Uptime", Type: plugin.ColumnNumber},
+			}},
+			{Title: "Configuration", Fields: []plugin.ObjectDetailField{
+				{Key: "cores", Label: "Cores", Type: plugin.ColumnNumber},
+				{Key: "sockets", Label: "Sockets", Type: plugin.ColumnNumber},
+				{Key: "memory", Label: "Configured memory", Type: plugin.ColumnBytes},
+				{Key: "ostype", Label: "OS type"},
+			}},
+		},
+		RawToggle: true,
+	}
+}
+
 // cpuMemMetrics declares the CPU/Memory gauges + time-series for the metrics
 // panel. Nodes, VMs, and containers all stream `{cpu, mem}` percentage frames.
 func cpuMemMetrics() plugin.MetricsConfig {
@@ -283,27 +317,27 @@ func whenStatus(statuses ...string) *plugin.Condition {
 func lifecycleActions(kind string) []plugin.Action {
 	gp := guestParams()
 	acts := []plugin.Action{
-		{ID: "act." + kind + ".start", Label: "Start", Icon: icon("play"), RouteID: "proxmox." + kind + ".start", Params: gp, EnabledWhen: whenStatus("stopped"), Group: "Power"},
-		{ID: "act." + kind + ".shutdown", Label: "Shutdown", Icon: icon("power"), RouteID: "proxmox." + kind + ".shutdown", Params: gp, Confirm: true, ConfirmText: "Gracefully shut down this guest?", EnabledWhen: whenStatus("running"), Group: "Power"},
-		{ID: "act." + kind + ".reboot", Label: "Reboot", Icon: icon("rotate-cw"), RouteID: "proxmox." + kind + ".reboot", Params: gp, Confirm: true, ConfirmText: "Reboot this guest?", EnabledWhen: whenStatus("running"), Group: "Power"},
-		{ID: "act." + kind + ".stop", Label: "Stop", Icon: icon("square"), RouteID: "proxmox." + kind + ".stop", Params: gp, Confirm: true, ConfirmText: "Force stop this guest? Unsaved state is lost.", EnabledWhen: whenStatus("running"), Group: "Power"},
-		{ID: "act." + kind + ".migrate", Label: "Migrate", Icon: icon("route"), RouteID: "proxmox." + kind + ".migrate", Params: gp, Group: "Manage"},
-		{ID: "act." + kind + ".snapshot.create", Label: "Snapshot", Icon: icon("camera"), RouteID: "proxmox." + kind + ".snapshot.create", Params: gp, OnSuccess: &plugin.ActionSuccess{SelectTab: "snapshots"}, Group: "Snapshots"},
-		{ID: "act." + kind + ".backup", Label: "Backup", Icon: icon("save"), RouteID: "proxmox." + kind + ".backup", Params: gp, OnSuccess: &plugin.ActionSuccess{SelectTab: "backups"}, Group: "Snapshots"},
+		{ID: "act." + kind + ".start", Label: "Start", Icon: icon("play"), RouteID: "proxmox." + kind + ".start", Params: gp, EnabledWhen: whenStatus("stopped"), VisibleWhen: instanceOnly(), Group: "Power"},
+		{ID: "act." + kind + ".shutdown", Label: "Shutdown", Icon: icon("power"), RouteID: "proxmox." + kind + ".shutdown", Params: gp, Confirm: true, ConfirmText: "Gracefully shut down this guest?", EnabledWhen: whenStatus("running"), VisibleWhen: instanceOnly(), Group: "Power"},
+		{ID: "act." + kind + ".reboot", Label: "Reboot", Icon: icon("rotate-cw"), RouteID: "proxmox." + kind + ".reboot", Params: gp, Confirm: true, ConfirmText: "Reboot this guest?", EnabledWhen: whenStatus("running"), VisibleWhen: instanceOnly(), Group: "Power"},
+		{ID: "act." + kind + ".stop", Label: "Stop", Icon: icon("square"), RouteID: "proxmox." + kind + ".stop", Params: gp, Confirm: true, ConfirmText: "Force stop this guest? Unsaved state is lost.", EnabledWhen: whenStatus("running"), VisibleWhen: instanceOnly(), Group: "Power"},
+		{ID: "act." + kind + ".migrate", Label: "Migrate", Icon: icon("route"), RouteID: "proxmox." + kind + ".migrate", Params: gp, VisibleWhen: instanceOnly(), Group: "Manage"},
+		{ID: "act." + kind + ".snapshot.create", Label: "Snapshot", Icon: icon("camera"), RouteID: "proxmox." + kind + ".snapshot.create", Params: gp, OnSuccess: &plugin.ActionSuccess{SelectTab: "snapshots"}, VisibleWhen: instanceOnly(), Group: "Snapshots"},
+		{ID: "act." + kind + ".backup", Label: "Backup", Icon: icon("save"), RouteID: "proxmox." + kind + ".backup", Params: gp, OnSuccess: &plugin.ActionSuccess{SelectTab: "backups"}, VisibleWhen: instanceOnly(), Group: "Snapshots"},
 		{ID: "act." + kind + ".clone", Label: "Clone", Icon: icon("copy"), RouteID: "proxmox." + kind + ".clone", Params: gp, Group: "Manage"},
-		{ID: "act." + kind + ".restore", Label: "Restore", Icon: icon("upload"), RouteID: "proxmox." + kind + ".restore", Params: map[string]string{"node": "${resource.namespace}"}, Confirm: true, ConfirmText: "Restore a guest from a backup archive?", Group: "Manage"},
+		{ID: "act." + kind + ".restore", Label: "Restore", Icon: icon("upload"), RouteID: "proxmox." + kind + ".restore", Params: map[string]string{"node": "${resource.namespace}"}, Confirm: true, ConfirmText: "Restore a guest from a backup archive?", VisibleWhen: instanceOnly(), Group: "Manage"},
 		{ID: "act." + kind + ".destroy", Label: "Destroy", Icon: icon("trash-2"), RouteID: "proxmox." + kind + ".destroy", Params: gp, Confirm: true, ConfirmText: "Destroy this guest and all its disks? This cannot be undone.", EnabledWhen: whenStatus("stopped")},
 	}
 	if kind == "qemu" {
 		acts = append(acts,
-			plugin.Action{ID: "act.qemu.suspend", Label: "Suspend", Icon: icon("power-off"), RouteID: "proxmox.qemu.suspend", Params: gp, Confirm: true, ConfirmText: "Suspend this VM to disk?", EnabledWhen: whenStatus("running"), Group: "Power"},
-			plugin.Action{ID: "act.qemu.resume", Label: "Resume", Icon: icon("play"), RouteID: "proxmox.qemu.resume", Params: gp, Group: "Power"},
-			plugin.Action{ID: "act.qemu.resize", Label: "Resize disk", Icon: icon("scaling"), RouteID: "proxmox.qemu.resize", Params: gp, Group: "Manage"},
+			plugin.Action{ID: "act.qemu.suspend", Label: "Suspend", Icon: icon("power-off"), RouteID: "proxmox.qemu.suspend", Params: gp, Confirm: true, ConfirmText: "Suspend this VM to disk?", EnabledWhen: whenStatus("running"), VisibleWhen: instanceOnly(), Group: "Power"},
+			plugin.Action{ID: "act.qemu.resume", Label: "Resume", Icon: icon("play"), RouteID: "proxmox.qemu.resume", Params: gp, VisibleWhen: instanceOnly(), Group: "Power"},
+			plugin.Action{ID: "act.qemu.resize", Label: "Resize disk", Icon: icon("scaling"), RouteID: "proxmox.qemu.resize", Params: gp, VisibleWhen: instanceOnly(), Group: "Manage"},
 		)
 	}
 	snapParams := map[string]string{"node": "${resource.namespace}", "vmid": "${resource.name}", "snapname": "${resource.uid}"}
 	return append(acts,
-		plugin.Action{ID: "act." + kind + ".snapshot.rollback", Label: "Rollback", Icon: icon("rotate-cw"), RouteID: "proxmox." + kind + ".snapshot.rollback", Params: snapParams, Confirm: true, ConfirmText: "Roll back to this snapshot? Current state is lost."},
-		plugin.Action{ID: "act." + kind + ".snapshot.delete", Label: "Delete", Icon: icon("trash"), RouteID: "proxmox." + kind + ".snapshot.delete", Params: snapParams, Confirm: true, ConfirmText: "Delete this snapshot?"},
+		plugin.Action{ID: "act." + kind + ".snapshot.rollback", Label: "Rollback", Icon: icon("rotate-cw"), RouteID: "proxmox." + kind + ".snapshot.rollback", Params: snapParams, Confirm: true, ConfirmText: "Roll back to this snapshot? Current state is lost.", VisibleWhen: instanceOnly()},
+		plugin.Action{ID: "act." + kind + ".snapshot.delete", Label: "Delete", Icon: icon("trash"), RouteID: "proxmox." + kind + ".snapshot.delete", Params: snapParams, Confirm: true, ConfirmText: "Delete this snapshot?", VisibleWhen: instanceOnly()},
 	)
 }

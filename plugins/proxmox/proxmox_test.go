@@ -125,6 +125,9 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		if page.Items[0]["kindIcon"] != "monitor" || page.Items[0]["mode"] != "Template" {
 			t.Fatalf("qemu presentation fields = %+v", page.Items[0])
 		}
+		if page.Items[0]["template"] != true {
+			t.Fatalf("qemu template flag = %+v", page.Items[0]["template"])
+		}
 		ref := page.Items[0]["ref"].(plugin.ResourceRef)
 		if ref.Namespace != "pve" || ref.UID != "100" {
 			t.Fatalf("qemu ref = %+v", ref)
@@ -197,6 +200,65 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 			t.Fatalf("storage ref = %+v", ref)
 		}
 	})
+}
+
+func TestTemplateUXContract(t *testing.T) {
+	m := New().Manifest()
+	actions := map[string]plugin.Action{}
+	for _, action := range m.Actions {
+		actions[action.ID] = action
+	}
+	for _, id := range []string{"act.qemu.start", "act.qemu.reboot", "act.qemu.migrate", "act.qemu.resize"} {
+		if actions[id].VisibleWhen == nil {
+			t.Fatalf("%s should be hidden for templates", id)
+		}
+	}
+	if actions["act.qemu.clone"].VisibleWhen != nil {
+		t.Fatalf("clone should remain visible for templates")
+	}
+
+	var qemu plugin.ResourceType
+	for _, resource := range m.Resources {
+		if resource.Kind == "qemu" {
+			qemu = resource
+			break
+		}
+	}
+	if qemu.Kind == "" {
+		t.Fatal("qemu resource missing")
+	}
+	for _, tab := range qemu.Detail.Tabs {
+		switch tab.Key {
+		case "metrics", "console", "snapshots":
+			if tab.VisibleWhen == nil {
+				t.Fatalf("%s tab should be hidden for templates", tab.Key)
+			}
+		case "summary", "hardware", "backups":
+			if tab.VisibleWhen != nil {
+				t.Fatalf("%s tab should remain visible for templates", tab.Key)
+			}
+		}
+	}
+}
+
+func TestMigrateUsesNodeOptions(t *testing.T) {
+	var field *plugin.Field
+	for _, group := range migrateSchema().Groups {
+		for i := range group.Fields {
+			if group.Fields[i].Key == "target" {
+				field = &group.Fields[i]
+			}
+		}
+	}
+	if field == nil {
+		t.Fatal("target field missing")
+	}
+	if field.Type != plugin.FieldSelect {
+		t.Fatalf("target field type = %q", field.Type)
+	}
+	if field.OptionsSource == nil || field.OptionsSource.RouteID != "proxmox.node.options" {
+		t.Fatalf("target options source = %+v", field.OptionsSource)
+	}
 }
 
 // --- helpers --------------------------------------------------------------

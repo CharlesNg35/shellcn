@@ -51,6 +51,18 @@ function isEnabled(action: Action): boolean {
       : [];
   return recs.every((rec) => recordMatches(cond, rec));
 }
+
+function isActionVisible(action: Action): boolean {
+  const cond = action.visibleWhen;
+  if (!cond) return true;
+  const recs = props.records?.length
+    ? props.records
+    : props.record
+      ? [props.record]
+      : [];
+  if (recs.length === 0) return true;
+  return recs.every((rec) => recordMatches(cond, rec));
+}
 const emit = defineEmits<{
   done: [action: Action, result?: Record<string, unknown>];
 }>();
@@ -81,7 +93,7 @@ type RenderUnit =
 const renderUnits = computed<RenderUnit[]>(() => {
   const groups = new Map<string, Extract<RenderUnit, { kind: "menu" }>>();
   const units: RenderUnit[] = [];
-  for (const action of props.actions) {
+  for (const action of props.actions.filter(isActionVisible)) {
     if (action.group) {
       let unit = groups.get(action.group);
       if (!unit) {

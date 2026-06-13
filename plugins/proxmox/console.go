@@ -22,14 +22,14 @@ import (
 // the ticket — so the password never leaves the gateway. The raw RFB stream is
 // then spliced to the browser's noVNC client.
 func (s *Session) openVMConsole(ctx context.Context, node, vmid string) (plugin.Channel, error) {
-	if node == "" || vmid == "" {
-		return nil, fmt.Errorf("%w: node and vmid are required", plugin.ErrInvalidInput)
+	if !validNode(node) || !validVMID(vmid) {
+		return nil, fmt.Errorf("%w: invalid node or vmid", plugin.ErrInvalidInput)
 	}
 	var vnc pmox.VNC
-	if err := s.client.Post(ctx, fmt.Sprintf("/nodes/%s/qemu/%s/vncproxy", node, vmid), pmox.VNCConfig{Websocket: true}, &vnc); err != nil {
+	if err := s.client.Post(ctx, pvePath("nodes", node, "qemu", vmid, "vncproxy"), pmox.VNCConfig{Websocket: true}, &vnc); err != nil {
 		return nil, fmt.Errorf("%w: open vnc proxy: %v", plugin.ErrUnavailable, err)
 	}
-	wsPath := fmt.Sprintf("/nodes/%s/qemu/%s/vncwebsocket?port=%d&vncticket=%s", node, vmid, int(vnc.Port), url.QueryEscape(vnc.Ticket))
+	wsPath := pvePath("nodes", node, "qemu", vmid, "vncwebsocket") + fmt.Sprintf("?port=%d&vncticket=%s", int(vnc.Port), url.QueryEscape(vnc.Ticket))
 	c, err := s.dialWS(ctx, wsPath)
 	if err != nil {
 		return nil, err
@@ -50,21 +50,21 @@ func (s *Session) openVMConsole(ctx context.Context, node, vmid string) (plugin.
 // xterm panel.
 func (s *Session) openTerminal(ctx context.Context, params map[string]string) (plugin.Channel, error) {
 	node := params["node"]
-	if node == "" {
-		return nil, fmt.Errorf("%w: node is required", plugin.ErrInvalidInput)
+	if !validNode(node) {
+		return nil, fmt.Errorf("%w: invalid node", plugin.ErrInvalidInput)
 	}
 	var proxyPath, wsPath string
 	switch params["kind"] {
 	case "lxc":
 		vmid := params["vmid"]
-		if vmid == "" {
-			return nil, fmt.Errorf("%w: vmid is required", plugin.ErrInvalidInput)
+		if !validVMID(vmid) {
+			return nil, fmt.Errorf("%w: invalid vmid", plugin.ErrInvalidInput)
 		}
-		proxyPath = fmt.Sprintf("/nodes/%s/lxc/%s/termproxy", node, vmid)
-		wsPath = fmt.Sprintf("/nodes/%s/lxc/%s/vncwebsocket", node, vmid)
+		proxyPath = pvePath("nodes", node, "lxc", vmid, "termproxy")
+		wsPath = pvePath("nodes", node, "lxc", vmid, "vncwebsocket")
 	case "node":
-		proxyPath = fmt.Sprintf("/nodes/%s/termproxy", node)
-		wsPath = fmt.Sprintf("/nodes/%s/vncwebsocket", node)
+		proxyPath = pvePath("nodes", node, "termproxy")
+		wsPath = pvePath("nodes", node, "vncwebsocket")
 	default:
 		return nil, fmt.Errorf("%w: unsupported terminal kind", plugin.ErrInvalidInput)
 	}

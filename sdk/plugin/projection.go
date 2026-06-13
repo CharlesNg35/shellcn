@@ -33,6 +33,7 @@ type ProjectedAction struct {
 	Panel           PanelType         `json:"panel,omitempty"`
 	Config          PanelConfig       `json:"config,omitempty"`
 	EnabledWhen     *Condition        `json:"enabledWhen,omitempty"`
+	VisibleWhen     *Condition        `json:"visibleWhen,omitempty"`
 	IconOnly        bool              `json:"iconOnly,omitempty"`
 	Group           string            `json:"group,omitempty"`
 }
@@ -134,6 +135,7 @@ func BuildProjection(m Manifest, routes map[string]Route) Projection {
 				Panel:           a.Panel,
 				Config:          a.Config,
 				EnabledWhen:     a.EnabledWhen,
+				VisibleWhen:     a.VisibleWhen,
 				IconOnly:        a.IconOnly,
 				Group:           a.Group,
 			}

@@ -21,15 +21,19 @@ var (
 	diskRe  = regexp.MustCompile(`^[a-z]+[0-9]+$`)
 	sizeRe  = regexp.MustCompile(`^\+?[1-9][0-9]*[KMGT]?$`)
 	nodeRe  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]*$`)
+	storeRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
+	snapRe  = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]+$`)
 	upidRe  = regexp.MustCompile(`^UPID:[A-Za-z0-9.\-]+:[0-9A-Fa-f]+:[0-9A-Fa-f]+:[0-9A-Fa-f]+:[A-Za-z0-9_-]+:[^:]*:[^:]+:$`)
 	powerOk = map[string]bool{"reboot": true, "shutdown": true}
 )
 
-func validVMID(s string) bool { return vmidRe.MatchString(s) }
-func validNode(s string) bool { return nodeRe.MatchString(s) }
-func validDisk(s string) bool { return diskRe.MatchString(s) }
-func validSize(s string) bool { return sizeRe.MatchString(s) }
-func validUPID(s string) bool { return upidRe.MatchString(s) }
+func validVMID(s string) bool     { return vmidRe.MatchString(s) }
+func validNode(s string) bool     { return nodeRe.MatchString(s) }
+func validDisk(s string) bool     { return diskRe.MatchString(s) }
+func validSize(s string) bool     { return sizeRe.MatchString(s) }
+func validStorage(s string) bool  { return storeRe.MatchString(s) }
+func validSnapName(s string) bool { return snapRe.MatchString(s) }
+func validUPID(s string) bool     { return upidRe.MatchString(s) }
 
 func validPowerCommand(s string) bool { return powerOk[s] }
 
@@ -80,6 +84,9 @@ func cloneBody(kind, newID, name, target, storage string, full bool) (map[string
 		body["target"] = target
 	}
 	if storage = strings.TrimSpace(storage); storage != "" {
+		if !validStorage(storage) {
+			return nil, fmt.Errorf("%w: invalid storage", plugin.ErrInvalidInput)
+		}
 		body["storage"] = storage
 	}
 	if full {
@@ -112,7 +119,7 @@ func guestClone(kind string) plugin.Handler {
 		if err != nil {
 			return nil, err
 		}
-		upid, err := s.postUPID(rc.Ctx, fmt.Sprintf("/nodes/%s/%s/%s/clone", node, kind, vmid), body)
+		upid, err := s.postUPID(rc.Ctx, pvePath("nodes", node, kind, vmid, "clone"), body)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +137,7 @@ func guestDestroy(kind string) plugin.Handler {
 		if !validNode(node) || !validVMID(vmid) {
 			return nil, fmt.Errorf("%w: invalid node or vmid", plugin.ErrInvalidInput)
 		}
-		path := fmt.Sprintf("/nodes/%s/%s/%s?purge=1&destroy-unreferenced-disks=1", node, kind, vmid)
+		path := pvePath("nodes", node, kind, vmid) + "?purge=1&destroy-unreferenced-disks=1"
 		upid, err := s.delUPID(rc.Ctx, path)
 		if err != nil {
 			return nil, err
@@ -156,6 +163,9 @@ func restoreBody(kind, vmid, archive, storage string, force bool) (map[string]an
 		body["archive"] = archive
 	}
 	if storage = strings.TrimSpace(storage); storage != "" {
+		if !validStorage(storage) {
+			return nil, fmt.Errorf("%w: invalid storage", plugin.ErrInvalidInput)
+		}
 		body["storage"] = storage
 	}
 	if force {
@@ -187,7 +197,7 @@ func guestRestore(kind string) plugin.Handler {
 		if err != nil {
 			return nil, err
 		}
-		upid, err := s.postUPID(rc.Ctx, fmt.Sprintf("/nodes/%s/%s", node, kind), body)
+		upid, err := s.postUPID(rc.Ctx, pvePath("nodes", node, kind), body)
 		if err != nil {
 			return nil, err
 		}
@@ -218,7 +228,7 @@ func qemuResize(rc *plugin.RequestContext) (any, error) {
 		return nil, fmt.Errorf("%w: size must be like 50G or +10G", plugin.ErrInvalidInput)
 	}
 	body := map[string]any{"disk": in.Disk, "size": in.Size}
-	upid, err := s.putUPID(rc.Ctx, fmt.Sprintf("/nodes/%s/qemu/%s/resize", node, vmid), body)
+	upid, err := s.putUPID(rc.Ctx, pvePath("nodes", node, "qemu", vmid, "resize"), body)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +253,7 @@ func nodePower(rc *plugin.RequestContext) (any, error) {
 	if !validPowerCommand(in.Command) {
 		return nil, fmt.Errorf("%w: command must be reboot or shutdown", plugin.ErrInvalidInput)
 	}
-	if err := s.post(rc.Ctx, "/nodes/"+node+"/status", map[string]any{"command": in.Command}); err != nil {
+	if err := s.post(rc.Ctx, pvePath("nodes", node, "status"), map[string]any{"command": in.Command}); err != nil {
 		return nil, err
 	}
 	return actionResult{OK: true}, nil
@@ -258,7 +268,7 @@ func taskStop(rc *plugin.RequestContext) (any, error) {
 	if !validNode(node) || !validUPID(upid) {
 		return nil, fmt.Errorf("%w: invalid node or task id", plugin.ErrInvalidInput)
 	}
-	if err := s.del(rc.Ctx, fmt.Sprintf("/nodes/%s/tasks/%s", node, upid)); err != nil {
+	if err := s.del(rc.Ctx, pvePath("nodes", node, "tasks", upid)); err != nil {
 		return nil, err
 	}
 	return actionResult{OK: true}, nil
@@ -273,7 +283,7 @@ func taskStatus(rc *plugin.RequestContext) (any, error) {
 	if !validNode(node) || !validUPID(upid) {
 		return nil, fmt.Errorf("%w: invalid node or task id", plugin.ErrInvalidInput)
 	}
-	return s.object(rc.Ctx, fmt.Sprintf("/nodes/%s/tasks/%s/status", node, upid))
+	return s.object(rc.Ctx, pvePath("nodes", node, "tasks", upid, "status"))
 }
 
 func taskLog(rc *plugin.RequestContext) (any, error) {
@@ -285,7 +295,7 @@ func taskLog(rc *plugin.RequestContext) (any, error) {
 	if !validNode(node) || !validUPID(upid) {
 		return nil, fmt.Errorf("%w: invalid node or task id", plugin.ErrInvalidInput)
 	}
-	lines, err := s.list(rc.Ctx, fmt.Sprintf("/nodes/%s/tasks/%s/log", node, upid))
+	lines, err := s.list(rc.Ctx, pvePath("nodes", node, "tasks", upid, "log"))
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +316,7 @@ func cloneSchema(kind string) *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Clone", Fields: []plugin.Field{
 		{Key: "newid", Label: "New VMID", Type: plugin.FieldNumber, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 100}, {Type: plugin.ValidatorMax, Value: 999999999}}},
 		{Key: "name", Label: nameLabel, Type: plugin.FieldText},
-		{Key: "target", Label: "Target node", Type: plugin.FieldText, Help: "Leave empty to clone on the same node."},
+		{Key: "target", Label: "Target node", Type: plugin.FieldSelect, OptionsSource: &plugin.DataSource{RouteID: "proxmox.node.options", Params: map[string]string{"node": "${resource.namespace}"}}, Help: "Leave empty to clone on the same node."},
 		{Key: "storage", Label: "Target storage", Type: plugin.FieldText, Help: "Required for a full clone to another storage."},
 		{Key: "full", Label: "Full clone", Type: plugin.FieldToggle, Help: "Copy all disks instead of a linked clone."},
 	}}}}
