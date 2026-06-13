@@ -195,11 +195,11 @@ func TestEngineShellCreateOptionsMountDockerSocket(t *testing.T) {
 	if got := opts.Config.Labels[engineShellLabel]; got != "true" {
 		t.Fatalf("shell label = %q, want true", got)
 	}
-	if got := opts.Config.Env; fmt.Sprint(got) != fmt.Sprint([]string{"DOCKER_HOST=unix:///var/run/docker.sock", "HOME=/root"}) {
+	if got := opts.Config.Env; fmt.Sprint(got) != fmt.Sprint([]string{"DOCKER_HOST=unix:///var/run/docker.sock", "HOME=" + engineShellHome}) {
 		t.Fatalf("shell env = %#v", got)
 	}
-	if opts.Config.WorkingDir != "/root" {
-		t.Fatalf("shell working dir = %q, want /root", opts.Config.WorkingDir)
+	if opts.Config.WorkingDir != engineShellHome {
+		t.Fatalf("shell working dir = %q, want %q", opts.Config.WorkingDir, engineShellHome)
 	}
 	if got := opts.HostConfig.Binds; fmt.Sprint(got) != fmt.Sprint([]string{"/run/docker.sock:/var/run/docker.sock:rw"}) {
 		t.Fatalf("shell binds = %#v", got)
@@ -214,8 +214,28 @@ func TestEngineShellCreateOptionsUsesTCPDockerHost(t *testing.T) {
 	if len(opts.HostConfig.Binds) != 0 {
 		t.Fatalf("tcp shell should not bind mount a socket: %#v", opts.HostConfig.Binds)
 	}
-	if got := opts.Config.Env; fmt.Sprint(got) != fmt.Sprint([]string{"DOCKER_HOST=tcp://docker.internal:2375", "HOME=/root"}) {
+	if got := opts.Config.Env; fmt.Sprint(got) != fmt.Sprint([]string{"DOCKER_HOST=tcp://docker.internal:2375", "HOME=" + engineShellHome}) {
 		t.Fatalf("tcp shell env = %#v", got)
+	}
+}
+
+func TestExecCreateOptionsUsesWorkingDir(t *testing.T) {
+	opts := execCreateOptions([]string{"/bin/sh"}, 90, 30, "  /root  ")
+	if opts.WorkingDir != engineShellHome {
+		t.Fatalf("exec working dir = %q, want %q", opts.WorkingDir, engineShellHome)
+	}
+	if !opts.AttachStdin || !opts.AttachStdout || !opts.AttachStderr || !opts.TTY {
+		t.Fatalf("exec attach/tty flags were not set: %#v", opts)
+	}
+	if opts.ConsoleSize.Width != 90 || opts.ConsoleSize.Height != 30 {
+		t.Fatalf("exec console size = %dx%d, want 90x30", opts.ConsoleSize.Width, opts.ConsoleSize.Height)
+	}
+}
+
+func TestExecCreateOptionsLeavesWorkingDirEmptyByDefault(t *testing.T) {
+	opts := execCreateOptions([]string{"/bin/sh"}, 80, 24, "")
+	if opts.WorkingDir != "" {
+		t.Fatalf("default exec working dir = %q, want empty", opts.WorkingDir)
 	}
 }
 

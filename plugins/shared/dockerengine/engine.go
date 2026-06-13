@@ -901,10 +901,11 @@ func (s *Session) openExec(ctx context.Context, params map[string]string) (plugi
 	}
 	cols := uintParam(params, "cols", 80)
 	rows := uintParam(params, "rows", 24)
+	workdir := strings.TrimSpace(params["workdir"])
 	commands := execCommands(params["command"])
 	var lastErr error
 	for i, cmd := range commands {
-		ch, err := s.openExecCommand(ctx, id, cmd, cols, rows)
+		ch, err := s.openExecCommand(ctx, id, cmd, cols, rows, workdir)
 		if err == nil {
 			return ch, nil
 		}
@@ -916,15 +917,8 @@ func (s *Session) openExec(ctx context.Context, params map[string]string) (plugi
 	return nil, lastErr
 }
 
-func (s *Session) openExecCommand(ctx context.Context, id string, cmd []string, cols, rows uint) (plugin.Channel, error) {
-	created, err := s.cli.ExecCreate(ctx, id, dockerclient.ExecCreateOptions{
-		AttachStdin:  true,
-		AttachStdout: true,
-		AttachStderr: true,
-		TTY:          true,
-		ConsoleSize:  dockerclient.ConsoleSize{Height: rows, Width: cols},
-		Cmd:          cmd,
-	})
+func (s *Session) openExecCommand(ctx context.Context, id string, cmd []string, cols, rows uint, workdir string) (plugin.Channel, error) {
+	created, err := s.cli.ExecCreate(ctx, id, execCreateOptions(cmd, cols, rows, workdir))
 	if err != nil {
 		return nil, DockerErr(err)
 	}
@@ -936,6 +930,18 @@ func (s *Session) openExecCommand(ctx context.Context, id string, cmd []string, 
 		return nil, DockerErr(err)
 	}
 	return &execChannel{cli: s.cli, execID: created.ID, resp: resp.HijackedResponse}, nil
+}
+
+func execCreateOptions(cmd []string, cols, rows uint, workdir string) dockerclient.ExecCreateOptions {
+	return dockerclient.ExecCreateOptions{
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
+		TTY:          true,
+		ConsoleSize:  dockerclient.ConsoleSize{Height: rows, Width: cols},
+		WorkingDir:   strings.TrimSpace(workdir),
+		Cmd:          cmd,
+	}
 }
 
 // WhenState gates an action on the row's "state" field.

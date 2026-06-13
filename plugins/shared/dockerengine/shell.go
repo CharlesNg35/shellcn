@@ -17,6 +17,7 @@ const (
 	engineShellImage     = "docker.io/library/docker:28-cli"
 	engineShellName      = "shellcn-docker-shell"
 	engineShellLabel     = "shellcn.io/docker-shell"
+	engineShellHome      = "/root"
 	engineShellKeepalive = "trap : TERM INT; sleep 2147483647 & wait"
 )
 
@@ -33,6 +34,7 @@ func EngineShellStream(rc *plugin.RequestContext, client plugin.ClientStream) er
 
 	params := streamParams(rc)
 	params["id"] = id
+	params["workdir"] = engineShellHome
 	ch, err := s.openExec(client.Context(), params)
 	if err != nil {
 		termshell.WriteExecError(client, err)
@@ -127,10 +129,10 @@ func engineShellCreateOptions(ep endpoint) dockerclient.ContainerCreateOptions {
 		Config: &container.Config{
 			Image:      engineShellImage,
 			Cmd:        []string{"/bin/sh", "-c", engineShellKeepalive},
-			Env:        append(env, "HOME=/root"),
+			Env:        append(env, "HOME="+engineShellHome),
 			OpenStdin:  true,
 			Tty:        true,
-			WorkingDir: "/root",
+			WorkingDir: engineShellHome,
 			Labels:     engineShellLabels(),
 			StopSignal: "SIGTERM",
 		},

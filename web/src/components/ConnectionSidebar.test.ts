@@ -85,7 +85,7 @@ describe("ConnectionSidebar", () => {
     await flushPromises();
 
     expect(scrollIntoView).toHaveBeenCalledWith({
-      block: "nearest",
+      block: "center",
       inline: "nearest",
       behavior: "auto",
     });
@@ -120,7 +120,7 @@ describe("ConnectionSidebar", () => {
       scrollIntoView.mock.contexts[0],
     );
     expect(scrollIntoView).toHaveBeenCalledWith({
-      block: "nearest",
+      block: "center",
       inline: "nearest",
       behavior: "auto",
     });
