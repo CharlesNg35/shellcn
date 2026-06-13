@@ -189,9 +189,8 @@ func TestDatabaseOverviewUsesGenericDashboard(t *testing.T) {
 	if cells["summary"].Type != plugin.PanelObjectDetail || cells["summary"].Source == nil || cells["summary"].Source.RouteID != "mongodb.database.overview" {
 		t.Fatalf("summary cell should render database overview details: %#v", cells["summary"])
 	}
-	collections := cells["collections"]
-	if collections.Type != plugin.PanelTable || collections.Source == nil || collections.Source.RouteID != "mongodb.collections.list" {
-		t.Fatalf("collections cell should render the collections table: %#v", collections)
+	if len(cells) != 1 {
+		t.Fatalf("database overview should not duplicate the Collections tab: %#v", cells)
 	}
 }
 

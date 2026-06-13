@@ -90,13 +90,28 @@ func databaseScope() plugin.ScopeFilter {
 	}
 }
 
-// overviewDashboard composes the server summary, connected clients, and pub/sub
-// channels into a single at-a-glance grid using the generic dashboard panel.
+func overviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Connection", Fields: []plugin.ObjectDetailField{
+				{Key: "address", Label: "Address", Copy: true},
+				{Key: "database", Label: "Database", Type: plugin.ColumnNumber},
+				{Key: "readOnly", Label: "Read only", Type: plugin.ColumnBool},
+			}},
+			{Title: "Activity", Fields: []plugin.ObjectDetailField{
+				{Key: "role", Label: "Role", Type: plugin.ColumnBadge},
+				{Key: "connected_clients", Label: "Clients", Type: plugin.ColumnNumber},
+				{Key: "instantaneous_ops_per_sec", Label: "Ops/sec", Type: plugin.ColumnNumber},
+			}},
+		},
+	}
+}
+
+// overviewDashboard keeps the first page compact. Full server INFO, clients,
+// and channels are available in their dedicated tabs.
 func overviewDashboard() plugin.DashboardConfig {
 	return plugin.DashboardConfig{Cells: []plugin.Panel{
-		{Key: "server", Label: "Server", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "redis.overview"}, Config: infoDetailConfig(), Span: 2},
-		{Key: "clients", Label: "Clients", Icon: icon("users"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.clients.list"}, Config: clientsTableConfig()},
-		{Key: "channels", Label: "Channels", Icon: icon("radio-tower"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.channels.list"}, Config: channelsTableConfig()},
+		{Key: "server", Label: "Server summary", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "redis.overview"}, Config: overviewDetailConfig(), Span: 2},
 	}}
 }
 

@@ -74,6 +74,14 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	if len(dash.Cells) == 0 || dash.Cells[0].Key != "server" || dash.Cells[0].Type != plugin.PanelObjectDetail {
 		t.Fatalf("server dashboard cell = %+v, want object_detail", dash.Cells)
 	}
+	if len(dash.Cells) != 1 {
+		t.Fatalf("overview should stay compact and avoid duplicating Clients/Channels tabs: %+v", dash.Cells)
+	}
+	if cfg, ok := dash.Cells[0].Config.(plugin.ObjectDetailConfig); !ok {
+		t.Fatalf("overview server config = %T, want object detail", dash.Cells[0].Config)
+	} else if cfg.RawToggle || hasSection(cfg, "Stats") {
+		t.Fatalf("overview server summary should not duplicate the Info tab: %#v", cfg)
+	}
 	for _, key := range []string{"clients", "channels"} {
 		tab, ok := tabs[key]
 		if !ok {

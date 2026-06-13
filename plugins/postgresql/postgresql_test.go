@@ -237,11 +237,8 @@ func TestDatabaseOverviewUsesGenericDashboard(t *testing.T) {
 	if cells["summary"].Type != plugin.PanelObjectDetail || cells["summary"].Source == nil || cells["summary"].Source.RouteID != "postgresql.database.overview" {
 		t.Fatalf("summary cell should render database overview details: %#v", cells["summary"])
 	}
-	for key, routeID := range map[string]string{"schemas": "postgresql.schemas.list", "tables": "postgresql.tables.list"} {
-		cell := cells[key]
-		if cell.Type != plugin.PanelTable || cell.Source == nil || cell.Source.RouteID != routeID {
-			t.Fatalf("%s cell should render %s table: %#v", key, routeID, cell)
-		}
+	if len(cells) != 1 {
+		t.Fatalf("database overview should not duplicate Schemas/Tables tabs: %#v", cells)
 	}
 }
 

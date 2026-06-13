@@ -109,7 +109,6 @@ func databaseOverviewDashboard() plugin.DashboardConfig {
 	databaseParams := map[string]string{"database": "${resource.uid}"}
 	return plugin.DashboardConfig{Cells: []plugin.Panel{
 		{Key: "summary", Label: "Summary", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mongodb.database.overview", Params: databaseParams}, Config: databaseOverviewDetailConfig(), Span: 2},
-		{Key: "collections", Label: "Collections", Icon: icon("folders"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.collections.list", Params: databaseParams}, Config: collectionsTableConfig([]string{"mongodb.collection.create"}, []string{"mongodb.collection.drop"})},
 	}}
 }
 
