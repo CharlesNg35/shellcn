@@ -172,8 +172,6 @@ func (s *Session) podFrame(ctx context.Context, namespace, name string) map[stri
 	frame["metricsAvailable"] = true
 	frame["cpu"] = milliToCores(cpuUse)
 	frame["mem"] = memUse
-	frame["cpuRequestPct"] = pct(cpuUse, reqCPU)
-	frame["memRequestPct"] = pct(memUse, reqMem)
 	if limCPU > 0 {
 		frame["cpuLimitPct"] = pct(cpuUse, limCPU)
 	}
