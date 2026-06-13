@@ -8,7 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charlesng35/shellcn/internal/cluster"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/store"
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
@@ -159,7 +161,9 @@ func TestRegistryRegisterResolveRemove(t *testing.T) {
 	if _, ok := reg.Dialer("c1"); ok {
 		t.Error("empty registry should have no dialer")
 	}
-	reg.Register("c1", func(context.Context, string, string) (net.Conn, error) { return nil, errors.New("via tunnel") })
+	if _, err := reg.Register(context.Background(), "c1", func(context.Context, string, string) (net.Conn, error) { return nil, errors.New("via tunnel") }); err != nil {
+		t.Fatalf("register tunnel: %v", err)
+	}
 
 	// An agent-mode connection now resolves through the registered dialer.
 	nt, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, reg, "")
@@ -174,6 +178,39 @@ func TestRegistryRegisterResolveRemove(t *testing.T) {
 	reg.Remove("c1")
 	if _, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, reg, ""); !errors.Is(err, transport.ErrAgentUnavailable) {
 		t.Errorf("after Remove: want ErrAgentUnavailable, got %v", err)
+	}
+}
+
+func TestRegistryRegisterReplacesClusterOwner(t *testing.T) {
+	owners := cluster.NewStoreOwnerRegistry(store.NewMemory().ClusterOwners)
+	a := transport.NewRegistry(transport.WithOwnerRegistry(owners, cluster.NewInstanceRef("a", "http://a")))
+	b := transport.NewRegistry(transport.WithOwnerRegistry(owners, cluster.NewInstanceRef("b", "http://b")))
+
+	registrationA, err := a.Register(context.Background(), "c1", func(context.Context, string, string) (net.Conn, error) {
+		return nil, errors.New("a")
+	})
+	if err != nil {
+		t.Fatalf("register a: %v", err)
+	}
+	registrationB, err := b.Register(context.Background(), "c1", func(context.Context, string, string) (net.Conn, error) {
+		return nil, errors.New("b")
+	})
+	if err != nil {
+		t.Fatalf("register b: %v", err)
+	}
+
+	owner, ok, err := owners.Get(context.Background(), cluster.AgentOwnerKey("c1"))
+	if err != nil || !ok {
+		t.Fatalf("owner lookup: ok=%v err=%v", ok, err)
+	}
+	if owner.Instance.ID != "b" {
+		t.Fatalf("owner = %q, want b", owner.Instance.ID)
+	}
+	if registrationA.Release().WasActive {
+		t.Fatal("old release must not remove newer owner")
+	}
+	if !registrationB.Release().WasActive {
+		t.Fatal("current release should remove active owner")
 	}
 }
 

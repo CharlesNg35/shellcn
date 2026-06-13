@@ -69,6 +69,7 @@ func TestStoreSuite(t *testing.T) {
 			t.Run("policies", func(t *testing.T) { testPolicies(t, f.open(t)) })
 			t.Run("recordings", func(t *testing.T) { testRecordings(t, f.open(t)) })
 			t.Run("pluginStorage", func(t *testing.T) { testPluginStorage(t, f.open(t)) })
+			t.Run("clusterOwners", func(t *testing.T) { testClusterOwners(t, f.open(t)) })
 		})
 	}
 }
@@ -154,6 +155,51 @@ func testUsers(t *testing.T, s *store.Store) {
 	}
 	if _, err := s.Users.GetByID(ctx, "u1"); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("get deleted: want ErrNotFound, got %v", err)
+	}
+}
+
+func testClusterOwners(t *testing.T, s *store.Store) {
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+	owner := &models.ClusterOwner{
+		Key:         "agent:c1",
+		InstanceID:  "instance-a",
+		InternalURL: "http://a",
+		LeaseID:     "lease-a",
+		ExpiresAt:   now.Add(time.Minute),
+	}
+	if _, err := s.ClusterOwners.Claim(ctx, owner, false, now); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	other := &models.ClusterOwner{
+		Key:         "agent:c1",
+		InstanceID:  "instance-b",
+		InternalURL: "http://b",
+		LeaseID:     "lease-b",
+		ExpiresAt:   now.Add(time.Minute),
+	}
+	if _, err := s.ClusterOwners.Claim(ctx, other, false, now); !errors.Is(err, models.ErrConflict) {
+		t.Fatalf("exclusive claim conflict: want ErrConflict, got %v", err)
+	}
+	got, err := s.ClusterOwners.Claim(ctx, other, true, now)
+	if err != nil {
+		t.Fatalf("replace claim: %v", err)
+	}
+	if got.InstanceID != "instance-b" || got.LeaseID != "lease-b" {
+		t.Fatalf("replace claim owner = %+v", got)
+	}
+	ok, err := s.ClusterOwners.Renew(ctx, "agent:c1", "lease-b", now.Add(2*time.Minute), now)
+	if err != nil || !ok {
+		t.Fatalf("renew active lease: ok=%v err=%v", ok, err)
+	}
+	if ok, err := s.ClusterOwners.Renew(ctx, "agent:c1", "lease-a", now.Add(2*time.Minute), now); err != nil || ok {
+		t.Fatalf("renew old lease should fail: ok=%v err=%v", ok, err)
+	}
+	if err := s.ClusterOwners.Release(ctx, "agent:c1", "lease-b"); err != nil {
+		t.Fatalf("release: %v", err)
+	}
+	if _, err := s.ClusterOwners.Get(ctx, "agent:c1", now); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("released owner: want ErrNotFound, got %v", err)
 	}
 }
 

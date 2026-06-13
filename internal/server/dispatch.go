@@ -164,6 +164,9 @@ func (s *Server) handleConnectionProxy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
+	if s.proxyIfRemoteOwner(w, r, conn, user.ID) {
+		return
+	}
 	handle, err := s.acquireSession(ctx, res)
 	if err != nil {
 		s.auditEvent(ctx, res, models.AuditError, err)
@@ -247,6 +250,10 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 			s.incAuthzFailure(err)
 		}
 		writeError(w, s.deps.Logger, err)
+		return
+	}
+
+	if s.proxyIfRemoteOwner(w, r, res.conn, res.user.ID) {
 		return
 	}
 

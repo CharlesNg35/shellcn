@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/charlesng35/shellcn/internal/cluster"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
@@ -58,6 +59,9 @@ type Options struct {
 	MaxChannelsPerSession int
 	HealthInterval        time.Duration
 	FailureRetention      time.Duration
+	OwnerRegistry         cluster.OwnerRegistry
+	Instance              cluster.InstanceRef
+	LeaseTTL              time.Duration
 }
 
 func (o Options) withDefaults() Options {
@@ -76,6 +80,9 @@ func (o Options) withDefaults() Options {
 	if o.FailureRetention <= 0 {
 		o.FailureRetention = 2 * time.Minute
 	}
+	if o.LeaseTTL <= 0 {
+		o.LeaseTTL = 45 * time.Second
+	}
 	return o
 }
 
@@ -91,6 +98,7 @@ type entry struct {
 	lastHealthCheck time.Time
 	reason          string
 	closed          bool
+	lease           cluster.Lease
 }
 
 type failure struct {
@@ -133,7 +141,19 @@ func (m *Manager) Acquire(ctx context.Context, key Key, userID string, connect C
 			return nil, ErrSessionLimit
 		}
 		now := m.now()
-		e = &entry{key: key, userID: userID, lastUsed: now, created: now}
+		var lease cluster.Lease
+		if m.opts.OwnerRegistry != nil {
+			var err error
+			lease, err = m.opts.OwnerRegistry.Claim(ctx, cluster.SessionOwnerKey(key.ConnectionID, key.OwnerScope), m.opts.Instance, cluster.ClaimOptions{
+				Mode: cluster.ClaimExclusive,
+				TTL:  m.opts.LeaseTTL,
+			})
+			if err != nil {
+				m.mu.Unlock()
+				return nil, err
+			}
+		}
+		e = &entry{key: key, userID: userID, lastUsed: now, created: now, lease: lease}
 		m.sessions[key] = e
 		delete(m.failures, key)
 	}
@@ -153,8 +173,13 @@ func (m *Manager) Acquire(ctx context.Context, key Key, userID string, connect C
 			e.reason = err.Error()
 			snap := e.snapshotLocked(StateError)
 			e.closed = true
+			lease := e.lease
+			e.lease = nil
 			e.mu.Unlock()
 			m.removeAndRememberFailure(key, e, snap)
+			if lease != nil {
+				_ = lease.Release(context.Background())
+			}
 			return nil, err
 		}
 		if err := sess.HealthCheck(ctx); err != nil {
@@ -164,8 +189,13 @@ func (m *Manager) Acquire(ctx context.Context, key Key, userID string, connect C
 			e.reason = err.Error()
 			snap := e.snapshotLocked(StateError)
 			e.closed = true
+			lease := e.lease
+			e.lease = nil
 			e.mu.Unlock()
 			m.removeAndRememberFailure(key, e, snap)
+			if lease != nil {
+				_ = lease.Release(context.Background())
+			}
 			return nil, err
 		}
 		e.sess = sess
@@ -320,13 +350,21 @@ func (m *Manager) IdleTimeout() time.Duration {
 
 func (e *entry) shutdown() {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	if e.closed {
+		e.mu.Unlock()
 		return
 	}
 	e.closed = true
-	if e.sess != nil {
-		_ = e.sess.Close()
+	sess := e.sess
+	lease := e.lease
+	e.sess = nil
+	e.lease = nil
+	e.mu.Unlock()
+	if sess != nil {
+		_ = sess.Close()
+	}
+	if lease != nil {
+		_ = lease.Release(context.Background())
 	}
 }
 
@@ -362,10 +400,18 @@ func (m *Manager) sweep() {
 		idle := e.channels == 0 && e.streams == 0 && m.now().Sub(e.lastUsed) > m.opts.IdleTimeout
 		sess := e.sess
 		closed := e.closed
+		lease := e.lease
 		e.mu.Unlock()
 
 		if closed {
 			continue
+		}
+		checkedAt := m.now()
+		if lease != nil {
+			if err := lease.Renew(ctx); err != nil {
+				m.failEntry(e, err, checkedAt)
+				continue
+			}
 		}
 		if idle {
 			m.Close(e.key)
@@ -374,7 +420,6 @@ func (m *Manager) sweep() {
 		if sess == nil {
 			continue
 		}
-		checkedAt := m.now()
 		if err := sess.HealthCheck(ctx); err != nil {
 			m.failEntry(e, err, checkedAt)
 			continue
@@ -408,11 +453,16 @@ func (m *Manager) failEntry(e *entry, err error, checkedAt time.Time) {
 	snap := e.snapshotLocked(StateError)
 	e.closed = true
 	sess := e.sess
+	lease := e.lease
 	e.sess = nil
+	e.lease = nil
 	e.mu.Unlock()
 
 	m.removeAndRememberFailure(e.key, e, snap)
 	if sess != nil {
 		_ = sess.Close()
+	}
+	if lease != nil {
+		_ = lease.Release(context.Background())
 	}
 }

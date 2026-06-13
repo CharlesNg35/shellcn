@@ -810,6 +810,64 @@ func (s *gormAIMessageStore) DeleteByConversation(ctx context.Context, conversat
 	return s.db.WithContext(ctx).Delete(&models.AIMessage{}, "conversation_id = ?", conversationID).Error
 }
 
+type gormClusterOwnerStore struct{ db *gorm.DB }
+
+func (s *gormClusterOwnerStore) Claim(ctx context.Context, owner *models.ClusterOwner, replace bool, now time.Time) (models.ClusterOwner, error) {
+	var out models.ClusterOwner
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var cur models.ClusterOwner
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&cur, "owner_key = ?", owner.Key).Error
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			out = *owner
+			out.CreatedAt = now
+			out.UpdatedAt = now
+			return tx.Create(&out).Error
+		case err != nil:
+			return err
+		}
+
+		if now.Before(cur.ExpiresAt) && !replace {
+			out = cur
+			return models.ErrConflict
+		}
+		cur.InstanceID = owner.InstanceID
+		cur.InternalURL = owner.InternalURL
+		cur.LeaseID = owner.LeaseID
+		cur.ExpiresAt = owner.ExpiresAt
+		cur.UpdatedAt = now
+		out = cur
+		return tx.Save(&cur).Error
+	})
+	return out, err
+}
+
+func (s *gormClusterOwnerStore) Get(ctx context.Context, key string, now time.Time) (models.ClusterOwner, error) {
+	var owner models.ClusterOwner
+	if err := s.db.WithContext(ctx).First(&owner, "owner_key = ?", key).Error; err != nil {
+		return models.ClusterOwner{}, normNotFound(err)
+	}
+	if !now.Before(owner.ExpiresAt) {
+		_ = s.db.WithContext(ctx).Delete(&models.ClusterOwner{}, "owner_key = ?", key).Error
+		return models.ClusterOwner{}, ErrNotFound
+	}
+	return owner, nil
+}
+
+func (s *gormClusterOwnerStore) Renew(ctx context.Context, key, leaseID string, expiresAt, now time.Time) (bool, error) {
+	res := s.db.WithContext(ctx).Model(&models.ClusterOwner{}).
+		Where("owner_key = ? AND lease_id = ? AND expires_at > ?", key, leaseID, now).
+		Updates(map[string]any{"expires_at": expiresAt, "updated_at": now})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected == 1, nil
+}
+
+func (s *gormClusterOwnerStore) Release(ctx context.Context, key, leaseID string) error {
+	return s.db.WithContext(ctx).Delete(&models.ClusterOwner{}, "owner_key = ? AND lease_id = ?", key, leaseID).Error
+}
+
 type gormEnrollmentStore struct{ db *gorm.DB }
 
 func (s *gormEnrollmentStore) Create(ctx context.Context, e *models.AgentEnrollment) error {
