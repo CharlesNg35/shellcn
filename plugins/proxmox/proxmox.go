@@ -232,6 +232,7 @@ func storageColumns() []plugin.Column {
 		{Key: "node", Label: "Node", Sortable: true},
 		{Key: "type", Label: "Type", Sortable: true},
 		{Key: "content", Label: "Content"},
+		{Key: "usedPct", Label: "Used", Type: plugin.ColumnPercent, Sortable: true, Precision: oneDecimal()},
 		{Key: "used", Label: "Used", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "total", Label: "Total", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Severities: statusSeverities},
@@ -282,10 +283,8 @@ func guestOverviewConfig() plugin.ObjectDetailConfig {
 				{Key: "tags", Label: "Tags"},
 			}},
 			{Title: "Runtime", Fields: []plugin.ObjectDetailField{
-				{Key: "cpu", Label: "CPU", Type: plugin.ColumnPercent},
-				{Key: "mem", Label: "Memory used", Type: plugin.ColumnBytes},
-				{Key: "maxmem", Label: "Memory limit", Type: plugin.ColumnBytes},
-				{Key: "memPct", Label: "Memory usage", Type: plugin.ColumnPercent},
+				{Key: "cpu", Label: "CPU usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpu", TotalKey: "cpuTotal", TotalType: plugin.ColumnNumber, TotalLabel: "of", Unit: "CPU(s)", WarnAt: 75, CriticalAt: 90}},
+				{Key: "memPct", Label: "Memory usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "memPct", UsedKey: "mem", TotalKey: "maxmem", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 80, CriticalAt: 95}},
 				{Key: "uptime", Label: "Uptime", Type: plugin.ColumnNumber},
 				{Key: "lock", Label: "Lock"},
 				{Key: "ha", Label: "HA state"},
@@ -402,13 +401,12 @@ func mountFields() []plugin.ObjectDetailField {
 	return fields
 }
 
-// cpuMemMetrics declares the CPU/Memory gauges + time-series for the metrics
-// panel. Nodes, VMs, and containers all stream `{cpu, mem}` percentage frames.
+// cpuMemMetrics declares compact CPU/Memory usage rows plus history lines.
 func cpuMemMetrics() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
-		Gauges: []plugin.MetricGauge{
-			{Key: "cpu", Label: "CPU", Unit: "%", Max: 100},
-			{Key: "mem", Label: "Memory", Unit: "%", Max: 100},
+		Usage: []plugin.MetricUsage{
+			{Key: "cpu", Label: "CPU usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpu", TotalKey: "cpuTotal", TotalType: plugin.ColumnNumber, TotalLabel: "of", Unit: "CPU(s)", WarnAt: 75, CriticalAt: 90}},
+			{Key: "mem", Label: "Memory usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "mem", UsedKey: "memUsed", TotalKey: "memTotal", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 80, CriticalAt: 95}},
 		},
 		Series: []plugin.MetricSeries{
 			{Key: "cpu", Label: "CPU", Unit: "%"},

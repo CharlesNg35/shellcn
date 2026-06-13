@@ -75,7 +75,7 @@ func databaseResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mongodb.database.overview", Params: map[string]string{"database": "${resource.uid}"}}, Config: databaseOverviewDetailConfig()},
+				{Key: "overview", Label: "Overview", Icon: icon("gauge"), Type: plugin.PanelDashboard, Config: databaseOverviewDashboard()},
 				{Key: "collections", Label: "Collections", Icon: icon("folders"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.collections.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: collectionsTableConfig([]string{"mongodb.collection.create"}, []string{"mongodb.collection.drop"})},
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mongodb.command", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.uid}"}}, Config: commandConfig(`{"serverStatus": 1}`)},
 			},
@@ -103,6 +103,14 @@ func collectionResource() plugin.ResourceType {
 			},
 		},
 	}
+}
+
+func databaseOverviewDashboard() plugin.DashboardConfig {
+	databaseParams := map[string]string{"database": "${resource.uid}"}
+	return plugin.DashboardConfig{Cells: []plugin.Panel{
+		{Key: "summary", Label: "Summary", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mongodb.database.overview", Params: databaseParams}, Config: databaseOverviewDetailConfig(), Span: 2},
+		{Key: "collections", Label: "Collections", Icon: icon("folders"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.collections.list", Params: databaseParams}, Config: collectionsTableConfig([]string{"mongodb.collection.create"}, []string{"mongodb.collection.drop"})},
+	}}
 }
 
 func databaseOverviewDetailConfig() plugin.ObjectDetailConfig {

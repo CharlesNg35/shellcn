@@ -41,6 +41,31 @@ func TestAttributesTabIsStagedEditableGrid(t *testing.T) {
 	}
 }
 
+func TestEntryOverviewUsesObjectDetail(t *testing.T) {
+	var overview *plugin.Panel
+	for _, res := range New().Manifest().Resources {
+		if res.Kind != "entry" {
+			continue
+		}
+		for i := range res.Detail.Tabs {
+			if res.Detail.Tabs[i].Key == "overview" {
+				overview = &res.Detail.Tabs[i]
+				break
+			}
+		}
+	}
+	if overview == nil {
+		t.Fatal("entry overview tab missing")
+	}
+	if overview.Type != plugin.PanelObjectDetail || overview.Source == nil || overview.Source.RouteID != "ldap.entry.overview" {
+		t.Fatalf("entry overview panel = %+v", overview)
+	}
+	cfg, ok := overview.Config.(plugin.ObjectDetailConfig)
+	if !ok || !cfg.RawToggle || len(cfg.Sections) < 2 {
+		t.Fatalf("entry overview config = %#v", overview.Config)
+	}
+}
+
 func TestEntryResourceExposesDirectoryBrowserColumnsAndSubtreeNavigation(t *testing.T) {
 	var entry plugin.ResourceType
 	for _, res := range New().Manifest().Resources {

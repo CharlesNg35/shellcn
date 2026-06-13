@@ -64,6 +64,8 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 		t.Fatalf("info config = %#v, want raw-toggle object detail", info.Config)
 	} else if len(cfg.Sections) < 4 {
 		t.Fatalf("info should expose structured overview sections, got %#v", cfg.Sections)
+	} else if !hasUsageField(cfg, "used_memory") {
+		t.Fatalf("info should render Redis memory as a generic usage field: %#v", cfg.Sections)
 	}
 	dash, ok := m.Tabs[0].Config.(plugin.DashboardConfig)
 	if !ok {
@@ -100,6 +102,40 @@ func TestRedisClientTableShowsOperationalColumns(t *testing.T) {
 	if cols["omem"].Type != plugin.ColumnBytes {
 		t.Fatalf("output memory should render as bytes: %#v", cols["omem"])
 	}
+}
+
+func TestOverviewInfoKeysCoverOperationalSummary(t *testing.T) {
+	keys := map[string]bool{}
+	for _, key := range overviewInfoKeys() {
+		keys[key] = true
+	}
+	for _, key := range []string{
+		"role",
+		"connected_clients",
+		"blocked_clients",
+		"used_memory",
+		"used_memory_peak",
+		"used_memory_human",
+		"used_memory_peak_human",
+		"instantaneous_ops_per_sec",
+		"keyspace_hits",
+		"keyspace_misses",
+	} {
+		if !keys[key] {
+			t.Fatalf("overview payload should include %s", key)
+		}
+	}
+}
+
+func hasUsageField(cfg plugin.ObjectDetailConfig, key string) bool {
+	for _, section := range cfg.Sections {
+		for _, field := range section.Fields {
+			if field.Key == key && field.Usage != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func TestParseCommand(t *testing.T) {

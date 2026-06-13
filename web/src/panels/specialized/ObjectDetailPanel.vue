@@ -4,7 +4,6 @@ import Panel from "primevue/panel";
 import Button from "primevue/button";
 import { fetchDoc } from "@/api/dataSource";
 import type {
-  ColumnType,
   ObjectDetailField,
   ObjectDetailPanelConfig,
   ObjectDetailSection,
@@ -15,7 +14,8 @@ import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "@/components/SkeletonList.vue";
 import AppIcon from "@/components/AppIcon.vue";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
-import { badgeClassFor } from "../shared/severity";
+import ObjectDetailFieldRow from "./ObjectDetailFieldRow.vue";
+import { formatValue, humanize, valueFor } from "./objectDetailFormat";
 
 const props = defineProps<PanelProps>();
 
@@ -39,13 +39,6 @@ function record(): Row {
   return doc.value && typeof doc.value === "object" && !Array.isArray(doc.value)
     ? (doc.value as Row)
     : {};
-}
-
-function humanize(key: string): string {
-  const spaced = key
-    .replace(/[_-]+/g, " ")
-    .replace(/([a-z\d])([A-Z])/g, "$1 $2");
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
 const sections = computed<ObjectDetailSection[]>(() => {
@@ -81,33 +74,8 @@ async function load(): Promise<void> {
   }
 }
 
-function valueFor(field: ObjectDetailField): unknown {
-  return record()[field.key];
-}
-
-function formatBytes(value: number): string {
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let n = value;
-  let i = 0;
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024;
-    i += 1;
-  }
-  return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-function formatValue(value: unknown, type?: ColumnType): string {
-  if (value === undefined || value === null || value === "") return "—";
-  if (type === "bytes" && typeof value === "number") return formatBytes(value);
-  if (type === "datetime" && typeof value === "string")
-    return new Date(value).toLocaleString();
-  if (type === "json" || typeof value === "object")
-    return JSON.stringify(value, null, 2);
-  return String(value);
-}
-
 async function copy(field: ObjectDetailField): Promise<void> {
-  const value = formatValue(valueFor(field), field.type);
+  const value = formatValue(valueFor(record(), field), field.type);
   if (!navigator.clipboard || value === "—") return;
   await navigator.clipboard.writeText(value);
   copiedKey.value = field.key;
@@ -188,51 +156,14 @@ onUnmounted(clearCopiedTimer);
             :header="section.title"
           >
             <dl class="divide-y divide-surface-100 dark:divide-surface-800">
-              <div
+              <ObjectDetailFieldRow
                 v-for="field in section.fields ?? []"
                 :key="field.key"
-                class="grid grid-cols-[minmax(8rem,14rem)_1fr_auto] items-start gap-3 px-4 py-2.5 text-sm"
-              >
-                <dt class="text-surface-500 dark:text-surface-400">
-                  {{ field.label ?? humanize(field.key) }}
-                </dt>
-                <dd
-                  class="min-w-0 wrap-break-word whitespace-pre-wrap text-surface-900 dark:text-surface-100"
-                >
-                  <span v-if="field.redacted" class="font-mono text-surface-400"
-                    >********</span
-                  >
-                  <span
-                    v-else-if="field.type === 'badge'"
-                    class="inline-block max-w-full truncate rounded-full px-2 py-0.5 align-bottom text-xs"
-                    :class="badgeClassFor(field.severities, valueFor(field))"
-                    >{{ formatValue(valueFor(field), field.type) }}</span
-                  >
-                  <span v-else>{{
-                    formatValue(valueFor(field), field.type)
-                  }}</span>
-                </dd>
-                <Button
-                  v-if="field.copy && !field.redacted"
-                  type="button"
-                  text
-                  rounded
-                  severity="secondary"
-                  :title="copiedKey === field.key ? 'Copied' : 'Copy value'"
-                  :aria-label="
-                    copiedKey === field.key ? 'Copied' : 'Copy value'
-                  "
-                  @click="copy(field)"
-                >
-                  <AppIcon
-                    :icon="{
-                      type: 'lucide',
-                      value: copiedKey === field.key ? 'check' : 'copy',
-                    }"
-                    :size="14"
-                  />
-                </Button>
-              </div>
+                :field="field"
+                :record="record()"
+                :copied="copiedKey === field.key"
+                @copy="copy"
+              />
             </dl>
           </Panel>
         </div>

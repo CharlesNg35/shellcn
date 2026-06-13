@@ -58,6 +58,58 @@ describe("ObjectDetailPanel", () => {
     expect(wrapper.text()).not.toContain("secret");
   });
 
+  it("renders generic usage fields with used and total values", async () => {
+    fetchDoc.mockResolvedValue({
+      memPct: 14.72,
+      mem: 2534030705,
+      maxmem: 17179869184,
+    });
+    const wrapper = mount(ObjectDetailPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "x.object" },
+        config: {
+          sections: [
+            {
+              title: "Runtime",
+              fields: [
+                {
+                  key: "memPct",
+                  label: "Memory usage",
+                  type: "percent",
+                  usage: {
+                    percentKey: "memPct",
+                    usedKey: "mem",
+                    totalKey: "maxmem",
+                    usedType: "bytes",
+                    totalType: "bytes",
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+      global: {
+        stubs: {
+          CodeTextEditor: true,
+          AppIcon: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Memory usage");
+    expect(wrapper.text()).toContain("14.7%");
+    expect(wrapper.text()).toContain("2.4 GiB");
+    expect(wrapper.text()).toContain("16.0 GiB");
+    const progress = wrapper.findComponent({ name: "ProgressBar" });
+    expect(progress.exists()).toBe(true);
+    expect(progress.props("pt")).toMatchObject({
+      value: expect.stringContaining("h-full"),
+    });
+  });
+
   it("keeps existing fields visible during refresh", async () => {
     let resolveRefresh:
       | ((value: { name: string; status: string }) => void)

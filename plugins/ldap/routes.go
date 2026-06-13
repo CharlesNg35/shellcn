@@ -34,6 +34,7 @@ func routes() []plugin.Route {
 		{ID: "ldap.entries.search", Method: plugin.MethodGet, Path: "/entries", Permission: "ldap.entries.read", Risk: plugin.RiskSafe, AuditEvent: "ldap.entries.search", Handle: searchEntries},
 		{ID: "ldap.entry.children", Method: plugin.MethodGet, Path: "/entries/children", Permission: "ldap.entries.read", Risk: plugin.RiskSafe, AuditEvent: "ldap.entry.children", Handle: childEntries},
 		{ID: "ldap.entries.options", Method: plugin.MethodGet, Path: "/entries/options", Permission: "ldap.entries.read", Risk: plugin.RiskSafe, AuditEvent: "ldap.entries.options", Handle: entryOptions},
+		{ID: "ldap.entry.overview", Method: plugin.MethodGet, Path: "/entries/overview", Permission: "ldap.entries.read", Risk: plugin.RiskSafe, AuditEvent: "ldap.entry.overview", Handle: entryOverview},
 		{ID: "ldap.entry.attributes", Method: plugin.MethodGet, Path: "/entries/attributes", Permission: "ldap.entries.read", Risk: plugin.RiskSafe, AuditEvent: "ldap.entry.attributes", Handle: entryAttributes},
 		{ID: "ldap.entry.ldif", Method: plugin.MethodGet, Path: "/entries/ldif", Permission: "ldap.entries.read", Risk: plugin.RiskSafe, AuditEvent: "ldap.entry.ldif", Handle: entryLDIF},
 
@@ -274,6 +275,24 @@ func entryAttributes(rc *plugin.RequestContext) (any, error) {
 		return fmt.Sprint(rows[i]["attribute"]) < fmt.Sprint(rows[j]["attribute"])
 	})
 	return pageRows(rc, rows)
+}
+
+func entryOverview(rc *plugin.RequestContext) (any, error) {
+	s, err := ldapSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	dn, err := dnParam(rc)
+	if err != nil {
+		return nil, err
+	}
+	entry, err := lookupEntry(s, dn)
+	if err != nil {
+		return nil, err
+	}
+	out := entryRow(entry, s.opts.ReadOnly)
+	out["attributeCount"] = len(entry.Attributes)
+	return out, nil
 }
 
 func entryLDIF(rc *plugin.RequestContext) (any, error) {

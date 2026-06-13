@@ -81,6 +81,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 			Properties: props(
 				prop("stats", array(metricItem(false))),
 				prop("gauges", array(metricItem(true))),
+				prop("usage", array(objectDetailField())),
 				prop("series", array(metricItem(false))),
 				prop("history", number()),
 			),
@@ -429,11 +430,29 @@ func objectDetailField() PanelConfigProperty {
 			prop("key", stringProp()),
 			prop("label", stringProp()),
 			prop("type", stringProp()),
+			prop("usage", objectDetailUsage()),
 			prop("copy", boolProp()),
 			prop("redacted", boolProp()),
 			prop("severities", stringMap()),
 		),
 		Required: []string{"key"},
+	}
+}
+
+func objectDetailUsage() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("percentKey", stringProp()),
+			prop("usedKey", stringProp()),
+			prop("totalKey", stringProp()),
+			prop("usedType", stringProp()),
+			prop("totalType", stringProp()),
+			prop("unit", stringProp()),
+			prop("totalLabel", stringProp()),
+			prop("warnAt", number()),
+			prop("criticalAt", number()),
+		),
 	}
 }
 

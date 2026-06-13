@@ -162,19 +162,15 @@ func systemDetailConfig() plugin.ObjectDetailConfig {
 				{Key: "cpuVendor", Label: "CPU vendor"},
 				{Key: "cpuCores", Label: "CPU cores", Type: plugin.ColumnNumber},
 				{Key: "cpuMhz", Label: "CPU MHz", Type: plugin.ColumnNumber},
-				{Key: "cpuPct", Label: "CPU used", Type: plugin.ColumnPercent},
+				{Key: "cpuPct", Label: "CPU used", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpuPct", TotalKey: "cpuCores", TotalType: plugin.ColumnNumber, TotalLabel: "of", WarnAt: 75, CriticalAt: 90}},
 				{Key: "load1", Label: "Load 1m", Type: plugin.ColumnNumber},
 				{Key: "load5", Label: "Load 5m", Type: plugin.ColumnNumber},
 				{Key: "load15", Label: "Load 15m", Type: plugin.ColumnNumber},
 			}},
 			{Title: "Memory", Fields: []plugin.ObjectDetailField{
-				{Key: "memTotal", Label: "Memory total", Type: plugin.ColumnBytes},
-				{Key: "memUsed", Label: "Memory used", Type: plugin.ColumnBytes},
+				{Key: "memPct", Label: "Memory used", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "memPct", UsedKey: "memUsed", TotalKey: "memTotal", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 80, CriticalAt: 95}},
 				{Key: "memAvailable", Label: "Memory available", Type: plugin.ColumnBytes},
-				{Key: "memPct", Label: "Memory used", Type: plugin.ColumnPercent},
-				{Key: "swapTotal", Label: "Swap total", Type: plugin.ColumnBytes},
-				{Key: "swapUsed", Label: "Swap used", Type: plugin.ColumnBytes},
-				{Key: "swapPct", Label: "Swap used", Type: plugin.ColumnPercent},
+				{Key: "swapPct", Label: "Swap used", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "swapPct", UsedKey: "swapUsed", TotalKey: "swapTotal", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 20, CriticalAt: 60}},
 			}},
 			{Title: "Virtualization", Fields: []plugin.ObjectDetailField{
 				{Key: "virtualizationSystem", Label: "System"},
@@ -187,16 +183,10 @@ func systemDetailConfig() plugin.ObjectDetailConfig {
 	}
 }
 
-// summaryConfig is the full-width header card: the CPU/Mem/Swap gauges plus the
-// process/load stats. The line charts live in their own cells (below) so they
-// can sit in a grid.
+// summaryConfig is the full-width header card for operational counts. Capacity
+// usage lives in the CPU & Memory cell so the dashboard does not duplicate it.
 func summaryConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
-		Gauges: []plugin.MetricGauge{
-			{Key: "cpuPct", Label: "CPU", Unit: "%", Max: 100},
-			{Key: "memPct", Label: "Memory", Unit: "%", Max: 100},
-			{Key: "swapPct", Label: "Swap", Unit: "%", Max: 100},
-		},
 		Stats: []plugin.MetricStat{
 			{Key: "processes", Label: "Processes"},
 			{Key: "sessions", Label: "Sessions"},
@@ -209,6 +199,11 @@ func summaryConfig() plugin.MetricsConfig {
 // cpuMemConfig charts CPU and Memory over time on one shared 0–100 axis.
 func cpuMemConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
+		Usage: []plugin.MetricUsage{
+			{Key: "cpuPct", Label: "CPU usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpuPct", WarnAt: 75, CriticalAt: 90}},
+			{Key: "memPct", Label: "Memory usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "memPct", UsedKey: "memUsed", TotalKey: "memTotal", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 80, CriticalAt: 95}},
+			{Key: "swapPct", Label: "Swap usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "swapPct", UsedKey: "swapUsed", TotalKey: "swapTotal", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 20, CriticalAt: 60}},
+		},
 		Series: []plugin.MetricSeries{
 			{Key: "cpuPct", Label: "CPU", Unit: "%"},
 			{Key: "memPct", Label: "Memory", Unit: "%"},

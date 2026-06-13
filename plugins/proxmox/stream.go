@@ -13,8 +13,7 @@ import (
 const metricsInterval = 2 * time.Second
 
 // guestMetrics streams live CPU/memory for a VM or container by polling its
-// status endpoint and emitting `{cpu, mem}` percentage frames for the metrics
-// panel.
+// status endpoint.
 func guestMetrics(kind string) plugin.StreamHandler {
 	return func(rc *plugin.RequestContext, client plugin.ClientStream) error {
 		node, vmid, err := requireGuest(rc)
@@ -60,15 +59,29 @@ func metricsLoop(rc *plugin.RequestContext, client plugin.ClientStream, statusPa
 
 func metricFrame(status row) map[string]any {
 	cpu := round1(numFloat(status["cpu"]) * 100)
+	cpuTotal := numInt(status["cpus"])
+	if cpuTotal == 0 {
+		cpuTotal = numInt(status["maxcpu"])
+	}
+	memUsed := numInt(status["mem"])
+	memTotal := numInt(status["maxmem"])
 	var memPct float64
-	if maxmem := numFloat(status["maxmem"]); maxmem > 0 {
-		memPct = numFloat(status["mem"]) / maxmem * 100
+	if memTotal > 0 {
+		memPct = float64(memUsed) / float64(memTotal) * 100
 	} else if mem, ok := status["memory"].(map[string]any); ok {
 		if total := numFloat(mem["total"]); total > 0 {
-			memPct = numFloat(mem["used"]) / total * 100
+			memUsed = numInt(mem["used"])
+			memTotal = numInt(mem["total"])
+			memPct = float64(memUsed) / total * 100
 		}
 	}
-	return map[string]any{"cpu": cpu, "mem": round1(memPct)}
+	return map[string]any{
+		"cpu":      cpu,
+		"cpuTotal": cpuTotal,
+		"mem":      round1(memPct),
+		"memUsed":  memUsed,
+		"memTotal": memTotal,
+	}
 }
 
 // vmConsole splices the authenticated upstream RFB stream to the browser's noVNC

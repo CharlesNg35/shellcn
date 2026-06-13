@@ -162,6 +162,38 @@ func TestTableInspectorTabsIncludeDDL(t *testing.T) {
 	t.Fatal("table resource missing DDL tab")
 }
 
+func TestDatabaseOverviewUsesGenericDashboard(t *testing.T) {
+	m := New().Manifest()
+	var overview plugin.Panel
+	for _, res := range m.Resources {
+		if res.Kind != "database" {
+			continue
+		}
+		for _, tab := range res.Detail.Tabs {
+			if tab.Key == "overview" {
+				overview = tab
+			}
+		}
+	}
+	cfg, ok := overview.Config.(plugin.DashboardConfig)
+	if overview.Type != plugin.PanelDashboard || !ok {
+		t.Fatalf("database overview should be a generic dashboard: %#v", overview)
+	}
+	cells := map[string]plugin.Panel{}
+	for _, cell := range cfg.Cells {
+		cells[cell.Key] = cell
+	}
+	if cells["summary"].Type != plugin.PanelObjectDetail || cells["summary"].Source == nil || cells["summary"].Source.RouteID != "mysql.database.overview" {
+		t.Fatalf("summary cell should render database overview details: %#v", cells["summary"])
+	}
+	for key, routeID := range map[string]string{"tables": "mysql.tables.list", "views": "mysql.views.list", "routines": "mysql.routines.list"} {
+		cell := cells[key]
+		if cell.Type != plugin.PanelTable || cell.Source == nil || cell.Source.RouteID != routeID {
+			t.Fatalf("%s cell should render %s table: %#v", key, routeID, cell)
+		}
+	}
+}
+
 func TestMySQLConstraintAndIndexFormsUsePickers(t *testing.T) {
 	constraints := routeInputSchema(t, New(), "mysql.constraint.add")
 	for _, key := range []string{"ref_database", "ref_table"} {

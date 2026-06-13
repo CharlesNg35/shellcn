@@ -100,12 +100,12 @@ func TestTermFraming(t *testing.T) {
 }
 
 func TestMetricFrame(t *testing.T) {
-	guest := metricFrame(row{"cpu": 0.5, "mem": float64(512), "maxmem": float64(1024)})
-	if guest["cpu"] != 50.0 || guest["mem"] != 50.0 {
+	guest := metricFrame(row{"cpu": 0.5, "cpus": float64(4), "mem": float64(512), "maxmem": float64(1024)})
+	if guest["cpu"] != 50.0 || guest["cpuTotal"] != int64(4) || guest["mem"] != 50.0 || guest["memUsed"] != int64(512) || guest["memTotal"] != int64(1024) {
 		t.Fatalf("guest metric = %+v", guest)
 	}
-	node := metricFrame(row{"cpu": 0.1, "memory": map[string]any{"used": float64(1), "total": float64(4)}})
-	if node["cpu"] != 10.0 || node["mem"] != 25.0 {
+	node := metricFrame(row{"cpu": 0.1, "maxcpu": float64(8), "memory": map[string]any{"used": float64(1), "total": float64(4)}})
+	if node["cpu"] != 10.0 || node["cpuTotal"] != int64(8) || node["mem"] != 25.0 || node["memUsed"] != int64(1) || node["memTotal"] != int64(4) {
 		t.Fatalf("node metric = %+v", node)
 	}
 }
@@ -207,6 +207,9 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		}
 		if local == nil {
 			t.Fatalf("local storage row missing: %+v", page.Items)
+		}
+		if local["usedPct"] != 10.0 {
+			t.Fatalf("storage usedPct = %+v", local["usedPct"])
 		}
 		ref := local["ref"].(plugin.ResourceRef)
 		if ref.Kind != "storage" || ref.Namespace != "pve" || ref.UID != "local" {
@@ -329,6 +332,22 @@ func TestBackupUXContract(t *testing.T) {
 	}
 }
 
+func TestStorageColumnsExposeCapacityUsage(t *testing.T) {
+	var usedPct *plugin.Column
+	for _, column := range storageColumns() {
+		if column.Key == "usedPct" {
+			usedPct = &column
+			break
+		}
+	}
+	if usedPct == nil {
+		t.Fatal("storage columns missing usedPct")
+	}
+	if usedPct.Type != plugin.ColumnPercent || usedPct.Precision == nil || *usedPct.Precision != 1 {
+		t.Fatalf("storage usedPct column = %+v", usedPct)
+	}
+}
+
 func TestBackupSchemaUsesStoragePicker(t *testing.T) {
 	var field *plugin.Field
 	for _, group := range backupSchema().Groups {
@@ -360,6 +379,9 @@ func TestGuestOverviewMemorySemantics(t *testing.T) {
 		t.Fatalf("overview: %v", err)
 	}
 	got := result.(row)
+	if got["cpuTotal"] != int64(2) {
+		t.Fatalf("cpuTotal = %+v, want sockets*cores", got["cpuTotal"])
+	}
 	if got["mem"] != int64(1073741824) || got["maxmem"] != int64(2147483648) || got["memPct"] != 50.0 {
 		t.Fatalf("runtime memory fields = %+v", got)
 	}
@@ -383,6 +405,18 @@ func TestProxmoxUXInformationArchitecture(t *testing.T) {
 		}
 	}
 	for _, tab := range byKind["qemu"].Detail.Tabs {
+		if tab.Key == "summary" {
+			cfg := tab.Config.(plugin.ObjectDetailConfig)
+			if !hasUsageField(cfg, "cpu") || !hasUsageField(cfg, "memPct") {
+				t.Fatalf("qemu summary should use generic usage fields: %+v", cfg.Sections)
+			}
+		}
+		if tab.Key == "metrics" {
+			cfg := tab.Config.(plugin.MetricsConfig)
+			if len(cfg.Gauges) != 0 || len(cfg.Usage) != 2 {
+				t.Fatalf("qemu metrics should prefer usage rows over duplicate gauges: %+v", cfg)
+			}
+		}
 		if tab.Key == "hardware" {
 			cfg := tab.Config.(plugin.ObjectDetailConfig)
 			if len(cfg.Sections) < 4 || cfg.Sections[2].Title != "Disks" || cfg.Sections[3].Title != "Network" {
@@ -390,6 +424,17 @@ func TestProxmoxUXInformationArchitecture(t *testing.T) {
 			}
 		}
 	}
+}
+
+func hasUsageField(cfg plugin.ObjectDetailConfig, key string) bool {
+	for _, section := range cfg.Sections {
+		for _, field := range section.Fields {
+			if field.Key == key && field.Usage != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func TestGuestStoragePickerUsesContentContext(t *testing.T) {

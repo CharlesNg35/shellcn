@@ -143,7 +143,7 @@ func overview(rc *plugin.RequestContext) (any, error) {
 		"address":  sr.client.Options().Addr,
 		"readOnly": sr.session.opts.ReadOnly,
 	}
-	for _, key := range []string{"redis_version", "redis_mode", "connected_clients", "used_memory_human", "total_commands_processed"} {
+	for _, key := range overviewInfoKeys() {
 		if v, ok := sections[key]; ok {
 			out[key] = v
 		}
@@ -152,6 +152,15 @@ func overview(rc *plugin.RequestContext) (any, error) {
 		out["keyspace"] = v
 	}
 	return out, nil
+}
+
+func overviewInfoKeys() []string {
+	return []string{
+		"redis_version", "redis_mode", "role",
+		"connected_clients", "blocked_clients", "tracking_clients",
+		"used_memory", "used_memory_peak", "used_memory_human", "used_memory_peak_human", "mem_fragmentation_ratio",
+		"total_commands_processed", "instantaneous_ops_per_sec", "keyspace_hits", "keyspace_misses",
+	}
 }
 
 func listDatabases(rc *plugin.RequestContext) (any, error) {

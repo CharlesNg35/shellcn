@@ -28,25 +28,36 @@ describe("MetricsPanel", () => {
     expect(w.text()).toContain("No metrics configured.");
   });
 
-  it("renders exactly the declared stats, gauges, and series", () => {
+  it("renders usage rows instead of duplicate gauges for the same metric", () => {
     const w = mountPanel({
       stats: [{ key: "conns", label: "Connections" }],
       gauges: [
         { key: "cpu", label: "CPU", max: 100 },
-        { key: "mem", label: "Memory", max: 100 },
+        { key: "memPct", label: "Memory", max: 100 },
         { key: "disk", label: "Disk", max: 100 },
+      ],
+      usage: [
+        {
+          key: "memPct",
+          label: "Memory usage",
+          type: "percent",
+          usage: { percentKey: "memPct" },
+        },
       ],
       series: [{ key: "cpu", label: "CPU" }],
     });
     expect(w.findAll(".stat")).toHaveLength(1);
-    expect(w.findAll(".gauge")).toHaveLength(3);
+    expect(w.findAll(".gauge")).toHaveLength(2);
+    expect(w.text()).toContain("Memory usage");
     expect(w.findAll(".series")).toHaveLength(1);
   });
 
   it("renders only the declared section when a single kind is set", () => {
-    const w = mountPanel({ stats: [{ key: "conns" }] });
-    expect(w.findAll(".stat")).toHaveLength(1);
+    const w = mountPanel({ usage: [{ key: "cpu", label: "CPU" }] });
+    expect(w.findAll(".stat")).toHaveLength(0);
     expect(w.findAll(".gauge")).toHaveLength(0);
     expect(w.findAll(".series")).toHaveLength(0);
+    expect(w.text()).toContain("CPU");
+    expect(w.text()).not.toContain("No metrics configured.");
   });
 });

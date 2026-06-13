@@ -69,12 +69,37 @@ func entryResource() plugin.ResourceType {
 				"computer": plugin.SeverityWarn, "entry": plugin.SeveritySecondary,
 			}},
 			Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "ldap.entry.overview", Params: dnParams}, Config: entryOverviewConfig()},
 				{Key: "attributes", Label: "Attributes", Icon: icon("table"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.attributes", Params: dnParams}, Config: attributeGridConfig(dnParams)},
 				{Key: "children", Label: "Children", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.children", Params: dnParams}, Config: plugin.TableConfig{Columns: entryColumns(), RowActionIDs: []string{"ldap.entry.delete"}, EmptyText: "No child entries.", Exportable: true, RowClick: plugin.RowClickNavigate}},
 				{Key: "subtree", Label: "Subtree search", Icon: icon("search"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entries.search", Params: map[string]string{"base": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: entryColumns(), DefaultSort: &plugin.SortKey{Field: "dn"}, EmptyText: "No matching entries. Use the table search box for a name fragment or LDAP filter.", Exportable: true, RowClick: plugin.RowClickNavigate}},
 				{Key: "ldif", Label: "LDIF", Icon: icon("file-text"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "ldap.entry.ldif", Params: dnParams}},
 			},
 		},
+	}
+}
+
+func entryOverviewConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Identity", Fields: []plugin.ObjectDetailField{
+				{Key: "name", Label: "RDN", Copy: true},
+				{Key: "dn", Label: "DN", Copy: true},
+				{Key: "parent", Label: "Parent DN", Copy: true},
+				{Key: "entryType", Label: "Type", Type: plugin.ColumnBadge, Severities: map[string]plugin.Severity{
+					"domain": plugin.SeverityInfo, "container": plugin.SeverityInfo,
+					"group": plugin.SeveritySuccess, "person": plugin.SeveritySecondary,
+					"computer": plugin.SeverityWarn, "entry": plugin.SeveritySecondary,
+				}},
+			}},
+			{Title: "Directory", Fields: []plugin.ObjectDetailField{
+				{Key: "objectClass", Label: "Object classes"},
+				{Key: "attributeCount", Label: "Attributes", Type: plugin.ColumnNumber},
+				{Key: "hasChildren", Label: "Has children", Type: plugin.ColumnBool},
+				{Key: "readOnly", Label: "Read-only", Type: plugin.ColumnBool},
+			}},
+		},
+		RawToggle: true,
 	}
 }
 

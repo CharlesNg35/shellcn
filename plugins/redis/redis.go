@@ -69,8 +69,7 @@ func infoDetailConfig() plugin.ObjectDetailConfig {
 				{Key: "tracking_clients", Label: "Tracking", Type: plugin.ColumnNumber},
 			}},
 			{Title: "Memory", Fields: []plugin.ObjectDetailField{
-				{Key: "used_memory_human", Label: "Used"},
-				{Key: "used_memory_peak_human", Label: "Peak"},
+				{Key: "used_memory", Label: "Memory used", Type: plugin.ColumnBytes, Usage: &plugin.UsageSpec{UsedKey: "used_memory", TotalKey: "used_memory_peak", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, TotalLabel: "of peak", WarnAt: 80, CriticalAt: 95}},
 				{Key: "mem_fragmentation_ratio", Label: "Fragmentation"},
 			}},
 			{Title: "Stats", Fields: []plugin.ObjectDetailField{

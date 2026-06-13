@@ -149,8 +149,11 @@ func TestAdminManifestUX(t *testing.T) {
 	if !ok {
 		t.Fatalf("bucket tab config = %T", tab.Config)
 	}
-	if cfg.EmptyText == "" || cfg.RowClick != plugin.RowClickDetail {
+	if cfg.EmptyText == "" || cfg.RowClick != plugin.RowClickDetail || cfg.DefaultSort == nil || cfg.DefaultSort.Field != "createdAt" {
 		t.Fatalf("bucket tab should declare empty text and row detail behavior: %#v", cfg)
+	}
+	if !contains(cfg.RowActionIDs, "minio.bucket.versions") {
+		t.Fatalf("bucket tab should expose versions inspector action: %#v", cfg.RowActionIDs)
 	}
 
 	actions := Actions("minio")
@@ -158,9 +161,26 @@ func TestAdminManifestUX(t *testing.T) {
 	for _, action := range actions {
 		byID[action.ID] = action
 	}
+	versions := byID["minio.bucket.versions"]
+	if versions.Open != plugin.OpenDialog || versions.Panel != plugin.PanelTable {
+		t.Fatalf("versions action should open a table dialog: %+v", versions)
+	}
+	versionsCfg, ok := versions.Config.(plugin.TableConfig)
+	if !ok || versionsCfg.DefaultSort == nil || versionsCfg.DefaultSort.Field != "modTime" || !versionsCfg.Exportable {
+		t.Fatalf("versions action should declare an exportable typed table: %#v", versions.Config)
+	}
 	if a := byID["minio.bucket.versioning.set"]; !a.Confirm || a.Label != "Edit versioning" {
 		t.Fatalf("versioning action should be explicit and confirmed: %+v", a)
 	}
+}
+
+func contains(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestBucketCreateSchemaValidatesPortableNames(t *testing.T) {

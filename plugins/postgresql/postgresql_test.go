@@ -213,6 +213,38 @@ func TestDatabaseTablesTabHasCreate(t *testing.T) {
 	}
 }
 
+func TestDatabaseOverviewUsesGenericDashboard(t *testing.T) {
+	m := New().Manifest()
+	var overview plugin.Panel
+	for _, res := range m.Resources {
+		if res.Kind != "database" {
+			continue
+		}
+		for _, tab := range res.Detail.Tabs {
+			if tab.Key == "overview" {
+				overview = tab
+			}
+		}
+	}
+	cfg, ok := overview.Config.(plugin.DashboardConfig)
+	if overview.Type != plugin.PanelDashboard || !ok {
+		t.Fatalf("database overview should be a generic dashboard: %#v", overview)
+	}
+	cells := map[string]plugin.Panel{}
+	for _, cell := range cfg.Cells {
+		cells[cell.Key] = cell
+	}
+	if cells["summary"].Type != plugin.PanelObjectDetail || cells["summary"].Source == nil || cells["summary"].Source.RouteID != "postgresql.database.overview" {
+		t.Fatalf("summary cell should render database overview details: %#v", cells["summary"])
+	}
+	for key, routeID := range map[string]string{"schemas": "postgresql.schemas.list", "tables": "postgresql.tables.list"} {
+		cell := cells[key]
+		if cell.Type != plugin.PanelTable || cell.Source == nil || cell.Source.RouteID != routeID {
+			t.Fatalf("%s cell should render %s table: %#v", key, routeID, cell)
+		}
+	}
+}
+
 func TestDestructiveResourceActionsNavigateAwayFromDeletedDetails(t *testing.T) {
 	actions := map[string]plugin.Action{}
 	for _, a := range New().Manifest().Actions {

@@ -41,6 +41,8 @@ func TestManifestUsesObjectDetailForSystemOverview(t *testing.T) {
 		t.Fatalf("dashboard system config = %#v, want raw-toggle object detail", dashboardSystem.Config)
 	} else if len(cfg.Sections) == 0 {
 		t.Fatalf("dashboard system detail should declare focused sections")
+	} else if !hasUsageField(cfg, "cpuPct") || !hasUsageField(cfg, "memPct") || !hasUsageField(cfg, "swapPct") {
+		t.Fatalf("system detail should use generic usage fields for cpu/memory/swap: %#v", cfg.Sections)
 	}
 	var systemTab *plugin.Panel
 	for i := range m.Tabs {
@@ -52,6 +54,17 @@ func TestManifestUsesObjectDetailForSystemOverview(t *testing.T) {
 	if systemTab == nil || systemTab.Type != plugin.PanelObjectDetail {
 		t.Fatalf("system tab = %+v, want object_detail", systemTab)
 	}
+}
+
+func hasUsageField(cfg plugin.ObjectDetailConfig, key string) bool {
+	for _, section := range cfg.Sections {
+		for _, field := range section.Fields {
+			if field.Key == key && field.Usage != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func TestOverviewDashboardGroupsHealthLoadAndCapacity(t *testing.T) {
@@ -73,8 +86,12 @@ func TestOverviewDashboardGroupsHealthLoadAndCapacity(t *testing.T) {
 	if !ok {
 		t.Fatalf("health config = %T, want MetricsConfig", cells["health"].Config)
 	}
-	if len(health.Gauges) < 3 || len(health.Stats) < 4 {
-		t.Fatalf("health metrics should expose gauges and operational stats: %#v", health)
+	if len(health.Gauges) != 0 || len(health.Stats) < 4 {
+		t.Fatalf("health metrics should expose operational stats without duplicate gauges: %#v", health)
+	}
+	cpumem, ok := cells["cpumem"].Config.(plugin.MetricsConfig)
+	if !ok || len(cpumem.Gauges) != 0 || len(cpumem.Usage) != 3 {
+		t.Fatalf("cpu/memory metrics should use usage rows without duplicate gauges: %#v", cells["cpumem"].Config)
 	}
 	load, ok := cells["load"].Config.(plugin.MetricsConfig)
 	if !ok || len(load.Series) != 3 {

@@ -160,7 +160,7 @@ func TestPodDetailHasMetricsLogsAndShell(t *testing.T) {
 		t.Fatalf("pod metrics tab = %+v", metrics)
 	}
 	cfg, ok := metrics.Config.(plugin.MetricsConfig)
-	if !ok || len(cfg.Stats) == 0 || len(cfg.Series) == 0 {
+	if !ok || len(cfg.Stats) == 0 || len(cfg.Usage) == 0 || len(cfg.Series) == 0 || len(cfg.Gauges) != 0 {
 		t.Fatalf("pod metrics config = %#v", metrics.Config)
 	}
 	if !conditionRequiresStatus(metrics.VisibleWhen, "Running") {

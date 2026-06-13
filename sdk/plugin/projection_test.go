@@ -73,6 +73,19 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 				DefaultTab: "editor",
 				Tabs: []plugin.Panel{
 					{Key: "logs", Label: "Logs", Type: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "sample.logs", Method: plugin.MethodWS}},
+					{Key: "summary", Label: "Summary", Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "sample.summary"}, Config: plugin.ObjectDetailConfig{
+						Sections: []plugin.ObjectDetailSection{{Title: "Usage", Fields: []plugin.ObjectDetailField{
+							{Key: "memoryPct", Label: "Memory", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{
+								PercentKey: "memoryPct",
+								UsedKey:    "memoryUsed",
+								TotalKey:   "memoryTotal",
+								UsedType:   plugin.ColumnBytes,
+								TotalType:  plugin.ColumnBytes,
+								WarnAt:     80,
+								CriticalAt: 95,
+							}},
+						}}},
+					}},
 					{Key: "config", Label: "Config", Type: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "sample.form"}, Config: plugin.FormPanelConfig{
 						SubmitRouteID: "sample.form.save",
 						SubmitMethod:  plugin.MethodPatch,
@@ -119,6 +132,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		{ID: "sample.files.delete", Method: plugin.MethodDelete, Path: "/files/delete", Permission: "sample.files.write", Risk: plugin.RiskDestructive, AuditEvent: "sample.files.delete", Handle: noop},
 		{ID: "sample.list", Method: plugin.MethodGet, Path: "/containers", Permission: "sample.read", Risk: plugin.RiskSafe, AuditEvent: "sample.list", Handle: noop},
 		{ID: "sample.logs", Method: plugin.MethodWS, Path: "/logs", Permission: "sample.read", Risk: plugin.RiskSafe, AuditEvent: "sample.logs", Stream: stream},
+		{ID: "sample.summary", Method: plugin.MethodGet, Path: "/summary", Permission: "sample.read", Risk: plugin.RiskSafe, AuditEvent: "sample.summary", Handle: noop},
 		{ID: "sample.form", Method: plugin.MethodGet, Path: "/form", Permission: "sample.read", Risk: plugin.RiskSafe, AuditEvent: "sample.form", Handle: noop},
 		{ID: "sample.form.save", Method: plugin.MethodPatch, Path: "/form", Permission: "sample.write", Risk: plugin.RiskWrite, AuditEvent: "sample.form.save", Handle: noop},
 		{ID: "sample.doc", Method: plugin.MethodGet, Path: "/doc", Permission: "sample.read", Risk: plugin.RiskSafe, AuditEvent: "sample.doc", Handle: noop},

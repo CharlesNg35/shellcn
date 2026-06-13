@@ -207,9 +207,22 @@ type ObjectDetailField struct {
 	Key        string              `json:"key"`
 	Label      string              `json:"label,omitempty"`
 	Type       ColumnType          `json:"type,omitempty"`
+	Usage      *UsageSpec          `json:"usage,omitempty"`
 	Copy       bool                `json:"copy,omitempty"`
 	Redacted   bool                `json:"redacted,omitempty"`
 	Severities map[string]Severity `json:"severities,omitempty"`
+}
+
+type UsageSpec struct {
+	PercentKey string     `json:"percentKey,omitempty"`
+	UsedKey    string     `json:"usedKey,omitempty"`
+	TotalKey   string     `json:"totalKey,omitempty"`
+	UsedType   ColumnType `json:"usedType,omitempty"`
+	TotalType  ColumnType `json:"totalType,omitempty"`
+	Unit       string     `json:"unit,omitempty"`
+	TotalLabel string     `json:"totalLabel,omitempty"`
+	WarnAt     float64    `json:"warnAt,omitempty"`
+	CriticalAt float64    `json:"criticalAt,omitempty"`
 }
 
 type ObjectDetailSection struct {
@@ -221,6 +234,11 @@ type ObjectDetailConfig struct {
 	Sections  []ObjectDetailSection `json:"sections,omitempty"`
 	RawToggle bool                  `json:"rawToggle,omitempty"`
 }
+
+// MetricUsage renders one live used/capacity row in a metrics panel. It uses
+// the same field contract as object-detail usage rows so static and streaming
+// capacity displays stay consistent.
+type MetricUsage = ObjectDetailField
 
 type TimelineConfig struct {
 	TimestampField    string `json:"timestampField,omitempty"`
@@ -403,11 +421,12 @@ type MetricSeries struct {
 	Unit  string `json:"unit,omitempty"`
 }
 
-// MetricsConfig selects the stat, gauge, and series keys rendered from metric
-// stream frames.
+// MetricsConfig selects the stat, usage, gauge, and series keys rendered from
+// metric stream frames. Prefer Usage for values that have used/total context.
 type MetricsConfig struct {
 	Stats   []MetricStat   `json:"stats,omitempty"`
 	Gauges  []MetricGauge  `json:"gauges,omitempty"`
+	Usage   []MetricUsage  `json:"usage,omitempty"`
 	Series  []MetricSeries `json:"series,omitempty"`
 	History int            `json:"history,omitempty"`
 }

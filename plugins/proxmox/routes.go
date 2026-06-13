@@ -480,11 +480,19 @@ func storageRow(node string, st row) (row, bool) {
 		"node":    node,
 		"type":    typ,
 		"content": str(st["content"]),
+		"usedPct": percent(used, total),
 		"used":    used,
 		"total":   total,
 		"status":  status,
 		"ref":     plugin.ResourceRef{Kind: "storage", Namespace: node, Name: storage, UID: storage},
 	}, true
+}
+
+func percent(used, total int64) float64 {
+	if total <= 0 {
+		return 0
+	}
+	return round1(float64(used) / float64(total) * 100)
 }
 
 func nodeStorageStatus(st row) string {
@@ -702,6 +710,12 @@ func guestOverview(kind string) plugin.Handler {
 		if err != nil {
 			return nil, err
 		}
+		cores := numInt(cfg["cores"])
+		sockets := numInt(cfg["sockets"])
+		cpuTotal := cores * sockets
+		if cpuTotal == 0 {
+			cpuTotal = cores
+		}
 		out := row{
 			"node":             node,
 			"vmid":             vmid,
@@ -709,6 +723,7 @@ func guestOverview(kind string) plugin.Handler {
 			"status":           str(status["status"]),
 			"template":         isTemplateValue(cfg["template"]),
 			"cpu":              round1(numFloat(status["cpu"]) * 100),
+			"cpuTotal":         cpuTotal,
 			"mem":              numInt(status["mem"]),
 			"maxmem":           numInt(status["maxmem"]),
 			"memPct":           memoryPercent(status["mem"], status["maxmem"]),
@@ -716,8 +731,8 @@ func guestOverview(kind string) plugin.Handler {
 			"lock":             str(status["lock"]),
 			"ha":               str(status["ha"]),
 			"tags":             str(cfg["tags"]),
-			"cores":            numInt(cfg["cores"]),
-			"sockets":          numInt(cfg["sockets"]),
+			"cores":            cores,
+			"sockets":          sockets,
 			"memory":           numInt(cfg["memory"]),
 			"memoryConfigured": memoryMiBBytes(cfg["memory"]),
 			"memoryMinimum":    memoryMiBBytes(cfg["balloon"]),

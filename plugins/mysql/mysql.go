@@ -103,7 +103,7 @@ func databaseResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mysql.database.overview", Params: map[string]string{"database": "${resource.uid}"}}, Config: databaseOverviewDetailConfig()},
+				{Key: "overview", Label: "Overview", Icon: icon("gauge"), Type: plugin.PanelDashboard, Config: databaseOverviewDashboard()},
 				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: tablesTableConfig([]string{"mysql.table.create"}, []string{"mysql.table.truncate", "mysql.table.drop"})},
 				{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Type: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "mysql.relations.graph", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}},
 				{Key: "views", Label: "Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.views.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: viewsTableConfig([]string{"mysql.view.drop"})},
@@ -182,6 +182,16 @@ func userResource() plugin.ResourceType {
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mysql.user.overview", Params: map[string]string{"user": "${resource.name}", "host": "${resource.namespace}"}}, Config: userOverviewDetailConfig()},
 		}},
 	}
+}
+
+func databaseOverviewDashboard() plugin.DashboardConfig {
+	databaseParams := map[string]string{"database": "${resource.uid}"}
+	return plugin.DashboardConfig{Cells: []plugin.Panel{
+		{Key: "summary", Label: "Summary", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mysql.database.overview", Params: databaseParams}, Config: databaseOverviewDetailConfig(), Span: 2},
+		{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.tables.list", Params: databaseParams}, Config: tablesTableConfig([]string{"mysql.table.create"}, []string{"mysql.table.truncate", "mysql.table.drop"})},
+		{Key: "views", Label: "Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.views.list", Params: databaseParams}, Config: viewsTableConfig([]string{"mysql.view.drop"})},
+		{Key: "routines", Label: "Routines", Icon: icon("function-square"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.routines.list", Params: databaseParams}, Config: routinesTableConfig()},
+	}}
 }
 
 func databaseOverviewDetailConfig() plugin.ObjectDetailConfig {

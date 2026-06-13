@@ -93,7 +93,7 @@ func databaseResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "postgresql.database.overview", Params: map[string]string{"database": "${resource.uid}"}}, Config: databaseOverviewDetailConfig()},
+				{Key: "overview", Label: "Overview", Icon: icon("gauge"), Type: plugin.PanelDashboard, Config: databaseOverviewDashboard()},
 				{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.schemas.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: schemasTableConfig([]string{"postgresql.schema.drop"})},
 				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: tablesTableConfig([]string{"postgresql.table.create.in_database"}, []string{"postgresql.table.truncate", "postgresql.table.drop"})},
 				{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Type: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "postgresql.relations.graph", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}},
@@ -180,6 +180,15 @@ func sequenceResource() plugin.ResourceType {
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "postgresql.sequence.overview", Params: tableParams()}, Config: sequenceOverviewDetailConfig()},
 		}},
 	}
+}
+
+func databaseOverviewDashboard() plugin.DashboardConfig {
+	databaseParams := map[string]string{"database": "${resource.uid}"}
+	return plugin.DashboardConfig{Cells: []plugin.Panel{
+		{Key: "summary", Label: "Summary", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "postgresql.database.overview", Params: databaseParams}, Config: databaseOverviewDetailConfig(), Span: 2},
+		{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.schemas.list", Params: databaseParams}, Config: schemasTableConfig([]string{"postgresql.schema.drop"})},
+		{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.tables.list", Params: databaseParams}, Config: tablesTableConfig([]string{"postgresql.table.create.in_database"}, []string{"postgresql.table.truncate", "postgresql.table.drop"})},
+	}}
 }
 
 func databaseOverviewDetailConfig() plugin.ObjectDetailConfig {
