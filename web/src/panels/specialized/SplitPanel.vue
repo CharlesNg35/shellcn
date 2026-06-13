@@ -11,6 +11,7 @@ import type {
 } from "@/types/projection";
 import { SplitOrientation } from "@/types/projection";
 import PanelHost from "../core/PanelHost.vue";
+import { resolvedPanelConfig, resolvedPanelType } from "../core/variants";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{
@@ -22,6 +23,9 @@ const cfg = computed(
   () => (props.config as SplitPanelConfig | undefined) ?? {},
 );
 const panels = computed<SplitChildPanel[]>(() => cfg.value.panels ?? []);
+const variantData = computed<Record<string, unknown>>(() =>
+  props.resource ? { ...props.resource } : {},
+);
 const layout = computed(() =>
   cfg.value.orientation === SplitOrientation.Vertical
     ? SplitOrientation.Vertical
@@ -39,10 +43,10 @@ const layout = computed(() =>
       class="min-h-0 overflow-hidden"
     >
       <PanelHost
-        :panel="child.panel"
+        :panel="resolvedPanelType(child, variantData)"
         :connection-id="connectionId"
         :source="child.source"
-        :config="child.config"
+        :config="resolvedPanelConfig(child, variantData)"
         :resource="resource"
         :actions="actions"
         @action-done="(action, result) => emit('actionDone', action, result)"

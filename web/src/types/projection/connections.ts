@@ -28,6 +28,7 @@ export interface ConnectionSummary {
   protocol: string;
   icon?: Icon;
   transport: Transport;
+  config?: Record<string, unknown>;
   online?: boolean;
   status?: ConnectionStatus;
   canManage?: boolean;

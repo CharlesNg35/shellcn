@@ -466,6 +466,7 @@ func panelObject() PanelConfigProperty {
 			prop("panel", stringProp()),
 			prop("source", dataSource()),
 			prop("config", object()),
+			prop("variants", array(object())),
 			prop("span", number()),
 			prop("visibleWhen", conditionObject()),
 		),

@@ -309,6 +309,12 @@ export interface TaskProgressPanelConfig {
   retryRouteId?: string;
 }
 
+export interface PanelVariant {
+  panel: PanelType;
+  config?: Record<string, unknown>;
+  visibleWhen?: Condition;
+}
+
 export interface DashboardCell {
   key: string;
   label?: string;
@@ -316,6 +322,7 @@ export interface DashboardCell {
   panel: PanelType;
   source?: DataSource;
   config?: Record<string, unknown>;
+  variants?: PanelVariant[];
   visibleWhen?: Condition;
   span?: number;
 }
@@ -446,6 +453,25 @@ export interface ResourceRef {
 export interface ActionSuccess {
   selectTab?: string;
   navigate?: NavigateTarget;
+  effects?: ActionEffect[];
+}
+
+export const ActionEffectType = {
+  TerminalInput: "terminal_input",
+} as const;
+export type ActionEffectType =
+  (typeof ActionEffectType)[keyof typeof ActionEffectType];
+
+export interface ActionEffect {
+  type: ActionEffectType;
+  terminalInput?: TerminalInputEffect;
+}
+
+export interface TerminalInputEffect {
+  tab?: string;
+  text?: string;
+  resultField?: string;
+  appendNewline?: boolean;
 }
 
 export const NavigateTarget = {
@@ -496,6 +522,7 @@ export interface Tab {
   panel: PanelType;
   source?: DataSource;
   config?: Record<string, unknown>;
+  variants?: PanelVariant[];
   visibleWhen?: Condition;
   span?: number;
 }

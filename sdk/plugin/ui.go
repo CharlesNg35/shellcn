@@ -582,10 +582,19 @@ type Panel struct {
 	Type   PanelType   `json:"panel"`
 	Source *DataSource `json:"source,omitempty"`
 	Config PanelConfig `json:"config,omitempty"`
+	// Variants switch the renderer/config without duplicating the logical tab.
+	// The first variant whose VisibleWhen matches wins.
+	Variants []PanelVariant `json:"variants,omitempty"`
 	// VisibleWhen hides this panel unless the active row/resource data matches.
 	VisibleWhen *Condition `json:"visibleWhen,omitempty"`
 	// Span is a dashboard-only sizing hint.
 	Span int `json:"span,omitempty"`
+}
+
+type PanelVariant struct {
+	Type        PanelType   `json:"panel"`
+	Config      PanelConfig `json:"config,omitempty"`
+	VisibleWhen *Condition  `json:"visibleWhen,omitempty"`
 }
 
 // TreeGroup is a lazy connection-sidebar root. With Source it expands; without
@@ -663,6 +672,23 @@ type ActionSuccess struct {
 	SelectTab string `json:"selectTab,omitempty"`
 	// Navigate moves the workbench after success.
 	Navigate NavigateTarget `json:"navigate,omitempty"`
+	Effects  []ActionEffect `json:"effects,omitempty"`
+}
+
+type ActionEffectType string
+
+const ActionEffectTerminalInput ActionEffectType = "terminal_input"
+
+type ActionEffect struct {
+	Type          ActionEffectType     `json:"type"`
+	TerminalInput *TerminalInputEffect `json:"terminalInput,omitempty"`
+}
+
+type TerminalInputEffect struct {
+	Tab           string `json:"tab,omitempty"`
+	Text          string `json:"text,omitempty"`
+	ResultField   string `json:"resultField,omitempty"`
+	AppendNewline bool   `json:"appendNewline,omitempty"`
 }
 
 // Stream is a long-lived channel a panel binds to, pointing at a WS route.

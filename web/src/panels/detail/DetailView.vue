@@ -12,6 +12,7 @@ import type {
 } from "@/types/projection";
 import AppIcon from "@/components/AppIcon.vue";
 import PanelHost from "../core/PanelHost.vue";
+import { resolvedPanelConfig, resolvedPanelType } from "../core/variants";
 import ActionBar from "../shared/ActionBar.vue";
 import { badgeClassFor } from "../shared/severity";
 import { isVisible } from "../form/condition";
@@ -73,6 +74,14 @@ const statusClass = computed(() =>
 
 const current = computed(() =>
   visibleTabs.value.find((t) => t.key === activeTab.value),
+);
+
+const currentPanel = computed(() =>
+  current.value ? resolvedPanelType(current.value, props.row) : undefined,
+);
+
+const currentConfig = computed(() =>
+  current.value ? resolvedPanelConfig(current.value, props.row) : {},
 );
 
 const headerActions = computed(() =>
@@ -142,10 +151,10 @@ function onActionDone(action: Action, result?: Record<string, unknown>): void {
         <PanelHost
           v-if="current"
           :key="`${connectionId}:${row.ref?.uid}:${current.key}`"
-          :panel="current.panel"
+          :panel="currentPanel ?? current.panel"
           :connection-id="connectionId"
           :source="current.source"
-          :config="current.config"
+          :config="currentConfig"
           :resource="resource"
           :actions="actions"
           @action-done="onActionDone"

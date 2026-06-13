@@ -27,40 +27,82 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
 		Tabs: []plugin.Panel{
-			{
-				Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"},
-				Type: plugin.PanelTerminalGrid,
-				Source: &plugin.DataSource{
-					RouteID: "ssh.shell",
-					Method:  plugin.MethodWS,
-					Params:  map[string]string{"cols": "80", "rows": "24"},
-				},
-				Config: plugin.TerminalGridConfig{MaxPanes: 6, DefaultPanes: 1, Zoom: true, Search: true},
-			},
+			terminalTab(),
 			filesTab("ssh"),
 			snippetsTab(),
 		},
 		Actions: []plugin.Action{
 			{
-				ID: "ssh.snippet.create", Label: "New snippet", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "plus"},
+				ID:      "ssh.snippet.create",
+				Label:   "New snippet",
+				Icon:    plugin.Icon{Type: plugin.IconLucide, Value: "plus"},
 				RouteID: "ssh.snippet.create",
 			},
 			{
-				ID: "ssh.snippet.run", Label: "Run", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"},
-				RouteID: "ssh.snippet.run", Params: map[string]string{"id": "${resource.uid}"},
-				Confirm: true, ConfirmText: "Run this snippet on the SSH host?",
-				OnSuccess: &plugin.ActionSuccess{SelectTab: "terminal"},
+				ID:          "ssh.snippet.run",
+				Label:       "Run",
+				Icon:        plugin.Icon{Type: plugin.IconLucide, Value: "play"},
+				RouteID:     "ssh.snippet.run",
+				Params:      map[string]string{"id": "${resource.uid}"},
+				Confirm:     true,
+				ConfirmText: "Run this snippet on the SSH host?",
+				OnSuccess: &plugin.ActionSuccess{
+					SelectTab: "terminal",
+					Effects: []plugin.ActionEffect{{
+						Type: plugin.ActionEffectTerminalInput,
+						TerminalInput: &plugin.TerminalInputEffect{
+							Tab:           "terminal",
+							ResultField:   "command",
+							AppendNewline: true,
+						},
+					}},
+				},
 			},
 			{
-				ID: "ssh.snippet.delete", Label: "Delete", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"},
-				RouteID: "ssh.snippet.delete", Params: map[string]string{"id": "${resource.uid}"},
-				Confirm: true, ConfirmText: "Delete this snippet?",
+				ID:          "ssh.snippet.delete",
+				Label:       "Delete",
+				Icon:        plugin.Icon{Type: plugin.IconLucide, Value: "trash"},
+				RouteID:     "ssh.snippet.delete",
+				Params:      map[string]string{"id": "${resource.uid}"},
+				Confirm:     true,
+				ConfirmText: "Delete this snippet?",
 			},
 		},
 		Streams: []plugin.Stream{{ID: "ssh.shell", Kind: plugin.StreamTerminal, RouteID: "ssh.shell"}},
 		Recording: []plugin.RecordingCapability{{
 			Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2},
 			StreamIDs: []string{"ssh.shell"}, Authoritative: true,
+		}},
+	}
+}
+
+func terminalTab() plugin.Panel {
+	return plugin.Panel{
+		Key:   "terminal",
+		Label: "Terminal",
+		Icon:  plugin.Icon{Type: plugin.IconLucide, Value: "terminal"},
+		Type:  plugin.PanelTerminal,
+		Source: &plugin.DataSource{
+			RouteID: "ssh.shell",
+			Method:  plugin.MethodWS,
+			Params:  map[string]string{"cols": "80", "rows": "24"},
+		},
+		Config: plugin.TerminalConfig{Zoom: true, Search: true},
+		Variants: []plugin.PanelVariant{{
+			Type: plugin.PanelTerminalGrid,
+			Config: plugin.TerminalGridConfig{
+				MaxPanes:     6,
+				DefaultPanes: 1,
+				Zoom:         true,
+				Search:       true,
+			},
+			VisibleWhen: &plugin.Condition{
+				AllOf: []plugin.Rule{{
+					Field: "terminal_layout",
+					Op:    plugin.OpEq,
+					Value: "grid",
+				}},
+			},
 		}},
 	}
 }
@@ -114,6 +156,12 @@ func configSchema(protocol string) plugin.Schema {
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 			{Key: "private_key", Label: "Private key", Type: plugin.FieldTextarea, Required: true, Secret: true, Help: "PEM-encoded private key.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "private_key"}}}},
 			{Key: "passphrase", Label: "Key passphrase", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "private_key"}}}},
+		}},
+		{Name: "Terminal", Fields: []plugin.Field{
+			{Key: "terminal_layout", Label: "Terminal layout", Type: plugin.FieldSelect, Required: true, Default: "single", Options: []plugin.Option{
+				{Label: "Single terminal", Value: "single"},
+				{Label: "Terminal grid", Value: "grid"},
+			}, Help: "Use a single terminal by default. Enable grid only when you need multiple concurrent terminal sessions."},
 		}},
 	}}
 }

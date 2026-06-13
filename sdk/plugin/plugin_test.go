@@ -227,6 +227,15 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"action success references unknown tab", "onSuccess.selectTab", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "x.list", OnSuccess: &plugin.ActionSuccess{SelectTab: "ghost"}}}
 		}},
+		{"action terminal input references unknown tab", "onSuccess.effects[0].terminalInput.tab", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "x.list", OnSuccess: &plugin.ActionSuccess{Effects: []plugin.ActionEffect{{Type: plugin.ActionEffectTerminalInput, TerminalInput: &plugin.TerminalInputEffect{Tab: "ghost", Text: "uptime"}}}}}}
+		}},
+		{"action terminal input missing source", "onSuccess.effects[0].terminalInput requires text or resultField", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "x.list", OnSuccess: &plugin.ActionSuccess{Effects: []plugin.ActionEffect{{Type: plugin.ActionEffectTerminalInput, TerminalInput: &plugin.TerminalInputEffect{Tab: "overview"}}}}}}
+		}},
+		{"action terminal input missing payload", "onSuccess.effects[0].terminalInput is required", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "x.list", OnSuccess: &plugin.ActionSuccess{Effects: []plugin.ActionEffect{{Type: plugin.ActionEffectTerminalInput}}}}}
+		}},
 		{"action navigate unknown target", "is not a known target", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "x.list", OnSuccess: &plugin.ActionSuccess{Navigate: "sideways"}}}
 		}},

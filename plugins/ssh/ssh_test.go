@@ -19,11 +19,17 @@ func TestManifestExposesTerminalAndFiles(t *testing.T) {
 	if len(m.Tabs) != 3 {
 		t.Fatalf("tabs: got %d want 3", len(m.Tabs))
 	}
-	if m.Tabs[0].Type != plugin.PanelTerminalGrid || m.Tabs[0].Source.RouteID != "ssh.shell" {
+	if m.Tabs[0].Key != "terminal" || m.Tabs[0].Type != plugin.PanelTerminal || m.Tabs[0].Source.RouteID != "ssh.shell" {
 		t.Fatalf("terminal tab not wired to ssh.shell: %+v", m.Tabs[0])
 	}
-	if cfg, ok := m.Tabs[0].Config.(plugin.TerminalGridConfig); !ok || cfg.MaxPanes != 6 || !cfg.Zoom || !cfg.Search {
-		t.Fatalf("terminal grid config missing split/search/zoom support: %#v", m.Tabs[0].Config)
+	if cfg, ok := m.Tabs[0].Config.(plugin.TerminalConfig); !ok || !cfg.Zoom || !cfg.Search {
+		t.Fatalf("terminal config missing search/zoom support: %#v", m.Tabs[0].Config)
+	}
+	if len(m.Tabs[0].Variants) != 1 || m.Tabs[0].Variants[0].Type != plugin.PanelTerminalGrid || m.Tabs[0].Variants[0].VisibleWhen == nil {
+		t.Fatalf("terminal grid variant not conditionally wired: %+v", m.Tabs[0].Variants)
+	}
+	if cfg, ok := m.Tabs[0].Variants[0].Config.(plugin.TerminalGridConfig); !ok || cfg.MaxPanes != 6 || !cfg.Zoom || !cfg.Search {
+		t.Fatalf("terminal grid config missing split/search/zoom support: %#v", m.Tabs[0].Variants[0].Config)
 	}
 	files := m.Tabs[1]
 	if files.Type != plugin.PanelFileBrowser {
@@ -51,6 +57,28 @@ func TestManifestExposesTerminalAndFiles(t *testing.T) {
 	}
 }
 
+func TestManifestRunsSnippetsInVisibleTerminal(t *testing.T) {
+	m := ssh.New().Manifest()
+	var run plugin.Action
+	for _, action := range m.Actions {
+		if action.ID == "ssh.snippet.run" {
+			run = action
+			break
+		}
+	}
+	if run.OnSuccess == nil || run.OnSuccess.SelectTab != "terminal" || len(run.OnSuccess.Effects) != 1 {
+		t.Fatalf("snippet run should target the terminal on success: %+v", run.OnSuccess)
+	}
+	effect := run.OnSuccess.Effects[0]
+	if effect.Type != plugin.ActionEffectTerminalInput || effect.TerminalInput == nil {
+		t.Fatalf("snippet run effect = %+v", effect)
+	}
+	input := effect.TerminalInput
+	if input.Tab != "terminal" || input.ResultField != "command" || !input.AppendNewline {
+		t.Fatalf("snippet terminal input = %+v", input)
+	}
+}
+
 func TestManifestSurfacesHostKeyVerification(t *testing.T) {
 	m := ssh.New().Manifest()
 	policy := requireField(t, m.Config, "host_key_verification")
@@ -63,6 +91,17 @@ func TestManifestSurfacesHostKeyVerification(t *testing.T) {
 	hostKey := requireField(t, m.Config, "host_key")
 	if hostKey.Type != plugin.FieldTextarea || hostKey.Secret || hostKey.Help == "" || hostKey.VisibleWhen == nil {
 		t.Fatalf("host_key field should be a conditional visible textarea with help: %+v", hostKey)
+	}
+}
+
+func TestManifestSurfacesTerminalLayout(t *testing.T) {
+	m := ssh.New().Manifest()
+	layout := requireField(t, m.Config, "terminal_layout")
+	if layout.Type != plugin.FieldSelect || layout.Default != "single" || len(layout.Options) != 2 {
+		t.Fatalf("terminal layout should be an explicit select: %+v", layout)
+	}
+	if layout.Options[0].Value != "single" || layout.Options[1].Value != "grid" {
+		t.Fatalf("terminal layout options should prefer single terminal: %+v", layout.Options)
 	}
 }
 

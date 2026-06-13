@@ -73,6 +73,12 @@ func (s *Server) toConnectionDTO(c models.Connection) connectionDTO {
 	if m, ok := s.deps.Plugins.Manifest(c.Protocol); ok {
 		icon := m.Icon
 		dto.Icon = &icon
+		configWithDefaults := m.Config.ValuesWithDefaults(c.Config)
+		context := map[string]any{
+			plugin.SchemaContextProtocol:  c.Protocol,
+			plugin.SchemaContextTransport: c.Transport,
+		}
+		dto.Config = m.Config.VisibleValues(configWithDefaults, context)
 	}
 	return dto
 }

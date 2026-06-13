@@ -476,6 +476,12 @@
               "span": {
                 "type": "number"
               },
+              "variants": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
               "visibleWhen": {
                 "type": "object",
                 "properties": {
@@ -1123,6 +1129,12 @@
               },
               "span": {
                 "type": "number"
+              },
+              "variants": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
               },
               "visibleWhen": {
                 "type": "object",

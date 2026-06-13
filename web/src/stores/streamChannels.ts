@@ -36,6 +36,7 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
   const channels = new Map<string, Channel>();
   const statuses = reactive<Record<string, ChannelStatus>>({});
   const reasons = reactive<Record<string, string>>({});
+  const preferredTerminalTargets = reactive<Record<string, string>>({});
   const generation = ref(0);
 
   function ensure(key: string, factory: () => SocketLike): void {
@@ -109,6 +110,14 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     delete reasons[key];
   }
 
+  function setPreferredTerminalTarget(baseKey: string, suffix: string): void {
+    preferredTerminalTargets[baseKey] = suffix;
+  }
+
+  function preferredTerminalTarget(baseKey: string): string | undefined {
+    return preferredTerminalTargets[baseKey];
+  }
+
   function closeWhere(predicate: (key: string) => boolean): void {
     for (const key of [...channels.keys()]) {
       if (predicate(key)) close(key);
@@ -132,5 +141,7 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     close,
     closeWhere,
     closeForConnection,
+    setPreferredTerminalTarget,
+    preferredTerminalTarget,
   };
 });
