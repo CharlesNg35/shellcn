@@ -30,6 +30,7 @@ func TestParseConnectOptionsRequiresPasswordMaterial(t *testing.T) {
 
 func TestManifestUsesDesktopSizeSelect(t *testing.T) {
 	var found bool
+	values := map[any]bool{}
 	for _, group := range New().Manifest().Config.Groups {
 		for _, field := range group.Fields {
 			if field.Key != "resolution" {
@@ -42,9 +43,17 @@ func TestManifestUsesDesktopSizeSelect(t *testing.T) {
 			if len(field.Options) < 4 {
 				t.Fatalf("resolution should provide common desktop sizes: %#v", field.Options)
 			}
+			for _, option := range field.Options {
+				values[option.Value] = true
+			}
 		}
 	}
 	if !found {
 		t.Fatal("missing resolution field")
+	}
+	for _, want := range []string{"1920x1080", "2560x1440", "3840x2160"} {
+		if !values[want] {
+			t.Fatalf("resolution options missing %s: %#v", want, values)
+		}
 	}
 }

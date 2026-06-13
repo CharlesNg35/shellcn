@@ -26,9 +26,11 @@ func Routes() []plugin.Route {
 		{ID: "proxmox.node.list", Method: plugin.MethodGet, Path: "/nodes", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.list", Handle: listNodes},
 		{ID: "proxmox.node.options", Method: plugin.MethodGet, Path: "/nodes/options", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.options", Handle: nodeOptions},
 		{ID: "proxmox.node.backup_storage.options", Method: plugin.MethodGet, Path: "/nodes/{node}/backup-storage/options", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.backup_storage.options", Handle: backupStorageOptions},
+		{ID: "proxmox.node.guest_storage.options", Method: plugin.MethodGet, Path: "/nodes/{node}/guest-storage/options", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.guest_storage.options", Handle: guestStorageOptions},
 		{ID: "proxmox.storage.list", Method: plugin.MethodGet, Path: "/storage", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.storage.list", Handle: listStorage},
 		{ID: "proxmox.node.storage", Method: plugin.MethodGet, Path: "/nodes/{node}/storage", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.storage", Handle: listNodeStorage},
 		{ID: "proxmox.node.tasks", Method: plugin.MethodGet, Path: "/nodes/{node}/tasks", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.tasks", Handle: listTasks},
+		{ID: "proxmox.task.list", Method: plugin.MethodGet, Path: "/tasks", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.task.list", Handle: listClusterTasks},
 		{ID: "proxmox.storage.content", Method: plugin.MethodGet, Path: "/nodes/{node}/storage/{storage}/content", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.storage.content", Handle: listStorageContent},
 		{ID: "proxmox.qemu.snapshots", Method: plugin.MethodGet, Path: "/nodes/{node}/qemu/{vmid}/snapshot", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.qemu.snapshots", Handle: listSnapshots("qemu")},
 		{ID: "proxmox.lxc.snapshots", Method: plugin.MethodGet, Path: "/nodes/{node}/lxc/{vmid}/snapshot", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.lxc.snapshots", Handle: listSnapshots("lxc")},
@@ -356,6 +358,21 @@ func nodeOptions(rc *plugin.RequestContext) (any, error) {
 }
 
 func backupStorageOptions(rc *plugin.RequestContext) (any, error) {
+	return storageOptions(rc, "backup")
+}
+
+func guestStorageOptions(rc *plugin.RequestContext) (any, error) {
+	content := rc.Query().Get("content")
+	if content == "" {
+		content = rc.Param("content")
+	}
+	if content == "" {
+		content = "images"
+	}
+	return storageOptions(rc, content)
+}
+
+func storageOptions(rc *plugin.RequestContext, requiredContent string) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
 		return nil, err
@@ -371,7 +388,7 @@ func backupStorageOptions(rc *plugin.RequestContext) (any, error) {
 	rows := make([]row, 0, len(items))
 	for _, st := range items {
 		storage := str(st["storage"])
-		if storage == "" || !validStorage(storage) || !strings.Contains(str(st["content"]), "backup") {
+		if storage == "" || !validStorage(storage) || !storageSupportsContent(st, requiredContent) {
 			continue
 		}
 		label := storage
@@ -385,6 +402,15 @@ func backupStorageOptions(rc *plugin.RequestContext) (any, error) {
 		})
 	}
 	return pageRows(rc, rows)
+}
+
+func storageSupportsContent(st row, content string) bool {
+	for _, part := range strings.Split(str(st["content"]), ",") {
+		if strings.TrimSpace(part) == content {
+			return true
+		}
+	}
+	return false
 }
 
 func listStorage(rc *plugin.RequestContext) (any, error) {
@@ -487,9 +513,11 @@ func listStorageContent(rc *plugin.RequestContext) (any, error) {
 	rows := make([]row, 0, len(items))
 	for _, it := range items {
 		volid := str(it["volid"])
+		content := str(it["content"])
 		rows = append(rows, row{
 			"name":      volid,
-			"content":   str(it["content"]),
+			"content":   content,
+			"guestType": backupGuestType(volid),
 			"format":    str(it["format"]),
 			"protected": rowBool(it["protected"]),
 			"size":      numInt(it["size"]),
@@ -514,25 +542,52 @@ func listTasks(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	itemsWithNode := make([]row, 0, len(items))
+	for _, t := range items {
+		if str(t["node"]) == "" {
+			t["node"] = node
+		}
+		itemsWithNode = append(itemsWithNode, t)
+	}
+	return pageRows(rc, taskRows(itemsWithNode))
+}
+
+func listClusterTasks(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.list(rc.Ctx, "/cluster/tasks")
+	if err != nil {
+		return nil, err
+	}
+	return pageRows(rc, taskRows(items))
+}
+
+func taskRows(items []row) []row {
 	rows := make([]row, 0, len(items))
 	for _, t := range items {
 		upid := str(t["upid"])
+		node := str(t["node"])
 		status := str(t["status"])
 		if status == "" && t["endtime"] == nil {
 			status = "running"
+		} else if status == "" {
+			status = str(t["exitstatus"])
 		}
 		rows = append(rows, row{
-			"name":      str(t["type"]),
-			"id":        str(t["id"]),
-			"user":      str(t["user"]),
-			"status":    status,
-			"starttime": rfcTime(t["starttime"]),
-			"endtime":   rfcTime(t["endtime"]),
-			"_id":       upid,
-			"ref":       plugin.ResourceRef{Kind: "task", Namespace: node, Name: node, UID: upid},
+			"name":       str(t["type"]),
+			"id":         str(t["id"]),
+			"user":       str(t["user"]),
+			"status":     status,
+			"exitstatus": str(t["exitstatus"]),
+			"starttime":  rfcTime(t["starttime"]),
+			"endtime":    rfcTime(t["endtime"]),
+			"_id":        upid,
+			"ref":        plugin.ResourceRef{Kind: "task", Namespace: node, Name: node, UID: upid},
 		})
 	}
-	return pageRows(rc, rows)
+	return rows
 }
 
 func listSnapshots(kind string) plugin.Handler {
@@ -595,9 +650,11 @@ func listBackups(rc *plugin.RequestContext) (any, error) {
 				continue
 			}
 			volid := str(it["volid"])
+			guestType := backupGuestType(volid)
 			rows = append(rows, row{
 				"name":      volid,
 				"content":   "backup",
+				"guestType": guestType,
 				"storage":   storage,
 				"protected": rowBool(it["protected"]),
 				"size":      numInt(it["size"]),
@@ -646,22 +703,26 @@ func guestOverview(kind string) plugin.Handler {
 			return nil, err
 		}
 		out := row{
-			"node":     node,
-			"vmid":     vmid,
-			"name":     stringOr(str(cfg["name"]), str(cfg["hostname"])),
-			"status":   str(status["status"]),
-			"template": isTemplateValue(cfg["template"]),
-			"cpu":      round1(numFloat(status["cpu"]) * 100),
-			"mem":      numInt(status["mem"]),
-			"maxmem":   numInt(status["maxmem"]),
-			"uptime":   numInt(status["uptime"]),
-			"lock":     str(status["lock"]),
-			"ha":       str(status["ha"]),
-			"tags":     str(cfg["tags"]),
-			"cores":    numInt(cfg["cores"]),
-			"sockets":  numInt(cfg["sockets"]),
-			"memory":   numInt(cfg["memory"]) * 1024 * 1024,
-			"ostype":   str(cfg["ostype"]),
+			"node":             node,
+			"vmid":             vmid,
+			"name":             stringOr(str(cfg["name"]), str(cfg["hostname"])),
+			"status":           str(status["status"]),
+			"template":         isTemplateValue(cfg["template"]),
+			"cpu":              round1(numFloat(status["cpu"]) * 100),
+			"mem":              numInt(status["mem"]),
+			"maxmem":           numInt(status["maxmem"]),
+			"memPct":           memoryPercent(status["mem"], status["maxmem"]),
+			"uptime":           numInt(status["uptime"]),
+			"lock":             str(status["lock"]),
+			"ha":               str(status["ha"]),
+			"tags":             str(cfg["tags"]),
+			"cores":            numInt(cfg["cores"]),
+			"sockets":          numInt(cfg["sockets"]),
+			"memory":           numInt(cfg["memory"]),
+			"memoryConfigured": memoryMiBBytes(cfg["memory"]),
+			"memoryMinimum":    memoryMiBBytes(cfg["balloon"]),
+			"memoryCurrent":    memoryCurrentBytes(cfg["memory"]),
+			"ostype":           str(cfg["ostype"]),
 		}
 		if out["name"] == "" {
 			out["name"] = kind + "/" + vmid
@@ -884,7 +945,7 @@ func snapshotSchema(kind string) *plugin.Schema {
 func migrateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Migrate", Fields: []plugin.Field{
 		{Key: "target", Label: "Target node", Type: plugin.FieldSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "proxmox.node.options", Params: map[string]string{"node": "${resource.namespace}"}}},
-		{Key: "online", Label: "Live / online migration", Type: plugin.FieldToggle},
+		{Key: "online", Label: "Online migration", Type: plugin.FieldToggle, Default: true, Help: "Keep a running VM online when possible. Containers use restart migration."},
 	}}}}
 }
 
@@ -912,6 +973,62 @@ func guestName(g row, kind, vmid string) string {
 		return name
 	}
 	return kind + "/" + vmid
+}
+
+func backupGuestType(volid string) string {
+	switch {
+	case strings.Contains(volid, "vzdump-qemu-"):
+		return "qemu"
+	case strings.Contains(volid, "vzdump-lxc-"):
+		return "lxc"
+	default:
+		return ""
+	}
+}
+
+func memoryMiBBytes(v any) int64 {
+	current, maximum := memoryMiB(v)
+	if maximum > 0 {
+		return maximum * 1024 * 1024
+	}
+	return current * 1024 * 1024
+}
+
+func memoryCurrentBytes(v any) int64 {
+	current, maximum := memoryMiB(v)
+	if current > 0 {
+		return current * 1024 * 1024
+	}
+	return maximum * 1024 * 1024
+}
+
+func memoryMiB(v any) (current int64, maximum int64) {
+	text := strings.TrimSpace(str(v))
+	if text == "" {
+		return 0, 0
+	}
+	for _, part := range strings.Split(text, ",") {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, "current=") {
+			current = numInt(strings.TrimPrefix(part, "current="))
+			continue
+		}
+		if maximum == 0 {
+			maximum = numInt(part)
+		}
+	}
+	if current == 0 {
+		current = maximum
+	}
+	return current, maximum
+}
+
+func memoryPercent(used, maximum any) float64 {
+	limit := numFloat(maximum)
+	if limit <= 0 {
+		return 0
+	}
+	return round1(numFloat(used) / limit * 100)
 }
 
 func refForVolume(kind, node, storage, volid string) plugin.ResourceRef {

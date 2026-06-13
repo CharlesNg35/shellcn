@@ -35,6 +35,52 @@ type chmodRequest struct {
 	Mode  string   `json:"mode"`
 }
 
+func pathsSchema(groupName string) *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: groupName, Fields: []plugin.Field{
+		{
+			Key: "paths", Label: "Selection", Type: plugin.FieldArray, Required: true,
+			ItemLabel: "Path", AddLabel: "Add path", MinItems: 1,
+			Item: &plugin.Field{Type: plugin.FieldText, Required: true, Placeholder: "/path/to/item"},
+		},
+	}}}}
+}
+
+func destinationSchema(groupName, help string) *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: groupName, Fields: []plugin.Field{
+		{
+			Key: "paths", Label: "Selection", Type: plugin.FieldArray, Required: true,
+			ItemLabel: "Path", AddLabel: "Add path", MinItems: 1,
+			Item: &plugin.Field{Type: plugin.FieldText, Required: true, Placeholder: "/path/to/item"},
+		},
+		{
+			Key: "dest", Label: "Destination folder", Type: plugin.FieldAutocomplete, Required: true,
+			Placeholder: "/destination/folder", Help: help,
+			Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^(/|~|\.)?[^\x00]*$`, Message: "Use a valid remote folder path."}},
+		},
+	}}}}
+}
+
+func chmodSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Permissions", Fields: []plugin.Field{
+		{
+			Key: "paths", Label: "Selection", Type: plugin.FieldArray, Required: true,
+			ItemLabel: "Path", AddLabel: "Add path", MinItems: 1,
+			Item: &plugin.Field{Type: plugin.FieldText, Required: true, Placeholder: "/path/to/item"},
+		},
+		{
+			Key: "mode", Label: "Octal mode", Type: plugin.FieldAutocomplete, Required: true,
+			Placeholder: "0644", Help: "Use a 3 or 4 digit octal mode, such as 0644 for files or 0755 for folders.",
+			Options: []plugin.Option{
+				{Label: "0644 - owner write, everyone read", Value: "0644"},
+				{Label: "0600 - owner read/write only", Value: "0600"},
+				{Label: "0755 - executable folder/script", Value: "0755"},
+				{Label: "0700 - owner-only folder/script", Value: "0700"},
+			},
+			Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^0?[0-7]{3,4}$`, Message: "Enter a 3 or 4 digit octal mode, e.g. 0644."}},
+		},
+	}}}}
+}
+
 func resolveBulkPaths(raw []string) ([]string, error) {
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("%w: no paths provided", plugin.ErrInvalidInput)

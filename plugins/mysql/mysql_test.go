@@ -124,6 +124,10 @@ func TestConstraintAddClause(t *testing.T) {
 	if err != nil || fkRef != "FOREIGN KEY (`person_id`) REFERENCES `other`.`people` (`id`)" {
 		t.Fatalf("foreign key (cross-db, unnamed) clause = %q err=%v", fkRef, err)
 	}
+	fkActions, err := constraintAddClause("app", constraintAddRequest{Kind: "FOREIGN KEY", Name: "fk_person", Columns: "person_id", RefTable: "people", RefColumns: "id", OnDelete: "CASCADE", OnUpdate: "RESTRICT"})
+	if err != nil || fkActions != "CONSTRAINT `fk_person` FOREIGN KEY (`person_id`) REFERENCES `app`.`people` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT" {
+		t.Fatalf("foreign key actions clause = %q err=%v", fkActions, err)
+	}
 	chk, err := constraintAddClause("app", constraintAddRequest{Kind: "CHECK", Name: "ck_price", Expression: "price > 0"})
 	if err != nil || chk != "CONSTRAINT `ck_price` CHECK (price > 0)" {
 		t.Fatalf("check clause = %q err=%v", chk, err)
@@ -136,6 +140,46 @@ func TestConstraintAddClause(t *testing.T) {
 	}
 	if _, err := constraintAddClause("app", constraintAddRequest{Kind: "TRIGGER"}); err == nil {
 		t.Fatal("unsupported constraint kind accepted")
+	}
+}
+
+func TestTableInspectorTabsIncludeDDL(t *testing.T) {
+	var table plugin.ResourceType
+	for _, res := range New().Manifest().Resources {
+		if res.Kind == "table" {
+			table = res
+			break
+		}
+	}
+	for _, tab := range table.Detail.Tabs {
+		if tab.Key == "ddl" {
+			if tab.Type != plugin.PanelDocument || tab.Source == nil || tab.Source.RouteID != "mysql.table.ddl" {
+				t.Fatalf("DDL tab is not a document backed by table DDL: %#v", tab)
+			}
+			return
+		}
+	}
+	t.Fatal("table resource missing DDL tab")
+}
+
+func TestMySQLConstraintAndIndexFormsUsePickers(t *testing.T) {
+	constraints := routeInputSchema(t, New(), "mysql.constraint.add")
+	for _, key := range []string{"ref_database", "ref_table"} {
+		field := requireRouteField(t, constraints, key)
+		if field.Type != plugin.FieldAutocomplete || field.OptionsSource == nil || field.VisibleWhen == nil {
+			t.Fatalf("%s should be a foreign-key-only autocomplete: %#v", key, field)
+		}
+	}
+	for _, key := range []string{"on_delete", "on_update"} {
+		field := requireRouteField(t, constraints, key)
+		if field.Type != plugin.FieldSelect || len(field.Options) != 4 || field.VisibleWhen == nil {
+			t.Fatalf("%s should be a foreign-key-only select: %#v", key, field)
+		}
+	}
+	indexes := routeInputSchema(t, New(), "mysql.index.create")
+	indexType := requireRouteField(t, indexes, "type")
+	if indexType.Type != plugin.FieldSelect || indexType.Default != "BTREE" {
+		t.Fatalf("index type should default to BTREE select: %#v", indexType)
 	}
 }
 

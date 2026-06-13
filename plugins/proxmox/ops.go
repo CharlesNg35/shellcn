@@ -205,12 +205,15 @@ func guestRestore(kind string) plugin.Handler {
 		}
 		var in struct {
 			VMID    any    `json:"vmid"`
-			Archive string `json:"archive" validate:"required"`
+			Archive string `json:"archive"`
 			Storage string `json:"storage"`
 			Force   bool   `json:"force"`
 		}
 		if err := rc.Bind(&in); err != nil {
 			return nil, err
+		}
+		if strings.TrimSpace(in.Archive) == "" {
+			in.Archive = rc.Param("archive")
 		}
 		body, err := restoreBody(kind, bodyString(in.VMID), in.Archive, in.Storage, in.Force)
 		if err != nil {
@@ -329,28 +332,32 @@ func taskLog(rc *plugin.RequestContext) (any, error) {
 
 func cloneSchema(kind string) *plugin.Schema {
 	nameLabel := "Name"
+	storageContent := "images"
 	if kind == "lxc" {
 		nameLabel = "Hostname"
+		storageContent = "rootdir"
 	}
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Clone", Fields: []plugin.Field{
 		{Key: "newid", Label: "New VMID", Type: plugin.FieldNumber, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 100}, {Type: plugin.ValidatorMax, Value: 999999999}}},
 		{Key: "name", Label: nameLabel, Type: plugin.FieldText},
 		{Key: "target", Label: "Target node", Type: plugin.FieldSelect, OptionsSource: &plugin.DataSource{RouteID: "proxmox.node.options", Params: map[string]string{"node": "${resource.namespace}"}}, Help: "Leave empty to clone on the same node."},
-		{Key: "storage", Label: "Target storage", Type: plugin.FieldText, Help: "Required for a full clone to another storage."},
+		{Key: "storage", Label: "Target storage", Type: plugin.FieldSelect, OptionsSource: &plugin.DataSource{RouteID: "proxmox.node.guest_storage.options", Params: map[string]string{"node": "${resource.namespace}", "content": storageContent}}, Help: "Used for full clones or when changing storage."},
 		{Key: "full", Label: "Full clone", Type: plugin.FieldToggle, Help: "Copy all disks instead of a linked clone."},
 	}}}}
 }
 
 func restoreSchema(kind string) *plugin.Schema {
+	storageContent := "images"
 	archiveHelp := "Backup volume id, e.g. local:backup/vzdump-qemu-100-....vma.zst"
 	if kind == "lxc" {
+		storageContent = "rootdir"
 		archiveHelp = "Backup volume id, e.g. local:backup/vzdump-lxc-100-....tar.zst"
 	}
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Restore", Fields: []plugin.Field{
 		{Key: "vmid", Label: "New VMID", Type: plugin.FieldNumber, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 100}, {Type: plugin.ValidatorMax, Value: 999999999}}},
-		{Key: "archive", Label: "Backup archive", Type: plugin.FieldText, Required: true, Help: archiveHelp},
-		{Key: "storage", Label: "Target storage", Type: plugin.FieldText},
-		{Key: "force", Label: "Overwrite existing", Type: plugin.FieldToggle, Help: "Restore over an existing guest with this VMID."},
+		{Key: "archive", Label: "Backup archive", Type: plugin.FieldText, Required: true, Default: "${resource.uid}", Help: archiveHelp},
+		{Key: "storage", Label: "Target storage", Type: plugin.FieldSelect, OptionsSource: &plugin.DataSource{RouteID: "proxmox.node.guest_storage.options", Params: map[string]string{"node": "${resource.namespace}", "content": storageContent}}},
+		{Key: "force", Label: "Overwrite existing VMID", Type: plugin.FieldToggle, Help: "Restore over an existing guest with this VMID."},
 	}}}}
 }
 

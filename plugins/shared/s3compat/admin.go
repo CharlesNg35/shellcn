@@ -99,7 +99,7 @@ func Actions(protocol string) []plugin.Action {
 	return []plugin.Action{
 		{ID: routeID(protocol, "bucket.create"), Label: "Create bucket", Icon: icon("plus"), RouteID: routeID(protocol, "bucket.create")},
 		{ID: routeID(protocol, "bucket.delete"), Label: "Delete", Icon: icon("trash-2"), RouteID: routeID(protocol, "bucket.delete"), Params: bucketParams(), Confirm: true, ConfirmText: "Delete this bucket? The bucket must be empty."},
-		{ID: routeID(protocol, "bucket.versioning.set"), Label: "Versioning", Icon: icon("history"), RouteID: routeID(protocol, "bucket.versioning.set"), Params: bucketParams(), Confirm: true, ConfirmText: "Change bucket versioning? After versioning is enabled, S3 only allows suspending it."},
+		{ID: routeID(protocol, "bucket.versioning.set"), Label: "Edit versioning", Icon: icon("history"), RouteID: routeID(protocol, "bucket.versioning.set"), Params: bucketParams(), Confirm: true, ConfirmText: "Change bucket versioning? After versioning is enabled, S3 only allows suspending it."},
 	}
 }
 
@@ -124,7 +124,7 @@ func bucketCreateSchema() *plugin.Schema {
 		{Key: "name", Label: "Bucket name", Type: plugin.FieldText, Required: true, Placeholder: "my-bucket", Help: "Lowercase letters, numbers, dots and hyphens; 3-63 characters.", Validators: []plugin.Validator{
 			{Type: plugin.ValidatorRegex, Value: `^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`, Message: "Use 3-63 lowercase letters, numbers, dots, or hyphens, starting and ending with a letter or number."},
 		}},
-		{Key: "region", Label: "Region", Type: plugin.FieldAutocomplete, Placeholder: "us-east-1", Options: AWSRegionOptions()},
+		{Key: "region", Label: "Region", Type: plugin.FieldAutocomplete, Required: true, Default: "us-east-1", Placeholder: "us-east-1", Help: "AWS requires a region for bucket creation; us-east-1 uses the default location constraint.", Options: AWSRegionOptions()},
 	}}}}
 }
 

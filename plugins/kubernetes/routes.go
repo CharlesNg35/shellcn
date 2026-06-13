@@ -79,8 +79,8 @@ func drainSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{
 		Name: "Drain",
 		Fields: []plugin.Field{
-			{Key: "gracePeriodSeconds", Label: "Grace period (s)", Type: plugin.FieldStepper, Default: 30, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}, {Type: plugin.ValidatorMax, Value: 3600}}},
-			{Key: "force", Label: "Force (evict unmanaged pods)", Type: plugin.FieldToggle},
+			{Key: "gracePeriodSeconds", Label: "Grace period (s)", Type: plugin.FieldStepper, Default: 30, Help: "Maximum termination grace period for evicted Pods.", Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}, {Type: plugin.ValidatorMax, Value: 3600}}},
+			{Key: "force", Label: "Evict unmanaged Pods", Type: plugin.FieldToggle, Help: "Also evict Pods without a controller owner. DaemonSet and mirror Pods are still skipped."},
 		},
 	}}}
 }
@@ -89,7 +89,7 @@ func scaleSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{
 		Name: "Scale",
 		Fields: []plugin.Field{
-			{Key: "replicas", Label: "Replicas", Type: plugin.FieldStepper, Required: true, Default: 1, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}}},
+			{Key: "replicas", Label: "Replicas", Type: plugin.FieldStepper, Required: true, Help: "Set the desired replica count for this workload.", Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}}},
 		},
 	}}}
 }

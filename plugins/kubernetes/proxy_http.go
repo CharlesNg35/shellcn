@@ -154,6 +154,7 @@ func openPortSchema(optionsRouteID string) *plugin.Schema {
 			Label:       "Port",
 			Type:        plugin.FieldSelect,
 			Placeholder: "Select a port",
+			Help:        "Leave blank to open the first web-looking port, or choose a specific declared port.",
 			OptionsSource: &plugin.DataSource{
 				RouteID: optionsRouteID,
 				Params: map[string]string{

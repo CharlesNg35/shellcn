@@ -33,6 +33,7 @@ func routes() []plugin.Route {
 
 		{ID: "ldap.entries.search", Method: plugin.MethodGet, Path: "/entries", Permission: "ldap.entries.read", Risk: plugin.RiskSafe, AuditEvent: "ldap.entries.search", Handle: searchEntries},
 		{ID: "ldap.entry.children", Method: plugin.MethodGet, Path: "/entries/children", Permission: "ldap.entries.read", Risk: plugin.RiskSafe, AuditEvent: "ldap.entry.children", Handle: childEntries},
+		{ID: "ldap.entries.options", Method: plugin.MethodGet, Path: "/entries/options", Permission: "ldap.entries.read", Risk: plugin.RiskSafe, AuditEvent: "ldap.entries.options", Handle: entryOptions},
 		{ID: "ldap.entry.attributes", Method: plugin.MethodGet, Path: "/entries/attributes", Permission: "ldap.entries.read", Risk: plugin.RiskSafe, AuditEvent: "ldap.entry.attributes", Handle: entryAttributes},
 		{ID: "ldap.entry.ldif", Method: plugin.MethodGet, Path: "/entries/ldif", Permission: "ldap.entries.read", Risk: plugin.RiskSafe, AuditEvent: "ldap.entry.ldif", Handle: entryLDIF},
 
@@ -50,14 +51,14 @@ func entryAddSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Entry", Fields: []plugin.Field{
 		{Key: "rdn", Label: "RDN", Type: plugin.FieldText, Required: true, Placeholder: "uid=jdoe", Help: "Relative DN of the new entry, e.g. uid=jdoe or cn=Engineers.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^[^=]+=.+$`, Message: "Use attribute=value, for example uid=jdoe."}}},
 		{Key: "object_class", Label: "Object classes", Type: plugin.FieldArray, Required: true, Default: []string{"top"}, MinItems: 1, ItemLabel: "Object class", AddLabel: "Add object class", Item: &plugin.Field{Type: plugin.FieldAutocomplete, Options: commonObjectClassOptions()}},
-		{Key: "attributes", Label: "Attributes", Type: plugin.FieldMap, KeyLabel: "Attribute", KeyPlaceholder: "cn", AddLabel: "Add attribute", Item: &plugin.Field{Type: plugin.FieldArray, ItemLabel: "Value", MinItems: 1, Item: &plugin.Field{Type: plugin.FieldText}}},
+		{Key: "attributes", Label: "Attributes", Type: plugin.FieldMap, KeyLabel: "Attribute", KeyPlaceholder: "cn", AddLabel: "Add attribute", Help: "Add required attributes for the selected object classes. The RDN attribute is added automatically when omitted.", Item: &plugin.Field{Type: plugin.FieldArray, ItemLabel: "Value", MinItems: 1, Item: &plugin.Field{Type: plugin.FieldText}}},
 	}}}}
 }
 
 func entryRenameSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Rename / move", Fields: []plugin.Field{
 		{Key: "new_rdn", Label: "New RDN", Type: plugin.FieldText, Required: true, Placeholder: "uid=johndoe", Help: "New relative DN for the entry.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^[^=]+=.+$`, Message: "Use attribute=value, for example uid=johndoe."}}},
-		{Key: "new_superior", Label: "New parent DN", Type: plugin.FieldText, Help: "Move the entry under this parent DN. Leave empty to rename in place."},
+		{Key: "new_superior", Label: "New parent DN", Type: plugin.FieldAutocomplete, OptionsSource: &plugin.DataSource{RouteID: "ldap.entries.options"}, Help: "Move the entry under this parent DN. Leave empty to rename in place."},
 		{Key: "delete_old_rdn", Label: "Delete old RDN", Type: plugin.FieldToggle, Default: true, Help: "Remove the previous RDN attribute value after the rename."},
 	}}}}
 }
@@ -214,6 +215,42 @@ func childEntries(rc *plugin.RequestContext) (any, error) {
 		rows = append(rows, entryRow(entry, s.opts.ReadOnly))
 	}
 	return pageRows(rc, rows)
+}
+
+func entryOptions(rc *plugin.RequestContext) (any, error) {
+	s, err := ldapSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	req, err := rc.Page()
+	if err != nil {
+		return nil, err
+	}
+	base := strings.TrimSpace(paramOf(rc, "base"))
+	if base == "" {
+		base = s.opts.BaseDN
+	}
+	if err := validateDN(base, "base DN"); err != nil {
+		return nil, err
+	}
+	filter, err := searchFilter(req.Search())
+	if err != nil {
+		return nil, err
+	}
+	entries, err := search(s, base, ldapv3.ScopeWholeSubtree, filter, structAttrs)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]row, 0, len(entries))
+	for _, entry := range entries {
+		rows = append(rows, row{
+			"value": entry.DN,
+			"label": entry.DN,
+			"name":  rdnOf(entry.DN),
+			"dn":    entry.DN,
+		})
+	}
+	return paginate(rc, rows)
 }
 
 func entryAttributes(rc *plugin.RequestContext) (any, error) {
@@ -545,13 +582,23 @@ func lookupEntry(s *Session, dn string) (*ldapv3.Entry, error) {
 func treeNode(entry *ldapv3.Entry, readOnly bool) plugin.TreeNode {
 	classes := entry.GetAttributeValues("objectClass")
 	leaf := strings.EqualFold(entry.GetAttributeValue("hasSubordinates"), "FALSE")
+	entryType := entryTypeForEntry(classes)
 	node := plugin.TreeNode{
 		Key:   entry.DN,
 		Label: rdnOf(entry.DN),
 		Icon:  iconForEntry(classes),
 		Ref:   entryRef(entry.DN),
 		Leaf:  leaf,
-		Data:  map[string]any{"readOnly": readOnly},
+		Data: map[string]any{
+			"readOnly":    readOnly,
+			"dn":          entry.DN,
+			"name":        rdnOf(entry.DN),
+			"parent":      parentOf(entry.DN),
+			"entryType":   entryType,
+			"objectClass": strings.Join(classes, ", "),
+			"hasChildren": !leaf,
+			"icon":        iconForEntry(classes).Value,
+		},
 	}
 	if !leaf {
 		node.ChildrenSource = &plugin.DataSource{RouteID: "ldap.tree.children", Params: map[string]string{"dn": entry.DN}}
@@ -561,10 +608,16 @@ func treeNode(entry *ldapv3.Entry, readOnly bool) plugin.TreeNode {
 
 func entryRow(entry *ldapv3.Entry, readOnly bool) row {
 	ref := entryRef(entry.DN)
+	classes := entry.GetAttributeValues("objectClass")
+	hasChildren := !strings.EqualFold(entry.GetAttributeValue("hasSubordinates"), "FALSE")
 	return row{
 		"name":        ref.Name,
 		"dn":          entry.DN,
-		"objectClass": strings.Join(entry.GetAttributeValues("objectClass"), ", "),
+		"parent":      parentOf(entry.DN),
+		"entryType":   entryTypeForEntry(classes),
+		"objectClass": strings.Join(classes, ", "),
+		"hasChildren": hasChildren,
+		"icon":        iconForEntry(classes).Value,
 		"readOnly":    readOnly,
 		"ref":         *ref,
 	}
@@ -588,6 +641,24 @@ func iconForEntry(classes []string) plugin.Icon {
 		}
 	}
 	return icon("file")
+}
+
+func entryTypeForEntry(classes []string) string {
+	for _, class := range classes {
+		switch strings.ToLower(class) {
+		case "domain", "domaindns", "dcobject":
+			return "domain"
+		case "organizationalunit", "organization", "container", "builtindomain":
+			return "container"
+		case "groupofnames", "groupofuniquenames", "posixgroup", "group":
+			return "group"
+		case "person", "inetorgperson", "organizationalperson", "user", "posixaccount", "foreignsecurityprincipal":
+			return "person"
+		case "computer", "device":
+			return "computer"
+		}
+	}
+	return "entry"
 }
 
 func rdnOf(dn string) string {

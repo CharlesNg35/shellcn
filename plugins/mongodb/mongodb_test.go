@@ -123,7 +123,7 @@ func TestIndexCreateKeysIsMapOfDirectionSelect(t *testing.T) {
 	for _, o := range field.Item.Options {
 		values = append(values, o.Value)
 	}
-	want := []any{1, -1}
+	want := []any{1, -1, "text", "hashed", "2dsphere"}
 	if len(values) != len(want) {
 		t.Fatalf("keys select options = %#v, want %#v", values, want)
 	}
@@ -131,6 +131,55 @@ func TestIndexCreateKeysIsMapOfDirectionSelect(t *testing.T) {
 		if values[i] != want[i] {
 			t.Fatalf("keys select option %d = %#v (%T), want %#v", i, values[i], values[i], want[i])
 		}
+	}
+}
+
+func TestCollectionHasValidationTabAndIndexProperties(t *testing.T) {
+	var collection plugin.ResourceType
+	for _, res := range New().Manifest().Resources {
+		if res.Kind == "collection" {
+			collection = res
+			break
+		}
+	}
+	hasValidation := false
+	for _, tab := range collection.Detail.Tabs {
+		if tab.Key == "validation" {
+			hasValidation = true
+			if tab.Type != plugin.PanelObjectDetail || tab.Source == nil || tab.Source.RouteID != "mongodb.collection.validation" {
+				t.Fatalf("validation tab is not backed by collection validation: %#v", tab)
+			}
+		}
+	}
+	if !hasValidation {
+		t.Fatal("collection detail missing validation tab")
+	}
+	cols := map[string]bool{}
+	for _, col := range indexColumns() {
+		cols[col.Key] = true
+	}
+	for _, key := range []string{"type", "hidden", "ttl", "properties"} {
+		if !cols[key] {
+			t.Fatalf("index table missing %s column", key)
+		}
+	}
+}
+
+func TestIndexCreateAdvancedOptionsAreStateSpecific(t *testing.T) {
+	schema := routeInputSchema(t, "mongodb.index.create")
+	for _, key := range []string{"hidden", "ttl", "partial"} {
+		field := requireRouteField(t, schema, key)
+		if field.Type != plugin.FieldToggle {
+			t.Fatalf("%s should be a toggle: %#v", key, field)
+		}
+	}
+	ttl := requireRouteField(t, schema, "expire_after_seconds")
+	if ttl.Type != plugin.FieldNumber || ttl.VisibleWhen == nil {
+		t.Fatalf("TTL seconds should be a state-specific number field: %#v", ttl)
+	}
+	partial := requireRouteField(t, schema, "partial_filter")
+	if partial.Type != plugin.FieldJSON || partial.VisibleWhen == nil {
+		t.Fatalf("partial filter should be a state-specific JSON field: %#v", partial)
 	}
 }
 

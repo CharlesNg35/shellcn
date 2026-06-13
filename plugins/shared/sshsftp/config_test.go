@@ -55,6 +55,49 @@ func TestConnectVerifiesPinnedHostKey(t *testing.T) {
 	}
 }
 
+func TestParseConnectOptionsHostKeyVerification(t *testing.T) {
+	opts, err := parseConnectOptions(plugin.ConnectConfig{Config: map[string]any{
+		"host":                  "example.test",
+		"user":                  "root",
+		"auth":                  "password",
+		"password":              "pw",
+		"host_key_verification": "pinned",
+		"host_key":              "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+	}})
+	if err != nil {
+		t.Fatalf("parse pinned host key: %v", err)
+	}
+	if opts.HostKeyMode != "pinned" || opts.HostKey == "" {
+		t.Fatalf("host key policy not preserved: %+v", opts)
+	}
+
+	_, err = parseConnectOptions(plugin.ConnectConfig{Config: map[string]any{
+		"host":                  "example.test",
+		"user":                  "root",
+		"auth":                  "password",
+		"password":              "pw",
+		"host_key_verification": "pinned",
+	}})
+	if !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("missing pinned host key err = %v, want ErrInvalidInput", err)
+	}
+
+	opts, err = parseConnectOptions(plugin.ConnectConfig{Config: map[string]any{
+		"host":                  "example.test",
+		"user":                  "root",
+		"auth":                  "password",
+		"password":              "pw",
+		"host_key_verification": "insecure",
+		"host_key":              "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+	}})
+	if err != nil {
+		t.Fatalf("parse insecure host key policy: %v", err)
+	}
+	if opts.HostKeyMode != "insecure" || opts.HostKey != "" {
+		t.Fatalf("insecure policy should ignore pinned key: %+v", opts)
+	}
+}
+
 func TestHostKeyCallbackParsesOpenSSHKeys(t *testing.T) {
 	srv := newSSHServer(t)
 	defer srv.Close()

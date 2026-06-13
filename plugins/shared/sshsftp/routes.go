@@ -86,10 +86,10 @@ func Routes(prefix, protocol string, includeShell bool) []plugin.Route {
 		{ID: prefix + ".sftp.mkdir", Method: plugin.MethodPost, Path: "/sftp/mkdir/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".sftp.mkdir", Input: nameSchema("Folder"), Handle: mkdir},
 		{ID: prefix + ".sftp.rename", Method: plugin.MethodPatch, Path: "/sftp/rename/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".sftp.rename", Input: nameSchema("Name"), Handle: renameEntry},
 		{ID: prefix + ".sftp.delete", Method: plugin.MethodDelete, Path: "/sftp/delete/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskDestructive, AuditEvent: protocol + ".sftp.delete", Handle: deleteEntry},
-		{ID: prefix + ".sftp.move", Method: plugin.MethodPost, Path: "/sftp/move", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".sftp.move", Handle: move},
-		{ID: prefix + ".sftp.copy", Method: plugin.MethodPost, Path: "/sftp/copy", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".sftp.copy", Handle: copyFiles},
-		{ID: prefix + ".sftp.chmod", Method: plugin.MethodPost, Path: "/sftp/chmod", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".sftp.chmod", Handle: chmod},
-		{ID: prefix + ".sftp.archive", Method: plugin.MethodPost, Path: "/sftp/archive", Permission: protocol + ".files.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".sftp.archive", Handle: archive},
+		{ID: prefix + ".sftp.move", Method: plugin.MethodPost, Path: "/sftp/move", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".sftp.move", Input: destinationSchema("Move", "Each selected item is moved into this folder and keeps its current name."), Handle: move},
+		{ID: prefix + ".sftp.copy", Method: plugin.MethodPost, Path: "/sftp/copy", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".sftp.copy", Input: destinationSchema("Copy", "Each selected item is copied into this folder and keeps its current name."), Handle: copyFiles},
+		{ID: prefix + ".sftp.chmod", Method: plugin.MethodPost, Path: "/sftp/chmod", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".sftp.chmod", Input: chmodSchema(), Handle: chmod},
+		{ID: prefix + ".sftp.archive", Method: plugin.MethodPost, Path: "/sftp/archive", Permission: protocol + ".files.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".sftp.archive", Input: pathsSchema("Archive"), Handle: archive},
 	}
 	if includeShell {
 		routes = append([]plugin.Route{{

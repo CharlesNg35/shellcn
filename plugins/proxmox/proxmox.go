@@ -6,6 +6,7 @@ package proxmox
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
@@ -19,9 +20,10 @@ func New() *Plugin { return &Plugin{} }
 // statusSeverities colors guest/node/task/storage status badges by value.
 var statusSeverities = map[string]plugin.Severity{
 	"running": plugin.SeveritySuccess, "online": plugin.SeveritySuccess, "ok": plugin.SeveritySuccess, "available": plugin.SeveritySuccess, "active": plugin.SeveritySuccess,
+	"OK":      plugin.SeveritySuccess,
 	"stopped": plugin.SeveritySecondary, "offline": plugin.SeveritySecondary, "disabled": plugin.SeveritySecondary,
-	"paused": plugin.SeverityWarn, "unknown": plugin.SeverityWarn,
-	"error": plugin.SeverityDanger,
+	"paused": plugin.SeverityWarn, "unknown": plugin.SeverityWarn, "WARNINGS": plugin.SeverityWarn,
+	"error": plugin.SeverityDanger, "ERROR": plugin.SeverityDanger,
 }
 
 var templateSeverities = map[string]plugin.Severity{
@@ -73,7 +75,7 @@ func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.
 }
 
 func resources() []plugin.ResourceType {
-	return []plugin.ResourceType{guestResource(), qemuResource(), lxcResource(), nodeResource(), storageResource()}
+	return []plugin.ResourceType{guestResource(), qemuResource(), lxcResource(), nodeResource(), storageResource(), taskResource()}
 }
 
 func guestColumns() []plugin.Column {
@@ -86,7 +88,8 @@ func guestColumns() []plugin.Column {
 		{Key: "node", Label: "Node", Sortable: true},
 		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: statusSeverities},
 		{Key: "cpu", Label: "CPU", Type: plugin.ColumnPercent, Sortable: true, Precision: oneDecimal()},
-		{Key: "mem", Label: "Memory", Type: plugin.ColumnBytes, Sortable: true},
+		{Key: "mem", Label: "Memory used", Type: plugin.ColumnBytes, Sortable: true},
+		{Key: "maxmem", Label: "Memory limit", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "uptime", Label: "Uptime", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "tags", Label: "Tags"},
 	}
@@ -113,6 +116,7 @@ func snapshotColumns() []plugin.Column {
 func backupColumns() []plugin.Column {
 	return []plugin.Column{
 		{Key: "name", Label: "Volume", Sortable: true},
+		{Key: "guestType", Label: "Guest", Type: plugin.ColumnBadge, Sortable: true},
 		{Key: "storage", Label: "Storage", Sortable: true},
 		{Key: "protected", Label: "Protected", Type: plugin.ColumnBool, Sortable: true},
 		{Key: "size", Label: "Size", Type: plugin.ColumnBytes, Sortable: true},
@@ -124,7 +128,7 @@ func backupColumns() []plugin.Column {
 
 func qemuResource() plugin.ResourceType {
 	cols := guestColumns()
-	lifecycle := []string{"act.qemu.start", "act.qemu.shutdown", "act.qemu.reboot", "act.qemu.stop", "act.qemu.suspend", "act.qemu.resume", "act.qemu.migrate", "act.qemu.clone", "act.qemu.resize", "act.qemu.restore", "act.qemu.snapshot.create", "act.qemu.backup", "act.qemu.destroy"}
+	lifecycle := []string{"act.qemu.start", "act.qemu.shutdown", "act.qemu.reboot", "act.qemu.stop", "act.qemu.suspend", "act.qemu.resume", "act.qemu.migrate", "act.qemu.clone", "act.qemu.resize", "act.qemu.snapshot.create", "act.qemu.backup", "act.qemu.destroy"}
 	row := []string{"act.qemu.destroy"}
 	return plugin.ResourceType{
 		Kind: "qemu", Title: "Virtual Machines",
@@ -137,8 +141,8 @@ func qemuResource() plugin.ResourceType {
 				{Key: "metrics", Label: "Metrics", Icon: icon("activity"), Type: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.qemu.metrics", Method: plugin.MethodWS, Params: guestParams()}, Config: cpuMemMetrics(), VisibleWhen: instanceOnly()},
 				{Key: "console", Label: "Console", Icon: icon("monitor"), Type: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "proxmox.qemu.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.RemoteDesktopConfig{Resize: true, Clipboard: true}, VisibleWhen: instanceOnly()},
 				{Key: "snapshots", Label: "Snapshots", Icon: icon("camera"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.snapshots", Params: guestParams()}, Config: plugin.TableConfig{Columns: snapshotColumns(), RowActionIDs: []string{"act.qemu.snapshot.rollback", "act.qemu.snapshot.delete"}, EmptyText: "No snapshots for this VM."}, VisibleWhen: instanceOnly()},
-				{Key: "backups", Label: "Backups", Icon: icon("archive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.backups", Params: guestParams()}, Config: plugin.TableConfig{Columns: backupColumns(), RowActionIDs: []string{"act.backup.delete"}, RowClick: plugin.RowClickDetail, EmptyText: "No backups found for this VM."}},
-				{Key: "hardware", Label: "Hardware", Icon: icon("cpu"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.qemu.config", Params: guestParams()}, Config: plugin.ObjectDetailConfig{RawToggle: true}},
+				{Key: "backups", Label: "Backups", Icon: icon("archive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.backups", Params: guestParams()}, Config: plugin.TableConfig{Columns: backupColumns(), RowActionIDs: []string{"act.qemu.backup.restore", "act.backup.delete"}, RowClick: plugin.RowClickSelect, EmptyText: "No backup archives found for this VM."}},
+				{Key: "hardware", Label: "Hardware", Icon: icon("cpu"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.qemu.config", Params: guestParams()}, Config: qemuHardwareConfig()},
 			},
 		},
 	}
@@ -146,7 +150,7 @@ func qemuResource() plugin.ResourceType {
 
 func lxcResource() plugin.ResourceType {
 	cols := guestColumns()
-	lifecycle := []string{"act.lxc.start", "act.lxc.shutdown", "act.lxc.reboot", "act.lxc.stop", "act.lxc.migrate", "act.lxc.clone", "act.lxc.restore", "act.lxc.snapshot.create", "act.lxc.backup", "act.lxc.destroy"}
+	lifecycle := []string{"act.lxc.start", "act.lxc.shutdown", "act.lxc.reboot", "act.lxc.stop", "act.lxc.migrate", "act.lxc.clone", "act.lxc.snapshot.create", "act.lxc.backup", "act.lxc.destroy"}
 	row := []string{"act.lxc.destroy"}
 	return plugin.ResourceType{
 		Kind: "lxc", Title: "Containers",
@@ -159,8 +163,8 @@ func lxcResource() plugin.ResourceType {
 				{Key: "metrics", Label: "Metrics", Icon: icon("activity"), Type: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.lxc.metrics", Method: plugin.MethodWS, Params: guestParams()}, Config: cpuMemMetrics(), VisibleWhen: instanceOnly()},
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "proxmox.lxc.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.TerminalConfig{Zoom: true, Search: true}, VisibleWhen: instanceOnly()},
 				{Key: "snapshots", Label: "Snapshots", Icon: icon("camera"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.snapshots", Params: guestParams()}, Config: plugin.TableConfig{Columns: snapshotColumns(), RowActionIDs: []string{"act.lxc.snapshot.rollback", "act.lxc.snapshot.delete"}, EmptyText: "No snapshots for this container."}, VisibleWhen: instanceOnly()},
-				{Key: "backups", Label: "Backups", Icon: icon("archive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.backups", Params: guestParams()}, Config: plugin.TableConfig{Columns: backupColumns(), RowActionIDs: []string{"act.backup.delete"}, RowClick: plugin.RowClickDetail, EmptyText: "No backups found for this container."}},
-				{Key: "config", Label: "Config", Icon: icon("code"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.lxc.config", Params: guestParams()}, Config: plugin.ObjectDetailConfig{RawToggle: true}},
+				{Key: "backups", Label: "Backups", Icon: icon("archive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.backups", Params: guestParams()}, Config: plugin.TableConfig{Columns: backupColumns(), RowActionIDs: []string{"act.lxc.backup.restore", "act.backup.delete"}, RowClick: plugin.RowClickSelect, EmptyText: "No backup archives found for this container."}},
+				{Key: "config", Label: "Config", Icon: icon("code"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.lxc.config", Params: guestParams()}, Config: lxcConfigDetail()},
 			},
 		},
 	}
@@ -199,7 +203,24 @@ func storageResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Panel{
-				{Key: "content", Label: "Content", Icon: icon("hard-drive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.storage.content", Params: map[string]string{"node": "${resource.namespace}", "storage": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: contentColumns(), RowActionIDs: []string{"act.backup.delete"}, RowClick: plugin.RowClickDetail, EmptyText: "This storage has no content visible to this connection."}},
+				{Key: "content", Label: "Content", Icon: icon("hard-drive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.storage.content", Params: map[string]string{"node": "${resource.namespace}", "storage": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: contentColumns(), RowActionIDs: []string{"act.qemu.backup.restore", "act.lxc.backup.restore", "act.backup.delete"}, RowClick: plugin.RowClickSelect, EmptyText: "This storage has no content visible to this connection."}},
+			},
+		},
+	}
+}
+
+func taskResource() plugin.ResourceType {
+	return plugin.ResourceType{
+		Kind:    "task",
+		Title:   "Tasks",
+		List:    plugin.DataSource{RouteID: "proxmox.task.list"},
+		Columns: taskColumns(),
+		Actions: plugin.ResourceActions{Detail: []string{"act.task.stop"}},
+		Detail: plugin.DetailView{
+			Header: plugin.HeaderSpec{Title: "${resource.uid}", StatusField: "status", Severities: statusSeverities},
+			Tabs: []plugin.Panel{
+				{Key: "status", Label: "Status", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.task.status", Params: map[string]string{"node": "${resource.namespace}", "upid": "${resource.uid}"}}, Config: taskStatusConfig()},
+				{Key: "log", Label: "Log", Icon: icon("scroll-text"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.task.log", Params: map[string]string{"node": "${resource.namespace}", "upid": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: []plugin.Column{{Key: "n", Label: "#", Type: plugin.ColumnNumber, Width: "5rem"}, {Key: "t", Label: "Message"}}, EmptyText: "This task has no log lines."}},
 			},
 		},
 	}
@@ -235,6 +256,7 @@ func taskColumns() []plugin.Column {
 		{Key: "id", Label: "ID"},
 		{Key: "user", Label: "User", Sortable: true},
 		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Severities: statusSeverities},
+		{Key: "exitstatus", Label: "Exit status", Type: plugin.ColumnBadge, Severities: statusSeverities},
 		{Key: "starttime", Label: "Started", Type: plugin.ColumnDateTime, Sortable: true},
 		{Key: "endtime", Label: "Ended", Type: plugin.ColumnDateTime, Sortable: true},
 	}
@@ -261,21 +283,123 @@ func guestOverviewConfig() plugin.ObjectDetailConfig {
 			}},
 			{Title: "Runtime", Fields: []plugin.ObjectDetailField{
 				{Key: "cpu", Label: "CPU", Type: plugin.ColumnPercent},
-				{Key: "mem", Label: "Memory", Type: plugin.ColumnBytes},
-				{Key: "maxmem", Label: "Max memory", Type: plugin.ColumnBytes},
+				{Key: "mem", Label: "Memory used", Type: plugin.ColumnBytes},
+				{Key: "maxmem", Label: "Memory limit", Type: plugin.ColumnBytes},
+				{Key: "memPct", Label: "Memory usage", Type: plugin.ColumnPercent},
 				{Key: "uptime", Label: "Uptime", Type: plugin.ColumnNumber},
 				{Key: "lock", Label: "Lock"},
 				{Key: "ha", Label: "HA state"},
 			}},
-			{Title: "Configuration", Fields: []plugin.ObjectDetailField{
+			{Title: "Allocation", Fields: []plugin.ObjectDetailField{
 				{Key: "cores", Label: "Cores", Type: plugin.ColumnNumber},
 				{Key: "sockets", Label: "Sockets", Type: plugin.ColumnNumber},
-				{Key: "memory", Label: "Configured memory", Type: plugin.ColumnBytes},
+				{Key: "memoryConfigured", Label: "Configured maximum RAM", Type: plugin.ColumnBytes},
+				{Key: "memoryMinimum", Label: "Minimum RAM (balloon)", Type: plugin.ColumnBytes},
+				{Key: "memoryCurrent", Label: "Current online RAM", Type: plugin.ColumnBytes},
 				{Key: "ostype", Label: "OS type"},
 			}},
 		},
 		RawToggle: true,
 	}
+}
+
+func qemuHardwareConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "CPU and memory", Fields: []plugin.ObjectDetailField{
+				{Key: "cores", Label: "Cores", Type: plugin.ColumnNumber},
+				{Key: "sockets", Label: "Sockets", Type: plugin.ColumnNumber},
+				{Key: "cpu", Label: "CPU type"},
+				{Key: "memory", Label: "Maximum RAM"},
+				{Key: "balloon", Label: "Minimum RAM (balloon)"},
+				{Key: "shares", Label: "Balloon shares", Type: plugin.ColumnNumber},
+				{Key: "numa", Label: "NUMA"},
+			}},
+			{Title: "Boot and firmware", Fields: []plugin.ObjectDetailField{
+				{Key: "bios", Label: "BIOS"},
+				{Key: "machine", Label: "Machine"},
+				{Key: "ostype", Label: "OS type"},
+				{Key: "boot", Label: "Boot order"},
+				{Key: "scsihw", Label: "SCSI controller"},
+			}},
+			{Title: "Disks", Fields: diskFields()},
+			{Title: "Network", Fields: netFields()},
+		},
+		RawToggle: true,
+	}
+}
+
+func lxcConfigDetail() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Resources", Fields: []plugin.ObjectDetailField{
+				{Key: "cores", Label: "Cores", Type: plugin.ColumnNumber},
+				{Key: "memory", Label: "Memory"},
+				{Key: "swap", Label: "Swap"},
+				{Key: "rootfs", Label: "Root disk"},
+			}},
+			{Title: "Container", Fields: []plugin.ObjectDetailField{
+				{Key: "hostname", Label: "Hostname"},
+				{Key: "ostype", Label: "OS type"},
+				{Key: "arch", Label: "Architecture"},
+				{Key: "unprivileged", Label: "Unprivileged", Type: plugin.ColumnBool},
+				{Key: "features", Label: "Features"},
+				{Key: "tags", Label: "Tags"},
+			}},
+			{Title: "Network", Fields: netFields()},
+			{Title: "Mount points", Fields: mountFields()},
+		},
+		RawToggle: true,
+	}
+}
+
+func taskStatusConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		Sections: []plugin.ObjectDetailSection{{Title: "Task", Fields: []plugin.ObjectDetailField{
+			{Key: "upid", Label: "UPID", Copy: true},
+			{Key: "type", Label: "Type"},
+			{Key: "id", Label: "ID"},
+			{Key: "user", Label: "User"},
+			{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Severities: statusSeverities},
+			{Key: "exitstatus", Label: "Exit status", Type: plugin.ColumnBadge, Severities: statusSeverities},
+			{Key: "starttime", Label: "Started", Type: plugin.ColumnDateTime},
+			{Key: "endtime", Label: "Ended", Type: plugin.ColumnDateTime},
+		}}},
+		RawToggle: true,
+	}
+}
+
+func diskFields() []plugin.ObjectDetailField {
+	fields := []plugin.ObjectDetailField{}
+	for _, prefix := range []string{"scsi", "virtio", "sata", "ide", "efidisk", "tpmstate", "unused"} {
+		limit := 4
+		if prefix == "scsi" {
+			limit = 8
+		}
+		for i := 0; i < limit; i++ {
+			key := prefix + fmt.Sprint(i)
+			fields = append(fields, plugin.ObjectDetailField{Key: key, Label: key})
+		}
+	}
+	return fields
+}
+
+func netFields() []plugin.ObjectDetailField {
+	fields := []plugin.ObjectDetailField{}
+	for i := 0; i < 8; i++ {
+		key := "net" + fmt.Sprint(i)
+		fields = append(fields, plugin.ObjectDetailField{Key: key, Label: key})
+	}
+	return fields
+}
+
+func mountFields() []plugin.ObjectDetailField {
+	fields := []plugin.ObjectDetailField{}
+	for i := 0; i < 8; i++ {
+		key := "mp" + fmt.Sprint(i)
+		fields = append(fields, plugin.ObjectDetailField{Key: key, Label: key})
+	}
+	return fields
 }
 
 // cpuMemMetrics declares the CPU/Memory gauges + time-series for the metrics
@@ -333,7 +457,6 @@ func lifecycleActions(kind string) []plugin.Action {
 		{ID: "act." + kind + ".snapshot.create", Label: "Snapshot", Icon: icon("camera"), RouteID: "proxmox." + kind + ".snapshot.create", Params: gp, OnSuccess: &plugin.ActionSuccess{SelectTab: "snapshots"}, VisibleWhen: instanceOnly(), Group: "Snapshots"},
 		{ID: "act." + kind + ".backup", Label: "Backup now", Icon: icon("archive"), RouteID: "proxmox." + kind + ".backup", Params: gp, OnSuccess: &plugin.ActionSuccess{SelectTab: "backups"}, VisibleWhen: instanceOnly(), Group: "Snapshots"},
 		{ID: "act." + kind + ".clone", Label: "Clone", Icon: icon("copy"), RouteID: "proxmox." + kind + ".clone", Params: gp, Group: "Manage"},
-		{ID: "act." + kind + ".restore", Label: "Restore from backup", Icon: icon("upload"), RouteID: "proxmox." + kind + ".restore", Params: map[string]string{"node": "${resource.namespace}"}, Confirm: true, ConfirmText: "Restore a guest from a backup archive. Existing guests can be overwritten only when enabled in the form.", VisibleWhen: instanceOnly(), Group: "Manage"},
 		{ID: "act." + kind + ".destroy", Label: "Destroy", Icon: icon("trash-2"), RouteID: "proxmox." + kind + ".destroy", Params: gp, Confirm: true, ConfirmText: "Destroy this guest and all its disks? This cannot be undone.", EnabledWhen: whenStatus("stopped")},
 	}
 	if kind == "qemu" {
@@ -347,5 +470,6 @@ func lifecycleActions(kind string) []plugin.Action {
 	return append(acts,
 		plugin.Action{ID: "act." + kind + ".snapshot.rollback", Label: "Rollback", Icon: icon("rotate-cw"), RouteID: "proxmox." + kind + ".snapshot.rollback", Params: snapParams, Confirm: true, ConfirmText: "Roll back to this snapshot? Current state is lost.", VisibleWhen: instanceOnly()},
 		plugin.Action{ID: "act." + kind + ".snapshot.delete", Label: "Delete", Icon: icon("trash"), RouteID: "proxmox." + kind + ".snapshot.delete", Params: snapParams, Confirm: true, ConfirmText: "Delete this snapshot?", VisibleWhen: instanceOnly()},
+		plugin.Action{ID: "act." + kind + ".backup.restore", Label: "Restore", Icon: icon("upload"), RouteID: "proxmox." + kind + ".restore", Params: map[string]string{"node": "${resource.namespace}", "archive": "${resource.uid}"}, Confirm: true, ConfirmText: "Restore this backup archive. Existing guests can be overwritten only when enabled in the form.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "content", Op: plugin.OpEq, Value: "backup"}, {Field: "guestType", Op: plugin.OpEq, Value: kind}}}},
 	)
 }

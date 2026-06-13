@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	ldapv3 "github.com/go-ldap/ldap/v3"
+
 	"github.com/charlesng35/shellcn/sdk/plugin"
 	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
@@ -36,6 +38,76 @@ func TestAttributesTabIsStagedEditableGrid(t *testing.T) {
 	}
 	if len(tc.RowKey) != 1 || tc.RowKey[0] != "attribute" {
 		t.Fatalf("attributes grid rowKey = %#v, want [attribute]", tc.RowKey)
+	}
+}
+
+func TestEntryResourceExposesDirectoryBrowserColumnsAndSubtreeNavigation(t *testing.T) {
+	var entry plugin.ResourceType
+	for _, res := range New().Manifest().Resources {
+		if res.Kind == "entry" {
+			entry = res
+			break
+		}
+	}
+	if entry.Kind == "" {
+		t.Fatal("missing entry resource")
+	}
+	columns := map[string]plugin.Column{}
+	for _, column := range entry.Columns {
+		columns[column.Key] = column
+	}
+	for _, key := range []string{"icon", "name", "dn", "parent", "entryType", "hasChildren", "objectClass"} {
+		if _, ok := columns[key]; !ok {
+			t.Fatalf("entry columns missing %q", key)
+		}
+	}
+	if columns["icon"].Type != plugin.ColumnIcon || columns["entryType"].Type != plugin.ColumnBadge || columns["hasChildren"].Type != plugin.ColumnBool {
+		t.Fatalf("entry columns should expose icon/type/children affordances: %#v", columns)
+	}
+	if entry.Detail.Header.StatusField != "entryType" {
+		t.Fatalf("entry header status = %q, want entryType", entry.Detail.Header.StatusField)
+	}
+	var subtree *plugin.Panel
+	for i := range entry.Detail.Tabs {
+		if entry.Detail.Tabs[i].Key == "subtree" {
+			subtree = &entry.Detail.Tabs[i]
+			break
+		}
+	}
+	if subtree == nil {
+		t.Fatal("missing subtree tab")
+	}
+	cfg, ok := subtree.Config.(plugin.TableConfig)
+	if !ok || cfg.RowClick != plugin.RowClickNavigate || cfg.DefaultSort == nil || cfg.DefaultSort.Field != "dn" {
+		t.Fatalf("subtree table config = %#v", subtree.Config)
+	}
+}
+
+func TestRenameUsesParentDNAutocomplete(t *testing.T) {
+	var schema *plugin.Schema
+	for _, route := range New().Routes() {
+		if route.ID == "ldap.entry.rename" {
+			schema = route.Input
+			break
+		}
+	}
+	if schema == nil {
+		t.Fatal("ldap.entry.rename has no input schema")
+	}
+	var parent *plugin.Field
+	for _, group := range schema.Groups {
+		for i := range group.Fields {
+			if group.Fields[i].Key == "new_superior" {
+				parent = &group.Fields[i]
+				break
+			}
+		}
+	}
+	if parent == nil || parent.Type != plugin.FieldAutocomplete {
+		t.Fatalf("new_superior field = %#v, want autocomplete", parent)
+	}
+	if parent.OptionsSource == nil || parent.OptionsSource.RouteID != "ldap.entries.options" {
+		t.Fatalf("new_superior options source = %#v", parent.OptionsSource)
 	}
 }
 
@@ -224,6 +296,23 @@ func TestIconForEntry(t *testing.T) {
 		if got := iconForEntry([]string{class}); got.Value != want {
 			t.Fatalf("iconForEntry(%q) = %q, want %q", class, got.Value, want)
 		}
+	}
+}
+
+func TestEntryRowCarriesTypeIconParentAndChildrenMetadata(t *testing.T) {
+	entry := &ldapv3.Entry{
+		DN: "cn=Admins,ou=Groups,dc=example,dc=com",
+		Attributes: []*ldapv3.EntryAttribute{
+			{Name: "objectClass", Values: []string{"top", "groupOfNames"}},
+			{Name: "hasSubordinates", Values: []string{"TRUE"}},
+		},
+	}
+	row := entryRow(entry, true)
+	if row["entryType"] != "group" || row["icon"] != "users" || row["parent"] != "ou=Groups,dc=example,dc=com" || row["hasChildren"] != true {
+		t.Fatalf("entry metadata row = %#v", row)
+	}
+	if row["readOnly"] != true {
+		t.Fatalf("readOnly flag missing from row: %#v", row)
 	}
 }
 

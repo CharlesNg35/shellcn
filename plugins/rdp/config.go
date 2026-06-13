@@ -47,8 +47,10 @@ func configSchema(protocol string) plugin.Schema {
 		{Name: "Display", Fields: []plugin.Field{
 			{Key: "resolution", Label: "Desktop size", Type: plugin.FieldSelect, Default: "1280x800", Help: "Initial remote desktop size. The browser scales this fixed session to fit the panel.", Options: []plugin.Option{
 				{Label: "1280 x 800", Value: "1280x800"},
-				{Label: "1920 x 1080", Value: "1920x1080"},
 				{Label: "1600 x 900", Value: "1600x900"},
+				{Label: "1920 x 1080", Value: "1920x1080"},
+				{Label: "2560 x 1440", Value: "2560x1440"},
+				{Label: "3840 x 2160", Value: "3840x2160"},
 				{Label: "1366 x 768", Value: "1366x768"},
 				{Label: "1024 x 768", Value: "1024x768"},
 			}},

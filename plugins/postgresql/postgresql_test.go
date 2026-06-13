@@ -232,6 +232,31 @@ func TestDestructiveResourceActionsNavigateAwayFromDeletedDetails(t *testing.T) 
 	}
 }
 
+func TestForeignKeyFormUsesReferencePickersAndActions(t *testing.T) {
+	schema := routeInputSchema(t, New(), "postgresql.constraint.add")
+	refTable := requireRouteField(t, schema, "refTable")
+	if refTable.Type != plugin.FieldAutocomplete || refTable.OptionsSource == nil || refTable.OptionsSource.RouteID != "postgresql.tables.list" {
+		t.Fatalf("referenced table should be route-backed autocomplete: %#v", refTable)
+	}
+	for _, key := range []string{"onDelete", "onUpdate"} {
+		field := requireRouteField(t, schema, key)
+		if field.Type != plugin.FieldSelect || len(field.Options) < 5 || field.VisibleWhen == nil {
+			t.Fatalf("%s should be a foreign-key-only select: %#v", key, field)
+		}
+	}
+	got, err := addConstraintSQL("public", "orders", constraintRequest{
+		Name: "fk_orders_customer", Type: constraintForeignKey, Columns: []string{"customer_id"},
+		RefTable: "customers", RefColumns: "id", OnDelete: "CASCADE", OnUpdate: "RESTRICT",
+	})
+	if err != nil {
+		t.Fatalf("addConstraintSQL: %v", err)
+	}
+	want := `ALTER TABLE "public"."orders" ADD CONSTRAINT "fk_orders_customer" FOREIGN KEY ("customer_id") REFERENCES "customers" ("id") ON DELETE CASCADE ON UPDATE RESTRICT`
+	if got != want {
+		t.Fatalf("constraint SQL\n got: %s\nwant: %s", got, want)
+	}
+}
+
 func TestBrowseTablesDeclareEmptyStatesAndExport(t *testing.T) {
 	for _, res := range New().Manifest().Resources {
 		for _, tab := range res.Detail.Tabs {

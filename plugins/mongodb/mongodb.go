@@ -97,6 +97,7 @@ func collectionResource() plugin.ResourceType {
 			Tabs: []plugin.Panel{
 				{Key: "documents", Label: "Documents", Icon: icon("braces"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.documents.list", Params: collectionParams()}, Config: documentsTableConfig()},
 				{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.indexes.list", Params: collectionParams()}, Config: indexesTableConfig()},
+				{Key: "validation", Label: "Validation", Icon: icon("shield-check"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mongodb.collection.validation", Params: collectionParams()}, Config: collectionValidationDetailConfig()},
 				{Key: "stats", Label: "Stats", Icon: icon("bar-chart-3"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mongodb.collection.stats", Params: collectionParams()}, Config: collectionStatsDetailConfig()},
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mongodb.command", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.namespace}"}}, Config: commandConfig(`{"find": "${resource.name}", "filter": {}, "limit": 50}`)},
 			},
@@ -136,6 +137,19 @@ func collectionStatsDetailConfig() plugin.ObjectDetailConfig {
 				{Key: "nindexes", Label: "Indexes", Type: plugin.ColumnNumber},
 				{Key: "totalIndexSize", Label: "Index size", Type: plugin.ColumnBytes},
 				{Key: "wiredTiger", Label: "WiredTiger", Type: plugin.ColumnJSON},
+			}},
+		},
+	}
+}
+
+func collectionValidationDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Validation", Fields: []plugin.ObjectDetailField{
+				{Key: "validationAction", Label: "Action", Type: plugin.ColumnBadge},
+				{Key: "validationLevel", Label: "Level", Type: plugin.ColumnBadge},
+				{Key: "validator", Label: "Rules", Type: plugin.ColumnJSON},
 			}},
 		},
 	}
@@ -200,8 +214,12 @@ func indexColumns() []plugin.Column {
 	return []plugin.Column{
 		{Key: "name", Label: "Index", Sortable: true},
 		{Key: "keys", Label: "Keys"},
+		{Key: "type", Label: "Type", Sortable: true},
 		{Key: "unique", Label: "Unique", Type: plugin.ColumnBool},
 		{Key: "sparse", Label: "Sparse", Type: plugin.ColumnBool},
+		{Key: "hidden", Label: "Hidden", Type: plugin.ColumnBool},
+		{Key: "ttl", Label: "TTL", Type: plugin.ColumnNumber},
+		{Key: "properties", Label: "Properties"},
 	}
 }
 

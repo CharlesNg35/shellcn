@@ -183,11 +183,19 @@ func ContainerOverview(rc *plugin.RequestContext) (any, error) {
 	}
 	if res.Container.Config != nil {
 		out["image"] = stringDefault(res.Container.Config.Image, fmt.Sprint(out["image"]))
+		out["entrypoint"] = strings.Join(res.Container.Config.Entrypoint, " ")
+		out["env"] = len(res.Container.Config.Env)
+		out["labels"] = res.Container.Config.Labels
 		out["composeProject"] = res.Container.Config.Labels[ComposeProjectLabel]
 		out["composeService"] = res.Container.Config.Labels["com.docker.compose.service"]
 	}
+	if res.Container.HostConfig != nil {
+		out["restartPolicy"] = res.Container.HostConfig.RestartPolicy.Name
+		out["networkMode"] = string(res.Container.HostConfig.NetworkMode)
+	}
 	if res.Container.State != nil {
 		out["state"] = res.Container.State.Status
+		out["status"] = res.Container.State.Status
 		out["running"] = res.Container.State.Running
 		out["startedAt"] = res.Container.State.StartedAt
 		out["finishedAt"] = res.Container.State.FinishedAt
@@ -198,6 +206,7 @@ func ContainerOverview(rc *plugin.RequestContext) (any, error) {
 	}
 	if res.Container.NetworkSettings != nil {
 		out["networks"] = mapKeys(res.Container.NetworkSettings.Networks)
+		out["ports"] = portMap(res.Container.NetworkSettings.Ports)
 	}
 	return out, nil
 }
@@ -235,6 +244,7 @@ func VolumeOverview(rc *plugin.RequestContext) (any, error) {
 	if res.Volume.UsageData != nil {
 		out["size"] = res.Volume.UsageData.Size
 		out["refs"] = res.Volume.UsageData.RefCount
+		out["status"] = volumeUsageStatus(res.Volume.UsageData.RefCount)
 	}
 	return out, nil
 }
@@ -386,6 +396,36 @@ func ContainerEnv(rc *plugin.RequestContext) (any, error) {
 		}
 	}
 	sort.Slice(rows, func(i, j int) bool { return fmt.Sprint(rows[i]["key"]) < fmt.Sprint(rows[j]["key"]) })
+	return PageRows(rc, rows)
+}
+
+func ContainerMounts(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.cli.ContainerInspect(rc.Ctx, rc.Param("id"), dockerclient.ContainerInspectOptions{})
+	if err != nil {
+		return nil, DockerErr(err)
+	}
+	rows := make([]Row, 0, len(res.Container.Mounts))
+	for i, m := range res.Container.Mounts {
+		name := m.Name
+		if name == "" {
+			name = m.Source
+		}
+		uid := fmt.Sprintf("%d:%s:%s", i, m.Source, m.Destination)
+		rows = append(rows, Row{
+			"type":        string(m.Type),
+			"name":        name,
+			"source":      m.Source,
+			"destination": m.Destination,
+			"mode":        m.Mode,
+			"rw":          m.RW,
+			"propagation": string(m.Propagation),
+			"ref":         plugin.ResourceRef{Kind: "mount", Name: name, UID: uid},
+		})
+	}
 	return PageRows(rc, rows)
 }
 
@@ -942,6 +982,7 @@ func ImageRows(items []image.Summary) []Row {
 			"id":         img.ID,
 			"name":       name,
 			"tags":       strings.Join(img.RepoTags, ", "),
+			"status":     imageUsageStatus(img.Containers),
 			"size":       img.Size,
 			"containers": img.Containers,
 			"createdAt":  unixTime(img.Created),
@@ -956,13 +997,16 @@ func VolumeRows(items []volume.Volume) []Row {
 	for _, v := range items {
 		size := int64(-1)
 		refs := int64(-1)
+		status := "Unknown"
 		if v.UsageData != nil {
 			size = v.UsageData.Size
 			refs = v.UsageData.RefCount
+			status = volumeUsageStatus(refs)
 		}
 		rows = append(rows, Row{
 			"id":         v.Name,
 			"name":       v.Name,
+			"status":     status,
 			"driver":     v.Driver,
 			"scope":      v.Scope,
 			"mountpoint": v.Mountpoint,
@@ -986,6 +1030,7 @@ func NetworkRows(items []network.Summary) []Row {
 			"scope":      n.Scope,
 			"internal":   n.Internal,
 			"attachable": n.Attachable,
+			"ingress":    n.Ingress,
 			"createdAt":  n.Created.String(),
 			"compose":    n.Labels[ComposeProjectLabel],
 			"ref":        plugin.ResourceRef{Kind: "network", Name: n.Name, UID: n.ID},
@@ -1004,6 +1049,7 @@ func composeRows(rc *plugin.RequestContext) ([]Row, error) {
 		return nil, DockerErr(err)
 	}
 	projects := map[string]Row{}
+	services := map[string]map[string]bool{}
 	for _, c := range res.Items {
 		project := c.Labels[ComposeProjectLabel]
 		if project == "" {
@@ -1017,20 +1063,65 @@ func composeRows(rc *plugin.RequestContext) ([]Row, error) {
 				"config":     c.Labels["com.docker.compose.project.config_files"],
 				"containers": 0,
 				"running":    0,
+				"services":   0,
+				"status":     "Stopped",
 				"ref":        plugin.ResourceRef{Kind: "compose", Name: project, UID: project},
 			}
 			projects[project] = r
+		}
+		if services[project] == nil {
+			services[project] = map[string]bool{}
+		}
+		if service := c.Labels["com.docker.compose.service"]; service != "" {
+			services[project][service] = true
+			r["services"] = len(services[project])
 		}
 		r["containers"] = r["containers"].(int) + 1
 		if c.State == "running" {
 			r["running"] = r["running"].(int) + 1
 		}
+		r["status"] = composeStatus(r["running"].(int), r["containers"].(int))
 	}
 	rows := make([]Row, 0, len(projects))
 	for _, r := range projects {
 		rows = append(rows, r)
 	}
 	return rows, nil
+}
+
+func imageUsageStatus(containers int64) string {
+	switch {
+	case containers > 0:
+		return "In use"
+	case containers == 0:
+		return "Unused"
+	default:
+		return "Unknown"
+	}
+}
+
+func volumeUsageStatus(refs int64) string {
+	switch {
+	case refs > 0:
+		return "In use"
+	case refs == 0:
+		return "Unused"
+	default:
+		return "Unknown"
+	}
+}
+
+func composeStatus(running, total int) string {
+	switch {
+	case total == 0:
+		return "Empty"
+	case running == total:
+		return "Running"
+	case running == 0:
+		return "Stopped"
+	default:
+		return "Partial"
+	}
 }
 
 func containersForCompose(rc *plugin.RequestContext, project string) ([]Row, error) {
@@ -1545,6 +1636,26 @@ func ports(ports []container.PortSummary) string {
 		}
 		out = append(out, target)
 	}
+	return strings.Join(out, ", ")
+}
+
+func portMap(ports network.PortMap) string {
+	out := make([]string, 0, len(ports))
+	for p, bindings := range ports {
+		target := p.String()
+		if len(bindings) == 0 {
+			out = append(out, target)
+			continue
+		}
+		for _, b := range bindings {
+			host := b.HostPort
+			if b.HostIP.IsValid() {
+				host = b.HostIP.String() + ":" + host
+			}
+			out = append(out, host+"->"+target)
+		}
+	}
+	sort.Strings(out)
 	return strings.Join(out, ", ")
 }
 

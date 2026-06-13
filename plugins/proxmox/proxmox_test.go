@@ -195,10 +195,20 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 
 	t.Run("list node storage", func(t *testing.T) {
 		page := callList(t, sess, listNodeStorage, map[string]string{"node": "pve"})
-		if len(page.Items) != 1 || page.Items[0]["name"] != "local" {
+		if len(page.Items) != 2 {
 			t.Fatalf("storage rows = %+v", page.Items)
 		}
-		ref := page.Items[0]["ref"].(plugin.ResourceRef)
+		var local row
+		for _, item := range page.Items {
+			if item["name"] == "local" {
+				local = item
+				break
+			}
+		}
+		if local == nil {
+			t.Fatalf("local storage row missing: %+v", page.Items)
+		}
+		ref := local["ref"].(plugin.ResourceRef)
 		if ref.Kind != "storage" || ref.Namespace != "pve" || ref.UID != "local" {
 			t.Fatalf("storage ref = %+v", ref)
 		}
@@ -301,8 +311,11 @@ func TestBackupUXContract(t *testing.T) {
 			if cfg.EmptyText == "" {
 				t.Fatalf("backup table missing empty text")
 			}
-			if len(cfg.Columns) < 3 || cfg.Columns[2].Key != "protected" {
+			if len(cfg.Columns) < 4 || cfg.Columns[3].Key != "protected" {
 				t.Fatalf("backup columns = %+v", cfg.Columns)
+			}
+			if len(cfg.RowActionIDs) != 2 || cfg.RowActionIDs[0] != "act.qemu.backup.restore" || cfg.RowActionIDs[1] != "act.backup.delete" {
+				t.Fatalf("backup row actions = %+v", cfg.RowActionIDs)
 			}
 		}
 	}
@@ -336,6 +349,78 @@ func TestBackupSchemaUsesStoragePicker(t *testing.T) {
 	}
 }
 
+func TestGuestOverviewMemorySemantics(t *testing.T) {
+	srv := fakeProxmox(t)
+	defer srv.Close()
+
+	host, port := splitHostPort(t, srv.URL)
+	sess := dialSession(t, host, port)
+	result, err := guestOverview("qemu")(newRC(sess, map[string]string{"node": "pve", "vmid": "100"}))
+	if err != nil {
+		t.Fatalf("overview: %v", err)
+	}
+	got := result.(row)
+	if got["mem"] != int64(1073741824) || got["maxmem"] != int64(2147483648) || got["memPct"] != 50.0 {
+		t.Fatalf("runtime memory fields = %+v", got)
+	}
+	if got["memoryConfigured"] != int64(2147483648) || got["memoryMinimum"] != int64(536870912) || got["memoryCurrent"] != int64(2147483648) {
+		t.Fatalf("configured memory fields = %+v", got)
+	}
+}
+
+func TestProxmoxUXInformationArchitecture(t *testing.T) {
+	m := New().Manifest()
+	byKind := map[string]plugin.ResourceType{}
+	for _, resource := range m.Resources {
+		byKind[resource.Kind] = resource
+	}
+	if byKind["task"].List.RouteID != "proxmox.task.list" {
+		t.Fatalf("task resource list = %+v", byKind["task"].List)
+	}
+	for _, tab := range byKind["task"].Detail.Tabs {
+		if tab.Key == "log" && tab.Type != plugin.PanelTable {
+			t.Fatalf("task log tab = %+v", tab)
+		}
+	}
+	for _, tab := range byKind["qemu"].Detail.Tabs {
+		if tab.Key == "hardware" {
+			cfg := tab.Config.(plugin.ObjectDetailConfig)
+			if len(cfg.Sections) < 4 || cfg.Sections[2].Title != "Disks" || cfg.Sections[3].Title != "Network" {
+				t.Fatalf("qemu hardware sections = %+v", cfg.Sections)
+			}
+		}
+	}
+}
+
+func TestGuestStoragePickerUsesContentContext(t *testing.T) {
+	qemu := cloneSchema("qemu")
+	lxc := cloneSchema("lxc")
+	if got := schemaField(t, qemu, "storage").OptionsSource.Params["content"]; got != "images" {
+		t.Fatalf("qemu clone storage content = %q", got)
+	}
+	if got := schemaField(t, lxc, "storage").OptionsSource.Params["content"]; got != "rootdir" {
+		t.Fatalf("lxc clone storage content = %q", got)
+	}
+	restore := restoreSchema("qemu")
+	archive := schemaField(t, restore, "archive")
+	if archive.Default != "${resource.uid}" {
+		t.Fatalf("restore archive default = %#v", archive.Default)
+	}
+}
+
+func schemaField(t *testing.T, schema *plugin.Schema, key string) plugin.Field {
+	t.Helper()
+	for _, group := range schema.Groups {
+		for _, field := range group.Fields {
+			if field.Key == key {
+				return field
+			}
+		}
+	}
+	t.Fatalf("field %q missing", key)
+	return plugin.Field{}
+}
+
 // --- helpers --------------------------------------------------------------
 
 func fakeProxmox(t *testing.T) *httptest.Server {
@@ -353,7 +438,9 @@ func fakeProxmox(t *testing.T) *httptest.Server {
 			]}`))
 	})
 	mux.HandleFunc("/api2/json/nodes", jsonHandler(`{"data":[{"node":"pve","status":"online","cpu":0.1,"mem":1073741824,"maxmem":4294967296,"uptime":7200}]}`))
-	mux.HandleFunc("/api2/json/nodes/pve/storage", jsonHandler(`{"data":[{"storage":"local","type":"dir","content":"backup,iso","used":10,"total":100,"active":1}]}`))
+	mux.HandleFunc("/api2/json/nodes/pve/storage", jsonHandler(`{"data":[{"storage":"local","type":"dir","content":"backup,iso","used":10,"total":100,"active":1},{"storage":"local-lvm","type":"lvmthin","content":"images,rootdir","used":20,"total":200,"active":1}]}`))
+	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/status/current", jsonHandler(`{"data":{"status":"running","cpu":0.25,"mem":1073741824,"maxmem":2147483648,"uptime":3600}}`))
+	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/config", jsonHandler(`{"data":{"name":"web","memory":2048,"balloon":512,"cores":2,"sockets":1,"ostype":"l26","tags":"prod"}}`))
 	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/snapshot", jsonHandler(`{"data":[{"name":"pre-upgrade","description":"before update","snaptime":1700000000,"vmstate":1}]}`))
 	srv := httptest.NewTLSServer(mux)
 	return srv

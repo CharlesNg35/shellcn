@@ -447,6 +447,64 @@ describe("SchemaForm", () => {
     expect(payload).not.toHaveProperty("endpoint");
   });
 
+  it("interpolates resource defaults for action forms", async () => {
+    const restoreSchema: Schema = {
+      groups: [
+        {
+          name: "Restore",
+          fields: [
+            {
+              key: "archive",
+              label: "Backup archive",
+              type: "text",
+              default: "${resource.uid}",
+              required: true,
+            },
+          ],
+        },
+      ],
+    };
+    const w = mount(SchemaForm, {
+      props: {
+        schema: restoreSchema,
+        submitLabel: "Restore",
+        resource: {
+          uid: "vzdump-qemu-101-2026_06_13-10_00_00.vma.zst",
+          name: "VM 101 backup",
+        },
+      },
+    });
+    await flushPromises();
+    await w.find("form").trigger("submit");
+    const payload = w.emitted("submit")?.[0][0] as Record<string, unknown>;
+    expect(payload.archive).toBe("vzdump-qemu-101-2026_06_13-10_00_00.vma.zst");
+  });
+
+  it("keeps unresolved token defaults literal", async () => {
+    const tokenSchema: Schema = {
+      groups: [
+        {
+          name: "Action",
+          fields: [
+            {
+              key: "name",
+              label: "Name",
+              type: "text",
+              default: "${resource.name}",
+            },
+          ],
+        },
+      ],
+    };
+    const w = mount(SchemaForm, {
+      props: { schema: tokenSchema, submitLabel: "Run" },
+    });
+    await flushPromises();
+    await w.find("form").trigger("submit");
+    const payload = w.emitted("submit")?.[0][0] as Record<string, unknown>;
+    expect(payload.name).toBe("${resource.name}");
+  });
+
   it("keeps secret fields write-only (set/replace, value never in a readable field)", async () => {
     const w = mount(SchemaForm, {
       props: { schema, secretsSet: { password: true } },

@@ -43,6 +43,7 @@ func routes() []plugin.Route {
 		{ID: "mongodb.collections.tree", Method: plugin.MethodGet, Path: "/tree/collections", Permission: "mongodb.collections.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.collections.tree", Handle: treeCollections},
 		{ID: "mongodb.collections.list", Method: plugin.MethodGet, Path: "/collections", Permission: "mongodb.collections.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.collections.list", Handle: listCollections},
 		{ID: "mongodb.collection.stats", Method: plugin.MethodGet, Path: "/collections/{database}/{collection}/stats", Permission: "mongodb.collections.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.collection.stats", Handle: collectionStats},
+		{ID: "mongodb.collection.validation", Method: plugin.MethodGet, Path: "/collections/{database}/{collection}/validation", Permission: "mongodb.collections.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.collection.validation", Handle: collectionValidation},
 		{ID: "mongodb.indexes.list", Method: plugin.MethodGet, Path: "/collections/{database}/{collection}/indexes", Permission: "mongodb.indexes.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.indexes.list", Handle: listIndexes},
 		{ID: "mongodb.index.create", Method: plugin.MethodPost, Path: "/collections/{database}/{collection}/indexes", Permission: "mongodb.indexes.write", Risk: plugin.RiskWrite, AuditEvent: "mongodb.index.create", Input: indexCreateSchema(), Handle: createIndex},
 		{ID: "mongodb.index.drop", Method: plugin.MethodDelete, Path: "/collections/{database}/{collection}/indexes/{name}", Permission: "mongodb.indexes.delete", Risk: plugin.RiskDestructive, AuditEvent: "mongodb.index.drop", Handle: dropIndex},
@@ -79,12 +80,29 @@ func collectionCreateSchema() *plugin.Schema {
 }
 
 func indexCreateSchema() *plugin.Schema {
+	partialOnly := &plugin.Condition{AllOf: []plugin.Rule{{Field: "partial", Op: plugin.OpEq, Value: true}}}
+	ttlOnly := &plugin.Condition{AllOf: []plugin.Rule{{Field: "ttl", Op: plugin.OpEq, Value: true}}}
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
-		{Key: "keys", Label: "Keys", Type: plugin.FieldMap, Required: true, KeyPlaceholder: "fieldName", AddLabel: "Add key", Item: &plugin.Field{Type: plugin.FieldSelect, Default: 1, Options: []plugin.Option{{Label: "Ascending", Value: 1}, {Label: "Descending", Value: -1}}}},
+		{Key: "keys", Label: "Keys", Type: plugin.FieldMap, Required: true, KeyPlaceholder: "fieldName", AddLabel: "Add key", Item: &plugin.Field{Type: plugin.FieldSelect, Default: 1, Options: mongoIndexDirectionOptions()}},
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Help: "Optional; derived from the keys when blank.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: mongoNamePattern}}},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
 		{Key: "sparse", Label: "Sparse", Type: plugin.FieldToggle},
+		{Key: "hidden", Label: "Hidden", Type: plugin.FieldToggle},
+		{Key: "ttl", Label: "TTL index", Type: plugin.FieldToggle},
+		{Key: "expire_after_seconds", Label: "Expire after seconds", Type: plugin.FieldNumber, VisibleWhen: ttlOnly, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}}},
+		{Key: "partial", Label: "Partial index", Type: plugin.FieldToggle},
+		{Key: "partial_filter", Label: "Partial filter", Type: plugin.FieldJSON, Default: map[string]any{}, VisibleWhen: partialOnly, Help: "MongoDB filter expression for indexed documents."},
 	}}}}
+}
+
+func mongoIndexDirectionOptions() []plugin.Option {
+	return []plugin.Option{
+		{Label: "Ascending", Value: 1},
+		{Label: "Descending", Value: -1},
+		{Label: "Text", Value: "text"},
+		{Label: "Hashed", Value: "hashed"},
+		{Label: "2dsphere", Value: "2dsphere"},
+	}
 }
 
 func documentCreateSchema() *plugin.Schema {
@@ -245,6 +263,42 @@ func collectionStats(rc *plugin.RequestContext) (any, error) {
 	return bsonDoc(stats)
 }
 
+func collectionValidation(rc *plugin.RequestContext) (any, error) {
+	database, collection, err := collectionIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	s, err := mongoSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := commandContext(rc.Ctx, s)
+	defer cancel()
+	cur, err := s.client.Database(database).ListCollections(ctx, bson.D{{Key: "name", Value: collection}})
+	if err != nil {
+		return nil, mongoErr(err)
+	}
+	var collections []bson.M
+	if err := cur.All(ctx, &collections); err != nil {
+		return nil, mongoErr(err)
+	}
+	if len(collections) == 0 {
+		return nil, plugin.ErrNotFound
+	}
+	optionsDoc, _ := collections[0]["options"].(bson.M)
+	out := bson.M{
+		"validationAction": "error",
+		"validationLevel":  "strict",
+		"validator":        bson.M{},
+	}
+	for _, key := range []string{"validationAction", "validationLevel", "validator"} {
+		if value, ok := optionsDoc[key]; ok {
+			out[key] = value
+		}
+	}
+	return bsonDoc(out)
+}
+
 func listIndexes(rc *plugin.RequestContext) (any, error) {
 	database, collection, err := collectionIdent(rc)
 	if err != nil {
@@ -267,15 +321,67 @@ func listIndexes(rc *plugin.RequestContext) (any, error) {
 	rows := make([]row, 0, len(indexes))
 	for _, idx := range indexes {
 		name := fmt.Sprint(idx["name"])
+		properties := mongoIndexProperties(idx)
 		rows = append(rows, row{
-			"name":   name,
-			"keys":   compactJSON(idx["key"]),
-			"unique": boolField(idx["unique"]),
-			"sparse": boolField(idx["sparse"]),
-			"ref":    plugin.ResourceRef{Kind: "index", Scope: database, Namespace: collection, Name: name, UID: database + "." + collection + "." + name},
+			"name":       name,
+			"keys":       compactJSON(idx["key"]),
+			"type":       mongoIndexType(idx["key"]),
+			"unique":     boolField(idx["unique"]),
+			"sparse":     boolField(idx["sparse"]),
+			"hidden":     boolField(idx["hidden"]),
+			"ttl":        numberValue(idx["expireAfterSeconds"]),
+			"properties": strings.Join(properties, ", "),
+			"ref":        plugin.ResourceRef{Kind: "index", Scope: database, Namespace: collection, Name: name, UID: database + "." + collection + "." + name},
 		})
 	}
 	return pageRows(rc, rows)
+}
+
+func mongoIndexProperties(idx bson.M) []string {
+	props := []string{}
+	if boolField(idx["unique"]) {
+		props = append(props, "unique")
+	}
+	if boolField(idx["sparse"]) {
+		props = append(props, "sparse")
+	}
+	if boolField(idx["hidden"]) {
+		props = append(props, "hidden")
+	}
+	if _, ok := idx["partialFilterExpression"]; ok {
+		props = append(props, "partial")
+	}
+	if _, ok := idx["expireAfterSeconds"]; ok {
+		props = append(props, "ttl")
+	}
+	return props
+}
+
+func mongoIndexType(keys any) string {
+	values := []any{}
+	switch doc := keys.(type) {
+	case bson.M:
+		for _, value := range doc {
+			values = append(values, value)
+		}
+	case bson.D:
+		for _, elem := range doc {
+			values = append(values, elem.Value)
+		}
+	default:
+		return "regular"
+	}
+	for _, value := range values {
+		switch fmt.Sprint(value) {
+		case "text":
+			return "text"
+		case "hashed":
+			return "hashed"
+		case "2dsphere", "2d", "geoHaystack":
+			return "geospatial"
+		}
+	}
+	return "regular"
 }
 
 func createIndex(rc *plugin.RequestContext) (any, error) {
@@ -291,10 +397,15 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	var req struct {
-		Keys   any    `json:"keys" validate:"required"`
-		Name   string `json:"name"`
-		Unique bool   `json:"unique"`
-		Sparse bool   `json:"sparse"`
+		Keys               any    `json:"keys" validate:"required"`
+		Name               string `json:"name"`
+		Unique             bool   `json:"unique"`
+		Sparse             bool   `json:"sparse"`
+		Hidden             bool   `json:"hidden"`
+		TTL                bool   `json:"ttl"`
+		ExpireAfterSeconds int32  `json:"expire_after_seconds"`
+		Partial            bool   `json:"partial"`
+		PartialFilter      any    `json:"partial_filter"`
 	}
 	if err := rc.Bind(&req); err != nil {
 		return nil, err
@@ -309,6 +420,22 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 			return nil, err
 		}
 		opts.SetName(name)
+	}
+	if req.Hidden {
+		opts.SetHidden(true)
+	}
+	if req.TTL {
+		if req.ExpireAfterSeconds <= 0 {
+			return nil, fmt.Errorf("%w: expire after seconds must be greater than zero", plugin.ErrInvalidInput)
+		}
+		opts.SetExpireAfterSeconds(req.ExpireAfterSeconds)
+	}
+	if req.Partial {
+		filter, err := requestDocument(req.PartialFilter)
+		if err != nil {
+			return nil, fmt.Errorf("%w: partial filter must be a MongoDB Extended JSON document", plugin.ErrInvalidInput)
+		}
+		opts.SetPartialFilterExpression(filter)
 	}
 	ctx, cancel := commandContext(rc.Ctx, s)
 	defer cancel()

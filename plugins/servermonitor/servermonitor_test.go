@@ -54,6 +54,34 @@ func TestManifestUsesObjectDetailForSystemOverview(t *testing.T) {
 	}
 }
 
+func TestOverviewDashboardGroupsHealthLoadAndCapacity(t *testing.T) {
+	m := New().Manifest()
+	dash, ok := m.Tabs[0].Config.(plugin.DashboardConfig)
+	if !ok {
+		t.Fatalf("overview config = %T, want DashboardConfig", m.Tabs[0].Config)
+	}
+	cells := map[string]plugin.Panel{}
+	for _, cell := range dash.Cells {
+		cells[cell.Key] = cell
+	}
+	for _, key := range []string{"health", "cpumem", "throughput", "load", "system", "disks"} {
+		if _, ok := cells[key]; !ok {
+			t.Fatalf("overview dashboard missing %q cell", key)
+		}
+	}
+	health, ok := cells["health"].Config.(plugin.MetricsConfig)
+	if !ok {
+		t.Fatalf("health config = %T, want MetricsConfig", cells["health"].Config)
+	}
+	if len(health.Gauges) < 3 || len(health.Stats) < 4 {
+		t.Fatalf("health metrics should expose gauges and operational stats: %#v", health)
+	}
+	load, ok := cells["load"].Config.(plugin.MetricsConfig)
+	if !ok || len(load.Series) != 3 {
+		t.Fatalf("load metrics = %#v, want load1/load5/load15 series", cells["load"].Config)
+	}
+}
+
 func TestTablesDeclareUsefulEmptyStates(t *testing.T) {
 	for _, tab := range New().Manifest().Tabs {
 		if tab.Type != plugin.PanelTable {
@@ -65,6 +93,9 @@ func TestTablesDeclareUsefulEmptyStates(t *testing.T) {
 		}
 		if cfg.EmptyText == "" {
 			t.Fatalf("%s table is missing empty text", tab.Key)
+		}
+		if cfg.EmptyText == "No rows collected." {
+			t.Fatalf("%s table uses generic empty text", tab.Key)
 		}
 	}
 }

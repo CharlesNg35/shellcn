@@ -11,6 +11,7 @@ import FormField from "./FormField.vue";
 import { isVisible } from "./condition";
 import { collectField } from "./collect";
 import { defaultForField } from "./defaults";
+import { interpolate } from "@/api/dataSource";
 
 const props = defineProps<{
   schema: Schema;
@@ -56,8 +57,7 @@ function seed(resetTouched = true): void {
   for (const group of groups.value) {
     for (const field of group.fields ?? []) {
       const incoming = props.modelValue?.[field.key];
-      next[field.key] =
-        incoming !== undefined ? incoming : defaultForField(field);
+      next[field.key] = incoming !== undefined ? incoming : fieldDefault(field);
     }
   }
   for (const key of Object.keys(values)) {
@@ -79,11 +79,21 @@ function modelMatchesValues(model?: Record<string, unknown>): boolean {
       )
         continue;
       const incoming = model?.[field.key];
-      const expected = incoming !== undefined ? incoming : field.default;
+      const expected = incoming !== undefined ? incoming : fieldDefault(field);
       if (values[field.key] !== expected) return false;
     }
   }
   return true;
+}
+
+function fieldDefault(field: Field): unknown {
+  const value = defaultForField(field);
+  if (typeof value !== "string" || !value.includes("${")) return value;
+  try {
+    return interpolate(value, { resource: props.resource });
+  } catch {
+    return value;
+  }
 }
 
 watch(

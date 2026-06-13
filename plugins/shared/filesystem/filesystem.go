@@ -90,10 +90,10 @@ func Routes(prefix, protocol string) []plugin.Route {
 		{ID: prefix + ".files.mkdir", Method: plugin.MethodPost, Path: "/files/mkdir/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.mkdir", Input: nameSchema("Folder"), Handle: mkdir},
 		{ID: prefix + ".files.rename", Method: plugin.MethodPatch, Path: "/files/rename/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.rename", Input: nameSchema("Name"), Handle: renameEntry},
 		{ID: prefix + ".files.delete", Method: plugin.MethodDelete, Path: "/files/delete/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskDestructive, AuditEvent: protocol + ".files.delete", Handle: deleteEntry},
-		{ID: prefix + ".files.move", Method: plugin.MethodPost, Path: "/files/move", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.move", Handle: move},
-		{ID: prefix + ".files.copy", Method: plugin.MethodPost, Path: "/files/copy", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.copy", Handle: copyFiles},
-		{ID: prefix + ".files.chmod", Method: plugin.MethodPost, Path: "/files/chmod", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.chmod", Handle: chmod},
-		{ID: prefix + ".files.archive", Method: plugin.MethodPost, Path: "/files/archive", Permission: protocol + ".files.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".files.archive", Handle: archive},
+		{ID: prefix + ".files.move", Method: plugin.MethodPost, Path: "/files/move", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.move", Input: destinationSchema("Move", "Each selected item is moved into this folder and keeps its current name."), Handle: move},
+		{ID: prefix + ".files.copy", Method: plugin.MethodPost, Path: "/files/copy", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.copy", Input: destinationSchema("Copy", "Each selected item is copied into this folder and keeps its current name."), Handle: copyFiles},
+		{ID: prefix + ".files.chmod", Method: plugin.MethodPost, Path: "/files/chmod", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.chmod", Input: chmodSchema(), Handle: chmod},
+		{ID: prefix + ".files.archive", Method: plugin.MethodPost, Path: "/files/archive", Permission: protocol + ".files.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".files.archive", Input: pathsSchema("Archive"), Handle: archive},
 	}
 }
 

@@ -32,6 +32,8 @@ type kind struct {
 	gvr         schema.GroupVersionResource
 	namespaced  bool
 	redact      bool // never return object data (Secrets)
+	noCreate    bool // hide generic create affordances for read-only/controller-owned kinds
+	noDelete    bool // hide generic delete affordances for read-only/controller-owned kinds
 	columns     []plugin.Column
 	extra       func(obj) Row  // cells beyond commonRow
 	actionIDs   []string       // row + detail actions (Edit/Create added generically)
@@ -88,6 +90,12 @@ var (
 		"pending": plugin.SeverityWarn, "released": plugin.SeverityWarn,
 		"lost": plugin.SeverityDanger, "failed": plugin.SeverityDanger,
 	}
+	workloadSeverities = map[string]plugin.Severity{
+		"ready": plugin.SeveritySuccess, "available": plugin.SeveritySuccess, "complete": plugin.SeveritySuccess,
+		"progressing": plugin.SeverityInfo, "updating": plugin.SeverityInfo, "running": plugin.SeverityInfo,
+		"pending": plugin.SeverityWarn, "suspended": plugin.SeverityWarn,
+		"unavailable": plugin.SeverityDanger, "failed": plugin.SeverityDanger,
+	}
 	eventSeverities = map[string]plugin.Severity{"normal": plugin.SeverityInfo, "warning": plugin.SeverityWarn}
 )
 
@@ -116,31 +124,31 @@ var kinds = []kind{
 	{
 		name: "deployment", title: "Deployments", category: "workloads", icon: "layers", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
-		columns: []plugin.Column{nameCol(), nsCol(), col("ready", "Ready", notSort), col("upToDate", "Up-to-date", num), col("available", "Available", num), ageCol()},
+		columns: []plugin.Column{nameCol(), nsCol(), col("status", "Status", statusBadge(workloadSeverities)), col("ready", "Ready", notSort), col("upToDate", "Up-to-date", num), col("available", "Available", num), ageCol()},
 		extra:   deploymentRow, actionIDs: []string{"kubernetes.resource.scale", "kubernetes.resource.restart", "kubernetes.rollout.undo", "kubernetes.resource.delete"}, detailTabs: []plugin.Panel{workloadPodsTab("deployment")},
 	},
 	{
 		name: "statefulset", title: "StatefulSets", category: "workloads", icon: "layers", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "statefulsets"},
-		columns: []plugin.Column{nameCol(), nsCol(), col("ready", "Ready", notSort), ageCol()},
+		columns: []plugin.Column{nameCol(), nsCol(), col("status", "Status", statusBadge(workloadSeverities)), col("ready", "Ready", notSort), ageCol()},
 		extra:   statefulSetRow, actionIDs: scalable, detailTabs: []plugin.Panel{workloadPodsTab("statefulset")},
 	},
 	{
 		name: "daemonset", title: "DaemonSets", category: "workloads", icon: "layers", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"},
-		columns: []plugin.Column{nameCol(), nsCol(), col("desired", "Desired", num), col("current", "Current", num), col("ready", "Ready", num), col("upToDate", "Up-to-date", num), col("available", "Available", num), ageCol()},
+		columns: []plugin.Column{nameCol(), nsCol(), col("status", "Status", statusBadge(workloadSeverities)), col("desired", "Desired", num), col("current", "Current", num), col("ready", "Ready", num), col("upToDate", "Up-to-date", num), col("available", "Available", num), ageCol()},
 		extra:   daemonSetRow, actionIDs: []string{"kubernetes.resource.restart", "kubernetes.resource.delete"}, detailTabs: []plugin.Panel{workloadPodsTab("daemonset")},
 	},
 	{
 		name: "replicaset", title: "ReplicaSets", category: "workloads", icon: "layers", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "replicasets"},
-		columns: []plugin.Column{nameCol(), nsCol(), col("desired", "Desired", num), col("current", "Current", num), col("ready", "Ready", num), ageCol()},
+		columns: []plugin.Column{nameCol(), nsCol(), col("status", "Status", statusBadge(workloadSeverities)), col("desired", "Desired", num), col("current", "Current", num), col("ready", "Ready", num), ageCol()},
 		extra:   replicaSetRow, actionIDs: scalable, detailTabs: []plugin.Panel{workloadPodsTab("replicaset")},
 	},
 	{
 		name: "job", title: "Jobs", category: "workloads", icon: "square-check", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "jobs"},
-		columns: []plugin.Column{nameCol(), nsCol(), col("completions", "Completions", notSort), col("duration", "Duration"), col("active", "Active", num), ageCol()},
+		columns: []plugin.Column{nameCol(), nsCol(), col("status", "Status", statusBadge(workloadSeverities)), col("completions", "Completions", notSort), col("duration", "Duration"), col("active", "Active", num), ageCol()},
 		extra:   jobRow, actionIDs: justDelete,
 	},
 	{
@@ -163,16 +171,17 @@ var kinds = []kind{
 	},
 	{
 		name: "endpoints", title: "Endpoints", category: "network", icon: "network", namespaced: true,
-		gvr:       schema.GroupVersionResource{Version: "v1", Resource: "endpoints"},
-		columns:   []plugin.Column{nameCol(), nsCol(), col("endpoints", "Endpoints", notSort), ageCol()},
-		extra:     endpointsRow,
-		actionIDs: justDelete,
+		gvr:      schema.GroupVersionResource{Version: "v1", Resource: "endpoints"},
+		columns:  []plugin.Column{nameCol(), nsCol(), col("endpoints", "Endpoints", notSort), ageCol()},
+		extra:    endpointsRow,
+		noCreate: true,
+		noDelete: true,
 	},
 	{
 		name: "endpointslice", title: "Endpoint Slices", category: "network", icon: "network", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "discovery.k8s.io", Version: "v1", Resource: "endpointslices"},
 		columns: []plugin.Column{nameCol(), nsCol(), col("addressType", "Address type"), col("endpoints", "Endpoints", num), col("ports", "Ports", num), ageCol()},
-		extra:   endpointSliceRow, actionIDs: justDelete,
+		extra:   endpointSliceRow, noCreate: true, noDelete: true,
 	},
 	{
 		name: "ingressclass", title: "Ingress Classes", category: "network", icon: "globe",
@@ -263,7 +272,7 @@ var kinds = []kind{
 		name: "lease", title: "Leases", category: "config", icon: "timer", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "coordination.k8s.io", Version: "v1", Resource: "leases"},
 		columns: []plugin.Column{nameCol(), nsCol(), col("holder", "Holder"), ageCol()},
-		extra:   leaseRow, actionIDs: justDelete,
+		extra:   leaseRow, noCreate: true, noDelete: true,
 	},
 	{
 		name: "mutatingwebhookconfiguration", title: "Mutating Webhook Configs", category: "config", icon: "webhook",
@@ -281,12 +290,14 @@ var kinds = []kind{
 		name: "validatingadmissionpolicy", title: "Validating Admission Policies", category: "config", icon: "shield-check",
 		gvr:       schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingadmissionpolicies"},
 		columns:   []plugin.Column{nameCol(), ageCol()},
+		noCreate:  true,
 		actionIDs: justDelete, subgroup: "admissionpolicies",
 	},
 	{
 		name: "validatingadmissionpolicybinding", title: "Validating Admission Policy Bindings", category: "config", icon: "shield-check",
 		gvr:       schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingadmissionpolicybindings"},
 		columns:   []plugin.Column{nameCol(), ageCol()},
+		noCreate:  true,
 		actionIDs: justDelete, subgroup: "admissionpolicies",
 	},
 	{
@@ -329,13 +340,15 @@ var kinds = []kind{
 		name: "node", title: "Nodes", category: "cluster", icon: "server",
 		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "nodes"},
 		columns: []plugin.Column{nameCol(), col("status", "Status", statusBadge(nodeSeverities)), col("roles", "Roles"), col("version", "Version"), ageCol()},
-		extra:   nodeRow, actionIDs: []string{"kubernetes.node.cordon", "kubernetes.node.uncordon", "kubernetes.node.drain"}, detailTabs: nodeDetailTabs(),
+		extra:   nodeRow, noCreate: true, noDelete: true, actionIDs: []string{"kubernetes.node.cordon", "kubernetes.node.uncordon", "kubernetes.node.drain"}, detailTabs: nodeDetailTabs(),
 	},
 	{
 		name: "event", title: "Events", category: "cluster", icon: "bell", namespaced: true,
 		gvr:         schema.GroupVersionResource{Version: "v1", Resource: "events"},
 		columns:     []plugin.Column{col("type", "Type", statusBadge(eventSeverities)), col("reason", "Reason"), col("object", "Object"), col("message", "Message", notSort), col("count", "Count", num), ageCol()},
 		extra:       eventRow,
+		noCreate:    true,
+		noDelete:    true,
 		listLimit:   500,
 		recentFirst: true,
 	},

@@ -34,17 +34,30 @@ func TestManifestIsFileOnly(t *testing.T) {
 	}
 }
 
-func TestManifestSurfacesHostKeyPinning(t *testing.T) {
+func TestManifestSurfacesHostKeyVerification(t *testing.T) {
 	m := sftp.New().Manifest()
-	for _, group := range m.Config.Groups {
+	policy := requireField(t, m.Config, "host_key_verification")
+	if policy.Type != plugin.FieldSelect || policy.Default != "pinned" || len(policy.Options) != 2 {
+		t.Fatalf("host key verification should be an explicit select: %+v", policy)
+	}
+	if policy.Options[0].Value != "pinned" || policy.Options[1].Value != "insecure" {
+		t.Fatalf("host key verification options should prefer pinned verification: %+v", policy.Options)
+	}
+	hostKey := requireField(t, m.Config, "host_key")
+	if hostKey.Type != plugin.FieldTextarea || hostKey.Secret || hostKey.Help == "" || hostKey.VisibleWhen == nil {
+		t.Fatalf("host_key field should be a conditional visible textarea with help: %+v", hostKey)
+	}
+}
+
+func requireField(t *testing.T, schema plugin.Schema, key string) plugin.Field {
+	t.Helper()
+	for _, group := range schema.Groups {
 		for _, field := range group.Fields {
-			if field.Key == "host_key" {
-				if field.Type != plugin.FieldTextarea || field.Secret || field.Help == "" {
-					t.Fatalf("host_key field should be a visible textarea with help: %+v", field)
-				}
-				return
+			if field.Key == key {
+				return field
 			}
 		}
 	}
-	t.Fatal("missing host_key field")
+	t.Fatalf("missing field %q", key)
+	return plugin.Field{}
 }

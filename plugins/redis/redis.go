@@ -55,7 +55,32 @@ func icon(name string) plugin.Icon {
 }
 
 func infoDetailConfig() plugin.ObjectDetailConfig {
-	return plugin.ObjectDetailConfig{RawToggle: true}
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Server", Fields: []plugin.ObjectDetailField{
+				{Key: "redis_version", Label: "Version", Copy: true},
+				{Key: "redis_mode", Label: "Mode", Type: plugin.ColumnBadge},
+				{Key: "role", Label: "Role", Type: plugin.ColumnBadge},
+			}},
+			{Title: "Clients", Fields: []plugin.ObjectDetailField{
+				{Key: "connected_clients", Label: "Connected", Type: plugin.ColumnNumber},
+				{Key: "blocked_clients", Label: "Blocked", Type: plugin.ColumnNumber},
+				{Key: "tracking_clients", Label: "Tracking", Type: plugin.ColumnNumber},
+			}},
+			{Title: "Memory", Fields: []plugin.ObjectDetailField{
+				{Key: "used_memory_human", Label: "Used"},
+				{Key: "used_memory_peak_human", Label: "Peak"},
+				{Key: "mem_fragmentation_ratio", Label: "Fragmentation"},
+			}},
+			{Title: "Stats", Fields: []plugin.ObjectDetailField{
+				{Key: "total_commands_processed", Label: "Commands", Type: plugin.ColumnNumber},
+				{Key: "instantaneous_ops_per_sec", Label: "Ops/sec", Type: plugin.ColumnNumber},
+				{Key: "keyspace_hits", Label: "Keyspace hits", Type: plugin.ColumnNumber},
+				{Key: "keyspace_misses", Label: "Keyspace misses", Type: plugin.ColumnNumber},
+			}},
+		},
+	}
 }
 
 func databaseScope() plugin.ScopeFilter {
@@ -110,6 +135,10 @@ func clientColumns() []plugin.Column {
 		{Key: "db", Label: "DB", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "user", Label: "User"},
 		{Key: "cmd", Label: "Command"},
+		{Key: "flags", Label: "Flags"},
+		{Key: "sub", Label: "Subs", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "psub", Label: "Patterns", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "omem", Label: "Output memory", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "age", Label: "Age", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "idle", Label: "Idle", Type: plugin.ColumnNumber, Sortable: true},
 	}

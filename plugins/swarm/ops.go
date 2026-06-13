@@ -116,7 +116,7 @@ func nodeUpdateSchema() *plugin.Schema {
 func stackDeploySchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Deploy stack", Fields: []plugin.Field{
 		{Key: "name", Label: "Stack name", Type: plugin.FieldText, Required: true, Placeholder: "my-stack", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^[A-Za-z0-9][A-Za-z0-9_.-]*$`, Message: "Use letters, numbers, dots, underscores, or dashes."}}},
-		{Key: "spec", Label: "Service specs", Type: plugin.FieldJSON, Required: true, Help: "JSON array of Docker service specs. Each is created or updated under the stack namespace."},
+		{Key: "spec", Label: "Service spec JSON", Type: plugin.FieldJSON, Required: true, Help: "JSON array of Docker service specs. Each spec is created or updated under the stack namespace; Compose YAML is not accepted here."},
 	}}}}
 }
 

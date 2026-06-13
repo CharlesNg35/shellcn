@@ -62,6 +62,8 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	}
 	if cfg, ok := info.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
 		t.Fatalf("info config = %#v, want raw-toggle object detail", info.Config)
+	} else if len(cfg.Sections) < 4 {
+		t.Fatalf("info should expose structured overview sections, got %#v", cfg.Sections)
 	}
 	dash, ok := m.Tabs[0].Config.(plugin.DashboardConfig)
 	if !ok {
@@ -82,6 +84,21 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 		if cfg.EmptyText == "" || cfg.RefreshIntervalMs == 0 || !cfg.Exportable || cfg.RowClick != plugin.RowClickDetail {
 			t.Fatalf("%s tab table config is not review-ready: %#v", key, cfg)
 		}
+	}
+}
+
+func TestRedisClientTableShowsOperationalColumns(t *testing.T) {
+	cols := map[string]plugin.Column{}
+	for _, col := range clientColumns() {
+		cols[col.Key] = col
+	}
+	for _, key := range []string{"flags", "sub", "psub", "omem"} {
+		if _, ok := cols[key]; !ok {
+			t.Fatalf("client table missing %s column", key)
+		}
+	}
+	if cols["omem"].Type != plugin.ColumnBytes {
+		t.Fatalf("output memory should render as bytes: %#v", cols["omem"])
 	}
 }
 

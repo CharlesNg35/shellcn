@@ -212,6 +212,7 @@ func tableRenameSchema() *plugin.Schema {
 }
 
 func constraintAddSchema() *plugin.Schema {
+	fkOnly := &plugin.Condition{AllOf: []plugin.Rule{{Field: "type", Op: plugin.OpEq, Value: constraintForeignKey}}}
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Constraint", Fields: []plugin.Field{
 		{Key: "name", Label: "Constraint name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "type", Label: "Type", Type: plugin.FieldSelect, Required: true, Default: constraintPrimaryKey, Options: []plugin.Option{
@@ -224,16 +225,27 @@ func constraintAddSchema() *plugin.Schema {
 			{Field: "type", Op: plugin.OpIn, Value: []any{constraintPrimaryKey, constraintUnique, constraintForeignKey}},
 		}}},
 		{Key: "check", Label: "Check expression", Type: plugin.FieldText, Help: "Boolean expression, e.g. price > 0.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "type", Op: plugin.OpEq, Value: constraintCheck}}}},
-		{Key: "refTable", Label: "Referenced table", Type: plugin.FieldText, Help: "Target table for a foreign key (schema-qualified or bare).", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "type", Op: plugin.OpEq, Value: constraintForeignKey}}}},
-		{Key: "refColumns", Label: "Referenced columns", Type: plugin.FieldText, Help: "Comma-separated columns on the referenced table.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "type", Op: plugin.OpEq, Value: constraintForeignKey}}}},
+		{Key: "refTable", Label: "Referenced table", Type: plugin.FieldAutocomplete, Help: "Target table for a foreign key; schema-qualified values are accepted.", OptionsSource: &plugin.DataSource{RouteID: "postgresql.tables.list", Params: map[string]string{"database": "${resource.scope}"}}, VisibleWhen: fkOnly},
+		{Key: "refColumns", Label: "Referenced columns", Type: plugin.FieldText, Help: "Comma-separated columns on the referenced table, in matching order.", VisibleWhen: fkOnly},
 		{Key: "onDelete", Label: "On delete", Type: plugin.FieldSelect, Options: []plugin.Option{
 			{Label: "No action", Value: "NO ACTION"},
 			{Label: "Restrict", Value: "RESTRICT"},
 			{Label: "Cascade", Value: "CASCADE"},
 			{Label: "Set null", Value: "SET NULL"},
 			{Label: "Set default", Value: "SET DEFAULT"},
-		}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "type", Op: plugin.OpEq, Value: constraintForeignKey}}}},
+		}, VisibleWhen: fkOnly},
+		{Key: "onUpdate", Label: "On update", Type: plugin.FieldSelect, Options: foreignKeyActionOptions(), VisibleWhen: fkOnly},
 	}}}}
+}
+
+func foreignKeyActionOptions() []plugin.Option {
+	return []plugin.Option{
+		{Label: "No action", Value: "NO ACTION"},
+		{Label: "Restrict", Value: "RESTRICT"},
+		{Label: "Cascade", Value: "CASCADE"},
+		{Label: "Set null", Value: "SET NULL"},
+		{Label: "Set default", Value: "SET DEFAULT"},
+	}
 }
 
 func indexCreateSchema() *plugin.Schema {

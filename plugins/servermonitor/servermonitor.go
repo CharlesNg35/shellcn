@@ -98,7 +98,7 @@ func tabs() []plugin.Panel {
 			Key: "overview", Label: "Overview", Icon: lucide("layout-dashboard"), Type: plugin.PanelDashboard,
 			Config: plugin.DashboardConfig{Cells: []plugin.Panel{
 				{
-					Key: "metrics", Label: "Live metrics", Type: plugin.PanelMetrics, Span: 2,
+					Key: "health", Label: "Health", Type: plugin.PanelMetrics, Span: 2,
 					Source: &plugin.DataSource{RouteID: "server_monitor.metrics", Method: plugin.MethodWS},
 					Config: summaryConfig(),
 				},
@@ -111,6 +111,11 @@ func tabs() []plugin.Panel {
 					Key: "throughput", Label: "Throughput", Type: plugin.PanelMetrics, Span: 1,
 					Source: &plugin.DataSource{RouteID: "server_monitor.metrics", Method: plugin.MethodWS},
 					Config: throughputConfig(),
+				},
+				{
+					Key: "load", Label: "Load & activity", Type: plugin.PanelMetrics, Span: 1,
+					Source: &plugin.DataSource{RouteID: "server_monitor.metrics", Method: plugin.MethodWS},
+					Config: loadConfig(),
 				},
 				{
 					Key: "system", Label: "System", Type: plugin.PanelObjectDetail, Span: 1,
@@ -126,9 +131,9 @@ func tabs() []plugin.Panel {
 		},
 		{Key: "processes", Label: "Processes", Icon: lucide("list-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.processes"}, Config: liveTableConfig(processColumns(), 3000, sortBy("cpuPct"))},
 		{Key: "services", Label: "Services", Icon: lucide("settings"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.services"}, Config: liveTableConfig(serviceColumns(), 10000, nil)},
-		{Key: "disks", Label: "Disks", Icon: lucide("hard-drive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.disks"}, Config: liveTableConfig(diskColumns(), 10000, sortBy("usedPct"))},
+		{Key: "disks", Label: "Filesystems", Icon: lucide("hard-drive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.disks"}, Config: liveTableConfig(diskColumns(), 10000, sortBy("usedPct"))},
 		{Key: "io", Label: "Disk IO", Icon: lucide("activity"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.disk_io"}, Config: liveTableConfig(diskIOColumns(), 3000, sortBy("writeBytes"))},
-		{Key: "network", Label: "Network", Icon: lucide("network"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.network"}, Config: liveTableConfig(networkColumns(), 3000, sortBy("bytesRecv"))},
+		{Key: "network", Label: "Interfaces", Icon: lucide("network"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.network"}, Config: liveTableConfig(networkColumns(), 3000, sortBy("bytesRecv"))},
 		{Key: "connections", Label: "Connections", Icon: lucide("radio-tower"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.connections"}, Config: liveTableConfig(connectionColumns(), 5000, nil)},
 		{Key: "sessions", Label: "Sessions", Icon: lucide("users"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.users"}, Config: liveTableConfig(userColumns(), 15000, nil)},
 		{Key: "sensors", Label: "Sensors", Icon: lucide("thermometer"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.sensors"}, Config: liveTableConfig(sensorColumns(), 5000, sortBy("temperature"))},
@@ -194,8 +199,9 @@ func summaryConfig() plugin.MetricsConfig {
 		},
 		Stats: []plugin.MetricStat{
 			{Key: "processes", Label: "Processes"},
+			{Key: "sessions", Label: "Sessions"},
 			{Key: "load1", Label: "Load 1m"},
-			{Key: "load5", Label: "Load 5m"},
+			{Key: "updatedAt", Label: "Updated"},
 		},
 	}
 }
@@ -226,8 +232,25 @@ func throughputConfig() plugin.MetricsConfig {
 	}
 }
 
+func loadConfig() plugin.MetricsConfig {
+	return plugin.MetricsConfig{
+		Stats: []plugin.MetricStat{
+			{Key: "load1", Label: "Load 1m"},
+			{Key: "load5", Label: "Load 5m"},
+			{Key: "load15", Label: "Load 15m"},
+			{Key: "processes", Label: "Processes"},
+		},
+		Series: []plugin.MetricSeries{
+			{Key: "load1", Label: "Load 1m"},
+			{Key: "load5", Label: "Load 5m"},
+			{Key: "load15", Label: "Load 15m"},
+		},
+		History: 120,
+	}
+}
+
 func tableConfig(columns []plugin.Column) plugin.TableConfig {
-	return plugin.TableConfig{Columns: columns, EmptyText: "No rows collected.", Exportable: true, RowClick: plugin.RowClickDetail}
+	return plugin.TableConfig{Columns: columns, EmptyText: "No records reported by this host.", Exportable: true, RowClick: plugin.RowClickDetail}
 }
 
 func liveTableConfig(columns []plugin.Column, intervalMs int, sort *plugin.SortKey) plugin.TableConfig {
@@ -235,10 +258,28 @@ func liveTableConfig(columns []plugin.Column, intervalMs int, sort *plugin.SortK
 		Columns:           columns,
 		RefreshIntervalMs: intervalMs,
 		DefaultSort:       sort,
-		EmptyText:         "No rows collected.",
+		EmptyText:         emptyTextFor(columns),
 		Exportable:        true,
 		RowClick:          plugin.RowClickDetail,
 	}
+}
+
+func emptyTextFor(columns []plugin.Column) string {
+	for _, column := range columns {
+		switch column.Key {
+		case "pid":
+			return "No processes reported by this host."
+		case "unit":
+			return "No services reported by this host."
+		case "mountpoint":
+			return "No filesystems reported by this host."
+		case "localAddr":
+			return "No network connections reported by this host."
+		case "sensor":
+			return "No sensor readings reported by this host."
+		}
+	}
+	return "No records reported by this host."
 }
 
 func sortBy(field string) *plugin.SortKey { return &plugin.SortKey{Field: field, Desc: true} }
@@ -283,6 +324,7 @@ func diskColumns() []plugin.Column {
 		{Key: "total", Label: "Total", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "used", Label: "Used", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "free", Label: "Free", Type: plugin.ColumnBytes, Sortable: true},
+		{Key: "inodesUsedPct", Label: "Inodes", Type: plugin.ColumnPercent, Precision: prec(1), Sortable: true},
 	}
 }
 

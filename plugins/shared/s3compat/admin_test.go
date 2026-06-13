@@ -158,7 +158,7 @@ func TestAdminManifestUX(t *testing.T) {
 	for _, action := range actions {
 		byID[action.ID] = action
 	}
-	if a := byID["minio.bucket.versioning.set"]; !a.Confirm || a.Label != "Versioning" {
+	if a := byID["minio.bucket.versioning.set"]; !a.Confirm || a.Label != "Edit versioning" {
 		t.Fatalf("versioning action should be explicit and confirmed: %+v", a)
 	}
 }
@@ -171,6 +171,10 @@ func TestBucketCreateSchemaValidatesPortableNames(t *testing.T) {
 	}
 	if field.Validators[0].Type != plugin.ValidatorRegex || field.Validators[0].Message == "" {
 		t.Fatalf("bucket name validator should be a user-facing regex: %+v", field.Validators[0])
+	}
+	region := schema.Groups[0].Fields[1]
+	if region.Key != "region" || region.Type != plugin.FieldAutocomplete || !region.Required || region.Default != "us-east-1" {
+		t.Fatalf("bucket region should be required autocomplete with AWS default: %+v", region)
 	}
 }
 

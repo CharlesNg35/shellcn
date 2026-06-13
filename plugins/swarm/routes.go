@@ -53,6 +53,7 @@ func Routes() []plugin.Route {
 		{ID: "swarm.service.rollback", Method: plugin.MethodPost, Path: "/services/{id}/rollback", Permission: "swarm.services.write", Risk: plugin.RiskWrite, AuditEvent: "swarm.service.rollback", Handle: rollbackService},
 		{ID: "swarm.node.update", Method: plugin.MethodPost, Path: "/nodes/{id}/update", Permission: "swarm.nodes.write", Risk: plugin.RiskWrite, AuditEvent: "swarm.node.update", Input: nodeUpdateSchema(), Handle: updateNode},
 		{ID: "swarm.stack.deploy", Method: plugin.MethodPost, Path: "/stacks/deploy", Permission: "swarm.stacks.write", Risk: plugin.RiskWrite, AuditEvent: "swarm.stack.deploy", Input: stackDeploySchema(), Handle: deployStack},
+		{ID: "swarm.stack.remove", Method: plugin.MethodDelete, Path: "/stacks/{stack}", Permission: "swarm.stacks.delete", Risk: plugin.RiskDestructive, AuditEvent: "swarm.stack.remove", Handle: removeStack},
 		{ID: "swarm.service.logs", Method: plugin.MethodWS, Path: "/services/{id}/logs", Permission: "swarm.services.logs", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.logs", Input: dockerengine.LogsSchema(), Stream: serviceLogsStream},
 		{ID: "swarm.events.watch", Method: plugin.MethodWS, Path: "/events", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.events.watch", Stream: watchServiceEvents},
 	}
@@ -336,6 +337,34 @@ func removeService(rc *plugin.RequestContext) (any, error) {
 	}
 	_, err = cli.ServiceRemove(rc.Ctx, rc.Param("id"), dockerclient.ServiceRemoveOptions{})
 	return dockerengine.ActionResult{OK: err == nil}, dockerengine.DockerErr(err)
+}
+
+func removeStack(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	stack := strings.TrimSpace(rc.Param("stack"))
+	if stack == "" {
+		return nil, fmt.Errorf("%w: stack name is required", plugin.ErrInvalidInput)
+	}
+	res, err := cli.ServiceList(rc.Ctx, dockerclient.ServiceListOptions{
+		Filters: make(dockerclient.Filters).Add("label", stackNamespaceLabel+"="+stack),
+	})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	if len(res.Items) == 0 {
+		return nil, plugin.ErrNotFound
+	}
+	var removed int
+	for _, svc := range res.Items {
+		if _, err := cli.ServiceRemove(rc.Ctx, svc.ID, dockerclient.ServiceRemoveOptions{}); err != nil {
+			return nil, dockerengine.DockerErr(err)
+		}
+		removed++
+	}
+	return map[string]any{"ok": true, "removed": removed}, nil
 }
 
 func scaleSchema() *plugin.Schema {

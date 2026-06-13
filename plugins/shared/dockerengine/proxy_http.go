@@ -147,10 +147,10 @@ func ContainerOpenSchema(optionsRouteID string) *plugin.Schema {
 		Name: "Open",
 		Fields: []plugin.Field{{
 			Key:         "port",
-			Label:       "Port",
+			Label:       "Published port",
 			Type:        plugin.FieldSelect,
 			Placeholder: "Select a port",
-			Help:        "Only TCP ports reachable from the gateway are shown.",
+			Help:        "Only TCP ports reachable from the gateway are shown. If left blank, ShellCN opens the first web-like port.",
 			OptionsSource: &plugin.DataSource{
 				RouteID: optionsRouteID,
 				Params:  map[string]string{"id": "${resource.uid}"},

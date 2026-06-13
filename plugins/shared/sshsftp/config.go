@@ -22,14 +22,15 @@ const (
 )
 
 type connectOptions struct {
-	Host       string
-	Port       int
-	User       string
-	Auth       string
-	Password   string
-	PrivateKey string
-	Passphrase string
-	HostKey    string
+	Host        string
+	Port        int
+	User        string
+	Auth        string
+	Password    string
+	PrivateKey  string
+	Passphrase  string
+	HostKey     string
+	HostKeyMode string
 }
 
 // Connect opens one SSH client for either the SSH or SFTP plugin.
@@ -76,14 +77,15 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 		user = strings.TrimSpace(cfg.String("username"))
 	}
 	opts := connectOptions{
-		Host:       strings.TrimSpace(cfg.String("host")),
-		Port:       port,
-		User:       user,
-		Auth:       strings.TrimSpace(cfg.String("auth")),
-		Password:   cfg.String("password"),
-		PrivateKey: cfg.String("private_key"),
-		Passphrase: cfg.String("passphrase"),
-		HostKey:    strings.TrimSpace(cfg.String("host_key")),
+		Host:        strings.TrimSpace(cfg.String("host")),
+		Port:        port,
+		User:        user,
+		Auth:        strings.TrimSpace(cfg.String("auth")),
+		Password:    cfg.String("password"),
+		PrivateKey:  cfg.String("private_key"),
+		Passphrase:  cfg.String("passphrase"),
+		HostKey:     strings.TrimSpace(cfg.String("host_key")),
+		HostKeyMode: strings.TrimSpace(cfg.String("host_key_verification")),
 	}
 	if opts.Auth == "" {
 		opts.Auth = "password"
@@ -96,6 +98,22 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	}
 	if opts.User == "" {
 		return connectOptions{}, fmt.Errorf("%w: user is required", plugin.ErrInvalidInput)
+	}
+	switch opts.HostKeyMode {
+	case "":
+		if opts.HostKey != "" {
+			opts.HostKeyMode = "pinned"
+		} else {
+			opts.HostKeyMode = "insecure"
+		}
+	case "pinned":
+		if opts.HostKey == "" {
+			return connectOptions{}, fmt.Errorf("%w: pinned host key is required", plugin.ErrInvalidInput)
+		}
+	case "insecure":
+		opts.HostKey = ""
+	default:
+		return connectOptions{}, fmt.Errorf("%w: unsupported host key verification %q", plugin.ErrInvalidInput, opts.HostKeyMode)
 	}
 	if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
 		if opts.Auth == "credential" {

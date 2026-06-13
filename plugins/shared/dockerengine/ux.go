@@ -12,14 +12,17 @@ func ContainerOverviewDetailConfig() plugin.ObjectDetailConfig {
 				{Key: "image", Label: "Image", Copy: true},
 				{Key: "state", Label: "State", Type: plugin.ColumnBadge, Severities: StateSeverities()},
 				{Key: "health", Label: "Health", Type: plugin.ColumnBadge, Severities: healthSeverities()},
+				{Key: "ports", Label: "Ports"},
 				{Key: "running", Label: "Running", Type: plugin.ColumnBool},
 				{Key: "restartCount", Label: "Restarts", Type: plugin.ColumnNumber},
 				{Key: "exitCode", Label: "Exit code", Type: plugin.ColumnNumber},
 			}},
 			{Title: "Runtime", Fields: []plugin.ObjectDetailField{
 				{Key: "command", Label: "Command", Copy: true},
+				{Key: "entrypoint", Label: "Entrypoint", Copy: true},
 				{Key: "driver", Label: "Driver"},
 				{Key: "platform", Label: "Platform"},
+				{Key: "restartPolicy", Label: "Restart policy"},
 				{Key: "created", Label: "Created", Type: plugin.ColumnDateTime},
 				{Key: "startedAt", Label: "Started", Type: plugin.ColumnDateTime},
 				{Key: "finishedAt", Label: "Finished", Type: plugin.ColumnDateTime},
@@ -27,8 +30,11 @@ func ContainerOverviewDetailConfig() plugin.ObjectDetailConfig {
 			{Title: "Placement", Fields: []plugin.ObjectDetailField{
 				{Key: "composeProject", Label: "Compose project"},
 				{Key: "composeService", Label: "Compose service"},
+				{Key: "networkMode", Label: "Network mode"},
 				{Key: "networks", Label: "Networks", Type: plugin.ColumnJSON},
 				{Key: "mounts", Label: "Mounts", Type: plugin.ColumnNumber},
+				{Key: "env", Label: "Env vars", Type: plugin.ColumnNumber},
+				{Key: "labels", Label: "Labels", Type: plugin.ColumnJSON},
 			}},
 		},
 	}
@@ -63,12 +69,13 @@ func VolumeOverviewDetailConfig() plugin.ObjectDetailConfig {
 		Sections: []plugin.ObjectDetailSection{
 			{Title: "Volume", Fields: []plugin.ObjectDetailField{
 				{Key: "name", Label: "Name", Copy: true},
+				{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Severities: UsageSeverities()},
 				{Key: "driver", Label: "Driver"},
 				{Key: "scope", Label: "Scope"},
 				{Key: "mountpoint", Label: "Mountpoint", Copy: true},
 				{Key: "createdAt", Label: "Created", Type: plugin.ColumnDateTime},
 				{Key: "size", Label: "Size", Type: plugin.ColumnBytes},
-				{Key: "refs", Label: "Refs", Type: plugin.ColumnNumber},
+				{Key: "refs", Label: "Container refs", Type: plugin.ColumnNumber},
 			}},
 			{Title: "Metadata", Fields: []plugin.ObjectDetailField{
 				{Key: "labels", Label: "Labels", Type: plugin.ColumnJSON},
@@ -108,7 +115,9 @@ func ComposeOverviewDetailConfig() plugin.ObjectDetailConfig {
 			{Title: "Project", Fields: []plugin.ObjectDetailField{
 				{Key: "name", Label: "Name", Copy: true},
 				{Key: "containers", Label: "Containers", Type: plugin.ColumnNumber},
+				{Key: "services", Label: "Services", Type: plugin.ColumnNumber},
 				{Key: "running", Label: "Running", Type: plugin.ColumnNumber},
+				{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Severities: ComposeSeverities()},
 				{Key: "workingDir", Label: "Working directory", Copy: true},
 				{Key: "config", Label: "Config", Copy: true},
 			}},
@@ -121,5 +130,22 @@ func healthSeverities() map[string]plugin.Severity {
 		"healthy":   plugin.SeveritySuccess,
 		"starting":  plugin.SeverityWarn,
 		"unhealthy": plugin.SeverityDanger,
+	}
+}
+
+func UsageSeverities() map[string]plugin.Severity {
+	return map[string]plugin.Severity{
+		"In use":  plugin.SeveritySuccess,
+		"Unused":  plugin.SeveritySecondary,
+		"Unknown": plugin.SeverityWarn,
+	}
+}
+
+func ComposeSeverities() map[string]plugin.Severity {
+	return map[string]plugin.Severity{
+		"Running": plugin.SeveritySuccess,
+		"Partial": plugin.SeverityWarn,
+		"Stopped": plugin.SeveritySecondary,
+		"Empty":   plugin.SeveritySecondary,
 	}
 }

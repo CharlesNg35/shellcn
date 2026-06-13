@@ -289,6 +289,18 @@ func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 	if fmt.Sprint(overview.(Row)["name"]) != "web" || fmt.Sprint(overview.(Row)["state"]) != "running" {
 		t.Fatalf("container overview unexpected: %+v", overview)
 	}
+	if fmt.Sprint(overview.(Row)["ports"]) != "127.0.0.1:8080->80/tcp" || overview.(Row)["mounts"] != 1 {
+		t.Fatalf("container overview ports/mounts unexpected: %+v", overview)
+	}
+
+	mounts, err := ContainerMounts(inspectRC)
+	if err != nil {
+		t.Fatalf("container mounts: %v", err)
+	}
+	mountPage := mounts.(plugin.Page[Row])
+	if len(mountPage.Items) != 1 || mountPage.Items[0]["destination"] != "/usr/share/nginx/html" || mountPage.Items[0]["rw"] != false {
+		t.Fatalf("container mounts unexpected: %+v", mountPage.Items)
+	}
 
 	composeRC := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u"}, sess, map[string]string{"project": "demo"}, url.Values{}, nil)
 	services, err := ComposeServices(composeRC)
@@ -376,6 +388,18 @@ func fakeDockerDaemon(t *testing.T) (*httptest.Server, map[string]bool) {
 					"Labels": map[string]string{"com.docker.compose.project": "demo", "com.docker.compose.service": "web"},
 				},
 				"State": map[string]any{"Status": "running", "Running": true},
+				"NetworkSettings": map[string]any{
+					"Ports": map[string]any{
+						"80/tcp": []map[string]any{{"HostIp": "127.0.0.1", "HostPort": "8080"}},
+					},
+				},
+				"Mounts": []map[string]any{{
+					"Type":        "bind",
+					"Source":      "/srv/site",
+					"Destination": "/usr/share/nginx/html",
+					"Mode":        "ro",
+					"RW":          false,
+				}},
 			})
 		case p == "/images/json":
 			_ = json.NewEncoder(w).Encode([]map[string]any{{"Id": "sha256:img", "RepoTags": []string{"nginx:latest"}, "Size": 1234, "Created": 1710000000, "Containers": 1}})

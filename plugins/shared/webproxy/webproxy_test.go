@@ -216,6 +216,41 @@ func TestServeRewritesCookiePath(t *testing.T) {
 	}
 }
 
+func TestServeForwardsProxyContextHeaders(t *testing.T) {
+	seen := make(chan http.Header, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen <- r.Header.Clone()
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	req := httptest.NewRequest(http.MethodGet, "http://gateway.local/proxy/x/app?q=1", nil)
+	req.Host = "gateway.local"
+	req.RemoteAddr = "192.0.2.10:51234"
+	rec := httptest.NewRecorder()
+	webproxy.Serve(rec, req, webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/app", PublicPrefix: "/proxy/x",
+	})
+
+	h := <-seen
+	if got := h.Get("X-Forwarded-Host"); got != "gateway.local" {
+		t.Fatalf("X-Forwarded-Host = %q", got)
+	}
+	if got := h.Get("X-Forwarded-Prefix"); got != "/proxy/x" {
+		t.Fatalf("X-Forwarded-Prefix = %q", got)
+	}
+	if got := h.Get("X-Forwarded-Proto"); got != "http" {
+		t.Fatalf("X-Forwarded-Proto = %q", got)
+	}
+	if got := h.Get("X-Forwarded-Uri"); got != "/proxy/x/app?q=1" {
+		t.Fatalf("X-Forwarded-Uri = %q", got)
+	}
+	if got := h.Get("Forwarded"); !strings.Contains(got, `host="gateway.local"`) || !strings.Contains(got, `proto="http"`) || !strings.Contains(got, `for="192.0.2.10"`) {
+		t.Fatalf("Forwarded = %q", got)
+	}
+}
+
 func TestServeWorkerScope(t *testing.T) {
 	rec := httptest.NewRecorder()
 	webproxy.ServeWorker(rec, "/proxy/x")

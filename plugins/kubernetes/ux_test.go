@@ -195,6 +195,92 @@ func TestPodOpenRequiresRunningPodWithPorts(t *testing.T) {
 	t.Fatal("pod open action missing")
 }
 
+func TestServiceOpenRequiresForwardablePorts(t *testing.T) {
+	a := actionByID("kubernetes.service.open")
+	if a.ID == "" {
+		t.Fatal("service open action missing")
+	}
+	if !conditionHasRule(a.EnabledWhen, "ports", plugin.OpNotEmpty, nil) {
+		t.Fatalf("service open should require ports, got %#v", a.EnabledWhen)
+	}
+	if !conditionHasRule(a.EnabledWhen, "type", plugin.OpNeq, "ExternalName") {
+		t.Fatalf("service open should be disabled for ExternalName services, got %#v", a.EnabledWhen)
+	}
+}
+
+func TestControllerOwnedKindsDoNotExposeCreateOrDelete(t *testing.T) {
+	for _, name := range []string{"event", "endpoints", "endpointslice", "lease", "node"} {
+		k, ok := kindByName(name)
+		if !ok {
+			t.Fatalf("kind %q missing", name)
+		}
+		res := resourceType(k)
+		if hasAction(res.Actions.Toolbar, "kubernetes.create."+name) {
+			t.Errorf("%s should not expose Create", name)
+		}
+		if hasAction(res.Actions.Row, "kubernetes.resource.delete") || hasAction(res.Actions.Detail, "kubernetes.resource.delete") {
+			t.Errorf("%s should not expose generic Delete, got row=%v detail=%v", name, res.Actions.Row, res.Actions.Detail)
+		}
+	}
+}
+
+func TestWorkloadStatusIsVisibleInListsAndHeaders(t *testing.T) {
+	for _, name := range []string{"deployment", "statefulset", "daemonset", "replicaset", "job"} {
+		k, ok := kindByName(name)
+		if !ok {
+			t.Fatalf("kind %q missing", name)
+		}
+		res := resourceType(k)
+		if !hasColumn(res.Columns, "status") {
+			t.Errorf("%s should expose a status badge column", name)
+		}
+		if res.Detail.Header.StatusField != "status" {
+			t.Errorf("%s detail header status = %q, want status", name, res.Detail.Header.StatusField)
+		}
+	}
+}
+
+func TestScaleSchemaDoesNotDefaultToOneReplica(t *testing.T) {
+	s := scaleSchema()
+	field := s.Groups[0].Fields[0]
+	if field.Key != "replicas" || !field.Required {
+		t.Fatalf("scale replicas field = %+v", field)
+	}
+	if field.Default != nil {
+		t.Fatalf("scale replicas should not default to a destructive value, got %v", field.Default)
+	}
+	if len(field.Validators) == 0 || field.Validators[0].Type != plugin.ValidatorMin || field.Validators[0].Value != 0 {
+		t.Fatalf("scale replicas should validate a non-negative count, got %+v", field.Validators)
+	}
+}
+
+func actionByID(id string) plugin.Action {
+	for _, a := range actions() {
+		if a.ID == id {
+			return a
+		}
+	}
+	return plugin.Action{}
+}
+
+func hasAction(actions []string, id string) bool {
+	for _, got := range actions {
+		if got == id {
+			return true
+		}
+	}
+	return false
+}
+
+func hasColumn(columns []plugin.Column, key string) bool {
+	for _, got := range columns {
+		if got.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
 func conditionRequiresStatus(c *plugin.Condition, status string) bool {
 	return conditionHasRule(c, "status", plugin.OpEq, status)
 }

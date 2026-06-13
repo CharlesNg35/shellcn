@@ -7,6 +7,7 @@ package webproxy
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -66,6 +67,11 @@ func Serve(w http.ResponseWriter, r *http.Request, o Options) {
 			req.URL.RawPath = o.UpstreamRawPath
 			req.Host = o.Base.Host
 			req.Header.Set("Accept-Encoding", "identity")
+			req.Header.Set("X-Forwarded-Host", r.Host)
+			req.Header.Set("X-Forwarded-Prefix", o.PublicPrefix)
+			req.Header.Set("X-Forwarded-Proto", forwardedProto(r))
+			req.Header.Set("X-Forwarded-Uri", r.URL.RequestURI())
+			req.Header.Set("Forwarded", forwardedHeader(r))
 		},
 		Transport:     o.Transport,
 		FlushInterval: -1,
@@ -293,6 +299,38 @@ func headInsertIndex(html string) int {
 }
 
 func jsString(s string) string { return strconv.Quote(s) }
+
+func forwardedProto(r *http.Request) string {
+	if r.TLS != nil {
+		return "https"
+	}
+	if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto != "" {
+		return strings.Split(proto, ",")[0]
+	}
+	return "http"
+}
+
+func forwardedHeader(r *http.Request) string {
+	parts := []string{"host=" + quoteForwardedValue(r.Host), "proto=" + quoteForwardedValue(forwardedProto(r))}
+	if ip := clientIP(r); ip != "" {
+		parts = append(parts, "for="+quoteForwardedValue(ip))
+	}
+	return strings.Join(parts, ";")
+}
+
+func clientIP(r *http.Request) string {
+	if prior := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); prior != "" {
+		return strings.TrimSpace(strings.Split(prior, ",")[0])
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
+func quoteForwardedValue(v string) string {
+	return strconv.Quote(strings.ReplaceAll(v, `"`, ""))
+}
 
 // ServeWorker returns the service worker. Served from under the prefix, its
 // default scope is the proxy path, so it controls the app's page and rewrites any

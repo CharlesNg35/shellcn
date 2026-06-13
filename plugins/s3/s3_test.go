@@ -50,3 +50,36 @@ func TestBucketFieldDeclaresPortableNameValidation(t *testing.T) {
 	}
 	t.Fatal("missing bucket field")
 }
+
+func TestConfigUsesObjectStoreSpecificControls(t *testing.T) {
+	m := New().Manifest()
+	region := requireConfigField(t, m.Config, "region")
+	if region.Type != plugin.FieldAutocomplete || len(region.Options) < 10 {
+		t.Fatalf("region should be autocomplete with AWS region suggestions: %+v", region)
+	}
+	prefix := requireConfigField(t, m.Config, "prefix")
+	if prefix.Type != plugin.FieldAutocomplete {
+		t.Fatalf("root prefix should be autocomplete/free text, got %+v", prefix)
+	}
+	endpoint := requireConfigField(t, m.Config, "endpoint")
+	if endpoint.Type != plugin.FieldURL || endpoint.Help == "" {
+		t.Fatalf("endpoint should use URL input with help: %+v", endpoint)
+	}
+	pathStyle := requireConfigField(t, m.Config, "path_style")
+	if pathStyle.Type != plugin.FieldToggle || pathStyle.Help == "" {
+		t.Fatalf("path style should be an explained toggle: %+v", pathStyle)
+	}
+}
+
+func requireConfigField(t *testing.T, schema plugin.Schema, key string) plugin.Field {
+	t.Helper()
+	for _, group := range schema.Groups {
+		for _, field := range group.Fields {
+			if field.Key == key {
+				return field
+			}
+		}
+	}
+	t.Fatalf("missing config field %q", key)
+	return plugin.Field{}
+}
