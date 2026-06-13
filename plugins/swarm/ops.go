@@ -93,8 +93,8 @@ type serviceUpdateRequest struct {
 
 func serviceUpdateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Update service", Fields: []plugin.Field{
-		{Key: "image", Label: "Image", Type: plugin.FieldText, Placeholder: "nginx:1.27", Help: "Leave blank to keep the current image."},
-		{Key: "replicas", Label: "Replicas", Type: plugin.FieldStepper, Help: "Replicated services only.", Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}}},
+		{Key: "image", Label: "Image", Type: plugin.FieldAutocomplete, Placeholder: "nginx:1.27", Help: "Leave blank to keep the current image."},
+		{Key: "replicas", Label: "Replicas", Type: plugin.FieldStepper, Help: "Replicated services only.", Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}, {Type: plugin.ValidatorMax, Value: 10000}}},
 		{Key: "env", Label: "Environment", Type: plugin.FieldTextarea, Placeholder: "KEY=VALUE", Help: "One KEY=VALUE per line; replaces the current environment when set."},
 	}}}}
 }
@@ -115,8 +115,8 @@ func nodeUpdateSchema() *plugin.Schema {
 
 func stackDeploySchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Deploy stack", Fields: []plugin.Field{
-		{Key: "name", Label: "Stack name", Type: plugin.FieldText, Required: true, Placeholder: "my-stack"},
-		{Key: "spec", Label: "Service specs", Type: plugin.FieldJSON, Required: true, Help: "JSON array of Docker service specs. Each is created or updated under the stack namespace."},
+		{Key: "name", Label: "Stack name", Type: plugin.FieldText, Required: true, Placeholder: "my-stack", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^[A-Za-z0-9][A-Za-z0-9_.-]*$`, Message: "Use letters, numbers, dots, underscores, or dashes."}}},
+		{Key: "spec", Label: "Service spec JSON", Type: plugin.FieldJSON, Required: true, Help: "JSON array of Docker service specs. Each spec is created or updated under the stack namespace; Compose YAML is not accepted here."},
 	}}}}
 }
 

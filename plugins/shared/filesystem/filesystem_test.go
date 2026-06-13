@@ -198,6 +198,26 @@ func TestFilesystemHandlersRoundTrip(t *testing.T) {
 	}
 }
 
+func TestNameSchemasGuideSingleNameInputs(t *testing.T) {
+	routes := map[string]plugin.Route{}
+	for _, r := range Routes("test", "test") {
+		routes[r.ID] = r
+	}
+	for _, id := range []string{"test.files.mkdir", "test.files.rename"} {
+		route := routes[id]
+		if route.Input == nil {
+			t.Fatalf("%s missing input schema", id)
+		}
+		field := route.Input.Groups[0].Fields[0]
+		if field.Key != "name" || field.Placeholder == "" {
+			t.Fatalf("%s name field missing key/placeholder: %+v", id, field)
+		}
+		if len(field.Validators) != 1 || field.Validators[0].Type != plugin.ValidatorRegex {
+			t.Fatalf("%s name field missing regex validator: %+v", id, field.Validators)
+		}
+	}
+}
+
 func makeUpload(t *testing.T, name string, content []byte) plugin.UploadedFile {
 	t.Helper()
 	var buf bytes.Buffer

@@ -73,7 +73,7 @@ func serverResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "Databases"},
 			Tabs: []plugin.Panel{
-				{Key: "databases", Label: "Databases", Icon: icon("database"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.databases.list"}, Config: plugin.TableConfig{ActionIDs: []string{"postgresql.database.create"}}},
+				{Key: "databases", Label: "Databases", Icon: icon("database"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.databases.list"}, Config: databasesTableConfig([]string{"postgresql.database.create"})},
 				{Key: "console", Label: "SQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "postgresql.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT now();", nil)},
 			},
 		},
@@ -93,9 +93,9 @@ func databaseResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "postgresql.database.overview", Params: map[string]string{"database": "${resource.uid}"}}, Config: databaseOverviewDetailConfig()},
-				{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.schemas.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: schemaColumns(), RowActionIDs: []string{"postgresql.schema.drop"}}},
-				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"postgresql.table.create.in_database"}, RowActionIDs: []string{"postgresql.table.truncate", "postgresql.table.drop"}}},
+				{Key: "overview", Label: "Overview", Icon: icon("gauge"), Type: plugin.PanelDashboard, Config: databaseOverviewDashboard()},
+				{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.schemas.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: schemasTableConfig([]string{"postgresql.schema.drop"})},
+				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: tablesTableConfig([]string{"postgresql.table.create.in_database"}, []string{"postgresql.table.truncate", "postgresql.table.drop"})},
 				{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Type: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "postgresql.relations.graph", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}},
 				{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "postgresql.query", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.uid}"}}, Config: queryConfig("SELECT now();", map[string]string{"database": "${resource.uid}"})},
 			},
@@ -113,10 +113,10 @@ func schemaResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "postgresql.schema.overview", Params: schemaParams()}, Config: schemaOverviewDetailConfig()},
-				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.tables.list", Params: schemaParams()}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"postgresql.table.create"}, RowActionIDs: []string{"postgresql.table.truncate", "postgresql.table.drop"}}},
-				{Key: "views", Label: "Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.views.list", Params: schemaParams()}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"postgresql.view.drop"}}},
-				{Key: "functions", Label: "Functions", Icon: icon("function-square"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.functions.list", Params: schemaParams()}, Config: plugin.TableConfig{Columns: functionColumns()}},
-				{Key: "sequences", Label: "Sequences", Icon: icon("list-ordered"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.sequences.list", Params: schemaParams()}, Config: plugin.TableConfig{Columns: sequenceColumns()}},
+				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.tables.list", Params: schemaParams()}, Config: tablesTableConfig([]string{"postgresql.table.create"}, []string{"postgresql.table.truncate", "postgresql.table.drop"})},
+				{Key: "views", Label: "Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.views.list", Params: schemaParams()}, Config: viewsTableConfig([]string{"postgresql.view.drop"})},
+				{Key: "functions", Label: "Functions", Icon: icon("function-square"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.functions.list", Params: schemaParams()}, Config: functionsTableConfig()},
+				{Key: "sequences", Label: "Sequences", Icon: icon("list-ordered"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.sequences.list", Params: schemaParams()}, Config: sequencesTableConfig()},
 				{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "postgresql.query", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.scope}"}}, Config: queryConfig("SELECT now();", map[string]string{"database": "${resource.scope}"})},
 			},
 		},
@@ -136,9 +136,9 @@ func tableResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"},
 			Tabs: []plugin.Panel{
 				{Key: "data", Label: "Data", Icon: icon("table"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.table.rows", Params: tableParams()}, Config: dataGridConfig()},
-				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"postgresql.column.add"}, RowActionIDs: []string{"postgresql.column.rename", "postgresql.column.alter", "postgresql.column.drop"}}},
-				{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"postgresql.index.create"}, RowActionIDs: []string{"postgresql.index.drop"}}},
-				{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.table.constraints", Params: tableParams()}, Config: plugin.TableConfig{Columns: constraintColumns(), ActionIDs: []string{"postgresql.constraint.add"}, RowActionIDs: []string{"postgresql.constraint.drop"}}},
+				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.table.columns", Params: tableParams()}, Config: columnsTableConfig([]string{"postgresql.column.add"}, []string{"postgresql.column.rename", "postgresql.column.alter", "postgresql.column.drop"})},
+				{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.table.indexes", Params: tableParams()}, Config: indexesTableConfig([]string{"postgresql.index.create"}, []string{"postgresql.index.drop"})},
+				{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.table.constraints", Params: tableParams()}, Config: constraintsTableConfig([]string{"postgresql.constraint.add"}, []string{"postgresql.constraint.drop"})},
 				{Key: "ddl", Label: "DDL", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "postgresql.table.ddl", Params: tableParams()}},
 				{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "postgresql.query", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.scope}"}}, Config: queryConfig("SELECT * FROM ${resource.namespace}.${resource.name} LIMIT 100;", map[string]string{"database": "${resource.scope}"})},
 			},
@@ -155,7 +155,7 @@ func viewResource() plugin.ResourceType {
 			Detail: []string{"postgresql.view.drop"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Panel{
-			{Key: "data", Label: "Data", Icon: icon("table"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.view.rows", Params: tableParams()}},
+			{Key: "data", Label: "Data", Icon: icon("table"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.view.rows", Params: tableParams()}, Config: plugin.TableConfig{Exportable: true, EmptyText: "No rows returned."}},
 			{Key: "definition", Label: "Definition", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "postgresql.view.definition", Params: tableParams()}},
 			{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "postgresql.query", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.scope}"}}, Config: queryConfig("SELECT * FROM ${resource.namespace}.${resource.name} LIMIT 100;", map[string]string{"database": "${resource.scope}"})},
 		}},
@@ -180,6 +180,13 @@ func sequenceResource() plugin.ResourceType {
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "postgresql.sequence.overview", Params: tableParams()}, Config: sequenceOverviewDetailConfig()},
 		}},
 	}
+}
+
+func databaseOverviewDashboard() plugin.DashboardConfig {
+	databaseParams := map[string]string{"database": "${resource.uid}"}
+	return plugin.DashboardConfig{Cells: []plugin.Panel{
+		{Key: "summary", Label: "Summary", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "postgresql.database.overview", Params: databaseParams}, Config: databaseOverviewDetailConfig(), Span: 2},
+	}}
 }
 
 func databaseOverviewDetailConfig() plugin.ObjectDetailConfig {
@@ -255,6 +262,42 @@ func dataGridConfig() plugin.TableConfig {
 	}
 }
 
+func databasesTableConfig(actions []string) plugin.TableConfig {
+	return plugin.TableConfig{Columns: databaseColumns(), ActionIDs: actions, EmptyText: "No databases visible.", Exportable: true}
+}
+
+func schemasTableConfig(rowActions []string) plugin.TableConfig {
+	return plugin.TableConfig{Columns: schemaColumns(), RowActionIDs: rowActions, EmptyText: "No schemas visible.", Exportable: true}
+}
+
+func tablesTableConfig(actions, rowActions []string) plugin.TableConfig {
+	return plugin.TableConfig{Columns: tableColumns(), ActionIDs: actions, RowActionIDs: rowActions, EmptyText: "No tables.", Exportable: true}
+}
+
+func viewsTableConfig(rowActions []string) plugin.TableConfig {
+	return plugin.TableConfig{Columns: viewColumns(), RowActionIDs: rowActions, EmptyText: "No views.", Exportable: true}
+}
+
+func functionsTableConfig() plugin.TableConfig {
+	return plugin.TableConfig{Columns: functionColumns(), EmptyText: "No functions.", Exportable: true}
+}
+
+func sequencesTableConfig() plugin.TableConfig {
+	return plugin.TableConfig{Columns: sequenceColumns(), EmptyText: "No sequences.", Exportable: true}
+}
+
+func columnsTableConfig(actions, rowActions []string) plugin.TableConfig {
+	return plugin.TableConfig{Columns: columnColumns(), ActionIDs: actions, RowActionIDs: rowActions, EmptyText: "No columns.", Exportable: true}
+}
+
+func indexesTableConfig(actions, rowActions []string) plugin.TableConfig {
+	return plugin.TableConfig{Columns: indexColumns(), ActionIDs: actions, RowActionIDs: rowActions, EmptyText: "No indexes.", Exportable: true}
+}
+
+func constraintsTableConfig(actions, rowActions []string) plugin.TableConfig {
+	return plugin.TableConfig{Columns: constraintColumns(), ActionIDs: actions, RowActionIDs: rowActions, EmptyText: "No constraints.", Exportable: true}
+}
+
 func queryConfig(initial string, params map[string]string) plugin.QueryEditorConfig {
 	cfg := plugin.QueryEditorConfig{
 		Language:          "sql",
@@ -318,8 +361,8 @@ func constraintColumns() []plugin.Column {
 
 func actions() []plugin.Action {
 	return []plugin.Action{
-		{ID: "postgresql.database.create", Label: "Create database", Icon: icon("plus"), RouteID: "postgresql.database.create", OnSuccess: &plugin.ActionSuccess{SelectTab: "schemas"}},
-		{ID: "postgresql.database.drop", Label: "Drop database", Icon: icon("trash-2"), RouteID: "postgresql.database.drop", Params: map[string]string{"database": "${resource.uid}"}, Confirm: true, ConfirmText: "Drop this database? All of its schemas and data will be permanently deleted."},
+		{ID: "postgresql.database.create", Label: "Create database", Icon: icon("plus"), RouteID: "postgresql.database.create"},
+		{ID: "postgresql.database.drop", Label: "Drop database", Icon: icon("trash-2"), RouteID: "postgresql.database.drop", Params: map[string]string{"database": "${resource.uid}"}, Confirm: true, ConfirmText: "Drop this database? All of its schemas and data will be permanently deleted.", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 		{ID: "postgresql.schema.create", Label: "Create schema", Icon: icon("folder-plus"), RouteID: "postgresql.schema.create", Params: map[string]string{"database": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "schemas"}},
 		{ID: "postgresql.schema.drop", Label: "Drop schema", Icon: icon("trash-2"), RouteID: "postgresql.schema.drop", Params: schemaParams(), Confirm: true, ConfirmText: "Drop this schema? It must be empty."},
 		{ID: "postgresql.table.create", Label: "Create table", Icon: icon("plus"), RouteID: "postgresql.table.create", Params: schemaParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "tables"}},
@@ -330,11 +373,11 @@ func actions() []plugin.Action {
 		{ID: "postgresql.column.alter", Label: "Change type", Icon: icon("replace"), RouteID: "postgresql.column.alter", Params: map[string]string{"schema": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
 		{ID: "postgresql.constraint.add", Label: "Add constraint", Icon: icon("plus"), RouteID: "postgresql.constraint.add", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "constraints"}},
 		{ID: "postgresql.constraint.drop", Label: "Drop constraint", Icon: icon("trash"), RouteID: "postgresql.constraint.drop", Params: map[string]string{"schema": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this constraint?", OnSuccess: &plugin.ActionSuccess{SelectTab: "constraints"}},
-		{ID: "postgresql.table.rename", Label: "Rename table", Icon: icon("pencil"), RouteID: "postgresql.table.rename", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "data"}},
+		{ID: "postgresql.table.rename", Label: "Rename table", Icon: icon("pencil"), RouteID: "postgresql.table.rename", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 		{ID: "postgresql.index.create", Label: "Create index", Icon: icon("plus"), RouteID: "postgresql.index.create", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: "postgresql.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "postgresql.index.drop", Params: map[string]string{"schema": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: "postgresql.table.truncate", Label: "Truncate", Icon: icon("eraser"), RouteID: "postgresql.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted."},
-		{ID: "postgresql.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "postgresql.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
-		{ID: "postgresql.view.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "postgresql.view.drop", Params: map[string]string{"database": "${resource.scope}", "schema": "${resource.namespace}", "view": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this view?"},
+		{ID: "postgresql.table.drop", Label: "Drop table", Icon: icon("trash-2"), RouteID: "postgresql.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted.", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
+		{ID: "postgresql.view.drop", Label: "Drop view", Icon: icon("trash-2"), RouteID: "postgresql.view.drop", Params: map[string]string{"database": "${resource.scope}", "schema": "${resource.namespace}", "view": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this view?", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 	}
 }

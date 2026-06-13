@@ -156,6 +156,43 @@ func TestServeRewritesCSSAndSrcset(t *testing.T) {
 	}
 }
 
+func TestServeRewritesSingleQuotedHTMLURLs(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, `<html><head><meta http-equiv='refresh' content='0; url=/next'></head><body>`+
+			`<a href='/'>home</a><script src='/app.js'></script><img srcset='/a.png 1x, /b.png 2x'></body></html>`)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	rec := httptest.NewRecorder()
+	webproxy.Serve(rec, httptest.NewRequest(http.MethodGet, "/", nil), webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/", PublicPrefix: "/proxy/x",
+	})
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`href='/proxy/x/'`,
+		`src='/proxy/x/app.js'`,
+		`srcset='/proxy/x/a.png 1x, /proxy/x/b.png 2x'`,
+		`content='0; url=/proxy/x/next'`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("single-quoted URL rewrite missing %q in %s", want, body)
+		}
+	}
+}
+
+func TestServeWorkerQuotesPrefixSafely(t *testing.T) {
+	rec := httptest.NewRecorder()
+	webproxy.ServeWorker(rec, `/proxy/"x\y`)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `var P="/proxy/\"x\\y"`) {
+		t.Fatalf("worker prefix not safely quoted: %s", body)
+	}
+}
+
 func TestServeRewritesCookiePath(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Add("Set-Cookie", "sid=abc; Path=/; HttpOnly")
@@ -176,6 +213,41 @@ func TestServeRewritesCookiePath(t *testing.T) {
 	}
 	if !strings.Contains(joined, "__Host-sec=z; Path=/; Secure") {
 		t.Fatalf("__Host- cookie path must stay /: %q", got)
+	}
+}
+
+func TestServeForwardsProxyContextHeaders(t *testing.T) {
+	seen := make(chan http.Header, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen <- r.Header.Clone()
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	req := httptest.NewRequest(http.MethodGet, "http://gateway.local/proxy/x/app?q=1", nil)
+	req.Host = "gateway.local"
+	req.RemoteAddr = "192.0.2.10:51234"
+	rec := httptest.NewRecorder()
+	webproxy.Serve(rec, req, webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/app", PublicPrefix: "/proxy/x",
+	})
+
+	h := <-seen
+	if got := h.Get("X-Forwarded-Host"); got != "gateway.local" {
+		t.Fatalf("X-Forwarded-Host = %q", got)
+	}
+	if got := h.Get("X-Forwarded-Prefix"); got != "/proxy/x" {
+		t.Fatalf("X-Forwarded-Prefix = %q", got)
+	}
+	if got := h.Get("X-Forwarded-Proto"); got != "http" {
+		t.Fatalf("X-Forwarded-Proto = %q", got)
+	}
+	if got := h.Get("X-Forwarded-Uri"); got != "/proxy/x/app?q=1" {
+		t.Fatalf("X-Forwarded-Uri = %q", got)
+	}
+	if got := h.Get("Forwarded"); !strings.Contains(got, `host="gateway.local"`) || !strings.Contains(got, `proto="http"`) || !strings.Contains(got, `for="192.0.2.10"`) {
+		t.Fatalf("Forwarded = %q", got)
 	}
 }
 

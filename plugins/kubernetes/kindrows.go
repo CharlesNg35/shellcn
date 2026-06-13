@@ -53,7 +53,26 @@ func podPorts(o obj) string {
 }
 
 func deploymentRow(o obj) Row {
+	status := "Available"
+	if i64(o, "status", "availableReplicas") < i64(o, "spec", "replicas") {
+		status = "Unavailable"
+	}
+	for _, c := range slice(o, "status", "conditions") {
+		cm, ok := c.(obj)
+		if !ok || str(cm, "status") != "True" {
+			continue
+		}
+		switch str(cm, "type") {
+		case "Progressing":
+			status = "Progressing"
+		case "ReplicaFailure":
+			status = "Failed"
+		case "Available":
+			status = "Available"
+		}
+	}
 	return Row{
+		"status":    status,
 		"ready":     fmt.Sprintf("%d/%d", i64(o, "status", "readyReplicas"), i64(o, "spec", "replicas")),
 		"upToDate":  i64(o, "status", "updatedReplicas"),
 		"available": i64(o, "status", "availableReplicas"),
@@ -61,11 +80,20 @@ func deploymentRow(o obj) Row {
 }
 
 func statefulSetRow(o obj) Row {
-	return Row{"ready": fmt.Sprintf("%d/%d", i64(o, "status", "readyReplicas"), i64(o, "spec", "replicas"))}
+	status := readyStatus(i64(o, "status", "readyReplicas"), i64(o, "spec", "replicas"))
+	if i64(o, "status", "updatedReplicas") < i64(o, "spec", "replicas") {
+		status = "Updating"
+	}
+	return Row{"status": status, "ready": fmt.Sprintf("%d/%d", i64(o, "status", "readyReplicas"), i64(o, "spec", "replicas"))}
 }
 
 func daemonSetRow(o obj) Row {
+	status := readyStatus(i64(o, "status", "numberReady"), i64(o, "status", "desiredNumberScheduled"))
+	if i64(o, "status", "updatedNumberScheduled") < i64(o, "status", "desiredNumberScheduled") {
+		status = "Updating"
+	}
 	return Row{
+		"status":    status,
 		"desired":   i64(o, "status", "desiredNumberScheduled"),
 		"current":   i64(o, "status", "currentNumberScheduled"),
 		"ready":     i64(o, "status", "numberReady"),
@@ -75,7 +103,9 @@ func daemonSetRow(o obj) Row {
 }
 
 func replicaSetRow(o obj) Row {
+	status := readyStatus(i64(o, "status", "readyReplicas"), i64(o, "spec", "replicas"))
 	return Row{
+		"status":  status,
 		"desired": i64(o, "spec", "replicas"),
 		"current": i64(o, "status", "replicas"),
 		"ready":   i64(o, "status", "readyReplicas"),
@@ -83,11 +113,29 @@ func replicaSetRow(o obj) Row {
 }
 
 func jobRow(o obj) Row {
+	status := "Running"
+	if i64(o, "status", "succeeded") >= i64(o, "spec", "completions") && i64(o, "spec", "completions") > 0 {
+		status = "Complete"
+	}
+	if i64(o, "status", "failed") > 0 {
+		status = "Failed"
+	}
 	return Row{
+		"status":      status,
 		"completions": fmt.Sprintf("%d/%d", i64(o, "status", "succeeded"), i64(o, "spec", "completions")),
 		"duration":    jobDuration(o),
 		"active":      i64(o, "status", "active"),
 	}
+}
+
+func readyStatus(ready, desired int64) string {
+	if desired == 0 {
+		return "Pending"
+	}
+	if ready >= desired {
+		return "Ready"
+	}
+	return "Unavailable"
 }
 
 func cronJobRow(o obj) Row {

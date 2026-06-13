@@ -49,7 +49,9 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 		t.Fatal("redis console should stay a single terminal panel")
 	}
 	var info *plugin.Panel
+	tabs := map[string]plugin.Panel{}
 	for i := range m.Tabs {
+		tabs[m.Tabs[i].Key] = m.Tabs[i]
 		if m.Tabs[i].Key == "info" {
 			info = &m.Tabs[i]
 			break
@@ -60,6 +62,10 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	}
 	if cfg, ok := info.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
 		t.Fatalf("info config = %#v, want raw-toggle object detail", info.Config)
+	} else if len(cfg.Sections) < 3 {
+		t.Fatalf("info should expose structured overview sections, got %#v", cfg.Sections)
+	} else if hasSection(cfg, "Memory") {
+		t.Fatalf("info should not render Redis memory as a duplicate object detail card: %#v", cfg.Sections)
 	}
 	dash, ok := m.Tabs[0].Config.(plugin.DashboardConfig)
 	if !ok {
@@ -68,6 +74,74 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	if len(dash.Cells) == 0 || dash.Cells[0].Key != "server" || dash.Cells[0].Type != plugin.PanelObjectDetail {
 		t.Fatalf("server dashboard cell = %+v, want object_detail", dash.Cells)
 	}
+	if len(dash.Cells) != 1 {
+		t.Fatalf("overview should stay compact and avoid duplicating Clients/Channels tabs: %+v", dash.Cells)
+	}
+	if cfg, ok := dash.Cells[0].Config.(plugin.ObjectDetailConfig); !ok {
+		t.Fatalf("overview server config = %T, want object detail", dash.Cells[0].Config)
+	} else if cfg.RawToggle || hasSection(cfg, "Stats") {
+		t.Fatalf("overview server summary should not duplicate the Info tab: %#v", cfg)
+	}
+	for _, key := range []string{"clients", "channels"} {
+		tab, ok := tabs[key]
+		if !ok {
+			t.Fatalf("missing %s tab", key)
+		}
+		cfg, ok := tab.Config.(plugin.TableConfig)
+		if tab.Type != plugin.PanelTable || !ok {
+			t.Fatalf("%s tab should be a table, got %+v", key, tab)
+		}
+		if cfg.EmptyText == "" || cfg.RefreshIntervalMs == 0 || !cfg.Exportable || cfg.RowClick != plugin.RowClickDetail {
+			t.Fatalf("%s tab table config is not review-ready: %#v", key, cfg)
+		}
+	}
+}
+
+func TestRedisClientTableShowsOperationalColumns(t *testing.T) {
+	cols := map[string]plugin.Column{}
+	for _, col := range clientColumns() {
+		cols[col.Key] = col
+	}
+	for _, key := range []string{"flags", "sub", "psub", "omem"} {
+		if _, ok := cols[key]; !ok {
+			t.Fatalf("client table missing %s column", key)
+		}
+	}
+	if cols["omem"].Type != plugin.ColumnBytes {
+		t.Fatalf("output memory should render as bytes: %#v", cols["omem"])
+	}
+}
+
+func TestOverviewInfoKeysCoverOperationalSummary(t *testing.T) {
+	keys := map[string]bool{}
+	for _, key := range overviewInfoKeys() {
+		keys[key] = true
+	}
+	for _, key := range []string{
+		"role",
+		"connected_clients",
+		"blocked_clients",
+		"used_memory",
+		"used_memory_peak",
+		"used_memory_human",
+		"used_memory_peak_human",
+		"instantaneous_ops_per_sec",
+		"keyspace_hits",
+		"keyspace_misses",
+	} {
+		if !keys[key] {
+			t.Fatalf("overview payload should include %s", key)
+		}
+	}
+}
+
+func hasSection(cfg plugin.ObjectDetailConfig, title string) bool {
+	for _, section := range cfg.Sections {
+		if section.Title == title {
+			return true
+		}
+	}
+	return false
 }
 
 func TestParseCommand(t *testing.T) {

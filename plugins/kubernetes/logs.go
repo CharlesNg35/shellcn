@@ -19,8 +19,11 @@ func LogsStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 		return err
 	}
 	ns, pod := rc.Param("namespace"), rc.Param("name")
-	if pod == "" {
-		return errors.New("pod name is required")
+	if err := validateNamespace(ns); err != nil {
+		return err
+	}
+	if err := validateName(pod); err != nil {
+		return err
 	}
 	opts := &corev1.PodLogOptions{
 		Container:  param(rc, "container"),

@@ -166,9 +166,9 @@ func workloadPodsTab(kindName string) plugin.Panel {
 
 func clusterMetricsConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
-		Gauges: []plugin.MetricGauge{
-			{Key: "cpuPct", Label: "CPU", Unit: "%", Max: 100},
-			{Key: "memPct", Label: "Memory", Unit: "%", Max: 100},
+		Usage: []plugin.MetricUsage{
+			{Key: "cpuPct", Label: "CPU usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpuPct", UsedKey: "cpu", TotalKey: "cpuCapacity", UsedType: plugin.ColumnNumber, TotalType: plugin.ColumnNumber, TotalLabel: "of", Unit: "core(s)", WarnAt: 75, CriticalAt: 90}},
+			{Key: "memPct", Label: "Memory usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "memPct", UsedKey: "mem", TotalKey: "memCapacity", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 80, CriticalAt: 95}},
 		},
 		Stats: []plugin.MetricStat{
 			{Key: "pods", Label: "Pods"},
@@ -184,9 +184,9 @@ func clusterMetricsConfig() plugin.MetricsConfig {
 
 func nodeMetricsConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
-		Gauges: []plugin.MetricGauge{
-			{Key: "cpuPct", Label: "CPU", Unit: "%", Max: 100},
-			{Key: "memPct", Label: "Memory", Unit: "%", Max: 100},
+		Usage: []plugin.MetricUsage{
+			{Key: "cpuPct", Label: "CPU usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpuPct", UsedKey: "cpu", TotalKey: "cpuCapacity", UsedType: plugin.ColumnNumber, TotalType: plugin.ColumnNumber, TotalLabel: "of", Unit: "core(s)", WarnAt: 75, CriticalAt: 90}},
+			{Key: "memPct", Label: "Memory usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "memPct", UsedKey: "mem", TotalKey: "memCapacity", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 80, CriticalAt: 95}},
 		},
 		Series: []plugin.MetricSeries{
 			{Key: "cpu", Label: "CPU cores"},

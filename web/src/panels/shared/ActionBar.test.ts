@@ -245,6 +245,37 @@ describe("ActionBar", () => {
     stopped.unmount();
   });
 
+  it("hides an action whose visibleWhen fails against the record", () => {
+    const clone: Action = {
+      id: "clone",
+      label: "Clone",
+      routeId: "vm.clone",
+      risk: RiskLevel.Write,
+      requiresConfirm: false,
+    };
+    const start: Action = {
+      id: "start",
+      label: "Start",
+      routeId: "vm.start",
+      risk: RiskLevel.Write,
+      requiresConfirm: false,
+      visibleWhen: {
+        allOf: [{ field: "template", op: "neq", value: true }],
+      },
+    };
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [clone, start],
+        record: { template: true },
+      },
+    });
+    expect(bodyButton("Clone")).toBeTruthy();
+    expect(bodyButton("Start")).toBeUndefined();
+    w.unmount();
+  });
+
   it("clusters same-group actions into one dropdown and keeps ungrouped ones as buttons", () => {
     const grouped: Action[] = [
       {

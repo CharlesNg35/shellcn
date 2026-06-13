@@ -143,5 +143,60 @@ func TestAdminRoutesMetadata(t *testing.T) {
 	}
 }
 
+func TestAdminManifestUX(t *testing.T) {
+	tab := BucketTab("minio")
+	cfg, ok := tab.Config.(plugin.TableConfig)
+	if !ok {
+		t.Fatalf("bucket tab config = %T", tab.Config)
+	}
+	if cfg.EmptyText == "" || cfg.RowClick != plugin.RowClickDetail || cfg.DefaultSort == nil || cfg.DefaultSort.Field != "createdAt" {
+		t.Fatalf("bucket tab should declare empty text and row detail behavior: %#v", cfg)
+	}
+	if !contains(cfg.RowActionIDs, "minio.bucket.versions") {
+		t.Fatalf("bucket tab should expose versions inspector action: %#v", cfg.RowActionIDs)
+	}
+
+	actions := Actions("minio")
+	byID := map[string]plugin.Action{}
+	for _, action := range actions {
+		byID[action.ID] = action
+	}
+	versions := byID["minio.bucket.versions"]
+	if versions.Open != plugin.OpenDialog || versions.Panel != plugin.PanelTable {
+		t.Fatalf("versions action should open a table dialog: %+v", versions)
+	}
+	versionsCfg, ok := versions.Config.(plugin.TableConfig)
+	if !ok || versionsCfg.DefaultSort == nil || versionsCfg.DefaultSort.Field != "modTime" || !versionsCfg.Exportable {
+		t.Fatalf("versions action should declare an exportable typed table: %#v", versions.Config)
+	}
+	if a := byID["minio.bucket.versioning.set"]; !a.Confirm || a.Label != "Edit versioning" {
+		t.Fatalf("versioning action should be explicit and confirmed: %+v", a)
+	}
+}
+
+func contains(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
+}
+
+func TestBucketCreateSchemaValidatesPortableNames(t *testing.T) {
+	schema := bucketCreateSchema()
+	field := schema.Groups[0].Fields[0]
+	if field.Key != "name" || len(field.Validators) == 0 {
+		t.Fatalf("bucket name field missing validator: %+v", field)
+	}
+	if field.Validators[0].Type != plugin.ValidatorRegex || field.Validators[0].Message == "" {
+		t.Fatalf("bucket name validator should be a user-facing regex: %+v", field.Validators[0])
+	}
+	region := schema.Groups[0].Fields[1]
+	if region.Key != "region" || region.Type != plugin.FieldAutocomplete || !region.Required || region.Default != "us-east-1" {
+		t.Fatalf("bucket region should be required autocomplete with AWS default: %+v", region)
+	}
+}
+
 // ensure the SDK paginator constructor exists for the version we build against.
 var _ = awss3.NewListObjectVersionsPaginator

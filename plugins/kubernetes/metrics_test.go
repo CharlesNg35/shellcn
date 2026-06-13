@@ -130,6 +130,47 @@ func TestPodFrameIncludesRequestsLimitsAndUsage(t *testing.T) {
 	}
 }
 
+func TestPodFrameOmitsUnsetLimits(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "v1",
+			"kind":       "Pod",
+			"metadata":   obj{"name": "web", "namespace": "default"},
+			"spec": obj{"containers": []any{
+				obj{"name": "app", "resources": obj{
+					"requests": obj{"cpu": "100m", "memory": "70Mi"},
+				}},
+			}},
+		})
+	})
+	mux.HandleFunc("/apis/metrics.k8s.io/v1beta1/namespaces/default/pods/web", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "metrics.k8s.io/v1beta1",
+			"kind":       "PodMetrics",
+			"metadata":   obj{"name": "web", "namespace": "default"},
+			"containers": []any{
+				obj{"name": "app", "usage": obj{"cpu": "4m", "memory": "52Mi"}},
+			},
+		})
+	})
+	sess := connectTo(t, mux).(*Session)
+
+	frame := sess.podFrame(context.Background(), "default", "web")
+	if _, ok := frame["cpuLimit"]; ok {
+		t.Fatalf("unset CPU limit should be omitted: %+v", frame)
+	}
+	if _, ok := frame["memLimit"]; ok {
+		t.Fatalf("unset memory limit should be omitted: %+v", frame)
+	}
+	if _, ok := frame["cpuLimitPct"]; ok {
+		t.Fatalf("unset CPU limit percent should be omitted: %+v", frame)
+	}
+	if _, ok := frame["memLimitPct"]; ok {
+		t.Fatalf("unset memory limit percent should be omitted: %+v", frame)
+	}
+}
+
 func TestPodFrameDegradesWithoutMetrics(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/namespaces/default/pods/web", func(w http.ResponseWriter, _ *http.Request) {

@@ -124,6 +124,10 @@ func TestConstraintAddClause(t *testing.T) {
 	if err != nil || fkRef != "FOREIGN KEY (`person_id`) REFERENCES `other`.`people` (`id`)" {
 		t.Fatalf("foreign key (cross-db, unnamed) clause = %q err=%v", fkRef, err)
 	}
+	fkActions, err := constraintAddClause("app", constraintAddRequest{Kind: "FOREIGN KEY", Name: "fk_person", Columns: "person_id", RefTable: "people", RefColumns: "id", OnDelete: "CASCADE", OnUpdate: "RESTRICT"})
+	if err != nil || fkActions != "CONSTRAINT `fk_person` FOREIGN KEY (`person_id`) REFERENCES `app`.`people` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT" {
+		t.Fatalf("foreign key actions clause = %q err=%v", fkActions, err)
+	}
 	chk, err := constraintAddClause("app", constraintAddRequest{Kind: "CHECK", Name: "ck_price", Expression: "price > 0"})
 	if err != nil || chk != "CONSTRAINT `ck_price` CHECK (price > 0)" {
 		t.Fatalf("check clause = %q err=%v", chk, err)
@@ -136,6 +140,75 @@ func TestConstraintAddClause(t *testing.T) {
 	}
 	if _, err := constraintAddClause("app", constraintAddRequest{Kind: "TRIGGER"}); err == nil {
 		t.Fatal("unsupported constraint kind accepted")
+	}
+}
+
+func TestTableInspectorTabsIncludeDDL(t *testing.T) {
+	var table plugin.ResourceType
+	for _, res := range New().Manifest().Resources {
+		if res.Kind == "table" {
+			table = res
+			break
+		}
+	}
+	for _, tab := range table.Detail.Tabs {
+		if tab.Key == "ddl" {
+			if tab.Type != plugin.PanelDocument || tab.Source == nil || tab.Source.RouteID != "mysql.table.ddl" {
+				t.Fatalf("DDL tab is not a document backed by table DDL: %#v", tab)
+			}
+			return
+		}
+	}
+	t.Fatal("table resource missing DDL tab")
+}
+
+func TestDatabaseOverviewUsesGenericDashboard(t *testing.T) {
+	m := New().Manifest()
+	var overview plugin.Panel
+	for _, res := range m.Resources {
+		if res.Kind != "database" {
+			continue
+		}
+		for _, tab := range res.Detail.Tabs {
+			if tab.Key == "overview" {
+				overview = tab
+			}
+		}
+	}
+	cfg, ok := overview.Config.(plugin.DashboardConfig)
+	if overview.Type != plugin.PanelDashboard || !ok {
+		t.Fatalf("database overview should be a generic dashboard: %#v", overview)
+	}
+	cells := map[string]plugin.Panel{}
+	for _, cell := range cfg.Cells {
+		cells[cell.Key] = cell
+	}
+	if cells["summary"].Type != plugin.PanelObjectDetail || cells["summary"].Source == nil || cells["summary"].Source.RouteID != "mysql.database.overview" {
+		t.Fatalf("summary cell should render database overview details: %#v", cells["summary"])
+	}
+	if len(cells) != 1 {
+		t.Fatalf("database overview should not duplicate Tables/Views/Routines tabs: %#v", cells)
+	}
+}
+
+func TestMySQLConstraintAndIndexFormsUsePickers(t *testing.T) {
+	constraints := routeInputSchema(t, New(), "mysql.constraint.add")
+	for _, key := range []string{"ref_database", "ref_table"} {
+		field := requireRouteField(t, constraints, key)
+		if field.Type != plugin.FieldAutocomplete || field.OptionsSource == nil || field.VisibleWhen == nil {
+			t.Fatalf("%s should be a foreign-key-only autocomplete: %#v", key, field)
+		}
+	}
+	for _, key := range []string{"on_delete", "on_update"} {
+		field := requireRouteField(t, constraints, key)
+		if field.Type != plugin.FieldSelect || len(field.Options) != 4 || field.VisibleWhen == nil {
+			t.Fatalf("%s should be a foreign-key-only select: %#v", key, field)
+		}
+	}
+	indexes := routeInputSchema(t, New(), "mysql.index.create")
+	indexType := requireRouteField(t, indexes, "type")
+	if indexType.Type != plugin.FieldSelect || indexType.Default != "BTREE" {
+		t.Fatalf("index type should default to BTREE select: %#v", indexType)
 	}
 }
 
@@ -327,6 +400,65 @@ func TestUserActionsWiredToRoutes(t *testing.T) {
 	}
 	if !contains(user.Actions.Detail, "mysql.user.grant") || !contains(user.Actions.Detail, "mysql.user.drop") {
 		t.Fatalf("user detail actions = %#v, want grant+drop", user.Actions.Detail)
+	}
+}
+
+func TestQueryPanelsCarryDatabaseScopedParams(t *testing.T) {
+	for _, res := range New().Manifest().Resources {
+		if res.Kind != "database" && res.Kind != "table" && res.Kind != "view" {
+			continue
+		}
+		for _, tab := range res.Detail.Tabs {
+			if tab.Type != plugin.PanelQueryEditor {
+				continue
+			}
+			cfg, ok := tab.Config.(plugin.QueryEditorConfig)
+			if !ok {
+				t.Fatalf("%s query tab has %T config", res.Kind, tab.Config)
+			}
+			if res.Kind == "database" && cfg.CompletionParams["database"] != "${resource.uid}" {
+				t.Fatalf("database query completion params = %#v", cfg.CompletionParams)
+			}
+			if (res.Kind == "table" || res.Kind == "view") && cfg.CompletionParams["database"] != "${resource.namespace}" {
+				t.Fatalf("%s query completion params = %#v", res.Kind, cfg.CompletionParams)
+			}
+			if len(cfg.CancelParams) == 0 {
+				t.Fatalf("%s query tab should cancel in the same database scope", res.Kind)
+			}
+		}
+	}
+}
+
+func TestDestructiveResourceActionsNavigateAwayFromDeletedDetails(t *testing.T) {
+	actions := map[string]plugin.Action{}
+	for _, a := range New().Manifest().Actions {
+		actions[a.ID] = a
+	}
+	for _, id := range []string{"mysql.database.drop", "mysql.table.drop", "mysql.view.drop", "mysql.user.drop"} {
+		action := actions[id]
+		if !action.Confirm {
+			t.Fatalf("%s must require confirmation", id)
+		}
+		if action.OnSuccess == nil || action.OnSuccess.Navigate != plugin.NavigateList {
+			t.Fatalf("%s should navigate back to the list after success: %#v", id, action.OnSuccess)
+		}
+	}
+}
+
+func TestBrowseTablesDeclareEmptyStatesAndExport(t *testing.T) {
+	for _, res := range New().Manifest().Resources {
+		for _, tab := range res.Detail.Tabs {
+			tc, ok := tab.Config.(plugin.TableConfig)
+			if !ok {
+				continue
+			}
+			if tab.Key != "data" && tc.EmptyText == "" {
+				t.Fatalf("%s/%s table is missing an empty state", res.Kind, tab.Key)
+			}
+			if tab.Key != "data" && !tc.Exportable {
+				t.Fatalf("%s/%s browse table should be exportable", res.Kind, tab.Key)
+			}
+		}
 	}
 }
 

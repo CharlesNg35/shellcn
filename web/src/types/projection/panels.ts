@@ -187,6 +187,7 @@ export interface MetricSeries {
 export interface MetricsPanelConfig {
   stats?: MetricStat[];
   gauges?: MetricGauge[];
+  usage?: MetricUsage[];
   series?: MetricSeries[];
   history?: number;
 }
@@ -231,10 +232,25 @@ export interface ObjectDetailField {
   key: string;
   label?: string;
   type?: ColumnType;
+  usage?: UsageSpec;
   copy?: boolean;
   redacted?: boolean;
   severities?: Record<string, Severity>;
 }
+
+export interface UsageSpec {
+  percentKey?: string;
+  usedKey?: string;
+  totalKey?: string;
+  usedType?: ColumnType;
+  totalType?: ColumnType;
+  unit?: string;
+  totalLabel?: string;
+  warnAt?: number;
+  criticalAt?: number;
+}
+
+export type MetricUsage = ObjectDetailField;
 
 export interface ObjectDetailSection {
   title?: string;
@@ -270,6 +286,7 @@ export interface DashboardCell {
   panel: PanelType;
   source?: DataSource;
   config?: Record<string, unknown>;
+  visibleWhen?: Condition;
   span?: number;
 }
 
@@ -388,6 +405,7 @@ export interface Action {
   panel?: PanelType;
   config?: Record<string, unknown>;
   enabledWhen?: Condition;
+  visibleWhen?: Condition;
   iconOnly?: boolean;
   group?: string;
 }
@@ -405,6 +423,7 @@ export interface Tab {
   panel: PanelType;
   source?: DataSource;
   config?: Record<string, unknown>;
+  visibleWhen?: Condition;
   span?: number;
 }
 

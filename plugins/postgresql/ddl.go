@@ -81,6 +81,7 @@ type constraintRequest struct {
 	RefTable   string `json:"refTable"`
 	RefColumns string `json:"refColumns"`
 	OnDelete   string `json:"onDelete"`
+	OnUpdate   string `json:"onUpdate"`
 }
 
 // addConstraintSQL builds ALTER TABLE ... ADD CONSTRAINT for PK/UNIQUE/CHECK/FK.
@@ -131,6 +132,12 @@ func addConstraintSQL(schema, table string, req constraintRequest) (string, erro
 				return "", fmt.Errorf("%w: unsupported ON DELETE action", plugin.ErrInvalidInput)
 			}
 			stmt += " ON DELETE " + onDelete
+		}
+		if onUpdate := strings.ToUpper(strings.TrimSpace(req.OnUpdate)); onUpdate != "" {
+			if !validOnDelete[onUpdate] {
+				return "", fmt.Errorf("%w: unsupported ON UPDATE action", plugin.ErrInvalidInput)
+			}
+			stmt += " ON UPDATE " + onUpdate
 		}
 		return stmt, nil
 	default:

@@ -63,14 +63,43 @@ func entryResource() plugin.ResourceType {
 			Detail: []string{"ldap.entry.add", "ldap.entry.rename", "ldap.entry.delete"},
 		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}"},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "entryType", Severities: map[string]plugin.Severity{
+				"domain": plugin.SeverityInfo, "container": plugin.SeverityInfo,
+				"group": plugin.SeveritySuccess, "person": plugin.SeveritySecondary,
+				"computer": plugin.SeverityWarn, "entry": plugin.SeveritySecondary,
+			}},
 			Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "ldap.entry.overview", Params: dnParams}, Config: entryOverviewConfig()},
 				{Key: "attributes", Label: "Attributes", Icon: icon("table"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.attributes", Params: dnParams}, Config: attributeGridConfig(dnParams)},
-				{Key: "children", Label: "Children", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.children", Params: dnParams}, Config: plugin.TableConfig{Columns: entryColumns(), RowActionIDs: []string{"ldap.entry.delete"}, EmptyText: "No child entries.", Exportable: true}},
-				{Key: "subtree", Label: "Subtree", Icon: icon("search"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entries.search", Params: map[string]string{"base": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: entryColumns(), EmptyText: "No matching entries. Type an LDAP filter to search.", Exportable: true}},
+				{Key: "children", Label: "Children", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.children", Params: dnParams}, Config: plugin.TableConfig{Columns: entryColumns(), RowActionIDs: []string{"ldap.entry.delete"}, EmptyText: "No child entries.", Exportable: true, RowClick: plugin.RowClickNavigate}},
+				{Key: "subtree", Label: "Subtree search", Icon: icon("search"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entries.search", Params: map[string]string{"base": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: entryColumns(), DefaultSort: &plugin.SortKey{Field: "dn"}, EmptyText: "No matching entries. Use the table search box for a name fragment or LDAP filter.", Exportable: true, RowClick: plugin.RowClickNavigate}},
 				{Key: "ldif", Label: "LDIF", Icon: icon("file-text"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "ldap.entry.ldif", Params: dnParams}},
 			},
 		},
+	}
+}
+
+func entryOverviewConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Identity", Fields: []plugin.ObjectDetailField{
+				{Key: "name", Label: "RDN", Copy: true},
+				{Key: "dn", Label: "DN", Copy: true},
+				{Key: "parent", Label: "Parent DN", Copy: true},
+				{Key: "entryType", Label: "Type", Type: plugin.ColumnBadge, Severities: map[string]plugin.Severity{
+					"domain": plugin.SeverityInfo, "container": plugin.SeverityInfo,
+					"group": plugin.SeveritySuccess, "person": plugin.SeveritySecondary,
+					"computer": plugin.SeverityWarn, "entry": plugin.SeveritySecondary,
+				}},
+			}},
+			{Title: "Directory", Fields: []plugin.ObjectDetailField{
+				{Key: "objectClass", Label: "Object classes"},
+				{Key: "attributeCount", Label: "Attributes", Type: plugin.ColumnNumber},
+				{Key: "hasChildren", Label: "Has children", Type: plugin.ColumnBool},
+				{Key: "readOnly", Label: "Read-only", Type: plugin.ColumnBool},
+			}},
+		},
+		RawToggle: true,
 	}
 }
 
@@ -90,8 +119,16 @@ func attributeGridConfig(dnParams map[string]string) plugin.TableConfig {
 
 func entryColumns() []plugin.Column {
 	return []plugin.Column{
+		{Key: "icon", Label: "", Type: plugin.ColumnIcon, Width: "3rem"},
 		{Key: "name", Label: "RDN", Sortable: true},
 		{Key: "dn", Label: "DN", Sortable: true},
+		{Key: "parent", Label: "Parent DN", Sortable: true},
+		{Key: "entryType", Label: "Type", Type: plugin.ColumnBadge, Sortable: true, Severities: map[string]plugin.Severity{
+			"domain": plugin.SeverityInfo, "container": plugin.SeverityInfo,
+			"group": plugin.SeveritySuccess, "person": plugin.SeveritySecondary,
+			"computer": plugin.SeverityWarn, "entry": plugin.SeveritySecondary,
+		}},
+		{Key: "hasChildren", Label: "Children", Type: plugin.ColumnBool, Sortable: true},
 		{Key: "objectClass", Label: "Object class"},
 	}
 }
@@ -104,9 +141,10 @@ func attributeColumns() []plugin.Column {
 }
 
 func actions() []plugin.Action {
+	writable := &plugin.Condition{AllOf: []plugin.Rule{{Field: "readOnly", Op: plugin.OpNeq, Value: true}}}
 	return []plugin.Action{
-		{ID: "ldap.entry.add", Label: "Add entry", Icon: icon("plus"), RouteID: "ldap.entry.add", Params: map[string]string{"parent": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "children"}},
-		{ID: "ldap.entry.rename", Label: "Rename / move", Icon: icon("pencil"), RouteID: "ldap.entry.rename", Params: map[string]string{"dn": "${resource.uid}"}},
-		{ID: "ldap.entry.delete", Label: "Delete entry", Icon: icon("trash-2"), RouteID: "ldap.entry.delete", Params: map[string]string{"dn": "${resource.uid}"}, Confirm: true, ConfirmText: "Delete this entry? This permanently removes it from the directory."},
+		{ID: "ldap.entry.add", Label: "Add child entry", Icon: icon("plus"), RouteID: "ldap.entry.add", Params: map[string]string{"parent": "${resource.uid}"}, EnabledWhen: writable, OnSuccess: &plugin.ActionSuccess{SelectTab: "children"}},
+		{ID: "ldap.entry.rename", Label: "Rename or move", Icon: icon("pencil"), RouteID: "ldap.entry.rename", Params: map[string]string{"dn": "${resource.uid}"}, Confirm: true, ConfirmText: "Rename or move this entry? Existing references to its DN may need to be updated.", EnabledWhen: writable},
+		{ID: "ldap.entry.delete", Label: "Delete entry", Icon: icon("trash-2"), RouteID: "ldap.entry.delete", Params: map[string]string{"dn": "${resource.uid}"}, Confirm: true, ConfirmText: "Delete this entry? This permanently removes it from the directory.", EnabledWhen: writable, OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 	}
 }

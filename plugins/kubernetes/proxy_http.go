@@ -94,6 +94,12 @@ func ServiceProxyURL(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	ns, name := rc.Param("namespace"), rc.Param("name")
+	if err := validateNamespace(ns); err != nil {
+		return nil, err
+	}
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
 	portSeg := rc.Param("port")
 	if portSeg == "" {
 		svc, err := s.clientset.CoreV1().Services(ns).Get(rc.Ctx, name, metav1.GetOptions{})
@@ -116,6 +122,12 @@ func PodProxyURL(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	ns, name := rc.Param("namespace"), rc.Param("name")
+	if err := validateNamespace(ns); err != nil {
+		return nil, err
+	}
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
 	portSeg := rc.Param("port")
 	if portSeg == "" {
 		pod, err := s.clientset.CoreV1().Pods(ns).Get(rc.Ctx, name, metav1.GetOptions{})
@@ -142,6 +154,7 @@ func openPortSchema(optionsRouteID string) *plugin.Schema {
 			Label:       "Port",
 			Type:        plugin.FieldSelect,
 			Placeholder: "Select a port",
+			Help:        "Leave blank to open the first web-looking port, or choose a specific declared port.",
 			OptionsSource: &plugin.DataSource{
 				RouteID: optionsRouteID,
 				Params: map[string]string{
@@ -158,7 +171,14 @@ func ServiceOpenPorts(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	svc, err := s.clientset.CoreV1().Services(rc.Param("namespace")).Get(rc.Ctx, rc.Param("name"), metav1.GetOptions{})
+	ns, name := rc.Param("namespace"), rc.Param("name")
+	if err := validateNamespace(ns); err != nil {
+		return nil, err
+	}
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
+	svc, err := s.clientset.CoreV1().Services(ns).Get(rc.Ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, apiErr(err)
 	}
@@ -171,7 +191,14 @@ func PodOpenPorts(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	pod, err := s.clientset.CoreV1().Pods(rc.Param("namespace")).Get(rc.Ctx, rc.Param("name"), metav1.GetOptions{})
+	ns, name := rc.Param("namespace"), rc.Param("name")
+	if err := validateNamespace(ns); err != nil {
+		return nil, err
+	}
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
+	pod, err := s.clientset.CoreV1().Pods(ns).Get(rc.Ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, apiErr(err)
 	}

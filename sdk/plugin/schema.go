@@ -103,15 +103,17 @@ type Validator struct {
 }
 
 type Field struct {
-	Key         string    `json:"key"`
-	Label       string    `json:"label"`
-	Type        FieldType `json:"type"`
-	Required    bool      `json:"required,omitempty"`
-	Secret      bool      `json:"secret,omitempty"`
-	Default     any       `json:"default,omitempty"`
-	Placeholder string    `json:"placeholder,omitempty"`
-	Help        string    `json:"help,omitempty"`
-	Options     []Option  `json:"options,omitempty"`
+	Key      string    `json:"key"`
+	Label    string    `json:"label"`
+	Type     FieldType `json:"type"`
+	Required bool      `json:"required,omitempty"`
+	Secret   bool      `json:"secret,omitempty"`
+	// Default is a UI hint. In action forms, string defaults may reference
+	// the active resource with ${resource.uid} or ${resource.name}.
+	Default     any      `json:"default,omitempty"`
+	Placeholder string   `json:"placeholder,omitempty"`
+	Help        string   `json:"help,omitempty"`
+	Options     []Option `json:"options,omitempty"`
 	// OptionsSource populates choices from a route at form-open time.
 	OptionsSource *DataSource         `json:"optionsSource,omitempty"`
 	Credential    *CredentialSelector `json:"credential,omitempty"`

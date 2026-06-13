@@ -99,6 +99,28 @@ func TestBulkMoveCopyChmodOnCapableBackend(t *testing.T) {
 	}
 }
 
+func TestBulkRoutesDeclareActionableInputSchemas(t *testing.T) {
+	routes := bulkRoutes(t)
+	for _, id := range []string{"test.files.move", "test.files.copy", "test.files.chmod", "test.files.archive"} {
+		if routes[id].Input == nil {
+			t.Fatalf("%s missing input schema", id)
+		}
+	}
+
+	moveDest := requireBulkField(t, routes["test.files.move"].Input, "dest")
+	if moveDest.Type != plugin.FieldAutocomplete || !moveDest.Required || moveDest.Placeholder == "" {
+		t.Fatalf("move dest should be required autocomplete path field: %+v", moveDest)
+	}
+	chmodMode := requireBulkField(t, routes["test.files.chmod"].Input, "mode")
+	if chmodMode.Type != plugin.FieldAutocomplete || len(chmodMode.Options) < 2 || len(chmodMode.Validators) == 0 {
+		t.Fatalf("chmod mode should suggest common octal modes and validate input: %+v", chmodMode)
+	}
+	archivePaths := requireBulkField(t, routes["test.files.archive"].Input, "paths")
+	if archivePaths.Type != plugin.FieldArray || archivePaths.MinItems != 1 || archivePaths.Item == nil {
+		t.Fatalf("archive paths should be a non-empty path array: %+v", archivePaths)
+	}
+}
+
 func TestBulkUnsupportedReturnsCleanError(t *testing.T) {
 	m := newMemFS() // no Move/Copy/Chmod capabilities
 	routes := bulkRoutes(t)
@@ -203,6 +225,19 @@ func keys(m map[string]string) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+func requireBulkField(t *testing.T, schema *plugin.Schema, key string) plugin.Field {
+	t.Helper()
+	for _, group := range schema.Groups {
+		for _, field := range group.Fields {
+			if field.Key == key {
+				return field
+			}
+		}
+	}
+	t.Fatalf("missing field %q in schema %+v", key, schema)
+	return plugin.Field{}
 }
 
 func TestZipName(t *testing.T) {

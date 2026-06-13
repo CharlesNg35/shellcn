@@ -82,6 +82,48 @@ func TestManifestDeclaresPodmanWorkspace(t *testing.T) {
 			}
 		}
 	}
+	var containerRes *plugin.ResourceType
+	for i := range m.Resources {
+		if m.Resources[i].Kind == "container" {
+			containerRes = &m.Resources[i]
+			break
+		}
+	}
+	if containerRes == nil {
+		t.Fatal("missing container resource")
+	}
+	wantTabs := []string{"overview", "logs", "terminal", "env", "mounts", "inspect"}
+	if len(containerRes.Detail.Tabs) != len(wantTabs) {
+		t.Fatalf("container detail tabs = %d, want %d", len(containerRes.Detail.Tabs), len(wantTabs))
+	}
+	for i, want := range wantTabs {
+		if containerRes.Detail.Tabs[i].Key != want {
+			t.Fatalf("container tab %d = %q, want %q", i, containerRes.Detail.Tabs[i].Key, want)
+		}
+	}
+	if terminal := containerRes.Detail.Tabs[2]; terminal.Type != plugin.PanelTerminal || terminal.VisibleWhen == nil {
+		t.Fatalf("container exec panel = %s visible=%v, want running-only terminal", terminal.Type, terminal.VisibleWhen)
+	}
+	if mounts := containerRes.Detail.Tabs[4]; mounts.Type != plugin.PanelTable || mounts.Source.RouteID != "podman.container.mounts" {
+		t.Fatalf("container mounts should render a table from mounts route, got panel=%s source=%+v", mounts.Type, mounts.Source)
+	}
+	for _, id := range []string{"podman.container.remove", "podman.pod.remove", "podman.image.remove", "podman.volume.remove", "podman.network.remove"} {
+		action := findAction(m.Actions, id)
+		if action == nil || action.OnSuccess == nil || action.OnSuccess.Navigate != plugin.NavigateList {
+			t.Fatalf("%s should return to the resource list after success: %+v", id, action)
+		}
+	}
+	for _, res := range m.Resources {
+		for _, tab := range res.Detail.Tabs {
+			if tab.Type != plugin.PanelTable {
+				continue
+			}
+			cfg, ok := tab.Config.(plugin.TableConfig)
+			if !ok || cfg.EmptyText == "" {
+				t.Fatalf("table %s/%s config = %#v, want empty text", res.Kind, tab.Key, tab.Config)
+			}
+		}
+	}
 }
 
 func TestPodsAndContainersAgainstFakeDaemon(t *testing.T) {
@@ -192,4 +234,13 @@ var versionPrefix = regexp.MustCompile(`^/v[0-9]+(\.[0-9]+){1,2}`)
 
 func dockerAPIPath(path string) string {
 	return versionPrefix.ReplaceAllString(path, "")
+}
+
+func findAction(actions []plugin.Action, id string) *plugin.Action {
+	for i := range actions {
+		if actions[i].ID == id {
+			return &actions[i]
+		}
+	}
+	return nil
 }

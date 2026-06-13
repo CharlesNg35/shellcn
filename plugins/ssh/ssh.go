@@ -77,6 +77,7 @@ func snippetsTab() plugin.Panel {
 			},
 			ActionIDs:    []string{"ssh.snippet.create"},
 			RowActionIDs: []string{"ssh.snippet.run", "ssh.snippet.delete"},
+			EmptyText:    "No snippets. Create one for a command you run often.",
 		},
 	}
 }
@@ -95,6 +96,11 @@ func configSchema(protocol string) plugin.Schema {
 			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, Placeholder: "10.0.0.1"},
 			{Key: "port", Label: "Port", Type: plugin.FieldNumber, Default: 22, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}},
 			{Key: "user", Label: "Username", Type: plugin.FieldText, Required: true, Default: "root"},
+			{Key: "host_key_verification", Label: "Host key verification", Type: plugin.FieldSelect, Required: true, Default: "pinned", Options: []plugin.Option{
+				{Label: "Verify pinned host key", Value: "pinned"},
+				{Label: "Do not verify (unsafe)", Value: "insecure"},
+			}, Help: "Use a pinned OpenSSH public key, known_hosts line, or SHA256 fingerprint. Disable verification only for disposable or already isolated hosts."},
+			{Key: "host_key", Label: "Pinned host key", Type: plugin.FieldTextarea, Required: true, Placeholder: "SHA256:...", Help: "Paste the server public host key, a known_hosts line, or its SHA256 fingerprint.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "host_key_verification", Op: plugin.OpEq, Value: "pinned"}}}},
 		}},
 		{Name: "Auth", Fields: []plugin.Field{
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: "password", Options: []plugin.Option{
@@ -126,6 +132,10 @@ func filesTab(prefix string) plugin.Panel {
 			MkdirRouteID:    prefix + ".sftp.mkdir",
 			RenameRouteID:   prefix + ".sftp.rename",
 			DeleteRouteID:   prefix + ".sftp.delete",
+			MoveRouteID:     prefix + ".sftp.move",
+			CopyRouteID:     prefix + ".sftp.copy",
+			ChmodRouteID:    prefix + ".sftp.chmod",
+			ArchiveRouteID:  prefix + ".sftp.archive",
 			Writable:        true,
 			MultipleUpload:  true,
 			MaxUploadBytes:  52428800,

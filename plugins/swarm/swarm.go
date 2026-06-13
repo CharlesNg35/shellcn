@@ -109,8 +109,8 @@ func resources() []plugin.ResourceType {
 func overviewResource() plugin.ResourceType {
 	dash := plugin.DashboardConfig{Cells: []plugin.Panel{
 		{Key: "stats", Label: "Cluster", Type: plugin.PanelMetrics, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.overview.metrics", Method: plugin.MethodWS}, Config: overviewMetricsConfig()},
-		{Key: "services", Label: "Services", Type: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.services.list"}, Config: plugin.TableConfig{Columns: serviceColumns()}},
-		{Key: "nodes", Label: "Nodes", Type: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.nodes.list"}, Config: plugin.TableConfig{Columns: nodeResource().Columns}},
+		{Key: "services", Label: "Services", Type: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.services.list"}, Config: plugin.TableConfig{Columns: serviceColumns(), EmptyText: "No services found."}},
+		{Key: "nodes", Label: "Nodes", Type: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.nodes.list"}, Config: plugin.TableConfig{Columns: nodeResource().Columns, EmptyText: "No nodes found."}},
 	}}
 	return plugin.ResourceType{
 		Kind: dockerengine.OverviewKind, Title: "Overview",
@@ -169,7 +169,7 @@ func serviceResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.service.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: serviceOverviewDetailConfig()},
-				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.service.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns()}},
+				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.service.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns(), EmptyText: "No tasks found for this service."}},
 				{Key: "logs", Label: "Logs", Icon: icon("scroll-text"), Type: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "swarm.service.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.service.inspect", Params: map[string]string{"id": "${resource.uid}"}}, Config: inspectDetailConfig()},
 			},
@@ -186,13 +186,14 @@ func stackResource() plugin.ResourceType {
 		Kind: "stack", Title: "Stacks", List: plugin.DataSource{RouteID: "swarm.stacks.list"}, Columns: columns,
 		Actions: plugin.ResourceActions{
 			Toolbar: []string{"swarm.stack.deploy"},
-			Detail:  []string{"swarm.stack.deploy"},
+			Row:     []string{"swarm.stack.remove"},
+			Detail:  []string{"swarm.stack.deploy", "swarm.stack.remove"},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.stack.overview", Params: map[string]string{"stack": "${resource.uid}"}}, Config: stackOverviewDetailConfig()},
-				{Key: "services", Label: "Services", Icon: icon("workflow"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.stack.services", Params: map[string]string{"stack": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns()}},
+				{Key: "services", Label: "Services", Icon: icon("workflow"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.stack.services", Params: map[string]string{"stack": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns(), EmptyText: "No services found in this stack."}},
 			},
 		},
 	}
@@ -217,7 +218,7 @@ func nodeResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: stateSeverities},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.node.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: nodeOverviewDetailConfig()},
-				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.node.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns()}},
+				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.node.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns(), EmptyText: "No tasks found on this node."}},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.node.inspect", Params: map[string]string{"id": "${resource.uid}"}}, Config: inspectDetailConfig()},
 			},
 		},
@@ -320,12 +321,13 @@ func taskOverviewDetailConfig() plugin.ObjectDetailConfig {
 
 func actions() []plugin.Action {
 	return []plugin.Action{
-		{ID: "swarm.service.open", Label: "Open", Icon: icon("external-link"), RouteID: "swarm.service.open", Open: plugin.OpenURL, Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}}}},
+		{ID: "swarm.service.open", Label: "Open port", Icon: icon("external-link"), RouteID: "swarm.service.open", Open: plugin.OpenURL, Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}}}},
 		{ID: "swarm.service.scale", Label: "Scale", Icon: icon("move-vertical"), RouteID: "swarm.service.scale", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "mode", Op: plugin.OpEq, Value: "replicated"}}}, Group: "Manage"},
-		{ID: "swarm.service.update", Label: "Update", Icon: icon("pencil"), RouteID: "swarm.service.update", Params: map[string]string{"id": "${resource.uid}"}, Group: "Manage"},
+		{ID: "swarm.service.update", Label: "Update", Icon: icon("pencil"), RouteID: "swarm.service.update", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Update this service and trigger a rollout?", Group: "Manage"},
 		{ID: "swarm.service.rollback", Label: "Rollback", Icon: icon("undo-2"), RouteID: "swarm.service.rollback", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Roll this service back to its previous spec?", Group: "Manage"},
-		{ID: "swarm.service.remove", Label: "Remove", Icon: icon("trash"), RouteID: "swarm.service.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this service?"},
-		{ID: "swarm.node.update", Label: "Update", Icon: icon("settings"), RouteID: "swarm.node.update", Params: map[string]string{"id": "${resource.uid}"}},
-		{ID: "swarm.stack.deploy", Label: "Deploy stack", Icon: icon("upload"), RouteID: "swarm.stack.deploy"},
+		{ID: "swarm.service.remove", Label: "Remove", Icon: icon("trash"), RouteID: "swarm.service.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this service and all of its running tasks?", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
+		{ID: "swarm.node.update", Label: "Update", Icon: icon("settings"), RouteID: "swarm.node.update", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Update this node's availability or role? Draining reschedules its tasks."},
+		{ID: "swarm.stack.deploy", Label: "Deploy stack", Icon: icon("upload"), RouteID: "swarm.stack.deploy", Confirm: true, ConfirmText: "Create or update stack services from the submitted service specs? Run this from a manager node."},
+		{ID: "swarm.stack.remove", Label: "Remove stack services", Icon: icon("trash"), RouteID: "swarm.stack.remove", Params: map[string]string{"stack": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove every service in this stack? Stack-scoped networks and volumes are not removed by this action.", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 	}
 }

@@ -137,6 +137,7 @@ func (l *Local) Metrics(ctx context.Context) (map[string]any, error) {
 	if sm, err := mem.SwapMemoryWithContext(ctx); err == nil {
 		out["swapPct"] = sm.UsedPercent
 		out["swapUsed"] = sm.Used
+		out["swapTotal"] = sm.Total
 	}
 	if ios, err := gnet.IOCountersWithContext(ctx, false); err == nil && len(ios) > 0 {
 		out["netBytesRecv"] = ios[0].BytesRecv

@@ -13,17 +13,24 @@ import (
 const metricsInterval = 2 * time.Second
 
 // guestMetrics streams live CPU/memory for a VM or container by polling its
-// status endpoint and emitting `{cpu, mem}` percentage frames for the metrics
-// panel.
+// status endpoint.
 func guestMetrics(kind string) plugin.StreamHandler {
 	return func(rc *plugin.RequestContext, client plugin.ClientStream) error {
-		path := fmt.Sprintf("/nodes/%s/%s/%s/status/current", rc.Param("node"), kind, rc.Param("vmid"))
+		node, vmid, err := requireGuest(rc)
+		if err != nil {
+			return err
+		}
+		path := pvePath("nodes", node, kind, vmid, "status", "current")
 		return metricsLoop(rc, client, path)
 	}
 }
 
 func nodeMetrics(rc *plugin.RequestContext, client plugin.ClientStream) error {
-	return metricsLoop(rc, client, "/nodes/"+rc.Param("node")+"/status")
+	node, err := requireNode(rc)
+	if err != nil {
+		return err
+	}
+	return metricsLoop(rc, client, pvePath("nodes", node, "status"))
 }
 
 func metricsLoop(rc *plugin.RequestContext, client plugin.ClientStream, statusPath string) error {
@@ -35,10 +42,12 @@ func metricsLoop(rc *plugin.RequestContext, client plugin.ClientStream, statusPa
 	ticker := time.NewTicker(metricsInterval)
 	defer ticker.Stop()
 	for {
-		if status, err := s.object(rc.Ctx, statusPath); err == nil {
-			if err := enc.Encode(metricFrame(status)); err != nil {
-				return err
-			}
+		status, err := s.object(rc.Ctx, statusPath)
+		if err != nil {
+			return err
+		}
+		if err := enc.Encode(metricFrame(status)); err != nil {
+			return err
 		}
 		select {
 		case <-client.Context().Done():
@@ -50,15 +59,29 @@ func metricsLoop(rc *plugin.RequestContext, client plugin.ClientStream, statusPa
 
 func metricFrame(status row) map[string]any {
 	cpu := round1(numFloat(status["cpu"]) * 100)
+	cpuTotal := numInt(status["cpus"])
+	if cpuTotal == 0 {
+		cpuTotal = numInt(status["maxcpu"])
+	}
+	memUsed := numInt(status["mem"])
+	memTotal := numInt(status["maxmem"])
 	var memPct float64
-	if maxmem := numFloat(status["maxmem"]); maxmem > 0 {
-		memPct = numFloat(status["mem"]) / maxmem * 100
+	if memTotal > 0 {
+		memPct = float64(memUsed) / float64(memTotal) * 100
 	} else if mem, ok := status["memory"].(map[string]any); ok {
 		if total := numFloat(mem["total"]); total > 0 {
-			memPct = numFloat(mem["used"]) / total * 100
+			memUsed = numInt(mem["used"])
+			memTotal = numInt(mem["total"])
+			memPct = float64(memUsed) / total * 100
 		}
 	}
-	return map[string]any{"cpu": cpu, "mem": round1(memPct)}
+	return map[string]any{
+		"cpu":      cpu,
+		"cpuTotal": cpuTotal,
+		"mem":      round1(memPct),
+		"memUsed":  memUsed,
+		"memTotal": memTotal,
+	}
 }
 
 // vmConsole splices the authenticated upstream RFB stream to the browser's noVNC

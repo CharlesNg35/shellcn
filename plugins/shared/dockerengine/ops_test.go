@@ -127,3 +127,15 @@ func TestCollectBuildOutputSuccess(t *testing.T) {
 		t.Fatalf("output = %q, want success line", out)
 	}
 }
+
+func TestNetworkContainerFieldsUseSourcedSelects(t *testing.T) {
+	for name, schema := range map[string]*plugin.Schema{
+		"connect":    NetworkConnectSchema("docker.containers.list"),
+		"disconnect": NetworkDisconnectSchema("docker.containers.list"),
+	} {
+		field := schema.Groups[0].Fields[0]
+		if field.Key != "container" || field.Type != plugin.FieldSelect || field.OptionsSource == nil || field.OptionsSource.RouteID != "docker.containers.list" {
+			t.Fatalf("%s container field = %+v, want sourced select", name, field)
+		}
+	}
+}

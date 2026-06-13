@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
-	"github.com/charlesng35/shellcn/sdk/plugin/pluginux"
+	"github.com/charlesng35/shellcn/sdk/pluginux"
 )
 
 // ValidatePlugin validates the plugin manifest, route contract, UX contract, and

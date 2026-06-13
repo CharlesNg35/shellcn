@@ -130,10 +130,21 @@ func TestVolumeDriverAndContainerNetworkUseAutocomplete(t *testing.T) {
 	if err := VolumeCreateSchema().ValidateValues(map[string]any{"name": "data", "driver": "custom-volume-plugin"}, nil); err != nil {
 		t.Fatalf("volume schema should allow custom driver names: %v", err)
 	}
+	if err := VolumeCreateSchema().ValidateValues(map[string]any{"name": "bad name", "driver": "local"}, nil); err == nil {
+		t.Fatal("volume schema accepted a whitespace-bearing name")
+	}
 
 	containerNetwork := requireSchemaField(t, CreateContainerSchema(), "network")
 	if containerNetwork.Type != plugin.FieldAutocomplete {
 		t.Fatalf("container network field type = %q, want autocomplete", containerNetwork.Type)
+	}
+	containerImage := requireSchemaField(t, CreateContainerSchema(), "image")
+	if containerImage.Type != plugin.FieldAutocomplete {
+		t.Fatalf("container image field type = %q, want autocomplete", containerImage.Type)
+	}
+	pullImage := requireSchemaField(t, ImagePullSchema(), "image")
+	if pullImage.Type != plugin.FieldAutocomplete {
+		t.Fatalf("pull image field type = %q, want autocomplete", pullImage.Type)
 	}
 	got := make([]any, 0, len(containerNetwork.Options))
 	for _, option := range containerNetwork.Options {
@@ -142,6 +153,28 @@ func TestVolumeDriverAndContainerNetworkUseAutocomplete(t *testing.T) {
 	want := []any{"bridge", "host", "none"}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("container network options = %#v, want %#v", got, want)
+	}
+}
+
+func TestStreamSchemasConstrainTerminalAndLogInputs(t *testing.T) {
+	logTail := requireSchemaField(t, LogsSchema(), "tail")
+	if logTail.Default != 200 {
+		t.Fatalf("log tail default = %#v, want 200", logTail.Default)
+	}
+	if err := LogsSchema().ValidateValues(map[string]any{"tail": float64(-1)}, nil); err == nil {
+		t.Fatal("logs schema accepted a negative tail")
+	}
+	if err := LogsSchema().ValidateValues(map[string]any{"tail": float64(10001)}, nil); err == nil {
+		t.Fatal("logs schema accepted an excessive tail")
+	}
+
+	cols := requireSchemaField(t, ExecSchema(), "cols")
+	rows := requireSchemaField(t, ExecSchema(), "rows")
+	if cols.Default != 80 || rows.Default != 24 {
+		t.Fatalf("exec defaults = %#v/%#v, want 80/24", cols.Default, rows.Default)
+	}
+	if err := ExecSchema().ValidateValues(map[string]any{"cols": float64(10), "rows": float64(24)}, nil); err == nil {
+		t.Fatal("exec schema accepted too few columns")
 	}
 }
 
@@ -256,6 +289,18 @@ func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 	if fmt.Sprint(overview.(Row)["name"]) != "web" || fmt.Sprint(overview.(Row)["state"]) != "running" {
 		t.Fatalf("container overview unexpected: %+v", overview)
 	}
+	if fmt.Sprint(overview.(Row)["ports"]) != "127.0.0.1:8080->80/tcp" || overview.(Row)["mounts"] != 1 {
+		t.Fatalf("container overview ports/mounts unexpected: %+v", overview)
+	}
+
+	mounts, err := ContainerMounts(inspectRC)
+	if err != nil {
+		t.Fatalf("container mounts: %v", err)
+	}
+	mountPage := mounts.(plugin.Page[Row])
+	if len(mountPage.Items) != 1 || mountPage.Items[0]["destination"] != "/usr/share/nginx/html" || mountPage.Items[0]["rw"] != false {
+		t.Fatalf("container mounts unexpected: %+v", mountPage.Items)
+	}
 
 	composeRC := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u"}, sess, map[string]string{"project": "demo"}, url.Values{}, nil)
 	services, err := ComposeServices(composeRC)
@@ -343,6 +388,18 @@ func fakeDockerDaemon(t *testing.T) (*httptest.Server, map[string]bool) {
 					"Labels": map[string]string{"com.docker.compose.project": "demo", "com.docker.compose.service": "web"},
 				},
 				"State": map[string]any{"Status": "running", "Running": true},
+				"NetworkSettings": map[string]any{
+					"Ports": map[string]any{
+						"80/tcp": []map[string]any{{"HostIp": "127.0.0.1", "HostPort": "8080"}},
+					},
+				},
+				"Mounts": []map[string]any{{
+					"Type":        "bind",
+					"Source":      "/srv/site",
+					"Destination": "/usr/share/nginx/html",
+					"Mode":        "ro",
+					"RW":          false,
+				}},
 			})
 		case p == "/images/json":
 			_ = json.NewEncoder(w).Encode([]map[string]any{{"Id": "sha256:img", "RepoTags": []string{"nginx:latest"}, "Size": 1234, "Created": 1710000000, "Containers": 1}})

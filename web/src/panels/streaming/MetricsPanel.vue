@@ -6,12 +6,15 @@ import type {
   MetricGauge,
   MetricSeries,
   MetricStat,
+  MetricUsage,
   MetricsPanelConfig,
+  Row,
 } from "@/types/projection";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import StatCard from "./metrics/StatCard.vue";
 import GaugeChart from "./metrics/GaugeChart.vue";
 import SeriesChart from "./metrics/SeriesChart.vue";
+import UsageRows from "./metrics/UsageRows.vue";
 
 const props = defineProps<PanelProps>();
 const cfg = computed(
@@ -20,9 +23,27 @@ const cfg = computed(
 
 const stats = computed<MetricStat[]>(() => cfg.value.stats ?? []);
 const gauges = computed<MetricGauge[]>(() => cfg.value.gauges ?? []);
+const usage = computed<MetricUsage[]>(() => cfg.value.usage ?? []);
+const usageMetricKeys = computed(() => {
+  const keys = new Set<string>();
+  for (const field of usage.value) {
+    keys.add(field.key);
+    if (field.usage?.percentKey) keys.add(field.usage.percentKey);
+    if (field.usage?.usedKey) keys.add(field.usage.usedKey);
+  }
+  return keys;
+});
+const visibleGauges = computed<MetricGauge[]>(() =>
+  gauges.value.filter((gauge) => !usageMetricKeys.value.has(gauge.key)),
+);
 const series = computed<MetricSeries[]>(() => cfg.value.series ?? []);
 const hasMetrics = computed(
-  () => stats.value.length + gauges.value.length + series.value.length > 0,
+  () =>
+    stats.value.length +
+      visibleGauges.value.length +
+      usage.value.length +
+      series.value.length >
+    0,
 );
 const historyLimit = computed(() =>
   cfg.value.history && cfg.value.history > 0 ? cfg.value.history : 60,
@@ -59,10 +80,11 @@ function onFrame(raw: string): void {
 
 const seriesData = computed(() =>
   series.value.map((s) => ({
-    label: s.label ?? s.key,
+    label: s.unit ? `${s.label ?? s.key} (${s.unit})` : (s.label ?? s.key),
     data: histories[s.key] ?? [],
   })),
 );
+const latestRow = computed<Row>(() => ({ ...latest }));
 
 const { status, error, reconnect } = useStream(
   props.connectionId,
@@ -101,11 +123,11 @@ async function onReconnect(): Promise<void> {
         />
       </div>
       <div
-        v-if="gauges.length"
+        v-if="visibleGauges.length"
         class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
       >
         <GaugeChart
-          v-for="(g, i) in gauges"
+          v-for="(g, i) in visibleGauges"
           :key="g.key"
           :label="g.label ?? g.key"
           :value="latest[g.key] ?? null"
@@ -114,6 +136,7 @@ async function onReconnect(): Promise<void> {
           :color-index="i"
         />
       </div>
+      <UsageRows v-if="usage.length" :fields="usage" :values="latestRow" />
       <SeriesChart v-if="series.length" :labels="labels" :series="seriesData" />
       <div
         v-if="!hasMetrics"

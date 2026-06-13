@@ -14,6 +14,7 @@ import AppIcon from "@/components/AppIcon.vue";
 import PanelHost from "../core/PanelHost.vue";
 import ActionBar from "../shared/ActionBar.vue";
 import { badgeClassFor } from "../shared/severity";
+import { isVisible } from "../form/condition";
 
 const props = defineProps<{
   connectionId: string;
@@ -29,10 +30,13 @@ const emit = defineEmits<{
 }>();
 
 const resource = computed(() => props.row.ref ?? null);
+const visibleTabs = computed(() =>
+  props.detail.tabs.filter((tab) => isVisible(tab.visibleWhen, props.row)),
+);
 function initialTab(): string {
   const key = props.detail.defaultTab;
-  if (key && props.detail.tabs.some((tab) => tab.key === key)) return key;
-  return props.detail.tabs[0]?.key ?? "";
+  if (key && visibleTabs.value.some((tab) => tab.key === key)) return key;
+  return visibleTabs.value[0]?.key ?? "";
 }
 
 const activeTab = ref(initialTab());
@@ -41,7 +45,7 @@ watch(
   () => [
     props.row.ref?.uid,
     props.detail.defaultTab,
-    props.detail.tabs.map((tab) => tab.key).join("\0"),
+    visibleTabs.value.map((tab) => tab.key).join("\0"),
   ],
   () => {
     activeTab.value = initialTab();
@@ -68,7 +72,7 @@ const statusClass = computed(() =>
 );
 
 const current = computed(() =>
-  props.detail.tabs.find((t) => t.key === activeTab.value),
+  visibleTabs.value.find((t) => t.key === activeTab.value),
 );
 
 const headerActions = computed(() =>
@@ -79,7 +83,7 @@ const headerActions = computed(() =>
 
 function onActionDone(action: Action, result?: Record<string, unknown>): void {
   const tabKey = action.onSuccess?.selectTab;
-  if (tabKey && props.detail.tabs.some((tab) => tab.key === tabKey)) {
+  if (tabKey && visibleTabs.value.some((tab) => tab.key === tabKey)) {
     activeTab.value = tabKey;
   }
   emit("actionDone", action, result);
@@ -118,13 +122,13 @@ function onActionDone(action: Action, result?: Record<string, unknown>): void {
 
     <!-- A lone tab needs no tab bar — render just its panel below. -->
     <Tabs
-      v-if="detail.tabs.length > 1"
+      v-if="visibleTabs.length > 1"
       :value="activeTab"
       scrollable
       @update:value="activeTab = String($event)"
     >
       <TabList>
-        <Tab v-for="tab in detail.tabs" :key="tab.key" :value="tab.key">
+        <Tab v-for="tab in visibleTabs" :key="tab.key" :value="tab.key">
           <AppIcon :icon="tab.icon" :size="14" />
           {{ tab.label }}
         </Tab>

@@ -58,4 +58,56 @@ describe("DetailView", () => {
 
     expect(wrapper.get('[data-test="panel"]').text()).toBe("code_editor");
   });
+
+  it("hides tabs whose visibleWhen fails against the active row", () => {
+    wrapper = mount(DetailView, {
+      props: {
+        connectionId: "c1",
+        row: {
+          name: "ubuntu-template",
+          template: true,
+          ref: { kind: "qemu", name: "ubuntu-template", uid: "900" },
+        },
+        actions: [],
+        detail: {
+          header: { title: "${resource.name}" },
+          defaultTab: "metrics",
+          tabs: [
+            { key: "summary", label: "Summary", panel: "object_detail" },
+            { key: "backups", label: "Backups", panel: "table" },
+            {
+              key: "metrics",
+              label: "Metrics",
+              panel: "metrics",
+              visibleWhen: {
+                allOf: [{ field: "template", op: "neq", value: true }],
+              },
+            },
+            {
+              key: "console",
+              label: "Console",
+              panel: "terminal",
+              visibleWhen: {
+                allOf: [{ field: "template", op: "neq", value: true }],
+              },
+            },
+          ],
+        },
+      },
+      global: {
+        stubs: {
+          PanelHost: {
+            props: ["panel"],
+            template: '<div data-test="panel">{{ panel }}</div>',
+          },
+          AppIcon: true,
+        },
+      },
+    });
+
+    expect(wrapper.get('[data-test="panel"]').text()).toBe("object_detail");
+    expect(wrapper.text()).toContain("Summary");
+    expect(wrapper.text()).not.toContain("Metrics");
+    expect(wrapper.text()).not.toContain("Console");
+  });
 });

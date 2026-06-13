@@ -34,6 +34,8 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				ValueTypes: []string{"string", "hash", "list", "set", "zset"},
 			}},
 			{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "redis.terminal", Method: plugin.MethodWS}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
+			{Key: "clients", Label: "Clients", Icon: icon("users"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.clients.list"}, Config: clientsTableConfig()},
+			{Key: "channels", Label: "Channels", Icon: icon("radio-tower"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.channels.list"}, Config: channelsTableConfig()},
 			{Key: "info", Label: "Info", Icon: icon("file-text"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "redis.info"}, Config: infoDetailConfig()},
 		},
 		Streams: []plugin.Stream{
@@ -53,7 +55,27 @@ func icon(name string) plugin.Icon {
 }
 
 func infoDetailConfig() plugin.ObjectDetailConfig {
-	return plugin.ObjectDetailConfig{RawToggle: true}
+	return plugin.ObjectDetailConfig{
+		RawToggle: true,
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Server", Fields: []plugin.ObjectDetailField{
+				{Key: "redis_version", Label: "Version", Copy: true},
+				{Key: "redis_mode", Label: "Mode", Type: plugin.ColumnBadge},
+				{Key: "role", Label: "Role", Type: plugin.ColumnBadge},
+			}},
+			{Title: "Clients", Fields: []plugin.ObjectDetailField{
+				{Key: "connected_clients", Label: "Connected", Type: plugin.ColumnNumber},
+				{Key: "blocked_clients", Label: "Blocked", Type: plugin.ColumnNumber},
+				{Key: "tracking_clients", Label: "Tracking", Type: plugin.ColumnNumber},
+			}},
+			{Title: "Stats", Fields: []plugin.ObjectDetailField{
+				{Key: "total_commands_processed", Label: "Commands", Type: plugin.ColumnNumber},
+				{Key: "instantaneous_ops_per_sec", Label: "Ops/sec", Type: plugin.ColumnNumber},
+				{Key: "keyspace_hits", Label: "Keyspace hits", Type: plugin.ColumnNumber},
+				{Key: "keyspace_misses", Label: "Keyspace misses", Type: plugin.ColumnNumber},
+			}},
+		},
+	}
 }
 
 func databaseScope() plugin.ScopeFilter {
@@ -68,14 +90,51 @@ func databaseScope() plugin.ScopeFilter {
 	}
 }
 
-// overviewDashboard composes the server summary, connected clients, and pub/sub
-// channels into a single at-a-glance grid using the generic dashboard panel.
+func overviewDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Connection", Fields: []plugin.ObjectDetailField{
+				{Key: "address", Label: "Address", Copy: true},
+				{Key: "database", Label: "Database", Type: plugin.ColumnNumber},
+				{Key: "readOnly", Label: "Read only", Type: plugin.ColumnBool},
+			}},
+			{Title: "Activity", Fields: []plugin.ObjectDetailField{
+				{Key: "role", Label: "Role", Type: plugin.ColumnBadge},
+				{Key: "connected_clients", Label: "Clients", Type: plugin.ColumnNumber},
+				{Key: "instantaneous_ops_per_sec", Label: "Ops/sec", Type: plugin.ColumnNumber},
+			}},
+		},
+	}
+}
+
+// overviewDashboard keeps the first page compact. Full server INFO, clients,
+// and channels are available in their dedicated tabs.
 func overviewDashboard() plugin.DashboardConfig {
 	return plugin.DashboardConfig{Cells: []plugin.Panel{
-		{Key: "server", Label: "Server", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "redis.overview"}, Config: infoDetailConfig(), Span: 2},
-		{Key: "clients", Label: "Clients", Icon: icon("users"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.clients.list"}, Config: plugin.TableConfig{Columns: clientColumns(), Exportable: true, RowClick: plugin.RowClickDetail}},
-		{Key: "channels", Label: "Channels", Icon: icon("radio-tower"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.channels.list"}, Config: plugin.TableConfig{Columns: channelColumns(), Exportable: true, RowClick: plugin.RowClickDetail}},
+		{Key: "server", Label: "Server summary", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "redis.overview"}, Config: overviewDetailConfig(), Span: 2},
 	}}
+}
+
+func clientsTableConfig() plugin.TableConfig {
+	return plugin.TableConfig{
+		Columns:           clientColumns(),
+		EmptyText:         "No connected clients.",
+		Exportable:        true,
+		RefreshIntervalMs: 5000,
+		RowClick:          plugin.RowClickDetail,
+		DefaultSort:       &plugin.SortKey{Field: "id"},
+	}
+}
+
+func channelsTableConfig() plugin.TableConfig {
+	return plugin.TableConfig{
+		Columns:           channelColumns(),
+		EmptyText:         "No active pub/sub channels.",
+		Exportable:        true,
+		RefreshIntervalMs: 5000,
+		RowClick:          plugin.RowClickDetail,
+		DefaultSort:       &plugin.SortKey{Field: "name"},
+	}
 }
 
 func clientColumns() []plugin.Column {
@@ -86,6 +145,10 @@ func clientColumns() []plugin.Column {
 		{Key: "db", Label: "DB", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "user", Label: "User"},
 		{Key: "cmd", Label: "Command"},
+		{Key: "flags", Label: "Flags"},
+		{Key: "sub", Label: "Subs", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "psub", Label: "Patterns", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "omem", Label: "Output memory", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "age", Label: "Age", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "idle", Label: "Idle", Type: plugin.ColumnNumber, Sortable: true},
 	}

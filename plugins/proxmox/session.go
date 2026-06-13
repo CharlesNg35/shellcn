@@ -19,11 +19,10 @@ import (
 // the go-proxmox client (wired to cfg.Net via a custom http.Client); the console
 // websocket is dialed separately so it shares the same transport.
 type Session struct {
-	client  *pmox.Client
-	httpc   *http.Client
-	wsBase  string
-	apply   func(http.Header)
-	timeout time.Duration
+	client *pmox.Client
+	httpc  *http.Client
+	wsBase string
+	apply  func(http.Header)
 }
 
 func connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, error) {
@@ -60,11 +59,10 @@ func connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, err
 	}
 
 	s := &Session{
-		client:  pmox.NewClient(baseURL, clientOpts...),
-		httpc:   httpc,
-		wsBase:  "wss://" + opts.Addr + "/api2/json",
-		apply:   apply,
-		timeout: 20 * time.Second,
+		client: pmox.NewClient(baseURL, clientOpts...),
+		httpc:  httpc,
+		wsBase: "wss://" + opts.Addr + "/api2/json",
+		apply:  apply,
 	}
 	if err := s.HealthCheck(ctx); err != nil {
 		return nil, err

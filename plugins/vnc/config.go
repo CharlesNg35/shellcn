@@ -22,9 +22,10 @@ func credentialKinds() []plugin.CredentialKindInfo {
 }
 
 func configSchema(protocol string) plugin.Schema {
+	hostValidators := []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^[^\s/]+$`, Message: "Enter a host name or IP address, not a URL."}}
 	return plugin.Schema{Groups: []plugin.Group{
 		{Name: "Basic", Fields: []plugin.Field{
-			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, Placeholder: "10.0.0.1"},
+			{Key: "host", Label: "Host name or IP", Type: plugin.FieldText, Required: true, Placeholder: "10.0.0.1", Validators: hostValidators},
 			{Key: "port", Label: "Port", Type: plugin.FieldNumber, Default: defaultPort, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}},
 		}},
 		{Name: "Auth", Fields: []plugin.Field{
@@ -56,6 +57,11 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	if auth == "" {
 		auth = "password"
 	}
+	switch auth {
+	case "password", "credential", "none":
+	default:
+		return connectOptions{}, fmt.Errorf("%w: unsupported authentication method", plugin.ErrInvalidInput)
+	}
 	opts := connectOptions{
 		Host:     strings.TrimSpace(cfg.String("host")),
 		Port:     port,
@@ -67,11 +73,16 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	if opts.Port < 1 || opts.Port > 65535 {
 		return connectOptions{}, fmt.Errorf("%w: port must be between 1 and 65535", plugin.ErrInvalidInput)
 	}
+	if strings.ContainsAny(opts.Host, " \t\r\n/") {
+		return connectOptions{}, fmt.Errorf("%w: host must be a host name or IP address, not a URL", plugin.ErrInvalidInput)
+	}
 	if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" && auth == "credential" {
 		opts.Password = secret
 	}
 	if auth == "none" {
 		opts.Password = ""
+	} else if strings.TrimSpace(opts.Password) == "" {
+		return connectOptions{}, fmt.Errorf("%w: password is required for the selected authentication method", plugin.ErrInvalidInput)
 	}
 	return opts, nil
 }

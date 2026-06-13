@@ -8,6 +8,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 
 	pmox "github.com/luthermonson/go-proxmox"
 
@@ -78,6 +79,37 @@ func str(v any) string {
 	default:
 		return fmt.Sprint(t)
 	}
+}
+
+func bodyString(v any) string {
+	switch t := v.(type) {
+	case string:
+		return strings.TrimSpace(t)
+	case float64:
+		if t == math.Trunc(t) {
+			return strconv.FormatInt(int64(t), 10)
+		}
+	}
+	return strings.TrimSpace(str(v))
+}
+
+func rowBool(v any) bool {
+	switch t := v.(type) {
+	case bool:
+		return t
+	case float64:
+		return t != 0
+	case int:
+		return t != 0
+	case int64:
+		return t != 0
+	case string:
+		switch strings.ToLower(strings.TrimSpace(t)) {
+		case "1", "true", "yes", "on":
+			return true
+		}
+	}
+	return false
 }
 
 func numFloat(v any) float64 {

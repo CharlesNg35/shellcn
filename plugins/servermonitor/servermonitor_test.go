@@ -18,7 +18,7 @@ func TestManifestValidates(t *testing.T) {
 	}
 }
 
-func TestManifestUsesObjectDetailForSystemOverview(t *testing.T) {
+func TestManifestKeepsCompactHostSummaryInOverview(t *testing.T) {
 	m := New().Manifest()
 	if len(m.Tabs) == 0 {
 		t.Fatal("missing overview tab")
@@ -27,18 +27,22 @@ func TestManifestUsesObjectDetailForSystemOverview(t *testing.T) {
 	if !ok {
 		t.Fatalf("overview config = %T, want DashboardConfig", m.Tabs[0].Config)
 	}
-	var dashboardSystem *plugin.Panel
+	var hostSummary *plugin.Panel
 	for i := range dash.Cells {
-		if dash.Cells[i].Key == "system" {
-			dashboardSystem = &dash.Cells[i]
+		if dash.Cells[i].Key == "host" {
+			hostSummary = &dash.Cells[i]
 			break
 		}
 	}
-	if dashboardSystem == nil || dashboardSystem.Type != plugin.PanelObjectDetail {
-		t.Fatalf("dashboard system panel = %+v, want object_detail", dashboardSystem)
+	if hostSummary == nil || hostSummary.Type != plugin.PanelObjectDetail {
+		t.Fatalf("overview host summary = %+v, want object_detail", hostSummary)
 	}
-	if cfg, ok := dashboardSystem.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
-		t.Fatalf("dashboard system config = %#v, want raw-toggle object detail", dashboardSystem.Config)
+	cfg, ok := hostSummary.Config.(plugin.ObjectDetailConfig)
+	if !ok {
+		t.Fatalf("host summary config = %T, want ObjectDetailConfig", hostSummary.Config)
+	}
+	if cfg.RawToggle || len(cfg.Sections) != 2 || !hasUsageField(cfg, "cpuPct") || !hasUsageField(cfg, "memPct") {
+		t.Fatalf("host summary should be compact and include CPU/RAM usage rows: %#v", cfg)
 	}
 	var systemTab *plugin.Panel
 	for i := range m.Tabs {
@@ -49,6 +53,88 @@ func TestManifestUsesObjectDetailForSystemOverview(t *testing.T) {
 	}
 	if systemTab == nil || systemTab.Type != plugin.PanelObjectDetail {
 		t.Fatalf("system tab = %+v, want object_detail", systemTab)
+	}
+	if cfg, ok := systemTab.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
+		t.Fatalf("system tab config = %#v, want full raw-toggle object detail", systemTab.Config)
+	}
+}
+
+func TestOverviewDashboardKeepsOriginalReadableShape(t *testing.T) {
+	m := New().Manifest()
+	dash, ok := m.Tabs[0].Config.(plugin.DashboardConfig)
+	if !ok {
+		t.Fatalf("overview config = %T, want DashboardConfig", m.Tabs[0].Config)
+	}
+	cells := map[string]plugin.Panel{}
+	for _, cell := range dash.Cells {
+		cells[cell.Key] = cell
+	}
+	for _, key := range []string{"host", "cpumem", "throughput"} {
+		if _, ok := cells[key]; !ok {
+			t.Fatalf("overview dashboard missing %q cell", key)
+		}
+	}
+	for _, key := range []string{"metrics", "health", "load", "system", "disks"} {
+		if _, ok := cells[key]; ok {
+			t.Fatalf("overview dashboard should not include duplicated %q cell", key)
+		}
+	}
+	cpumem, ok := cells["cpumem"].Config.(plugin.MetricsConfig)
+	if !ok || len(cpumem.Gauges) != 0 || len(cpumem.Usage) != 0 || len(cpumem.Series) != 2 {
+		t.Fatalf("cpu/memory overview cell should be trends only: %#v", cells["cpumem"].Config)
+	}
+}
+
+func hasUsageField(cfg plugin.ObjectDetailConfig, key string) bool {
+	for _, section := range cfg.Sections {
+		for _, field := range section.Fields {
+			if field.Key == key && field.Usage != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestTablesDeclareUsefulEmptyStates(t *testing.T) {
+	for _, tab := range New().Manifest().Tabs {
+		if tab.Type != plugin.PanelTable {
+			continue
+		}
+		cfg, ok := tab.Config.(plugin.TableConfig)
+		if !ok {
+			t.Fatalf("%s config = %T, want TableConfig", tab.Key, tab.Config)
+		}
+		if cfg.EmptyText == "" {
+			t.Fatalf("%s table is missing empty text", tab.Key)
+		}
+		if cfg.EmptyText == "No rows collected." {
+			t.Fatalf("%s table uses generic empty text", tab.Key)
+		}
+	}
+}
+
+func TestCollectionLimitsUseBoundedSteppers(t *testing.T) {
+	fields := map[string]plugin.Field{}
+	for _, group := range New().Manifest().Config.Groups {
+		for _, field := range group.Fields {
+			fields[field.Key] = field
+		}
+	}
+	for _, key := range []string{"metrics_interval_seconds", "process_limit", "connection_limit"} {
+		field, ok := fields[key]
+		if !ok {
+			t.Fatalf("missing field %s", key)
+		}
+		if field.Type != plugin.FieldStepper {
+			t.Fatalf("%s type = %q, want stepper", key, field.Type)
+		}
+		if field.Step == nil {
+			t.Fatalf("%s should declare a step", key)
+		}
+		if len(field.Validators) < 2 {
+			t.Fatalf("%s should declare min/max validators", key)
+		}
 	}
 }
 

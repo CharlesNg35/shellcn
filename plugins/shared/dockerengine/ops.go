@@ -442,16 +442,16 @@ func ImageBuildSchema() *plugin.Schema {
 	}}}}
 }
 
-func NetworkConnectSchema() *plugin.Schema {
+func NetworkConnectSchema(containersRouteID string) *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Connect", Fields: []plugin.Field{
-		{Key: "container", Label: "Container", Type: plugin.FieldText, Required: true, Placeholder: "web", Help: "Container name or id to attach to this network."},
+		{Key: "container", Label: "Container", Type: plugin.FieldSelect, Required: true, Placeholder: "Select a container", OptionsSource: &plugin.DataSource{RouteID: containersRouteID}, Help: "Container to attach to this network."},
 		{Key: "aliases", Label: "Network aliases", Type: plugin.FieldTextarea, Placeholder: "api\ninternal", Help: "Optional DNS aliases, one per line."},
 	}}}}
 }
 
-func NetworkDisconnectSchema() *plugin.Schema {
+func NetworkDisconnectSchema(containersRouteID string) *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Disconnect", Fields: []plugin.Field{
-		{Key: "container", Label: "Container", Type: plugin.FieldText, Required: true, Placeholder: "web"},
+		{Key: "container", Label: "Container", Type: plugin.FieldSelect, Required: true, Placeholder: "Select a container", OptionsSource: &plugin.DataSource{RouteID: containersRouteID}},
 		{Key: "force", Label: "Force", Type: plugin.FieldToggle, Help: "Force the container to disconnect even if it is running."},
 	}}}}
 }

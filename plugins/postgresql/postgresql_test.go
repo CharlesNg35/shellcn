@@ -213,6 +213,96 @@ func TestDatabaseTablesTabHasCreate(t *testing.T) {
 	}
 }
 
+func TestDatabaseOverviewUsesGenericDashboard(t *testing.T) {
+	m := New().Manifest()
+	var overview plugin.Panel
+	for _, res := range m.Resources {
+		if res.Kind != "database" {
+			continue
+		}
+		for _, tab := range res.Detail.Tabs {
+			if tab.Key == "overview" {
+				overview = tab
+			}
+		}
+	}
+	cfg, ok := overview.Config.(plugin.DashboardConfig)
+	if overview.Type != plugin.PanelDashboard || !ok {
+		t.Fatalf("database overview should be a generic dashboard: %#v", overview)
+	}
+	cells := map[string]plugin.Panel{}
+	for _, cell := range cfg.Cells {
+		cells[cell.Key] = cell
+	}
+	if cells["summary"].Type != plugin.PanelObjectDetail || cells["summary"].Source == nil || cells["summary"].Source.RouteID != "postgresql.database.overview" {
+		t.Fatalf("summary cell should render database overview details: %#v", cells["summary"])
+	}
+	if len(cells) != 1 {
+		t.Fatalf("database overview should not duplicate Schemas/Tables tabs: %#v", cells)
+	}
+}
+
+func TestDestructiveResourceActionsNavigateAwayFromDeletedDetails(t *testing.T) {
+	actions := map[string]plugin.Action{}
+	for _, a := range New().Manifest().Actions {
+		actions[a.ID] = a
+	}
+	for _, id := range []string{"postgresql.database.drop", "postgresql.table.drop", "postgresql.view.drop"} {
+		action := actions[id]
+		if !action.Confirm {
+			t.Fatalf("%s must require confirmation", id)
+		}
+		if action.OnSuccess == nil || action.OnSuccess.Navigate != plugin.NavigateList {
+			t.Fatalf("%s should navigate back to the list after success: %#v", id, action.OnSuccess)
+		}
+	}
+	if action := actions["postgresql.table.rename"]; action.OnSuccess == nil || action.OnSuccess.Navigate != plugin.NavigateList {
+		t.Fatalf("table rename should navigate back to the list because the resource identity changes: %#v", action.OnSuccess)
+	}
+}
+
+func TestForeignKeyFormUsesReferencePickersAndActions(t *testing.T) {
+	schema := routeInputSchema(t, New(), "postgresql.constraint.add")
+	refTable := requireRouteField(t, schema, "refTable")
+	if refTable.Type != plugin.FieldAutocomplete || refTable.OptionsSource == nil || refTable.OptionsSource.RouteID != "postgresql.tables.list" {
+		t.Fatalf("referenced table should be route-backed autocomplete: %#v", refTable)
+	}
+	for _, key := range []string{"onDelete", "onUpdate"} {
+		field := requireRouteField(t, schema, key)
+		if field.Type != plugin.FieldSelect || len(field.Options) < 5 || field.VisibleWhen == nil {
+			t.Fatalf("%s should be a foreign-key-only select: %#v", key, field)
+		}
+	}
+	got, err := addConstraintSQL("public", "orders", constraintRequest{
+		Name: "fk_orders_customer", Type: constraintForeignKey, Columns: []string{"customer_id"},
+		RefTable: "customers", RefColumns: "id", OnDelete: "CASCADE", OnUpdate: "RESTRICT",
+	})
+	if err != nil {
+		t.Fatalf("addConstraintSQL: %v", err)
+	}
+	want := `ALTER TABLE "public"."orders" ADD CONSTRAINT "fk_orders_customer" FOREIGN KEY ("customer_id") REFERENCES "customers" ("id") ON DELETE CASCADE ON UPDATE RESTRICT`
+	if got != want {
+		t.Fatalf("constraint SQL\n got: %s\nwant: %s", got, want)
+	}
+}
+
+func TestBrowseTablesDeclareEmptyStatesAndExport(t *testing.T) {
+	for _, res := range New().Manifest().Resources {
+		for _, tab := range res.Detail.Tabs {
+			tc, ok := tab.Config.(plugin.TableConfig)
+			if !ok {
+				continue
+			}
+			if tab.Key != "data" && tc.EmptyText == "" {
+				t.Fatalf("%s/%s table is missing an empty state", res.Kind, tab.Key)
+			}
+			if tab.Key != "data" && !tc.Exportable {
+				t.Fatalf("%s/%s browse table should be exportable", res.Kind, tab.Key)
+			}
+		}
+	}
+}
+
 func TestRenameTableSQL(t *testing.T) {
 	got, err := renameTableSQL("public", "people", "persons")
 	if err != nil {

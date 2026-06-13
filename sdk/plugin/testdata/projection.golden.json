@@ -182,6 +182,37 @@
             }
           },
           {
+            "key": "summary",
+            "label": "Summary",
+            "panel": "object_detail",
+            "source": {
+              "routeId": "sample.summary"
+            },
+            "config": {
+              "sections": [
+                {
+                  "title": "Usage",
+                  "fields": [
+                    {
+                      "key": "memoryPct",
+                      "label": "Memory",
+                      "type": "percent",
+                      "usage": {
+                        "percentKey": "memoryPct",
+                        "usedKey": "memoryUsed",
+                        "totalKey": "memoryTotal",
+                        "usedType": "bytes",
+                        "totalType": "bytes",
+                        "warnAt": 80,
+                        "criticalAt": 95
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
             "key": "config",
             "label": "Config",
             "panel": "form",
@@ -444,6 +475,69 @@
               },
               "span": {
                 "type": "number"
+              },
+              "visibleWhen": {
+                "type": "object",
+                "properties": {
+                  "allOf": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "field": {
+                          "type": "string"
+                        },
+                        "op": {
+                          "type": "string",
+                          "enum": [
+                            "eq",
+                            "neq",
+                            "in",
+                            "nin",
+                            "empty",
+                            "notEmpty"
+                          ]
+                        },
+                        "value": {
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "field",
+                        "op"
+                      ]
+                    }
+                  },
+                  "anyOf": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "field": {
+                          "type": "string"
+                        },
+                        "op": {
+                          "type": "string",
+                          "enum": [
+                            "eq",
+                            "neq",
+                            "in",
+                            "nin",
+                            "empty",
+                            "notEmpty"
+                          ]
+                        },
+                        "value": {
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "field",
+                        "op"
+                      ]
+                    }
+                  }
+                }
               }
             },
             "required": [
@@ -739,6 +833,72 @@
               "key"
             ]
           }
+        },
+        "usage": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "copy": {
+                "type": "boolean"
+              },
+              "key": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "redacted": {
+                "type": "boolean"
+              },
+              "severities": {
+                "type": "object",
+                "properties": {
+                  "*": {
+                    "type": "string"
+                  }
+                }
+              },
+              "type": {
+                "type": "string"
+              },
+              "usage": {
+                "type": "object",
+                "properties": {
+                  "criticalAt": {
+                    "type": "number"
+                  },
+                  "percentKey": {
+                    "type": "string"
+                  },
+                  "totalKey": {
+                    "type": "string"
+                  },
+                  "totalLabel": {
+                    "type": "string"
+                  },
+                  "totalType": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "usedKey": {
+                    "type": "string"
+                  },
+                  "usedType": {
+                    "type": "string"
+                  },
+                  "warnAt": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "required": [
+              "key"
+            ]
+          }
         }
       }
     },
@@ -780,6 +940,38 @@
                     },
                     "type": {
                       "type": "string"
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "criticalAt": {
+                          "type": "number"
+                        },
+                        "percentKey": {
+                          "type": "string"
+                        },
+                        "totalKey": {
+                          "type": "string"
+                        },
+                        "totalLabel": {
+                          "type": "string"
+                        },
+                        "totalType": {
+                          "type": "string"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "usedKey": {
+                          "type": "string"
+                        },
+                        "usedType": {
+                          "type": "string"
+                        },
+                        "warnAt": {
+                          "type": "number"
+                        }
+                      }
                     }
                   },
                   "required": [
@@ -931,6 +1123,69 @@
               },
               "span": {
                 "type": "number"
+              },
+              "visibleWhen": {
+                "type": "object",
+                "properties": {
+                  "allOf": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "field": {
+                          "type": "string"
+                        },
+                        "op": {
+                          "type": "string",
+                          "enum": [
+                            "eq",
+                            "neq",
+                            "in",
+                            "nin",
+                            "empty",
+                            "notEmpty"
+                          ]
+                        },
+                        "value": {
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "field",
+                        "op"
+                      ]
+                    }
+                  },
+                  "anyOf": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "field": {
+                          "type": "string"
+                        },
+                        "op": {
+                          "type": "string",
+                          "enum": [
+                            "eq",
+                            "neq",
+                            "in",
+                            "nin",
+                            "empty",
+                            "notEmpty"
+                          ]
+                        },
+                        "value": {
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "field",
+                        "op"
+                      ]
+                    }
+                  }
+                }
               }
             },
             "required": [

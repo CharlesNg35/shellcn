@@ -25,6 +25,7 @@ func TestValidators(t *testing.T) {
 		{"disk", validDisk, []string{"scsi0", "virtio1", "sata15", "ide0"}, []string{"", "scsi", "0scsi", "scsi-0", "SCSI0"}},
 		{"size", validSize, []string{"50G", "+10G", "100", "8M", "2T", "512K"}, []string{"", "G", "+", "0G", "-5G", "10GB", "10g"}},
 		{"power", validPowerCommand, []string{"reboot", "shutdown"}, []string{"", "stop", "start", "Reboot", "poweroff"}},
+		{"backup volume", func(s string) bool { return validBackupVolume("local", s) }, []string{"local:backup/vzdump-qemu-100.vma.zst"}, []string{"", "other:backup/vzdump-qemu-100.vma.zst", "local:iso/debian.iso", "local:backup/file?v=1"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -137,6 +138,14 @@ func TestRestoreBody(t *testing.T) {
 	})
 }
 
+func TestPVEPathEscapesDynamicSegments(t *testing.T) {
+	got := pvePath("nodes", "pve", "storage", "local", "content", "local:backup/vzdump-qemu-100.vma.zst")
+	want := "/nodes/pve/storage/local/content/local:backup%2Fvzdump-qemu-100.vma.zst"
+	if got != want {
+		t.Fatalf("pvePath = %q, want %q", got, want)
+	}
+}
+
 // --- httptest handler coverage --------------------------------------------
 
 func TestOpsAgainstFakeProxmox(t *testing.T) {
@@ -149,7 +158,7 @@ func TestOpsAgainstFakeProxmox(t *testing.T) {
 
 	t.Run("qemu clone returns upid", func(t *testing.T) {
 		res, err := guestClone("qemu")(rcWithBody(sess, map[string]string{"node": "pve", "vmid": "100"},
-			`{"newid":"101","name":"web2","full":true}`))
+			`{"newid":101,"name":"web2","full":true}`))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -218,7 +227,7 @@ func TestOpsAgainstFakeProxmox(t *testing.T) {
 
 	t.Run("qemu restore creates from archive", func(t *testing.T) {
 		if _, err := guestRestore("qemu")(rcWithBody(sess, map[string]string{"node": "pve"},
-			`{"vmid":"300","archive":"local:backup/vzdump-qemu-100.vma.zst"}`)); err != nil {
+			`{"vmid":300,"archive":"local:backup/vzdump-qemu-100.vma.zst"}`)); err != nil {
 			t.Fatal(err)
 		}
 		var got map[string]any
@@ -240,6 +249,19 @@ func TestOpsAgainstFakeProxmox(t *testing.T) {
 		_ = json.Unmarshal(calls.posts["/api2/json/nodes/pve/status"], &got)
 		if got["command"] != "reboot" {
 			t.Fatalf("power body = %s", calls.posts["/api2/json/nodes/pve/status"])
+		}
+	})
+
+	t.Run("backup create rejects invalid mode", func(t *testing.T) {
+		if _, err := backupCreate(rcWithBody(sess, map[string]string{"node": "pve", "vmid": "100"},
+			`{"storage":"local","mode":"invalid","compress":"zstd"}`)); err == nil {
+			t.Fatal("expected error for invalid backup mode")
+		}
+	})
+
+	t.Run("backup delete rejects non backup volume", func(t *testing.T) {
+		if _, err := backupDelete(rcWithBody(sess, map[string]string{"node": "pve", "storage": "local", "volume": "local:iso/debian.iso"}, "")); err == nil {
+			t.Fatal("expected error for non-backup volume")
 		}
 	})
 

@@ -74,16 +74,19 @@ func configSchema() plugin.Schema {
 		Name: "Collection",
 		Fields: []plugin.Field{
 			{
-				Key: "metrics_interval_seconds", Label: "Metrics interval", Type: plugin.FieldNumber,
-				Default: 5, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 60}},
+				Key: "metrics_interval_seconds", Label: "Metrics interval", Type: plugin.FieldStepper,
+				Default: 5, Step: 1, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 60}},
+				Help: "Seconds between live metric samples.",
 			},
 			{
-				Key: "process_limit", Label: "Process limit", Type: plugin.FieldNumber,
-				Default: 1000, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 50}, {Type: plugin.ValidatorMax, Value: 5000}},
+				Key: "process_limit", Label: "Process limit", Type: plugin.FieldStepper,
+				Default: 1000, Step: 50, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 50}, {Type: plugin.ValidatorMax, Value: 5000}},
+				Help: "Maximum process rows collected per refresh.",
 			},
 			{
-				Key: "connection_limit", Label: "Connection limit", Type: plugin.FieldNumber,
-				Default: 1000, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 50}, {Type: plugin.ValidatorMax, Value: 10000}},
+				Key: "connection_limit", Label: "Connection limit", Type: plugin.FieldStepper,
+				Default: 1000, Step: 50, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 50}, {Type: plugin.ValidatorMax, Value: 10000}},
+				Help: "Maximum network connection rows collected per refresh.",
 			},
 		},
 	}}}
@@ -95,9 +98,9 @@ func tabs() []plugin.Panel {
 			Key: "overview", Label: "Overview", Icon: lucide("layout-dashboard"), Type: plugin.PanelDashboard,
 			Config: plugin.DashboardConfig{Cells: []plugin.Panel{
 				{
-					Key: "metrics", Label: "Live metrics", Type: plugin.PanelMetrics, Span: 2,
-					Source: &plugin.DataSource{RouteID: "server_monitor.metrics", Method: plugin.MethodWS},
-					Config: summaryConfig(),
+					Key: "host", Label: "Host summary", Type: plugin.PanelObjectDetail, Span: 2,
+					Source: &plugin.DataSource{RouteID: "server_monitor.overview"},
+					Config: systemOverviewConfig(),
 				},
 				{
 					Key: "cpumem", Label: "CPU & Memory", Type: plugin.PanelMetrics, Span: 1,
@@ -109,23 +112,13 @@ func tabs() []plugin.Panel {
 					Source: &plugin.DataSource{RouteID: "server_monitor.metrics", Method: plugin.MethodWS},
 					Config: throughputConfig(),
 				},
-				{
-					Key: "system", Label: "System", Type: plugin.PanelObjectDetail, Span: 1,
-					Source: &plugin.DataSource{RouteID: "server_monitor.overview"},
-					Config: systemDetailConfig(),
-				},
-				{
-					Key: "disks", Label: "Disks", Type: plugin.PanelTable, Span: 1,
-					Source: &plugin.DataSource{RouteID: "server_monitor.disks"},
-					Config: liveTableConfig(diskColumns(), 10000, sortBy("usedPct")),
-				},
 			}},
 		},
 		{Key: "processes", Label: "Processes", Icon: lucide("list-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.processes"}, Config: liveTableConfig(processColumns(), 3000, sortBy("cpuPct"))},
 		{Key: "services", Label: "Services", Icon: lucide("settings"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.services"}, Config: liveTableConfig(serviceColumns(), 10000, nil)},
-		{Key: "disks", Label: "Disks", Icon: lucide("hard-drive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.disks"}, Config: liveTableConfig(diskColumns(), 10000, sortBy("usedPct"))},
+		{Key: "disks", Label: "Filesystems", Icon: lucide("hard-drive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.disks"}, Config: liveTableConfig(diskColumns(), 10000, sortBy("usedPct"))},
 		{Key: "io", Label: "Disk IO", Icon: lucide("activity"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.disk_io"}, Config: liveTableConfig(diskIOColumns(), 3000, sortBy("writeBytes"))},
-		{Key: "network", Label: "Network", Icon: lucide("network"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.network"}, Config: liveTableConfig(networkColumns(), 3000, sortBy("bytesRecv"))},
+		{Key: "network", Label: "Interfaces", Icon: lucide("network"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.network"}, Config: liveTableConfig(networkColumns(), 3000, sortBy("bytesRecv"))},
 		{Key: "connections", Label: "Connections", Icon: lucide("radio-tower"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.connections"}, Config: liveTableConfig(connectionColumns(), 5000, nil)},
 		{Key: "sessions", Label: "Sessions", Icon: lucide("users"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.users"}, Config: liveTableConfig(userColumns(), 15000, nil)},
 		{Key: "sensors", Label: "Sensors", Icon: lucide("thermometer"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.sensors"}, Config: liveTableConfig(sensorColumns(), 5000, sortBy("temperature"))},
@@ -136,26 +129,25 @@ func tabs() []plugin.Panel {
 
 func lucide(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide, Value: name} }
 
-func systemDetailConfig() plugin.ObjectDetailConfig {
-	return plugin.ObjectDetailConfig{RawToggle: true}
-}
-
-// summaryConfig is the full-width header card: the CPU/Mem/Swap gauges plus the
-// process/load stats. The line charts live in their own cells (below) so they
-// can sit in a grid.
-func summaryConfig() plugin.MetricsConfig {
-	return plugin.MetricsConfig{
-		Gauges: []plugin.MetricGauge{
-			{Key: "cpuPct", Label: "CPU", Unit: "%", Max: 100},
-			{Key: "memPct", Label: "Memory", Unit: "%", Max: 100},
-			{Key: "swapPct", Label: "Swap", Unit: "%", Max: 100},
-		},
-		Stats: []plugin.MetricStat{
-			{Key: "processes", Label: "Processes"},
-			{Key: "load1", Label: "Load 1m"},
-			{Key: "load5", Label: "Load 5m"},
+func systemOverviewConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Host", Fields: []plugin.ObjectDetailField{
+				{Key: "hostname", Label: "Name", Copy: true},
+				{Key: "platform", Label: "Platform"},
+				{Key: "platformVersion", Label: "Version"},
+				{Key: "uptimeSeconds", Label: "Uptime (seconds)", Type: plugin.ColumnNumber},
+			}},
+			{Title: "Usage", Fields: []plugin.ObjectDetailField{
+				{Key: "cpuPct", Label: "CPU", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpuPct", WarnAt: 75, CriticalAt: 90}},
+				{Key: "memPct", Label: "Memory", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "memPct", UsedKey: "memUsed", TotalKey: "memTotal", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 80, CriticalAt: 95}},
+			}},
 		},
 	}
+}
+
+func systemDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{RawToggle: true}
 }
 
 // cpuMemConfig charts CPU and Memory over time on one shared 0–100 axis.
@@ -175,17 +167,17 @@ func cpuMemConfig() plugin.MetricsConfig {
 func throughputConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
 		Series: []plugin.MetricSeries{
-			{Key: "netRecvRate", Label: "Net in", Unit: "bytes"},
-			{Key: "netSentRate", Label: "Net out", Unit: "bytes"},
-			{Key: "diskReadRate", Label: "Disk read", Unit: "bytes"},
-			{Key: "diskWriteRate", Label: "Disk write", Unit: "bytes"},
+			{Key: "netRecvRate", Label: "Net in", Unit: "bytes/s"},
+			{Key: "netSentRate", Label: "Net out", Unit: "bytes/s"},
+			{Key: "diskReadRate", Label: "Disk read", Unit: "bytes/s"},
+			{Key: "diskWriteRate", Label: "Disk write", Unit: "bytes/s"},
 		},
 		History: 120,
 	}
 }
 
 func tableConfig(columns []plugin.Column) plugin.TableConfig {
-	return plugin.TableConfig{Columns: columns, Exportable: true, RowClick: plugin.RowClickDetail}
+	return plugin.TableConfig{Columns: columns, EmptyText: "No records reported by this host.", Exportable: true, RowClick: plugin.RowClickDetail}
 }
 
 func liveTableConfig(columns []plugin.Column, intervalMs int, sort *plugin.SortKey) plugin.TableConfig {
@@ -193,9 +185,28 @@ func liveTableConfig(columns []plugin.Column, intervalMs int, sort *plugin.SortK
 		Columns:           columns,
 		RefreshIntervalMs: intervalMs,
 		DefaultSort:       sort,
+		EmptyText:         emptyTextFor(columns),
 		Exportable:        true,
 		RowClick:          plugin.RowClickDetail,
 	}
+}
+
+func emptyTextFor(columns []plugin.Column) string {
+	for _, column := range columns {
+		switch column.Key {
+		case "pid":
+			return "No processes reported by this host."
+		case "unit":
+			return "No services reported by this host."
+		case "mountpoint":
+			return "No filesystems reported by this host."
+		case "localAddr":
+			return "No network connections reported by this host."
+		case "sensor":
+			return "No sensor readings reported by this host."
+		}
+	}
+	return "No records reported by this host."
 }
 
 func sortBy(field string) *plugin.SortKey { return &plugin.SortKey{Field: field, Desc: true} }
@@ -240,6 +251,7 @@ func diskColumns() []plugin.Column {
 		{Key: "total", Label: "Total", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "used", Label: "Used", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "free", Label: "Free", Type: plugin.ColumnBytes, Sortable: true},
+		{Key: "inodesUsedPct", Label: "Inodes", Type: plugin.ColumnPercent, Precision: prec(1), Sortable: true},
 	}
 }
 

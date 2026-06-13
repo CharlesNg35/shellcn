@@ -77,11 +77,14 @@ func BucketTab(protocol string) plugin.Panel {
 				routeID(protocol, "bucket.create"),
 			},
 			RowActionIDs: []string{
+				routeID(protocol, "bucket.versions"),
 				routeID(protocol, "bucket.versioning.set"),
 				routeID(protocol, "bucket.delete"),
 			},
-			Exportable: true,
-			EmptyText:  "No buckets.",
+			DefaultSort: &plugin.SortKey{Field: "createdAt", Desc: true},
+			Exportable:  true,
+			EmptyText:   "No buckets. Create one to start browsing objects.",
+			RowClick:    plugin.RowClickDetail,
 		},
 	}
 }
@@ -97,8 +100,26 @@ func bucketColumns() []plugin.Column {
 func Actions(protocol string) []plugin.Action {
 	return []plugin.Action{
 		{ID: routeID(protocol, "bucket.create"), Label: "Create bucket", Icon: icon("plus"), RouteID: routeID(protocol, "bucket.create")},
+		{ID: routeID(protocol, "bucket.versions"), Label: "Versions", Icon: icon("layers-3"), RouteID: routeID(protocol, "bucket.versions"), Params: bucketParams(), Open: plugin.OpenDialog, Panel: plugin.PanelTable, Config: bucketVersionsTableConfig()},
 		{ID: routeID(protocol, "bucket.delete"), Label: "Delete", Icon: icon("trash-2"), RouteID: routeID(protocol, "bucket.delete"), Params: bucketParams(), Confirm: true, ConfirmText: "Delete this bucket? The bucket must be empty."},
-		{ID: routeID(protocol, "bucket.versioning.set"), Label: "Set versioning", Icon: icon("history"), RouteID: routeID(protocol, "bucket.versioning.set"), Params: bucketParams()},
+		{ID: routeID(protocol, "bucket.versioning.set"), Label: "Edit versioning", Icon: icon("history"), RouteID: routeID(protocol, "bucket.versioning.set"), Params: bucketParams(), Confirm: true, ConfirmText: "Change bucket versioning? After versioning is enabled, S3 only allows suspending it."},
+	}
+}
+
+func bucketVersionsTableConfig() plugin.TableConfig {
+	return plugin.TableConfig{
+		Columns: []plugin.Column{
+			{Key: "key", Label: "Object key", Sortable: true},
+			{Key: "versionId", Label: "Version ID", Sortable: true},
+			{Key: "isLatest", Label: "Latest", Type: plugin.ColumnBool, Sortable: true},
+			{Key: "deleteMarker", Label: "Delete marker", Type: plugin.ColumnBool, Sortable: true},
+			{Key: "size", Label: "Size", Type: plugin.ColumnBytes, Sortable: true},
+			{Key: "modTime", Label: "Modified", Type: plugin.ColumnDateTime, Sortable: true},
+		},
+		DefaultSort: &plugin.SortKey{Field: "modTime", Desc: true},
+		Exportable:  true,
+		EmptyText:   "No object versions found.",
+		RowClick:    plugin.RowClickDetail,
 	}
 }
 
@@ -120,8 +141,10 @@ func AdminRoutes(protocol string) []plugin.Route {
 
 func bucketCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Bucket", Fields: []plugin.Field{
-		{Key: "name", Label: "Bucket name", Type: plugin.FieldText, Required: true, Placeholder: "my-bucket", Help: "Lowercase letters, numbers, dots and hyphens; 3-63 characters."},
-		{Key: "region", Label: "Region", Type: plugin.FieldAutocomplete, Placeholder: "us-east-1", Options: AWSRegionOptions()},
+		{Key: "name", Label: "Bucket name", Type: plugin.FieldText, Required: true, Placeholder: "my-bucket", Help: "Lowercase letters, numbers, dots and hyphens; 3-63 characters.", Validators: []plugin.Validator{
+			{Type: plugin.ValidatorRegex, Value: `^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`, Message: "Use 3-63 lowercase letters, numbers, dots, or hyphens, starting and ending with a letter or number."},
+		}},
+		{Key: "region", Label: "Region", Type: plugin.FieldAutocomplete, Required: true, Default: "us-east-1", Placeholder: "us-east-1", Help: "AWS requires a region for bucket creation; us-east-1 uses the default location constraint.", Options: AWSRegionOptions()},
 	}}}}
 }
 

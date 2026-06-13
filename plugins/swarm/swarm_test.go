@@ -71,6 +71,39 @@ func TestManifestDeclaresSwarmWorkspace(t *testing.T) {
 			}
 		}
 	}
+	for _, id := range []string{"swarm.service.update", "swarm.service.rollback", "swarm.service.remove", "swarm.node.update", "swarm.stack.deploy", "swarm.stack.remove"} {
+		action := findAction(m.Actions, id)
+		if action == nil || !action.Confirm || action.ConfirmText == "" {
+			t.Fatalf("%s should declare a confirmation: %+v", id, action)
+		}
+	}
+	for _, id := range []string{"swarm.service.remove", "swarm.stack.remove"} {
+		action := findAction(m.Actions, id)
+		if action == nil || action.OnSuccess == nil || action.OnSuccess.Navigate != plugin.NavigateList {
+			t.Fatalf("%s should return to the resource list after success: %+v", id, action)
+		}
+	}
+	var stackRes *plugin.ResourceType
+	for i := range m.Resources {
+		if m.Resources[i].Kind == "stack" {
+			stackRes = &m.Resources[i]
+			break
+		}
+	}
+	if stackRes == nil || !contains(stackRes.Actions.Row, "swarm.stack.remove") || !contains(stackRes.Actions.Detail, "swarm.stack.remove") {
+		t.Fatalf("stack resource should expose remove action: %+v", stackRes)
+	}
+	for _, res := range m.Resources {
+		for _, tab := range res.Detail.Tabs {
+			if tab.Type != plugin.PanelTable {
+				continue
+			}
+			cfg, ok := tab.Config.(plugin.TableConfig)
+			if !ok || cfg.EmptyText == "" {
+				t.Fatalf("table %s/%s config = %#v, want empty text", res.Kind, tab.Key, tab.Config)
+			}
+		}
+	}
 }
 
 func TestRoutesAgainstFakeSwarmDaemon(t *testing.T) {
@@ -215,12 +248,69 @@ func TestApplyServiceUpdateReplicasOnGlobalFails(t *testing.T) {
 	}
 }
 
+func TestSwarmActionSchemasGuideBoundedInput(t *testing.T) {
+	update := serviceUpdateSchema()
+	image := requireSchemaField(t, update, "image")
+	if image.Type != plugin.FieldAutocomplete {
+		t.Fatalf("service image field type = %q, want autocomplete", image.Type)
+	}
+	if err := update.ValidateValues(map[string]any{"replicas": float64(10001)}, nil); err == nil {
+		t.Fatal("service update schema accepted too many replicas")
+	}
+
+	node := nodeUpdateSchema()
+	availability := requireSchemaField(t, node, "availability")
+	if availability.Type != plugin.FieldSelect {
+		t.Fatalf("availability field type = %q, want select", availability.Type)
+	}
+	if err := node.ValidateValues(map[string]any{"availability": "offline"}, nil); err == nil {
+		t.Fatal("node update schema accepted an invalid availability")
+	}
+
+	deploy := stackDeploySchema()
+	if err := deploy.ValidateValues(map[string]any{"name": "bad name", "spec": []any{}}, nil); err == nil {
+		t.Fatal("stack deploy schema accepted a whitespace-bearing name")
+	}
+}
+
 func TestStampStackNamespace(t *testing.T) {
 	spec := swarm.ServiceSpec{}
 	stampStackNamespace(&spec, "demo")
 	if spec.Labels[stackNamespaceLabel] != "demo" {
 		t.Fatalf("namespace label = %q", spec.Labels[stackNamespaceLabel])
 	}
+}
+
+func findAction(actions []plugin.Action, id string) *plugin.Action {
+	for i := range actions {
+		if actions[i].ID == id {
+			return &actions[i]
+		}
+	}
+	return nil
+}
+
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func requireSchemaField(t *testing.T, schema *plugin.Schema, key string) *plugin.Field {
+	t.Helper()
+	for i := range schema.Groups {
+		for j := range schema.Groups[i].Fields {
+			field := &schema.Groups[i].Fields[j]
+			if field.Key == key {
+				return field
+			}
+		}
+	}
+	t.Fatalf("schema missing %q field", key)
+	return nil
 }
 
 func fakeSwarmDaemon(t *testing.T) *httptest.Server {

@@ -43,6 +43,22 @@ export const btnDanger =
 export const btnPrimaryBlock =
   "flex w-full items-center justify-center gap-1.5 rounded-md bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-700 focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:opacity-50";
 
+export const opsDetailRow =
+  "grid min-w-0 grid-cols-[minmax(8rem,14rem)_1fr_auto] items-start gap-3 px-4 py-2.5 text-sm";
+export const opsUsageRow =
+  "grid min-w-0 grid-cols-[minmax(8rem,14rem)_minmax(10rem,1fr)] gap-3 px-4 py-3 text-sm sm:grid-cols-[minmax(8rem,14rem)_minmax(12rem,1fr)_auto]";
+export const opsDetailLabel = "text-surface-500 dark:text-surface-400";
+export const opsDetailValue =
+  "min-w-0 wrap-break-word whitespace-pre-wrap text-surface-900 dark:text-surface-100";
+export const opsUsageValue =
+  "text-right text-xs font-medium text-surface-600 tabular-nums dark:text-surface-300";
+export const opsUsageCaption =
+  "mt-1 flex min-w-0 items-center justify-between gap-3 text-xs text-surface-500 dark:text-surface-400";
+export const opsStatGrid =
+  "grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3";
+export const opsStatTile =
+  "rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 dark:border-surface-800 dark:bg-surface-900/60";
+
 const buttonBase =
   "inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:pointer-events-none disabled:opacity-50";
 

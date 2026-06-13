@@ -160,9 +160,191 @@ func TestPodDetailHasMetricsLogsAndShell(t *testing.T) {
 		t.Fatalf("pod metrics tab = %+v", metrics)
 	}
 	cfg, ok := metrics.Config.(plugin.MetricsConfig)
-	if !ok || len(cfg.Stats) == 0 || len(cfg.Series) == 0 {
+	if !ok || len(cfg.Stats) == 0 || len(cfg.Usage) != 0 || len(cfg.Series) == 0 || len(cfg.Gauges) != 0 {
 		t.Fatalf("pod metrics config = %#v", metrics.Config)
 	}
+	if !conditionRequiresStatus(metrics.VisibleWhen, "Running") {
+		t.Fatalf("pod metrics should only show for running pods, got %#v", metrics.VisibleWhen)
+	}
+	terminal := res.Detail.Tabs[4]
+	if !conditionRequiresStatus(terminal.VisibleWhen, "Running") {
+		t.Fatalf("pod shell should only show for running pods, got %#v", terminal.VisibleWhen)
+	}
+	logs := res.Detail.Tabs[3]
+	if logs.VisibleWhen != nil {
+		t.Fatalf("pod logs should stay available for terminated/crashing pods, got %#v", logs.VisibleWhen)
+	}
+}
+
+func TestPodOpenRequiresRunningPodWithPorts(t *testing.T) {
+	for _, a := range actions() {
+		if a.ID != "kubernetes.pod.open" {
+			continue
+		}
+		if a.EnabledWhen == nil || len(a.EnabledWhen.AllOf) != 2 {
+			t.Fatalf("pod open should require ports and running status, got %#v", a.EnabledWhen)
+		}
+		if !conditionHasRule(a.EnabledWhen, "ports", plugin.OpNotEmpty, nil) {
+			t.Fatalf("pod open should require exposed ports, got %#v", a.EnabledWhen)
+		}
+		if !conditionRequiresStatus(a.EnabledWhen, "Running") {
+			t.Fatalf("pod open should require a running pod, got %#v", a.EnabledWhen)
+		}
+		return
+	}
+	t.Fatal("pod open action missing")
+}
+
+func TestServiceOpenRequiresForwardablePorts(t *testing.T) {
+	a := actionByID("kubernetes.service.open")
+	if a.ID == "" {
+		t.Fatal("service open action missing")
+	}
+	if !conditionHasRule(a.EnabledWhen, "ports", plugin.OpNotEmpty, nil) {
+		t.Fatalf("service open should require ports, got %#v", a.EnabledWhen)
+	}
+	if !conditionHasRule(a.EnabledWhen, "type", plugin.OpNeq, "ExternalName") {
+		t.Fatalf("service open should be disabled for ExternalName services, got %#v", a.EnabledWhen)
+	}
+}
+
+func TestControllerOwnedKindsDoNotExposeCreateOrDelete(t *testing.T) {
+	for _, name := range []string{"event", "endpoints", "endpointslice", "lease", "node"} {
+		k, ok := kindByName(name)
+		if !ok {
+			t.Fatalf("kind %q missing", name)
+		}
+		res := resourceType(k)
+		if hasAction(res.Actions.Toolbar, "kubernetes.create."+name) {
+			t.Errorf("%s should not expose Create", name)
+		}
+		if hasAction(res.Actions.Row, "kubernetes.resource.delete") || hasAction(res.Actions.Detail, "kubernetes.resource.delete") {
+			t.Errorf("%s should not expose generic Delete, got row=%v detail=%v", name, res.Actions.Row, res.Actions.Detail)
+		}
+	}
+}
+
+func TestWorkloadStatusIsVisibleInListsAndHeaders(t *testing.T) {
+	for _, name := range []string{"deployment", "statefulset", "daemonset", "replicaset", "job"} {
+		k, ok := kindByName(name)
+		if !ok {
+			t.Fatalf("kind %q missing", name)
+		}
+		res := resourceType(k)
+		if !hasColumn(res.Columns, "status") {
+			t.Errorf("%s should expose a status badge column", name)
+		}
+		if res.Detail.Header.StatusField != "status" {
+			t.Errorf("%s detail header status = %q, want status", name, res.Detail.Header.StatusField)
+		}
+	}
+}
+
+func TestScaleSchemaDoesNotDefaultToOneReplica(t *testing.T) {
+	s := scaleSchema()
+	field := s.Groups[0].Fields[0]
+	if field.Key != "replicas" || !field.Required {
+		t.Fatalf("scale replicas field = %+v", field)
+	}
+	if field.Default != nil {
+		t.Fatalf("scale replicas should not default to a destructive value, got %v", field.Default)
+	}
+	if len(field.Validators) == 0 || field.Validators[0].Type != plugin.ValidatorMin || field.Validators[0].Value != 0 {
+		t.Fatalf("scale replicas should validate a non-negative count, got %+v", field.Validators)
+	}
+}
+
+func actionByID(id string) plugin.Action {
+	for _, a := range actions() {
+		if a.ID == id {
+			return a
+		}
+	}
+	return plugin.Action{}
+}
+
+func hasAction(actions []string, id string) bool {
+	for _, got := range actions {
+		if got == id {
+			return true
+		}
+	}
+	return false
+}
+
+func hasColumn(columns []plugin.Column, key string) bool {
+	for _, got := range columns {
+		if got.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
+func conditionRequiresStatus(c *plugin.Condition, status string) bool {
+	return conditionHasRule(c, "status", plugin.OpEq, status)
+}
+
+func conditionHasRule(c *plugin.Condition, field string, op plugin.Operator, value any) bool {
+	if c == nil {
+		return false
+	}
+	for _, r := range append(c.AllOf, c.AnyOf...) {
+		if r.Field == field && r.Op == op {
+			if value == nil {
+				return true
+			}
+			return r.Value == value
+		}
+	}
+	return false
+}
+
+func TestCustomResourceDetailHasYAMLAndEvents(t *testing.T) {
+	res := customResourceType()
+	if strings.Join(res.Actions.Row, ",") != "kubernetes.customresource.delete" || strings.Join(res.Actions.Detail, ",") != "kubernetes.customresource.delete" {
+		t.Fatalf("custom resource should use scope-aware delete actions, got row=%v detail=%v", res.Actions.Row, res.Actions.Detail)
+	}
+	var keys []string
+	for _, tab := range res.Detail.Tabs {
+		keys = append(keys, tab.Key)
+		switch tab.Key {
+		case "yaml":
+			if tab.Type != plugin.PanelCodeEditor || tab.Source == nil || tab.Source.Params["kind"] != "${resource.scope}" {
+				t.Fatalf("custom resource YAML tab should edit the concrete CRD kind, got %+v", tab)
+			}
+		case "events":
+			if tab.Type != plugin.PanelTimeline || tab.Source == nil || tab.Source.Params["kind"] != "${resource.scope}" {
+				t.Fatalf("custom resource events tab should use the concrete CRD kind, got %+v", tab)
+			}
+			if _, ok := tab.Config.(plugin.TimelineConfig); !ok {
+				t.Fatalf("custom resource events config = %T, want TimelineConfig", tab.Config)
+			}
+		}
+	}
+	want := []string{"overview", "yaml", "events"}
+	if strings.Join(keys, ",") != strings.Join(want, ",") {
+		t.Fatalf("custom resource detail tabs = %v, want %v", keys, want)
+	}
+}
+
+func TestCustomResourceDeleteUsesConcreteScopeKind(t *testing.T) {
+	for _, a := range actions() {
+		if a.ID != "kubernetes.customresource.delete" {
+			continue
+		}
+		if a.RouteID != "kubernetes.resource.delete" {
+			t.Fatalf("custom resource delete route = %q", a.RouteID)
+		}
+		if a.Params["kind"] != "${resource.scope}" {
+			t.Fatalf("custom resource delete kind param = %q, want concrete scope", a.Params["kind"])
+		}
+		if !a.Confirm || a.OnSuccess == nil || a.OnSuccess.Navigate != plugin.NavigateList {
+			t.Fatalf("custom resource delete should confirm and navigate to list, got %+v", a)
+		}
+		return
+	}
+	t.Fatal("custom resource delete action missing")
 }
 
 func TestAuditShellRBACUsesStreamAuditHook(t *testing.T) {
@@ -253,8 +435,17 @@ func TestNamespaceIsAGlobalScope(t *testing.T) {
 	if scope.Param != "namespace" {
 		t.Errorf("namespace scope should set the namespace param, got %q", scope.Param)
 	}
+	if scope.Control != plugin.ScopeSelect {
+		t.Errorf("namespace scope should explicitly render as a select, got %q", scope.Control)
+	}
 	if scope.OptionsSource == nil || scope.OptionsSource.Params["kind"] != "namespace" {
 		t.Errorf("namespace scope should source options from the namespace list, got %+v", scope.OptionsSource)
+	}
+	if scope.ValueField != "name" || scope.LabelField != "name" {
+		t.Errorf("namespace scope should use namespace names as option values/labels, got value=%q label=%q", scope.ValueField, scope.LabelField)
+	}
+	if scope.AllLabel != "All namespaces" {
+		t.Errorf("namespace scope should expose an all-namespaces option, got %q", scope.AllLabel)
 	}
 }
 

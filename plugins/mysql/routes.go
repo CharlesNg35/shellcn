@@ -52,6 +52,7 @@ func routes() []plugin.Route {
 		{ID: "mysql.table.columns", Method: plugin.MethodGet, Path: "/tables/{database}/{table}/columns", Permission: "mysql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.table.columns", Handle: tableColumnsRoute},
 		{ID: "mysql.table.indexes", Method: plugin.MethodGet, Path: "/tables/{database}/{table}/indexes", Permission: "mysql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.table.indexes", Handle: tableIndexes},
 		{ID: "mysql.table.constraints", Method: plugin.MethodGet, Path: "/tables/{database}/{table}/constraints", Permission: "mysql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.table.constraints", Handle: tableConstraints},
+		{ID: "mysql.table.ddl", Method: plugin.MethodGet, Path: "/tables/{database}/{table}/ddl", Permission: "mysql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.table.ddl", Handle: tableDDL},
 		{ID: "mysql.view.definition", Method: plugin.MethodGet, Path: "/views/{database}/{table}/definition", Permission: "mysql.views.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.view.definition", Handle: viewDefinition},
 		{ID: "mysql.routine.definition", Method: plugin.MethodGet, Path: "/routines/{id}/definition", Permission: "mysql.routines.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.routine.definition", Handle: routineDefinition},
 		{ID: "mysql.completion", Method: plugin.MethodGet, Path: "/completion", Permission: "mysql.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.completion", Handle: completionRoute},
@@ -114,6 +115,7 @@ func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "mysql.table.columns", Params: tableParams()}},
+		{Key: "type", Label: "Type", Type: plugin.FieldSelect, Default: "BTREE", Options: mysqlIndexTypeOptions()},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
 	}}}}
 }
@@ -175,6 +177,8 @@ func stringOptions(values []string) []plugin.Option {
 }
 
 func constraintAddSchema() *plugin.Schema {
+	fkOnly := &plugin.Condition{AllOf: []plugin.Rule{{Field: "kind", Op: plugin.OpEq, Value: "FOREIGN KEY"}}}
+	checkOnly := &plugin.Condition{AllOf: []plugin.Rule{{Field: "kind", Op: plugin.OpEq, Value: "CHECK"}}}
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Constraint", Fields: []plugin.Field{
 		{Key: "kind", Label: "Type", Type: plugin.FieldSelect, Required: true, Default: "PRIMARY KEY", Options: []plugin.Option{
 			{Label: "Primary key", Value: "PRIMARY KEY"},
@@ -184,11 +188,21 @@ func constraintAddSchema() *plugin.Schema {
 		}},
 		{Key: "name", Label: "Constraint name", Type: plugin.FieldText, Help: "Required for unique, foreign key, and check; ignored for primary key.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, OptionsSource: &plugin.DataSource{RouteID: "mysql.table.columns", Params: tableParams()}, Help: "Constrained columns (primary/unique/foreign key)."},
-		{Key: "ref_database", Label: "Referenced database", Type: plugin.FieldText, Help: "Foreign key only; defaults to this database.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "ref_table", Label: "Referenced table", Type: plugin.FieldText, Help: "Foreign key only.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "ref_columns", Label: "Referenced columns", Type: plugin.FieldText, Help: "Foreign key only; comma-separated, matching the column order."},
-		{Key: "expression", Label: "Check expression", Type: plugin.FieldText, Help: "Check only, e.g. price > 0."},
+		{Key: "ref_database", Label: "Referenced database", Type: plugin.FieldAutocomplete, Help: "Foreign key only; defaults to this database.", OptionsSource: &plugin.DataSource{RouteID: "mysql.databases.list"}, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, VisibleWhen: fkOnly},
+		{Key: "ref_table", Label: "Referenced table", Type: plugin.FieldAutocomplete, Help: "Foreign key only.", OptionsSource: &plugin.DataSource{RouteID: "mysql.tables.list", Params: map[string]string{"database": "${resource.namespace}"}}, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, VisibleWhen: fkOnly},
+		{Key: "ref_columns", Label: "Referenced columns", Type: plugin.FieldText, Help: "Foreign key only; comma-separated, matching the column order.", VisibleWhen: fkOnly},
+		{Key: "on_delete", Label: "On delete", Type: plugin.FieldSelect, Options: mysqlForeignKeyActionOptions(), VisibleWhen: fkOnly},
+		{Key: "on_update", Label: "On update", Type: plugin.FieldSelect, Options: mysqlForeignKeyActionOptions(), VisibleWhen: fkOnly},
+		{Key: "expression", Label: "Check expression", Type: plugin.FieldText, Help: "Check only, e.g. price > 0.", VisibleWhen: checkOnly},
 	}}}}
+}
+
+func mysqlIndexTypeOptions() []plugin.Option {
+	return stringOptions([]string{"BTREE", "HASH"})
+}
+
+func mysqlForeignKeyActionOptions() []plugin.Option {
+	return stringOptions([]string{"RESTRICT", "CASCADE", "SET NULL", "NO ACTION"})
 }
 
 func userCreateSchema() *plugin.Schema {
@@ -672,6 +686,35 @@ ORDER BY tc.CONSTRAINT_NAME`, []any{database, table})
 	return pageRows(rc, rows)
 }
 
+func tableDDL(rc *plugin.RequestContext) (any, error) {
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	s, err := mysqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := queryRows(rc.Ctx, s, "SHOW CREATE TABLE "+qualified(database, table), nil)
+	if err != nil {
+		return nil, mysqlErr(err)
+	}
+	if len(rows) == 0 {
+		return nil, plugin.ErrNotFound
+	}
+	definition := ""
+	for key, value := range rows[0] {
+		if strings.EqualFold(key, "Create Table") || strings.EqualFold(key, "Create View") {
+			definition = fmt.Sprint(value)
+			break
+		}
+	}
+	if definition == "" {
+		return rows[0], nil
+	}
+	return row{"database": database, "name": table, "definition": definition}, nil
+}
+
 func viewDefinition(rc *plugin.RequestContext) (any, error) {
 	database, table, err := tableIdent(rc)
 	if err != nil {
@@ -1033,6 +1076,8 @@ type constraintAddRequest struct {
 	RefDatabase string `json:"ref_database"`
 	RefTable    string `json:"ref_table"`
 	RefColumns  string `json:"ref_columns"`
+	OnDelete    string `json:"on_delete"`
+	OnUpdate    string `json:"on_update"`
 	Expression  string `json:"expression"`
 }
 
@@ -1083,7 +1128,20 @@ func constraintAddClause(defaultDatabase string, req constraintAddRequest) (stri
 		if err != nil {
 			return "", err
 		}
-		return named + "FOREIGN KEY (" + strings.Join(cols, ", ") + ") REFERENCES " + qualified(refDatabaseSafe, refTable) + " (" + strings.Join(refCols, ", ") + ")", nil
+		clause := named + "FOREIGN KEY (" + strings.Join(cols, ", ") + ") REFERENCES " + qualified(refDatabaseSafe, refTable) + " (" + strings.Join(refCols, ", ") + ")"
+		if onDelete := strings.ToUpper(strings.TrimSpace(req.OnDelete)); onDelete != "" {
+			if !mysqlForeignKeyActionAllowed(onDelete) {
+				return "", fmt.Errorf("%w: unsupported ON DELETE action", plugin.ErrInvalidInput)
+			}
+			clause += " ON DELETE " + onDelete
+		}
+		if onUpdate := strings.ToUpper(strings.TrimSpace(req.OnUpdate)); onUpdate != "" {
+			if !mysqlForeignKeyActionAllowed(onUpdate) {
+				return "", fmt.Errorf("%w: unsupported ON UPDATE action", plugin.ErrInvalidInput)
+			}
+			clause += " ON UPDATE " + onUpdate
+		}
+		return clause, nil
 	case "CHECK":
 		expr := strings.TrimSpace(req.Expression)
 		if expr == "" || !sqldb.SafeDefault(expr) {
@@ -1092,6 +1150,15 @@ func constraintAddClause(defaultDatabase string, req constraintAddRequest) (stri
 		return named + "CHECK (" + expr + ")", nil
 	default:
 		return "", fmt.Errorf("%w: unsupported constraint type %q", plugin.ErrInvalidInput, req.Kind)
+	}
+}
+
+func mysqlForeignKeyActionAllowed(action string) bool {
+	switch action {
+	case "RESTRICT", "CASCADE", "SET NULL", "NO ACTION":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -1172,6 +1239,7 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 	var req struct {
 		Name    string `json:"name" validate:"required"`
 		Columns any    `json:"columns" validate:"required"`
+		Type    string `json:"type"`
 		Unique  bool   `json:"unique"`
 	}
 	if err := rc.Bind(&req); err != nil {
@@ -1190,6 +1258,12 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 		unique = "UNIQUE "
 	}
 	stmt := "CREATE " + unique + "INDEX " + quoteIdent(name) + " ON " + qualified(database, table) + " (" + strings.Join(cols, ", ") + ")"
+	if indexType := strings.ToUpper(strings.TrimSpace(req.Type)); indexType != "" {
+		if indexType != "BTREE" && indexType != "HASH" {
+			return nil, fmt.Errorf("%w: unsupported index type", plugin.ErrInvalidInput)
+		}
+		stmt += " USING " + indexType
+	}
 	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
 		return nil, mysqlErr(err)
 	}
