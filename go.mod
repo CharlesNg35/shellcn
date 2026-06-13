@@ -94,7 +94,7 @@ require (
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
 	github.com/casbin/govaluate v1.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/charlesng35/shellcn/sdk v0.1.8
+	github.com/charlesng35/shellcn/sdk v0.1.9
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/cloudwego/eino v0.9.2
 	github.com/cloudwego/eino-ext/components/model/claude v0.1.18
