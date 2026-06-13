@@ -39,6 +39,7 @@ const droppedId = ref<string | undefined>();
 const treeRenderKey = ref(0);
 const scrollEl = ref<HTMLElement | null>(null);
 const listScrolled = ref(false);
+const lastAutoScrolledTarget = ref<string | null>(null);
 
 const { start: startDropFade, stop: stopDropFade } = useTimeoutFn(
   () => {
@@ -111,6 +112,21 @@ watch(
     openFolderAncestors(conn.folderId);
   },
   { immediate: true },
+);
+
+watch(
+  () =>
+    [
+      props.activeId,
+      conns.loaded,
+      rootItems.value,
+      displayExpanded.value,
+      props.query,
+    ] as const,
+  () => {
+    void scrollActiveTargetIntoView();
+  },
+  { immediate: true, deep: true, flush: "post" },
 );
 
 function rebuildLists(): void {
@@ -193,6 +209,50 @@ function openFolderAncestors(folderId: string): void {
     current = current.parentId ? byID.get(current.parentId) : undefined;
   }
   expanded.value = next;
+}
+
+function activeScrollTarget(): { key: string; selector: string } | null {
+  const id = props.activeId;
+  if (!id || !conns.loaded) return null;
+  const conn = conns.byId(id);
+  if (!conn) return null;
+  if (
+    conn.folderId &&
+    conns.folders.some((folder) => folder.id === conn.folderId)
+  ) {
+    const folderId = cssAttr(conn.folderId);
+    return {
+      key: `folder:${conn.folderId}`,
+      selector: `[data-folder-row-id="${folderId}"]`,
+    };
+  }
+  return {
+    key: `connection:${conn.id}`,
+    selector: `[data-connection-id="${cssAttr(conn.id)}"]`,
+  };
+}
+
+async function scrollActiveTargetIntoView(): Promise<void> {
+  if (dragging.value) return;
+  const target = activeScrollTarget();
+  if (!target || target.key === lastAutoScrolledTarget.value) return;
+  await nextTick();
+  const scroller = scrollEl.value;
+  const el = scroller?.querySelector<HTMLElement>(target.selector);
+  if (!el || typeof el.scrollIntoView !== "function") return;
+  el.scrollIntoView({
+    block: "center",
+    inline: "nearest",
+    behavior: "auto",
+  });
+  lastAutoScrolledTarget.value = target.key;
+  updateScrollShadow();
+}
+
+function cssAttr(value: string): string {
+  return typeof CSS !== "undefined" && CSS.escape
+    ? CSS.escape(value)
+    : value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function openNewFolder(): void {
