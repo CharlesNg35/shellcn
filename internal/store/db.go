@@ -2,6 +2,9 @@ package store
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
@@ -57,7 +60,7 @@ func Open(cfg Config) (*Store, error) {
 		logLevel = logger.Info
 	}
 	db, err := gorm.Open(dialector, &gorm.Config{
-		Logger:                                   logger.Default.LogMode(logLevel),
+		Logger:                                   gormLogger(logLevel),
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
@@ -69,6 +72,19 @@ func Open(cfg Config) (*Store, error) {
 	}
 
 	return newGormStore(db), nil
+}
+
+func gormLogger(level logger.LogLevel) logger.Interface {
+	return gormLoggerWithWriter(log.New(os.Stdout, "\r\n", log.LstdFlags), level)
+}
+
+func gormLoggerWithWriter(w logger.Writer, level logger.LogLevel) logger.Interface {
+	return logger.New(w, logger.Config{
+		SlowThreshold:             200 * time.Millisecond,
+		LogLevel:                  level,
+		IgnoreRecordNotFoundError: true,
+		Colorful:                  true,
+	})
 }
 
 func dialector(cfg Config) (gorm.Dialector, error) {
