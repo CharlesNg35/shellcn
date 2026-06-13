@@ -31,6 +31,31 @@ func TestStreamKindHasContinuousClientReader(t *testing.T) {
 	}
 }
 
+func TestStreamKindKeepAlivePolicy(t *testing.T) {
+	tests := []struct {
+		name          string
+		kind          plugin.StreamKind
+		enabled       bool
+		controlReader bool
+	}{
+		{name: "terminal", kind: plugin.StreamTerminal, enabled: true},
+		{name: "desktop", kind: plugin.StreamDesktop, enabled: true},
+		{name: "canvas", kind: plugin.StreamCanvas, enabled: true},
+		{name: "logs", kind: plugin.StreamLogs, enabled: true, controlReader: true},
+		{name: "metrics", kind: plugin.StreamMetrics},
+		{name: "file", kind: plugin.StreamFile},
+		{name: "unknown", kind: plugin.StreamKind("query")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := streamKindKeepAlivePolicy(tt.kind)
+			if got.enabled != tt.enabled || got.controlReader != tt.controlReader {
+				t.Fatalf("streamKindKeepAlivePolicy(%q) = %+v, want enabled=%v controlReader=%v", tt.kind, got, tt.enabled, tt.controlReader)
+			}
+		})
+	}
+}
+
 func TestActiveConnTracksReadAndWriteActivity(t *testing.T) {
 	server, client := net.Pipe()
 	defer func() { _ = server.Close() }()
