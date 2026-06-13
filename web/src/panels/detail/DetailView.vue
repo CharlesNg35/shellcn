@@ -12,6 +12,7 @@ import type {
 } from "@/types/projection";
 import AppIcon from "@/components/AppIcon.vue";
 import PanelHost from "../core/PanelHost.vue";
+import { useActionSuccess } from "../core/actionSuccess";
 import { resolvedPanelConfig, resolvedPanelType } from "../core/variants";
 import ActionBar from "../shared/ActionBar.vue";
 import { badgeClassFor } from "../shared/severity";
@@ -90,11 +91,21 @@ const headerActions = computed(() =>
     .filter((a): a is Action => Boolean(a)),
 );
 
-function onActionDone(action: Action, result?: Record<string, unknown>): void {
-  const tabKey = action.onSuccess?.selectTab;
-  if (tabKey && visibleTabs.value.some((tab) => tab.key === tabKey)) {
-    activeTab.value = tabKey;
-  }
+const actionSuccess = useActionSuccess({
+  connectionId: () => props.connectionId,
+  tabs: visibleTabs,
+  resolvePanel: (tab) => resolvedPanelType(tab, props.row),
+  selectTab: (key) => {
+    activeTab.value = key;
+  },
+  context: () => ({ resource: resource.value }),
+});
+
+async function onActionDone(
+  action: Action,
+  result?: Record<string, unknown>,
+): Promise<void> {
+  await actionSuccess.run(action, result);
   emit("actionDone", action, result);
 }
 </script>

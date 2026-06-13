@@ -1,5 +1,5 @@
 import { nextTick, type ComputedRef } from "vue";
-import { channelKey } from "@/api/dataSource";
+import { channelKey, type ResolveContext } from "@/api/dataSource";
 import { useNotify } from "@/composables/useNotify";
 import { useStreamChannelsStore } from "@/stores/streamChannels";
 import {
@@ -11,23 +11,35 @@ import {
   type TerminalInputEffect,
 } from "@/types/projection";
 
-export interface ActionEffectRuntime {
+const StreamOpenWaitAttempts = 40;
+const StreamOpenWaitMs = 50;
+
+export interface ActionSuccessRuntime {
   connectionId: () => string;
   tabs: ComputedRef<TabDef[]>;
   resolvePanel: (tab: TabDef) => PanelType;
   selectTab: (key: string) => void;
+  context?: () => ResolveContext;
 }
 
-export function useActionEffects(runtime: ActionEffectRuntime) {
+export function useActionSuccess(runtime: ActionSuccessRuntime) {
   const notify = useNotify();
-  const streams = useStreamChannelsStore();
 
   async function run(
     action: Action,
     result?: Record<string, unknown>,
   ): Promise<void> {
+    selectSuccessTab(action);
+
     for (const effect of action.onSuccess?.effects ?? []) {
       await runEffect(action, effect, result);
+    }
+  }
+
+  function selectSuccessTab(action: Action): void {
+    const tabKey = action.onSuccess?.selectTab;
+    if (tabKey && runtime.tabs.value.some((tab) => tab.key === tabKey)) {
+      runtime.selectTab(tabKey);
     }
   }
 
@@ -71,23 +83,29 @@ export function useActionEffects(runtime: ActionEffectRuntime) {
       return;
     }
 
-    streams.send(key, text);
+    useStreamChannelsStore().send(key, text);
   }
 
   function terminalStreamKey(tab: TabDef): string | null {
     if (!tab.source) return null;
 
-    const base = channelKey(runtime.connectionId(), tab.source);
+    const base = channelKey(
+      runtime.connectionId(),
+      tab.source,
+      runtime.context?.() ?? {},
+    );
     if (runtime.resolvePanel(tab) !== PanelType.TerminalGrid) return base;
 
-    const suffix = streams.preferredTerminalTarget(base) ?? "pane-1";
+    const suffix =
+      useStreamChannelsStore().preferredTerminalTarget(base) ?? "pane-1";
     return `${base}:${suffix}`;
   }
 
   async function waitForOpenStreamKey(key: string): Promise<boolean> {
-    for (let i = 0; i < 40; i += 1) {
+    const streams = useStreamChannelsStore();
+    for (let i = 0; i < StreamOpenWaitAttempts; i += 1) {
       if (streams.status(key) === "open") return true;
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, StreamOpenWaitMs));
     }
     return streams.status(key) === "open";
   }

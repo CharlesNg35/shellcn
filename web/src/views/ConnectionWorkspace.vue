@@ -33,7 +33,7 @@ import ShareDialog from "../components/ShareDialog.vue";
 import AiChatLauncher from "../components/AiChatLauncher.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { recordingForStream } from "../composables/useRecordingControl";
-import { useActionEffects } from "../panels/core/actionEffects";
+import { useActionSuccess } from "../panels/core/actionSuccess";
 import { providePanelConfigSchemas } from "../panels/core/config";
 import { providePanelRecordingResolver } from "../panels/core/recording";
 import {
@@ -202,7 +202,7 @@ function tabPanel(tab: TabDef) {
   return resolvedPanelType(tab, connectionConfig.value);
 }
 
-const actionEffects = useActionEffects({
+const actionSuccess = useActionSuccess({
   connectionId: () => props.id,
   tabs: visibleTabs,
   resolvePanel: tabPanel,
@@ -232,11 +232,7 @@ async function onActionDone(
   action: Action,
   result?: Record<string, unknown>,
 ): Promise<void> {
-  const tabKey = action.onSuccess?.selectTab;
-  if (tabKey && visibleTabs.value.some((tab) => tab.key === tabKey)) {
-    ws.setActiveTab(props.id, tabKey);
-  }
-  await actionEffects.run(action, result);
+  await actionSuccess.run(action, result);
 }
 </script>
 
