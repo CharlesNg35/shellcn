@@ -1076,7 +1076,7 @@ ingestion, and the frontend runtime guard all consume that schema so Go and
 TypeScript do not drift. The frontend renders a panel error instead of mounting
 a panel with malformed config.
 
-`sdk/plugin/pluginux` applies renderer UX rules to manifests: destructive and
+`sdk/pluginux` applies renderer UX rules to manifests: destructive and
 privileged actions must confirm; `OpenDock` is reserved for long-lived
 interactive panels; stream route kind must match the panel type; closed-value
 fields use select/radio, suggested custom values use autocomplete; tables
