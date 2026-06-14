@@ -21,10 +21,10 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	if len(m.SupportedTransports) != 1 || m.SupportedTransports[0] != plugin.TransportDirect {
 		t.Fatalf("unexpected transports: %+v", m.SupportedTransports)
 	}
-	if !plugintest.CredentialKindSupported(m.Config, plugin.CredentialDBPassword) {
+	if !plugintest.CredentialKindSupported(m.Config, plugin.CredentialKindDBPassword) {
 		t.Fatal("database password credential should support PostgreSQL")
 	}
-	if !plugintest.CredentialKindSupported(m.Config, plugin.CredentialTLSClientCert) {
+	if !plugintest.CredentialKindSupported(m.Config, plugin.CredentialKindTLSClientCert) {
 		t.Fatal("TLS client certificate credential should support PostgreSQL")
 	}
 }
@@ -52,7 +52,7 @@ func TestParseOptionsUsesTLSCredentialAsClientCertificate(t *testing.T) {
 		"auth":     authClientCert,
 	}, Credentials: plugin.NewResolvedCredentials(plugin.CredentialBinding{
 		Field: authCertField,
-		Credential: plugin.ResolvedCredential{Kind: plugin.CredentialTLSClientCert, Values: map[string]string{
+		Credential: plugin.ResolvedCredential{Kind: plugin.CredentialKindTLSClientCert, Values: map[string]string{
 			"subject":     "cert-user",
 			"certificate": "cert-pem",
 			"private_key": "key-pem",

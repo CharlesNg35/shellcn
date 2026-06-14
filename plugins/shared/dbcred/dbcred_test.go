@@ -8,8 +8,8 @@ import (
 
 func TestApplyPasswordCredentialIgnoresCredentialKindRouting(t *testing.T) {
 	got := ApplyPasswordCredential(plugin.ConnectConfig{Credentials: plugin.NewResolvedCredentials(plugin.CredentialBinding{
-		Field: plugin.CredentialIDField,
-		Credential: plugin.ResolvedCredential{Kind: plugin.CredentialTLSClientCert, Values: map[string]string{
+		Field: plugin.CredentialRefField,
+		Credential: plugin.ResolvedCredential{Kind: plugin.CredentialKindTLSClientCert, Values: map[string]string{
 			"username": "default",
 			"password": "redis-password",
 		}},
@@ -22,7 +22,7 @@ func TestApplyPasswordCredentialIgnoresCredentialKindRouting(t *testing.T) {
 func TestApplyClientCertificateCredentialUsesFieldSpecificSecret(t *testing.T) {
 	got := ApplyClientCertificateCredential(plugin.ConnectConfig{Credentials: plugin.NewResolvedCredentials(plugin.CredentialBinding{
 		Field: "auth_client_cert_id",
-		Credential: plugin.ResolvedCredential{Kind: plugin.CredentialTLSClientCert, Values: map[string]string{
+		Credential: plugin.ResolvedCredential{Kind: plugin.CredentialKindTLSClientCert, Values: map[string]string{
 			"subject":     "cert-user",
 			"certificate": "cert-pem",
 			"private_key": "key-pem",

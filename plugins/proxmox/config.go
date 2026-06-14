@@ -100,8 +100,8 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 		opts.Password = cfg.String("password")
 	case "credential":
 		opts.Method = authToken
-		opts.TokenID = cfg.CredentialValueFor(plugin.CredentialIDField, "token_id")
-		opts.TokenSecret = cfg.CredentialValueFor(plugin.CredentialIDField, "token_secret")
+		opts.TokenID = cfg.CredentialValueFor(plugin.CredentialRefField, "token_id")
+		opts.TokenSecret = cfg.CredentialValueFor(plugin.CredentialRefField, "token_secret")
 	default:
 		return connectOptions{}, fmt.Errorf("%w: unsupported authentication method", plugin.ErrInvalidInput)
 	}

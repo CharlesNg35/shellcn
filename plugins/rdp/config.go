@@ -114,10 +114,10 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 		Height:   h,
 	}
 	if auth == "credential" {
-		if secret := cfg.CredentialValueFor(plugin.CredentialIDField, "password"); secret != "" {
+		if secret := cfg.CredentialValueFor(plugin.CredentialRefField, "password"); secret != "" {
 			opts.Password = secret
 		}
-		if identity := cfg.CredentialValueFor(plugin.CredentialIDField, "username"); identity != "" {
+		if identity := cfg.CredentialValueFor(plugin.CredentialRefField, "username"); identity != "" {
 			opts.User = identity
 		}
 	}

@@ -81,7 +81,7 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	if strings.ContainsAny(opts.Host, " \t\r\n/") {
 		return connectOptions{}, fmt.Errorf("%w: host must be a host name or IP address, not a URL", plugin.ErrInvalidInput)
 	}
-	if secret := cfg.CredentialValueFor(plugin.CredentialIDField, "password"); secret != "" && auth == "credential" {
+	if secret := cfg.CredentialValueFor(plugin.CredentialRefField, "password"); secret != "" && auth == "credential" {
 		opts.Password = secret
 	}
 	if auth == "none" {

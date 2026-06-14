@@ -75,7 +75,7 @@ func TestParseConnectOptions(t *testing.T) {
 			cfg := plugin.ConnectConfig{Config: tc.cfg}
 			if tc.name == "credential" {
 				cfg.Credentials = plugin.NewResolvedCredentials(plugin.CredentialBinding{
-					Field: plugin.CredentialIDField,
+					Field: plugin.CredentialRefField,
 					Credential: plugin.ResolvedCredential{Kind: CredentialProxmoxToken, Values: map[string]string{
 						"token_id":     "root@pam!stored",
 						"token_secret": "secret",

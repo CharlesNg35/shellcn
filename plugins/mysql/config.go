@@ -65,7 +65,7 @@ func configSchema() plugin.Schema {
 			}},
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "root", VisibleWhen: &passwordAuth},
 			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
-				Kind: plugin.CredentialDBPassword, Protocols: []string{protocolName},
+				Kind: plugin.CredentialKindDBPassword, Protocols: []string{protocolName},
 			}, VisibleWhen: &credentialAuth, Help: "Reusable database password. The stored username can also supply the username."},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &passwordAuth},
 		}},
@@ -78,7 +78,7 @@ func configSchema() plugin.Schema {
 			}},
 			{Key: "ca_certificate", Label: "CA certificate", Type: plugin.FieldTextarea, Secret: true, VisibleWhen: &verifyTLS, Help: "PEM CA bundle used for verify-ca and verify-full."},
 			{Key: clientCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kind: plugin.CredentialTLSClientCert, Protocols: []string{protocolName},
+				Kind: plugin.CredentialKindTLSClientCert, Protocols: []string{protocolName},
 			}, VisibleWhen: &tlsEnabled, Help: "Optional stored client certificate and private key."},
 		}},
 		{Name: "Safety", Fields: []plugin.Field{

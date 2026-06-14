@@ -156,14 +156,14 @@ func TestBuiltInCredentialKindsCanBeUsedByMultiplePlugins(t *testing.T) {
 	reg := New()
 	for _, protocol := range []string{"ssh", "sftp"} {
 		m, routes := protocolCredentialManifest(protocol, []plugin.CredentialKind{
-			plugin.CredentialSSHPrivateKey,
-			plugin.CredentialSSHPassword,
+			plugin.CredentialKindSSHPrivateKey,
+			plugin.CredentialKindSSHPassword,
 		})
 		if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
 			t.Fatalf("register %s: %v", protocol, err)
 		}
 	}
-	for _, kind := range []plugin.CredentialKind{plugin.CredentialSSHPrivateKey, plugin.CredentialSSHPassword} {
+	for _, kind := range []plugin.CredentialKind{plugin.CredentialKindSSHPrivateKey, plugin.CredentialKindSSHPassword} {
 		info, ok := reg.CredentialKindLookup(kind)
 		if !ok {
 			t.Fatalf("credential kind %q was not registered", kind)
@@ -177,7 +177,7 @@ func TestBuiltInCredentialKindsCanBeUsedByMultiplePlugins(t *testing.T) {
 func TestUnregisterRecomputesCredentialCatalog(t *testing.T) {
 	reg := New()
 	for _, protocol := range []string{"ssh", "sftp"} {
-		m, routes := protocolCredentialManifest(protocol, []plugin.CredentialKind{plugin.CredentialSSHPassword})
+		m, routes := protocolCredentialManifest(protocol, []plugin.CredentialKind{plugin.CredentialKindSSHPassword})
 		if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
 			t.Fatalf("register %s: %v", protocol, err)
 		}
@@ -190,10 +190,10 @@ func TestUnregisterRecomputesCredentialCatalog(t *testing.T) {
 	if err := reg.Unregister("sftp"); err != nil {
 		t.Fatalf("unregister sftp: %v", err)
 	}
-	if reg.CredentialKindSupportsProtocol(plugin.CredentialSSHPassword, "sftp") {
+	if reg.CredentialKindSupportsProtocol(plugin.CredentialKindSSHPassword, "sftp") {
 		t.Fatal("ssh password should no longer support sftp after unregister")
 	}
-	if !reg.CredentialKindSupportsProtocol(plugin.CredentialSSHPassword, "ssh") {
+	if !reg.CredentialKindSupportsProtocol(plugin.CredentialKindSSHPassword, "ssh") {
 		t.Fatal("ssh password should still support ssh")
 	}
 

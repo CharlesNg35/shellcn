@@ -301,12 +301,12 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"credential kind duplicates existing catalog", "duplicate credential kind", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
 			m.CredentialKinds = []plugin.CredentialKindInfo{{
-				Kind: plugin.CredentialDBPassword, Label: "Database password",
+				Kind: plugin.CredentialKindDBPassword, Label: "Database password",
 				Fields: []plugin.Field{plugin.CredentialSecretField(plugin.Field{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true})},
 			}}
 			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
 				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialDBPassword},
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialKindDBPassword},
 			})
 		}},
 		{"credential kind protocol list is derived", "must not declare CompatibleProtocols", func(m *plugin.Manifest, _ *[]plugin.Route) {

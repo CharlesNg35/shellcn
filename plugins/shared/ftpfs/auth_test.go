@@ -38,8 +38,8 @@ func TestNormalizeOptionsValidatesAuthFields(t *testing.T) {
 		cfg := plugin.ConnectConfig{Config: map[string]any{
 			"host": "ftp.example.com", "auth": "credential",
 		}, Credentials: plugin.NewResolvedCredentials(plugin.CredentialBinding{
-			Field:      plugin.CredentialIDField,
-			Credential: plugin.ResolvedCredential{Kind: plugin.CredentialBasicAuth, Values: map[string]string{"username": "alice", "password": "pw"}},
+			Field:      plugin.CredentialRefField,
+			Credential: plugin.ResolvedCredential{Kind: plugin.CredentialKindBasicAuth, Values: map[string]string{"username": "alice", "password": "pw"}},
 		})}
 		var opts Options
 		if err := normalizeOptions(cfg, &opts); err != nil {

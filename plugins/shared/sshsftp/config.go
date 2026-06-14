@@ -117,7 +117,7 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	}
 	switch opts.Auth {
 	case "stored_password":
-		cred, err := cfg.RequiredCredentialFor(CredentialPasswordField, CredentialSSHPassword)
+		cred, err := cfg.RequiredCredentialFor(CredentialPasswordField, CredentialKindSSHPassword)
 		if err != nil {
 			return connectOptions{}, err
 		}
@@ -131,7 +131,7 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 			return connectOptions{}, err
 		}
 	case "stored_private_key":
-		cred, err := cfg.RequiredCredentialFor(CredentialPrivateKeyField, CredentialSSHPrivateKey)
+		cred, err := cfg.RequiredCredentialFor(CredentialPrivateKeyField, CredentialKindSSHPrivateKey)
 		if err != nil {
 			return connectOptions{}, err
 		}

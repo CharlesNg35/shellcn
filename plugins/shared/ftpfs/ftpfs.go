@@ -173,10 +173,10 @@ func normalizeOptions(cfg plugin.ConnectConfig, opts *Options) error {
 	switch opts.Auth {
 	case "password":
 	case "credential":
-		if identity := cfg.CredentialValueFor(plugin.CredentialIDField, "username"); identity != "" {
+		if identity := cfg.CredentialValueFor(plugin.CredentialRefField, "username"); identity != "" {
 			opts.Username = identity
 		}
-		if secret := cfg.CredentialValueFor(plugin.CredentialIDField, "password"); secret != "" {
+		if secret := cfg.CredentialValueFor(plugin.CredentialRefField, "password"); secret != "" {
 			opts.Password = secret
 		}
 	case "anonymous":

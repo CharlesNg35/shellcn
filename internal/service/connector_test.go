@@ -30,7 +30,7 @@ func (credentialRefPlugin) Manifest() plugin.Manifest {
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Auth", Fields: []plugin.Field{
 			{
 				Key: "api_credential", Label: "API Credential", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialAPIToken},
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialKindAPIToken},
 			},
 		}}}},
 		Tabs: []plugin.Panel{{Key: "main", Label: "Main", Type: plugin.PanelTable}},
@@ -83,7 +83,7 @@ func TestConnectorResolvesCredentialRefFieldsFromSchema(t *testing.T) {
 	if values["token"] != "secret-token" || values["subject"] != "svc-api" {
 		t.Fatalf("resolved credential values = %+v", values)
 	}
-	if got := credValues.Kind; got != plugin.CredentialAPIToken {
+	if got := credValues.Kind; got != plugin.CredentialKindAPIToken {
 		t.Fatalf("resolved credential kind = %#v, want api_token", got)
 	}
 	if got := cfg.Config["api_credential"]; got != cred.ID {

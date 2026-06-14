@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	// CredentialIDField is the conventional config key for a credential_ref field.
-	CredentialIDField = "credential_id"
+	// CredentialRefField is the conventional config key for a credential_ref field.
+	CredentialRefField = "credential_id"
 )
 
 // ResolvedCredential is decrypted credential material resolved by the core for

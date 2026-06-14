@@ -4,24 +4,24 @@ import "testing"
 
 func TestConnectConfigCredentialHelpersUseResolvedCredentials(t *testing.T) {
 	cfg := ConnectConfig{Credentials: NewResolvedCredentials(
-		CredentialBinding{Field: CredentialIDField, Credential: ResolvedCredential{
+		CredentialBinding{Field: CredentialRefField, Credential: ResolvedCredential{
 			ID:     "cred-default",
-			Kind:   CredentialAPIToken,
+			Kind:   CredentialKindAPIToken,
 			Values: map[string]string{"token": "secret", "subject": "identity"},
 		}},
 		CredentialBinding{Field: "api_credential", Credential: ResolvedCredential{
 			ID:     "cred-field",
-			Kind:   CredentialBearerToken,
+			Kind:   CredentialKindBearerToken,
 			Values: map[string]string{"token": "field-secret", "subject": "field-identity"},
 		}},
 	)}
-	if got := cfg.CredentialValueFor(CredentialIDField, "token"); got != "secret" {
+	if got := cfg.CredentialValueFor(CredentialRefField, "token"); got != "secret" {
 		t.Fatalf("default credential token = %q", got)
 	}
-	if got := cfg.CredentialValueFor(CredentialIDField, "subject"); got != "identity" {
+	if got := cfg.CredentialValueFor(CredentialRefField, "subject"); got != "identity" {
 		t.Fatalf("default credential subject = %q", got)
 	}
-	if got := cfg.CredentialKindFor(CredentialIDField); got != CredentialAPIToken {
+	if got := cfg.CredentialKindFor(CredentialRefField); got != CredentialKindAPIToken {
 		t.Fatalf("default credential kind = %q", got)
 	}
 	if got := cfg.CredentialValueFor("api_credential", "token"); got != "field-secret" {
@@ -30,11 +30,11 @@ func TestConnectConfigCredentialHelpersUseResolvedCredentials(t *testing.T) {
 	if got := cfg.CredentialValueFor("api_credential", "subject"); got != "field-identity" {
 		t.Fatalf("field credential subject = %q", got)
 	}
-	if got := cfg.CredentialKindFor("api_credential"); got != CredentialBearerToken {
+	if got := cfg.CredentialKindFor("api_credential"); got != CredentialKindBearerToken {
 		t.Fatalf("field credential kind = %q", got)
 	}
 
-	cred, err := cfg.RequiredCredentialFor("api_credential", CredentialBearerToken)
+	cred, err := cfg.RequiredCredentialFor("api_credential", CredentialKindBearerToken)
 	if err != nil {
 		t.Fatalf("required credential: %v", err)
 	}

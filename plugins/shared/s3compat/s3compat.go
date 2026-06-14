@@ -139,13 +139,13 @@ func normalizeOptions(cfg plugin.ConnectConfig, opts *Options) error {
 	switch auth {
 	case "access_key":
 	case "credential":
-		if identity := cfg.CredentialValueFor(plugin.CredentialIDField, "access_key_id"); identity != "" {
+		if identity := cfg.CredentialValueFor(plugin.CredentialRefField, "access_key_id"); identity != "" {
 			opts.AccessKeyID = identity
 		}
-		if secret := cfg.CredentialValueFor(plugin.CredentialIDField, "secret_access_key"); secret != "" {
+		if secret := cfg.CredentialValueFor(plugin.CredentialRefField, "secret_access_key"); secret != "" {
 			opts.SecretKey = secret
 		}
-		if token := cfg.CredentialValueFor(plugin.CredentialIDField, "session_token"); token != "" {
+		if token := cfg.CredentialValueFor(plugin.CredentialRefField, "session_token"); token != "" {
 			opts.SessionToken = token
 		}
 	default:
@@ -173,7 +173,7 @@ func AuthFields(protocol string) []plugin.Field {
 		{Key: "secret_access_key", Label: "Secret access key", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "access_key"}}}},
 		{Key: "session_token", Label: "Session token", Type: plugin.FieldPassword, Secret: true, VisibleWhen: staticCredentials},
 		{Key: "credential_id", Label: "Access key credential", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
-			Kind: plugin.CredentialCloudAccessKey, Protocols: []string{protocol},
+			Kind: plugin.CredentialKindCloudAccessKey, Protocols: []string{protocol},
 		}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 	}
 }

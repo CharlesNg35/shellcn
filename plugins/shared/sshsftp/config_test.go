@@ -144,7 +144,7 @@ func TestCredentialIdentityOverridesConnectionUser(t *testing.T) {
 		"auth": "stored_password",
 	}, Credentials: plugin.NewResolvedCredentials(plugin.CredentialBinding{
 		Field: CredentialPasswordField,
-		Credential: plugin.ResolvedCredential{Kind: CredentialSSHPassword, Values: map[string]string{
+		Credential: plugin.ResolvedCredential{Kind: CredentialKindSSHPassword, Values: map[string]string{
 			"username": "ubuntu",
 			"password": "pw",
 		}},

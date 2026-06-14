@@ -59,10 +59,10 @@ func configSchema() plugin.Schema {
 				{Label: "Stored SSH private key", Value: "stored_private_key"},
 			}},
 			{Key: sshsftp.CredentialPasswordField, Label: "Stored SSH password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
-				Kind: sshsftp.CredentialSSHPassword, Protocols: []string{"sftp"},
+				Kind: sshsftp.CredentialKindSSHPassword, Protocols: []string{"sftp"},
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "stored_password"}}}},
 			{Key: sshsftp.CredentialPrivateKeyField, Label: "Stored SSH private key", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
-				Kind: sshsftp.CredentialSSHPrivateKey, Protocols: []string{"sftp"},
+				Kind: sshsftp.CredentialKindSSHPrivateKey, Protocols: []string{"sftp"},
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "stored_private_key"}}}},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 			{Key: "private_key", Label: "Private key", Type: plugin.FieldTextarea, Required: true, Secret: true, Help: "PEM-encoded private key.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "private_key"}}}},

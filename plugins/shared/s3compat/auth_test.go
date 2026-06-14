@@ -40,8 +40,8 @@ func TestNormalizeOptionsValidatesAuthFields(t *testing.T) {
 		err := normalizeOptions(plugin.ConnectConfig{Config: map[string]any{
 			"bucket": "b", "auth": "credential",
 		}, Credentials: plugin.NewResolvedCredentials(plugin.CredentialBinding{
-			Field:      plugin.CredentialIDField,
-			Credential: plugin.ResolvedCredential{Kind: plugin.CredentialCloudAccessKey, Values: map[string]string{"access_key_id": "ak", "secret_access_key": "sk"}},
+			Field:      plugin.CredentialRefField,
+			Credential: plugin.ResolvedCredential{Kind: plugin.CredentialKindCloudAccessKey, Values: map[string]string{"access_key_id": "ak", "secret_access_key": "sk"}},
 		})}, &opts)
 		if err != nil {
 			t.Fatalf("stored access key should validate: %v", err)

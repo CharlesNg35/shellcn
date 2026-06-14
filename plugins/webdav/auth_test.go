@@ -35,8 +35,8 @@ func TestParseOptionsValidatesAuthFields(t *testing.T) {
 		opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{
 			"url": "https://dav.example.com/", "auth": "credential",
 		}, Credentials: plugin.NewResolvedCredentials(plugin.CredentialBinding{
-			Field:      plugin.CredentialIDField,
-			Credential: plugin.ResolvedCredential{Kind: plugin.CredentialBasicAuth, Values: map[string]string{"username": "alice", "password": "pw"}},
+			Field:      plugin.CredentialRefField,
+			Credential: plugin.ResolvedCredential{Kind: plugin.CredentialKindBasicAuth, Values: map[string]string{"username": "alice", "password": "pw"}},
 		})})
 		if err != nil {
 			t.Fatalf("credential auth should validate: %v", err)

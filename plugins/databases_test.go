@@ -13,7 +13,7 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s should expose credential_id", name)
 		}
-		if field.Credential.Kind != plugin.CredentialDBPassword {
+		if field.Credential.Kind != plugin.CredentialKindDBPassword {
 			t.Fatalf("%s auth credential selector should support database password: %+v", name, field.Credential.Kind)
 		}
 	}
@@ -24,7 +24,7 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s should expose auth_client_cert_id for certificate authentication", name)
 		}
-		if field.Credential.Kind != plugin.CredentialTLSClientCert {
+		if field.Credential.Kind != plugin.CredentialKindTLSClientCert {
 			t.Fatalf("%s certificate auth selector should only advertise TLS client certificates: %+v", name, field.Credential.Kind)
 		}
 	}
@@ -42,7 +42,7 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s should expose client_cert_id in TLS settings", name)
 		}
-		if tlsField.Credential.Kind != plugin.CredentialTLSClientCert {
+		if tlsField.Credential.Kind != plugin.CredentialKindTLSClientCert {
 			t.Fatalf("%s TLS client certificate field should support TLS client certificates: %+v", name, tlsField.Credential.Kind)
 		}
 	}

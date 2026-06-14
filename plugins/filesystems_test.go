@@ -80,12 +80,12 @@ func TestPasswordAndStoredCredentialAreMutuallyExclusiveByDefault(t *testing.T) 
 
 func TestSharedBasicAuthCredentialCompatibility(t *testing.T) {
 	for _, name := range []string{"ftp", "ftps", "webdav", "smb"} {
-		if !plugintest.CredentialKindSupported(testManifest(t, name).Config, plugin.CredentialBasicAuth) {
+		if !plugintest.CredentialKindSupported(testManifest(t, name).Config, plugin.CredentialKindBasicAuth) {
 			t.Fatalf("basic auth credential should support %s", name)
 		}
 	}
 	for _, name := range []string{"s3"} {
-		if !plugintest.CredentialKindSupported(testManifest(t, name).Config, plugin.CredentialCloudAccessKey) {
+		if !plugintest.CredentialKindSupported(testManifest(t, name).Config, plugin.CredentialKindCloudAccessKey) {
 			t.Fatalf("cloud access key credential should support %s", name)
 		}
 	}
