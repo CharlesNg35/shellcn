@@ -92,8 +92,11 @@ func (h *Handle) OpenChannel(ctx context.Context, req plugin.ChannelRequest) (pl
 	}), nil
 }
 
+// Close closes this managed session through the registry so bookkeeping, leases,
+// and status are updated consistently.
 func (h *Handle) Close() error {
-	return h.Session().Close()
+	h.m.Close(h.e.key)
+	return nil
 }
 
 // trackedChannel decrements the session's channel counter once, on Close.

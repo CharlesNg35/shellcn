@@ -519,7 +519,7 @@ func TestConnectionProxyLazilyAcquiresSession(t *testing.T) {
 		t.Fatalf("proxy body = %q, want %q", got, want)
 	}
 
-	snap, ok := h.pluginSessions.Status(session.Key{ConnectionID: "c-op", OwnerScope: "op"})
+	snap, ok := h.pluginSessions.Status(session.Key{ConnectionID: "c-op", ActorScope: "op"})
 	if !ok {
 		t.Fatal("proxy request should create a live session")
 	}

@@ -349,6 +349,19 @@ func TestConnectionSessionKeepaliveHonorsAccess(t *testing.T) {
 	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/session", "viewer", nil); resp.Status != http.StatusOK {
 		t.Fatalf("viewer with grant: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
+
+	if err := h.store.Users.Create(context.Background(), &models.User{ID: "norole", Username: "norole"}, ""); err != nil {
+		t.Fatalf("create no-role user: %v", err)
+	}
+	h.sessions["norole"] = h.sessionMgr.Create("norole")
+	if err := h.store.Grants.Create(context.Background(), &models.Grant{
+		ID: "g-use-session-c-op-norole", ConnectionID: "c-op", SubjectID: "norole", Access: models.AccessUse,
+	}); err != nil {
+		t.Fatalf("create no-role grant: %v", err)
+	}
+	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/session", "norole", nil); resp.Status != http.StatusForbidden {
+		t.Fatalf("no-role grantee: want 403, got %d (%s)", resp.Status, resp.Body)
+	}
 }
 
 func TestDisconnectConnectionSessionHonorsConnectionAccess(t *testing.T) {

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mount, flushPromises } from "@vue/test-utils";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import { useAuthStore } from "../stores/auth";
 import { Role } from "../constants/roles";
@@ -30,13 +30,28 @@ const target: AdminUser = {
   protected: false,
 };
 
+let wrapper: VueWrapper | undefined;
+
 beforeEach(() => {
+  vi.useFakeTimers();
   setActivePinia(createPinia());
   const auth = useAuthStore();
   auth.user = { id: "admin", username: "admin", roles: [Role.Admin] };
   getUser.mockResolvedValue(target);
   deactivate.mockResolvedValue({ ...target, disabled: true });
 });
+
+afterEach(() => {
+  wrapper?.unmount();
+  wrapper = undefined;
+  vi.clearAllTimers();
+  vi.useRealTimers();
+});
+
+function mountView(id: string) {
+  wrapper = mount(UserDetailView, { props: { id } });
+  return wrapper;
+}
 
 function deactivateButton(w: ReturnType<typeof mount>) {
   return w
@@ -46,7 +61,7 @@ function deactivateButton(w: ReturnType<typeof mount>) {
 
 describe("UserDetailView", () => {
   it("shows the user's overview and deactivates a manageable account", async () => {
-    const w = mount(UserDetailView, { props: { id: "u1" } });
+    const w = mountView("u1");
     await flushPromises();
 
     expect(getUser).toHaveBeenCalledWith("u1");
@@ -66,14 +81,14 @@ describe("UserDetailView", () => {
       roles: [Role.Admin],
       protected: true,
     });
-    const w = mount(UserDetailView, { props: { id: "u1" } });
+    const w = mountView("u1");
     await flushPromises();
     expect(deactivateButton(w)).toBeUndefined();
   });
 
   it("never offers self-deactivation", async () => {
     getUser.mockResolvedValue({ ...target, id: "admin" });
-    const w = mount(UserDetailView, { props: { id: "admin" } });
+    const w = mountView("admin");
     await flushPromises();
     expect(deactivateButton(w)).toBeUndefined();
   });
