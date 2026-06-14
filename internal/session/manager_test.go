@@ -86,7 +86,7 @@ func TestAcquireLazyConnectAndReuse(t *testing.T) {
 
 	var hits int32
 	fs := &fakeSession{}
-	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	key := session.Key{ConnectionID: "c1", ActorScope: "u1"}
 
 	h1, err := m.Acquire(context.Background(), key, "u1", connector(fs, &hits))
 	if err != nil {
@@ -118,7 +118,7 @@ func TestAcquireLazyConnectAndReuse(t *testing.T) {
 func TestConnectErrorNotCached(t *testing.T) {
 	m := session.New(session.Options{})
 	defer m.Shutdown()
-	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	key := session.Key{ConnectionID: "c1", ActorScope: "u1"}
 
 	boom := errors.New("dial failed")
 	_, err := m.Acquire(context.Background(), key, "u1", func(context.Context) (plugin.Session, error) {
@@ -149,7 +149,7 @@ func TestConnectErrorNotCached(t *testing.T) {
 func TestInitialHealthCheckFailureNotCached(t *testing.T) {
 	m := session.New(session.Options{})
 	defer m.Shutdown()
-	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	key := session.Key{ConnectionID: "c1", ActorScope: "u1"}
 	fs := &fakeSession{healthErr: errors.New("unhealthy")}
 
 	_, err := m.Acquire(context.Background(), key, "u1", connector(fs, nil))
@@ -171,7 +171,7 @@ func TestInitialHealthCheckFailureNotCached(t *testing.T) {
 func TestConcurrentAcquireCreatesOneSession(t *testing.T) {
 	m := session.New(session.Options{})
 	defer m.Shutdown()
-	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	key := session.Key{ConnectionID: "c1", ActorScope: "u1"}
 	fs := &fakeSession{}
 
 	var hits int32
@@ -219,7 +219,7 @@ func TestConcurrentAcquireCreatesOneSession(t *testing.T) {
 func TestChannelTrackingAndLimit(t *testing.T) {
 	m := session.New(session.Options{MaxChannelsPerSession: 2})
 	defer m.Shutdown()
-	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	key := session.Key{ConnectionID: "c1", ActorScope: "u1"}
 	h, _ := m.Acquire(context.Background(), key, "u1", connector(&fakeSession{}, nil))
 
 	c1, err := h.OpenChannel(context.Background(), plugin.ChannelRequest{Kind: plugin.StreamTerminal})
@@ -252,7 +252,7 @@ func TestChannelTrackingAndLimit(t *testing.T) {
 func TestTrackedChannelPreservesOptionalCapabilities(t *testing.T) {
 	m := session.New(session.Options{})
 	defer m.Shutdown()
-	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	key := session.Key{ConnectionID: "c1", ActorScope: "u1"}
 	h, _ := m.Acquire(context.Background(), key, "u1", connector(&fakeSession{}, nil))
 
 	ch, err := h.OpenChannel(context.Background(), plugin.ChannelRequest{Kind: plugin.StreamTerminal})
@@ -270,7 +270,7 @@ func TestTrackedChannelPreservesOptionalCapabilities(t *testing.T) {
 func TestTrackedChannelDoesNotInventOptionalCapabilities(t *testing.T) {
 	m := session.New(session.Options{})
 	defer m.Shutdown()
-	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	key := session.Key{ConnectionID: "c1", ActorScope: "u1"}
 	h, _ := m.Acquire(context.Background(), key, "u1", connector(&fakeSession{channel: &basicChannel{}}, nil))
 
 	ch, err := h.OpenChannel(context.Background(), plugin.ChannelRequest{})
@@ -289,7 +289,7 @@ func TestActiveStreamPreventsIdleReclaim(t *testing.T) {
 	m := session.New(session.Options{IdleTimeout: 10 * time.Millisecond, HealthInterval: 5 * time.Millisecond})
 	defer m.Shutdown()
 	fs := &fakeSession{}
-	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	key := session.Key{ConnectionID: "c1", ActorScope: "u1"}
 	h, err := m.Acquire(context.Background(), key, "u1", connector(fs, nil))
 	if err != nil {
 		t.Fatalf("acquire: %v", err)
@@ -322,11 +322,11 @@ func TestActiveStreamPreventsIdleReclaim(t *testing.T) {
 func TestPerUserSessionLimit(t *testing.T) {
 	m := session.New(session.Options{MaxSessionsPerUser: 1})
 	defer m.Shutdown()
-	_, err := m.Acquire(context.Background(), session.Key{ConnectionID: "a", OwnerScope: "u1"}, "u1", connector(&fakeSession{}, nil))
+	_, err := m.Acquire(context.Background(), session.Key{ConnectionID: "a", ActorScope: "u1"}, "u1", connector(&fakeSession{}, nil))
 	if err != nil {
 		t.Fatalf("first session: %v", err)
 	}
-	_, err = m.Acquire(context.Background(), session.Key{ConnectionID: "b", OwnerScope: "u1"}, "u1", connector(&fakeSession{}, nil))
+	_, err = m.Acquire(context.Background(), session.Key{ConnectionID: "b", ActorScope: "u1"}, "u1", connector(&fakeSession{}, nil))
 	if !errors.Is(err, session.ErrSessionLimit) {
 		t.Errorf("want ErrSessionLimit, got %v", err)
 	}
@@ -336,7 +336,7 @@ func TestIdleReclaim(t *testing.T) {
 	m := session.New(session.Options{IdleTimeout: 10 * time.Millisecond, HealthInterval: 5 * time.Millisecond})
 	defer m.Shutdown()
 	fs := &fakeSession{}
-	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	key := session.Key{ConnectionID: "c1", ActorScope: "u1"}
 	if _, err := m.Acquire(context.Background(), key, "u1", connector(fs, nil)); err != nil {
 		t.Fatalf("acquire: %v", err)
 	}
@@ -358,7 +358,7 @@ func TestHealthCheckClosesDeadUpstream(t *testing.T) {
 	m := session.New(session.Options{HealthInterval: 5 * time.Millisecond, IdleTimeout: time.Hour})
 	defer m.Shutdown()
 	fs := &fakeSession{}
-	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	key := session.Key{ConnectionID: "c1", ActorScope: "u1"}
 	if _, err := m.Acquire(context.Background(), key, "u1", connector(fs, nil)); err != nil {
 		t.Fatalf("acquire: %v", err)
 	}
@@ -387,7 +387,7 @@ func TestHealthCheckClosesDeadUpstream(t *testing.T) {
 func TestFailureStatusExpires(t *testing.T) {
 	m := session.New(session.Options{FailureRetention: 15 * time.Millisecond})
 	defer m.Shutdown()
-	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	key := session.Key{ConnectionID: "c1", ActorScope: "u1"}
 	_, _ = m.Acquire(context.Background(), key, "u1", func(context.Context) (plugin.Session, error) {
 		return nil, errors.New("dial failed")
 	})
@@ -403,7 +403,7 @@ func TestFailureStatusExpires(t *testing.T) {
 func TestShutdownClosesAll(t *testing.T) {
 	m := session.New(session.Options{})
 	fs := &fakeSession{}
-	if _, err := m.Acquire(context.Background(), session.Key{ConnectionID: "c1", OwnerScope: "u1"}, "u1", connector(fs, nil)); err != nil {
+	if _, err := m.Acquire(context.Background(), session.Key{ConnectionID: "c1", ActorScope: "u1"}, "u1", connector(fs, nil)); err != nil {
 		t.Fatalf("acquire: %v", err)
 	}
 	m.Shutdown()
@@ -415,20 +415,20 @@ func TestShutdownClosesAll(t *testing.T) {
 	}
 }
 
-func TestCloseConnectionClosesAllOwnerScopes(t *testing.T) {
+func TestCloseConnectionClosesAllActorScopes(t *testing.T) {
 	m := session.New(session.Options{})
 	defer m.Shutdown()
 
 	c1u1 := &fakeSession{}
 	c1u2 := &fakeSession{}
 	c2u1 := &fakeSession{}
-	if _, err := m.Acquire(context.Background(), session.Key{ConnectionID: "c1", OwnerScope: "u1"}, "u1", connector(c1u1, nil)); err != nil {
+	if _, err := m.Acquire(context.Background(), session.Key{ConnectionID: "c1", ActorScope: "u1"}, "u1", connector(c1u1, nil)); err != nil {
 		t.Fatalf("acquire c1 u1: %v", err)
 	}
-	if _, err := m.Acquire(context.Background(), session.Key{ConnectionID: "c1", OwnerScope: "u2"}, "u2", connector(c1u2, nil)); err != nil {
+	if _, err := m.Acquire(context.Background(), session.Key{ConnectionID: "c1", ActorScope: "u2"}, "u2", connector(c1u2, nil)); err != nil {
 		t.Fatalf("acquire c1 u2: %v", err)
 	}
-	if _, err := m.Acquire(context.Background(), session.Key{ConnectionID: "c2", OwnerScope: "u1"}, "u1", connector(c2u1, nil)); err != nil {
+	if _, err := m.Acquire(context.Background(), session.Key{ConnectionID: "c2", ActorScope: "u1"}, "u1", connector(c2u1, nil)); err != nil {
 		t.Fatalf("acquire c2 u1: %v", err)
 	}
 
@@ -447,7 +447,7 @@ func TestCloseConnectionClosesAllOwnerScopes(t *testing.T) {
 
 func TestAcquireClaimsExclusiveOwner(t *testing.T) {
 	owners := cluster.NewStoreOwnerRegistry(store.NewMemory().ClusterOwners)
-	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	key := session.Key{ConnectionID: "c1", ActorScope: "u1"}
 	first := session.New(session.Options{
 		OwnerRegistry: owners,
 		Instance:      cluster.NewInstanceRef("a", "http://a"),

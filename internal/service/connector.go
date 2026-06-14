@@ -84,6 +84,7 @@ func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connec
 		c.onSecretAccess()
 	}
 
+	credentialBindings := []plugin.CredentialBinding{}
 	// Resolve referenced reusable credentials through the connection owner. The
 	// route wrapper has already authorized the acting user against the connection;
 	// credential records remain hidden unless separately shared.
@@ -102,8 +103,14 @@ func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connec
 					if err != nil {
 						return plugin.ConnectConfig{}, nil, fmt.Errorf("resolve credential: %w", err)
 					}
-					cfg[plugin.CredentialValuesKey(key)] = values
-					cfg[plugin.CredentialResolvedKindKey(key)] = cred.Kind
+					credentialBindings = append(credentialBindings, plugin.CredentialBinding{
+						Field: key,
+						Credential: plugin.ResolvedCredential{
+							ID:     cred.ID,
+							Kind:   plugin.CredentialKind(cred.Kind),
+							Values: values,
+						},
+					})
 				}
 			}
 		}
@@ -124,6 +131,7 @@ func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connec
 		ConnectionID: conn.ID,
 		Transport:    plugin.Transport(conn.Transport),
 		Config:       cfg,
+		Credentials:  plugin.NewResolvedCredentials(credentialBindings...),
 		Net:          net,
 	}, plg, nil
 }

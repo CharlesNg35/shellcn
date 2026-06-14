@@ -419,7 +419,7 @@ func (s *ConnectionService) ReferencesCredential(ctx context.Context, credential
 			}
 			continue
 		}
-		if id, _ := c.Config[plugin.CredentialIDField].(string); id == credentialID {
+		if id, _ := c.Config[plugin.CredentialRefField].(string); id == credentialID {
 			return true, nil
 		}
 	}

@@ -28,8 +28,8 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		CredentialKinds: []plugin.CredentialKindInfo{{
 			Kind: testCredentialPrivateKey, Label: "Sample private key",
 			Fields: []plugin.Field{
-				plugin.CredentialPublicField(plugin.Field{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true}),
-				plugin.CredentialSecretField(plugin.Field{Key: "private_key", Label: "Private key", Type: plugin.FieldTextarea, Required: true}),
+				plugin.CredentialPublicField(plugin.Field{Key: "username", Label: "Username", Type: plugin.FieldText}),
+				plugin.CredentialSecretField(plugin.Field{Key: "private_key", Label: "Private key", Type: plugin.FieldTextarea}),
 			},
 		}},
 		Layout: plugin.LayoutSidebarTree,
@@ -44,7 +44,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 					AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}},
 				}},
 				{Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-					Kind: testCredentialPrivateKey, Protocols: []string{"ssh"}, Required: true,
+					Kind: testCredentialPrivateKey, Protocols: []string{"ssh"},
 				}},
 			},
 		}}},
@@ -129,7 +129,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		{ID: "sample.files.list", Method: plugin.MethodGet, Path: "/files", Permission: "sample.files.read", Risk: plugin.RiskSafe, AuditEvent: "sample.files.list", Handle: noop},
 		{ID: "sample.files.read", Method: plugin.MethodGet, Path: "/files/read", Permission: "sample.files.read", Risk: plugin.RiskSafe, AuditEvent: "sample.files.read", Handle: noop},
 		{ID: "sample.files.download", Method: plugin.MethodGet, Path: "/files/download", Permission: "sample.files.read", Risk: plugin.RiskSafe, AuditEvent: "sample.files.download", Handle: noop},
-		{ID: "sample.files.upload", Method: plugin.MethodPost, Path: "/files/upload", Permission: "sample.files.write", Risk: plugin.RiskWrite, AuditEvent: "sample.files.upload", Handle: noop, Input: &plugin.Schema{Groups: []plugin.Group{{Name: "Upload", Fields: []plugin.Field{{Key: "files", Label: "Files", Type: plugin.FieldFile, Required: true}}}}}},
+		{ID: "sample.files.upload", Method: plugin.MethodPost, Path: "/files/upload", Permission: "sample.files.write", Risk: plugin.RiskWrite, AuditEvent: "sample.files.upload", Handle: noop, Input: &plugin.Schema{Groups: []plugin.Group{{Name: "Upload", Fields: []plugin.Field{{Key: "files", Label: "Files", Type: plugin.FieldFile}}}}}},
 		{ID: "sample.files.mkdir", Method: plugin.MethodPost, Path: "/files/mkdir", Permission: "sample.files.write", Risk: plugin.RiskWrite, AuditEvent: "sample.files.mkdir", Handle: noop},
 		{ID: "sample.files.rename", Method: plugin.MethodPatch, Path: "/files/rename", Permission: "sample.files.write", Risk: plugin.RiskWrite, AuditEvent: "sample.files.rename", Handle: noop},
 		{ID: "sample.files.delete", Method: plugin.MethodDelete, Path: "/files/delete", Permission: "sample.files.write", Risk: plugin.RiskDestructive, AuditEvent: "sample.files.delete", Handle: noop},

@@ -142,11 +142,13 @@ func TestCredentialIdentityOverridesConnectionUser(t *testing.T) {
 		"host": "example.test",
 		"user": "root",
 		"auth": "stored_password",
-		plugin.CredentialValuesKey(CredentialPasswordField): map[string]string{
+	}, Credentials: plugin.NewResolvedCredentials(plugin.CredentialBinding{
+		Field: CredentialPasswordField,
+		Credential: plugin.ResolvedCredential{Kind: CredentialKindSSHPassword, Values: map[string]string{
 			"username": "ubuntu",
 			"password": "pw",
-		},
-	}})
+		}},
+	})})
 	if err != nil {
 		t.Fatalf("parseConnectOptions: %v", err)
 	}

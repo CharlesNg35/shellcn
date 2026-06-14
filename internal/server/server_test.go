@@ -70,11 +70,11 @@ func (testPlugin) Manifest() plugin.Manifest {
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true},
 			{
 				Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialDBPassword},
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialKindDBPassword},
 			},
 			{
 				Key: "api_credential", Label: "API Credential", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialAPIToken},
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialKindAPIToken},
 			},
 		}}}},
 		Agent: &plugin.AgentProfile{
@@ -519,7 +519,7 @@ func TestConnectionProxyLazilyAcquiresSession(t *testing.T) {
 		t.Fatalf("proxy body = %q, want %q", got, want)
 	}
 
-	snap, ok := h.pluginSessions.Status(session.Key{ConnectionID: "c-op", OwnerScope: "op"})
+	snap, ok := h.pluginSessions.Status(session.Key{ConnectionID: "c-op", ActorScope: "op"})
 	if !ok {
 		t.Fatal("proxy request should create a live session")
 	}

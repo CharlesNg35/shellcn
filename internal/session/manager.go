@@ -23,7 +23,7 @@ var (
 // Key identifies one live session for an actor's scope on a connection.
 type Key struct {
 	ConnectionID string
-	OwnerScope   string
+	ActorScope   string
 }
 
 // ConnectFunc lazily opens the upstream session on first use.
@@ -148,7 +148,7 @@ func (m *Manager) Acquire(ctx context.Context, key Key, userID string, connect C
 		var lease cluster.Lease
 		if m.opts.OwnerRegistry != nil {
 			var err error
-			lease, err = m.opts.OwnerRegistry.Claim(ctx, cluster.SessionOwnerKey(key.ConnectionID, key.OwnerScope), m.opts.Instance, cluster.ClaimOptions{
+			lease, err = m.opts.OwnerRegistry.Claim(ctx, cluster.SessionOwnerKey(key.ConnectionID, key.ActorScope), m.opts.Instance, cluster.ClaimOptions{
 				Mode: cluster.ClaimExclusive,
 				TTL:  m.opts.LeaseTTL,
 			})
@@ -289,7 +289,7 @@ func (m *Manager) Close(key Key) {
 }
 
 // CloseConnection closes and removes every live session for a connection across
-// all owner scopes. Callers use this after connection config changes so cached
+// all actor scopes. Callers use this after connection config changes so cached
 // plugin options cannot outlive the saved connection state.
 func (m *Manager) CloseConnection(connectionID string) {
 	m.mu.Lock()

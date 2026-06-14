@@ -25,10 +25,10 @@ func ResolvedValue(cfg plugin.ConnectConfig, field, key string) string {
 
 func ApplyPasswordCredential(cfg plugin.ConnectConfig, username, password string) AuthMaterial {
 	username = strings.TrimSpace(username)
-	if identity := cfg.CredentialValueFor(plugin.CredentialIDField, "username"); identity != "" {
+	if identity := cfg.CredentialValueFor(plugin.CredentialRefField, "username"); identity != "" {
 		username = identity
 	}
-	if secret := cfg.CredentialValueFor(plugin.CredentialIDField, "password"); secret != "" {
+	if secret := cfg.CredentialValueFor(plugin.CredentialRefField, "password"); secret != "" {
 		password = secret
 	}
 	return AuthMaterial{Username: username, Password: password}

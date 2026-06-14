@@ -46,8 +46,8 @@ func configSchema(protocol string) plugin.Schema {
 			}},
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
-			{Key: "credential_id", Label: "Stored password", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kind: CredentialRDPPassword, Protocols: []string{protocol}, Required: true,
+			{Key: "credential_id", Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+				Kind: CredentialRDPPassword, Protocols: []string{protocol},
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 		}},
 		{Name: "Display", Fields: []plugin.Field{
@@ -114,10 +114,10 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 		Height:   h,
 	}
 	if auth == "credential" {
-		if secret := cfg.CredentialValueFor(plugin.CredentialIDField, "password"); secret != "" {
+		if secret := cfg.CredentialValueFor(plugin.CredentialRefField, "password"); secret != "" {
 			opts.Password = secret
 		}
-		if identity := cfg.CredentialValueFor(plugin.CredentialIDField, "username"); identity != "" {
+		if identity := cfg.CredentialValueFor(plugin.CredentialRefField, "username"); identity != "" {
 			opts.User = identity
 		}
 	}

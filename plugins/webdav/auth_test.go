@@ -11,7 +11,6 @@ func TestParseOptionsValidatesAuthFields(t *testing.T) {
 		"password missing password": {"url": "https://dav.example.com/", "auth": "password", "username": "alice"},
 		"credential missing secret": {
 			"url": "https://dav.example.com/", "auth": "credential",
-			plugin.CredentialValuesKey(plugin.CredentialIDField): map[string]string{"username": "alice"},
 		},
 		"unsupported auth": {"url": "https://dav.example.com/", "auth": "token", "username": "alice", "password": "pw"},
 	} {
@@ -35,8 +34,10 @@ func TestParseOptionsValidatesAuthFields(t *testing.T) {
 	t.Run("credential", func(t *testing.T) {
 		opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{
 			"url": "https://dav.example.com/", "auth": "credential",
-			plugin.CredentialValuesKey(plugin.CredentialIDField): map[string]string{"username": "alice", "password": "pw"},
-		}})
+		}, Credentials: plugin.NewResolvedCredentials(plugin.CredentialBinding{
+			Field:      plugin.CredentialRefField,
+			Credential: plugin.ResolvedCredential{Kind: plugin.CredentialKindBasicAuth, Values: map[string]string{"username": "alice", "password": "pw"}},
+		})})
 		if err != nil {
 			t.Fatalf("credential auth should validate: %v", err)
 		}

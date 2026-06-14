@@ -156,14 +156,14 @@ func TestBuiltInCredentialKindsCanBeUsedByMultiplePlugins(t *testing.T) {
 	reg := New()
 	for _, protocol := range []string{"ssh", "sftp"} {
 		m, routes := protocolCredentialManifest(protocol, []plugin.CredentialKind{
-			plugin.CredentialSSHPrivateKey,
-			plugin.CredentialSSHPassword,
+			plugin.CredentialKindSSHPrivateKey,
+			plugin.CredentialKindSSHPassword,
 		})
 		if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
 			t.Fatalf("register %s: %v", protocol, err)
 		}
 	}
-	for _, kind := range []plugin.CredentialKind{plugin.CredentialSSHPrivateKey, plugin.CredentialSSHPassword} {
+	for _, kind := range []plugin.CredentialKind{plugin.CredentialKindSSHPrivateKey, plugin.CredentialKindSSHPassword} {
 		info, ok := reg.CredentialKindLookup(kind)
 		if !ok {
 			t.Fatalf("credential kind %q was not registered", kind)
@@ -177,7 +177,7 @@ func TestBuiltInCredentialKindsCanBeUsedByMultiplePlugins(t *testing.T) {
 func TestUnregisterRecomputesCredentialCatalog(t *testing.T) {
 	reg := New()
 	for _, protocol := range []string{"ssh", "sftp"} {
-		m, routes := protocolCredentialManifest(protocol, []plugin.CredentialKind{plugin.CredentialSSHPassword})
+		m, routes := protocolCredentialManifest(protocol, []plugin.CredentialKind{plugin.CredentialKindSSHPassword})
 		if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
 			t.Fatalf("register %s: %v", protocol, err)
 		}
@@ -190,10 +190,10 @@ func TestUnregisterRecomputesCredentialCatalog(t *testing.T) {
 	if err := reg.Unregister("sftp"); err != nil {
 		t.Fatalf("unregister sftp: %v", err)
 	}
-	if reg.CredentialKindSupportsProtocol(plugin.CredentialSSHPassword, "sftp") {
+	if reg.CredentialKindSupportsProtocol(plugin.CredentialKindSSHPassword, "sftp") {
 		t.Fatal("ssh password should no longer support sftp after unregister")
 	}
-	if !reg.CredentialKindSupportsProtocol(plugin.CredentialSSHPassword, "ssh") {
+	if !reg.CredentialKindSupportsProtocol(plugin.CredentialKindSSHPassword, "ssh") {
 		t.Fatal("ssh password should still support ssh")
 	}
 
@@ -300,7 +300,7 @@ func TestReplaceRecomputesCredentialProtocols(t *testing.T) {
 	updated := m
 	updated.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{{
 		Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
-		Credential: &plugin.CredentialSelector{Kind: testCredentialPrivateKey, Protocols: []string{"sftp"}, Required: true},
+		Credential: &plugin.CredentialSelector{Kind: testCredentialPrivateKey, Protocols: []string{"sftp"}},
 	}}}}}
 	if err := reg.Replace(&stubPlugin{manifest: updated, routes: routes}); err != nil {
 		t.Fatalf("replace: %v", err)
@@ -334,7 +334,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		Layout: plugin.LayoutTabs,
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{{
 			Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
-			Credential: &plugin.CredentialSelector{Kind: testCredentialPrivateKey, Protocols: []string{"ssh"}, Required: true},
+			Credential: &plugin.CredentialSelector{Kind: testCredentialPrivateKey, Protocols: []string{"ssh"}},
 		}}}}},
 	}
 	routes := []plugin.Route{
@@ -350,7 +350,7 @@ func protocolCredentialManifest(name string, kinds []plugin.CredentialKind) (plu
 	for _, kind := range kinds {
 		fields = append(fields, plugin.Field{
 			Key: string(kind) + "_credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
-			Credential: &plugin.CredentialSelector{Kind: kind, Protocols: []string{name}, Required: true},
+			Credential: &plugin.CredentialSelector{Kind: kind, Protocols: []string{name}},
 		})
 	}
 	m := plugin.Manifest{

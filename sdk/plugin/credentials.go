@@ -39,7 +39,7 @@ type CredentialKindCatalog interface {
 
 var builtInCredentialKindCatalog = []CredentialKindInfo{
 	{
-		Kind: CredentialSSHPrivateKey, Label: "SSH private key",
+		Kind: CredentialKindSSHPrivateKey, Label: "SSH private key",
 		Fields: []Field{
 			CredentialPublicField(Field{Key: "username", Label: "Username", Type: FieldText, Required: true}),
 			CredentialSecretField(Field{Key: "private_key", Label: "Private key", Type: FieldTextarea, Required: true}),
@@ -47,28 +47,28 @@ var builtInCredentialKindCatalog = []CredentialKindInfo{
 		},
 	},
 	{
-		Kind: CredentialSSHPassword, Label: "SSH password",
+		Kind: CredentialKindSSHPassword, Label: "SSH password",
 		Fields: []Field{
 			CredentialPublicField(Field{Key: "username", Label: "Username", Type: FieldText, Required: true}),
 			CredentialSecretField(Field{Key: "password", Label: "Password", Type: FieldPassword, Required: true}),
 		},
 	},
 	{
-		Kind: CredentialDBPassword, Label: "Database password",
+		Kind: CredentialKindDBPassword, Label: "Database password",
 		Fields: []Field{
 			CredentialPublicField(Field{Key: "username", Label: "Database user", Type: FieldText}),
 			CredentialSecretField(Field{Key: "password", Label: "Password", Type: FieldPassword, Required: true}),
 		},
 	},
 	{
-		Kind: CredentialAPIToken, Label: "API token",
+		Kind: CredentialKindAPIToken, Label: "API token",
 		Fields: []Field{
 			CredentialPublicField(Field{Key: "subject", Label: "Token name / subject", Type: FieldText}),
 			CredentialSecretField(Field{Key: "token", Label: "Token", Type: FieldPassword, Required: true}),
 		},
 	},
 	{
-		Kind: CredentialTLSClientCert, Label: "TLS client certificate",
+		Kind: CredentialKindTLSClientCert, Label: "TLS client certificate",
 		Fields: []Field{
 			CredentialPublicField(Field{Key: "subject", Label: "Certificate subject / username", Type: FieldText}),
 			CredentialSecretField(Field{Key: "certificate", Label: "Client certificate", Type: FieldTextarea, Required: true}),
@@ -77,7 +77,7 @@ var builtInCredentialKindCatalog = []CredentialKindInfo{
 		},
 	},
 	{
-		Kind: CredentialCloudAccessKey, Label: "Cloud access key",
+		Kind: CredentialKindCloudAccessKey, Label: "Cloud access key",
 		Fields: []Field{
 			CredentialPublicField(Field{Key: "access_key_id", Label: "Access key ID", Type: FieldText, Required: true}),
 			CredentialSecretField(Field{Key: "secret_access_key", Label: "Secret access key", Type: FieldPassword, Required: true}),
@@ -85,14 +85,14 @@ var builtInCredentialKindCatalog = []CredentialKindInfo{
 		},
 	},
 	{
-		Kind: CredentialBasicAuth, Label: "Basic auth",
+		Kind: CredentialKindBasicAuth, Label: "Basic auth",
 		Fields: []Field{
 			CredentialPublicField(Field{Key: "username", Label: "Username", Type: FieldText, Required: true}),
 			CredentialSecretField(Field{Key: "password", Label: "Password", Type: FieldPassword, Required: true}),
 		},
 	},
 	{
-		Kind: CredentialBearerToken, Label: "Bearer token",
+		Kind: CredentialKindBearerToken, Label: "Bearer token",
 		Fields: []Field{
 			CredentialPublicField(Field{Key: "subject", Label: "Token name / subject", Type: FieldText}),
 			CredentialSecretField(Field{Key: "token", Label: "Token", Type: FieldPassword, Required: true}),

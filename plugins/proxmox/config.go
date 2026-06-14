@@ -47,8 +47,8 @@ func configSchema(protocol string) plugin.Schema {
 			{Key: "token_secret", Label: "Token secret", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: whenToken},
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "root@pam", VisibleWhen: whenPassword},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: whenPassword},
-			{Key: "credential_id", Label: "API token credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kind: CredentialProxmoxToken, Protocols: []string{protocol}, Required: true,
+			{Key: "credential_id", Label: "API token credential", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+				Kind: CredentialProxmoxToken, Protocols: []string{protocol},
 			}, VisibleWhen: whenCredential},
 		}},
 	}}
@@ -100,8 +100,8 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 		opts.Password = cfg.String("password")
 	case "credential":
 		opts.Method = authToken
-		opts.TokenID = cfg.CredentialValueFor(plugin.CredentialIDField, "token_id")
-		opts.TokenSecret = cfg.CredentialValueFor(plugin.CredentialIDField, "token_secret")
+		opts.TokenID = cfg.CredentialValueFor(plugin.CredentialRefField, "token_id")
+		opts.TokenSecret = cfg.CredentialValueFor(plugin.CredentialRefField, "token_secret")
 	default:
 		return connectOptions{}, fmt.Errorf("%w: unsupported authentication method", plugin.ErrInvalidInput)
 	}

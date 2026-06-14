@@ -28,7 +28,7 @@ func TestObservabilityPluginsValidateAndRegister(t *testing.T) {
 func TestObservabilityCredentialCompatibility(t *testing.T) {
 	manifest := testManifest(t, "server_monitor")
 
-	for _, kind := range []plugin.CredentialKind{plugin.CredentialBasicAuth, plugin.CredentialBearerToken, plugin.CredentialAPIToken, plugin.CredentialDBPassword} {
+	for _, kind := range []plugin.CredentialKind{plugin.CredentialKindBasicAuth, plugin.CredentialKindBearerToken, plugin.CredentialKindAPIToken, plugin.CredentialKindDBPassword} {
 		if plugintest.CredentialKindSupported(manifest.Config, kind) {
 			t.Fatalf("server_monitor should not advertise %s credentials", kind)
 		}

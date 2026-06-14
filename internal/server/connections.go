@@ -237,7 +237,7 @@ func (s *Server) handleConnectionSessionStatus(w http.ResponseWriter, r *http.Re
 	if s.proxyIfRemoteOwner(w, r, conn, user.ID) {
 		return
 	}
-	key := session.Key{ConnectionID: conn.ID, OwnerScope: user.ID}
+	key := session.Key{ConnectionID: conn.ID, ActorScope: user.ID}
 	snap, ok := s.deps.Sessions.Status(key)
 	if !ok {
 		writeJSON(w, http.StatusOK, connectionSessionDTO{State: "idle"})
@@ -254,19 +254,21 @@ func (s *Server) handleKeepaliveConnectionSession(w http.ResponseWriter, r *http
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if !s.canAccessConnection(ctx, user, conn) {
-		writeError(w, s.deps.Logger, plugin.ErrForbidden)
+	res := resolved{user: user, conn: conn, route: plugin.Route{
+		ID: "connection.session.keepalive", Permission: "connection.use", Risk: plugin.RiskSafe, AuditEvent: "connection.session.keepalive",
+	}}
+	if err := s.authorize(ctx, user, conn, res.route); err != nil {
+		s.auditEvent(ctx, res, models.AuditDenied, err)
+		s.incAuthzFailure(err)
+		writeError(w, s.deps.Logger, err)
 		return
 	}
 	if s.proxyIfRemoteOwner(w, r, conn, user.ID) {
 		return
 	}
-	res := resolved{user: user, conn: conn, route: plugin.Route{
-		ID: "connection.session.keepalive", Permission: "connection.use", Risk: plugin.RiskSafe, AuditEvent: "connection.session.keepalive",
-	}}
 	handle, err := s.acquireSession(ctx, res)
 	if err != nil {
-		if snap, ok := s.deps.Sessions.Status(session.Key{ConnectionID: conn.ID, OwnerScope: user.ID}); ok {
+		if snap, ok := s.deps.Sessions.Status(session.Key{ConnectionID: conn.ID, ActorScope: user.ID}); ok {
 			writeJSON(w, http.StatusOK, s.connectionSessionDTO(snap))
 			return
 		}
@@ -310,7 +312,7 @@ func (s *Server) handleDisconnectConnectionSession(w http.ResponseWriter, r *htt
 	if s.proxyIfRemoteOwner(w, r, conn, user.ID) {
 		return
 	}
-	s.deps.Sessions.Close(session.Key{ConnectionID: conn.ID, OwnerScope: user.ID})
+	s.deps.Sessions.Close(session.Key{ConnectionID: conn.ID, ActorScope: user.ID})
 	s.auditConnEvent(ctx, user, conn.ID, connSessionDisconnectEvent, plugin.RiskWrite, models.AuditAllowed, nil)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

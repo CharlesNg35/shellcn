@@ -39,14 +39,14 @@ const (
 type CredentialKind string
 
 const (
-	CredentialSSHPrivateKey  CredentialKind = "ssh_private_key"
-	CredentialSSHPassword    CredentialKind = "ssh_password"
-	CredentialTLSClientCert  CredentialKind = "tls_client_cert"
-	CredentialDBPassword     CredentialKind = "db_password"
-	CredentialAPIToken       CredentialKind = "api_token"
-	CredentialCloudAccessKey CredentialKind = "cloud_access_key"
-	CredentialBasicAuth      CredentialKind = "basic_auth"
-	CredentialBearerToken    CredentialKind = "bearer_token"
+	CredentialKindSSHPrivateKey  CredentialKind = "ssh_private_key"
+	CredentialKindSSHPassword    CredentialKind = "ssh_password"
+	CredentialKindTLSClientCert  CredentialKind = "tls_client_cert"
+	CredentialKindDBPassword     CredentialKind = "db_password"
+	CredentialKindAPIToken       CredentialKind = "api_token"
+	CredentialKindCloudAccessKey CredentialKind = "cloud_access_key"
+	CredentialKindBasicAuth      CredentialKind = "basic_auth"
+	CredentialKindBearerToken    CredentialKind = "bearer_token"
 )
 
 // Operator is the comparison used by a structured visibility Rule.
@@ -82,7 +82,6 @@ type Option struct {
 type CredentialSelector struct {
 	Kind      CredentialKind `json:"kind"`
 	Protocols []string       `json:"protocols,omitempty"`
-	Required  bool           `json:"required,omitempty"`
 }
 
 type Rule struct {

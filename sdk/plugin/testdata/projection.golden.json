@@ -68,8 +68,7 @@
               "kind": "sample_private_key",
               "protocols": [
                 "ssh"
-              ],
-              "required": true
+              ]
             }
           }
         ]
@@ -89,14 +88,12 @@
           "key": "username",
           "label": "Username",
           "type": "text",
-          "required": true,
           "public": true
         },
         {
           "key": "private_key",
           "label": "Private key",
           "type": "textarea",
-          "required": true,
           "secret": true
         }
       ]
