@@ -32,7 +32,7 @@ interface CredentialKindField {
   type: string;
   required?: boolean;
   secret?: boolean;
-  summary?: boolean;
+  public?: boolean;
   placeholder?: string;
   help?: string;
 }
