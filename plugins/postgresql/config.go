@@ -71,7 +71,7 @@ func configSchema() plugin.Schema {
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "postgres", VisibleWhen: &usernameAuth},
 			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kind: plugin.CredentialDBPassword, Protocols: []string{protocolName},
-			}, VisibleWhen: &credentialAuth, Help: "Reusable database password. The credential identity can also supply the username."},
+			}, VisibleWhen: &credentialAuth, Help: "Reusable database password. The stored username can also supply the username."},
 			{Key: authCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kind: plugin.CredentialTLSClientCert, Protocols: []string{protocolName},
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authClientCert}}}, Help: "Reusable client certificate and private key used for certificate authentication."},
@@ -118,8 +118,8 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	}
 	tlsMode := stringDefault(cfg.String("tls_mode"), "disable")
 	auth := dbcred.ApplyPasswordCredential(cfg, cfg.String("username"), cfg.String("password"))
-	clientCertificate := dbcred.ResolvedSecret(cfg, clientCertField)
-	certAuthMode := cfg.String("auth") == authClientCert || dbcred.ResolvedSecret(cfg, authCertField) != ""
+	clientCertificate := dbcred.ApplyClientCertificateCredential(cfg, clientCertField, "", tlsMode, "").ClientCertificate
+	certAuthMode := cfg.String("auth") == authClientCert || cfg.CredentialValueFor(authCertField, "certificate") != ""
 	if certAuthMode {
 		certAuth := dbcred.ApplyClientCertificateCredential(cfg, authCertField, cfg.String("username"), tlsMode, "")
 		auth.Username = certAuth.Username

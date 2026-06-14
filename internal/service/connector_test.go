@@ -52,11 +52,10 @@ func TestConnectorResolvesCredentialRefFieldsFromSchema(t *testing.T) {
 	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg))
 
 	cred, err := creds.Create(ctx, service.NewCredentialInput{
-		OwnerID:  "u1",
-		Name:     "token",
-		Kind:     "api_token",
-		Identity: "svc-api",
-		Secret:   "secret-token",
+		OwnerID: "u1",
+		Name:    "token",
+		Kind:    "api_token",
+		Values:  map[string]string{"subject": "svc-api", "token": "secret-token"},
 	})
 	if err != nil {
 		t.Fatalf("create credential: %v", err)
@@ -76,11 +75,12 @@ func TestConnectorResolvesCredentialRefFieldsFromSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build config: %v", err)
 	}
-	if got := cfg.Config[plugin.CredentialSecretKey("api_credential")]; got != "secret-token" {
-		t.Fatalf("resolved credential secret = %#v, want secret-token", got)
+	values, ok := cfg.Config[plugin.CredentialValuesKey("api_credential")].(map[string]string)
+	if !ok {
+		t.Fatalf("resolved credential values = %#v", cfg.Config[plugin.CredentialValuesKey("api_credential")])
 	}
-	if got := cfg.Config[plugin.CredentialIdentityKey("api_credential")]; got != "svc-api" {
-		t.Fatalf("resolved credential identity = %#v, want svc-api", got)
+	if values["token"] != "secret-token" || values["subject"] != "svc-api" {
+		t.Fatalf("resolved credential values = %+v", values)
 	}
 	if got := cfg.Config[plugin.CredentialResolvedKindKey("api_credential")]; got != "api_token" {
 		t.Fatalf("resolved credential kind = %#v, want api_token", got)
@@ -103,7 +103,7 @@ func TestConnectorResolvesSharedConnectionCredentialAsConnectionOwner(t *testing
 		OwnerID: "owner",
 		Name:    "token",
 		Kind:    "api_token",
-		Secret:  "owner-secret",
+		Values:  map[string]string{"token": "owner-secret"},
 	})
 	if err != nil {
 		t.Fatalf("create credential: %v", err)
@@ -123,8 +123,9 @@ func TestConnectorResolvesSharedConnectionCredentialAsConnectionOwner(t *testing
 	if err != nil {
 		t.Fatalf("shared connection should resolve owner credential: %v", err)
 	}
-	if got := cfg.Config[plugin.CredentialSecretKey("api_credential")]; got != "owner-secret" {
-		t.Fatalf("resolved credential secret = %#v, want owner-secret", got)
+	values, ok := cfg.Config[plugin.CredentialValuesKey("api_credential")].(map[string]string)
+	if !ok || values["token"] != "owner-secret" {
+		t.Fatalf("resolved credential values = %#v, want owner-secret token", cfg.Config[plugin.CredentialValuesKey("api_credential")])
 	}
 }
 

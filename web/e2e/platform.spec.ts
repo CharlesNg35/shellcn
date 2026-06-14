@@ -92,7 +92,8 @@ test("create a credential and select it from a connection credential_ref", async
   await page.getByRole("combobox", { name: "Database password" }).click();
   await page.getByRole("option", { name: "SSH private key" }).click();
   await page.locator("#cred-name").fill(credName);
-  await page.locator("textarea").fill("s3cret-value");
+  await page.getByLabel("Username").fill("ubuntu");
+  await page.getByRole("textbox", { name: /Private key/ }).fill("s3cret-value");
   await page.getByRole("button", { name: "Create credential" }).click();
   await expect(
     page.getByRole("cell", { name: credName, exact: true }),

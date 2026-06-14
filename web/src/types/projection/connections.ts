@@ -79,7 +79,7 @@ export interface CredentialSummary {
   kind: CredentialKind;
   ownerId?: string;
   ownerName?: string;
-  identity?: string;
+  values?: Record<string, string>;
   protocols?: string[];
   updatedAt?: string;
 }

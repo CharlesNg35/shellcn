@@ -66,7 +66,7 @@ func configSchema() plugin.Schema {
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "root", VisibleWhen: &passwordAuth},
 			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kind: plugin.CredentialDBPassword, Protocols: []string{protocolName},
-			}, VisibleWhen: &credentialAuth, Help: "Reusable database password. The credential identity can also supply the username."},
+			}, VisibleWhen: &credentialAuth, Help: "Reusable database password. The stored username can also supply the username."},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &passwordAuth},
 		}},
 		{Name: "TLS", Fields: []plugin.Field{
@@ -79,7 +79,7 @@ func configSchema() plugin.Schema {
 			{Key: "ca_certificate", Label: "CA certificate", Type: plugin.FieldTextarea, Secret: true, VisibleWhen: &verifyTLS, Help: "PEM CA bundle used for verify-ca and verify-full."},
 			{Key: clientCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
 				Kind: plugin.CredentialTLSClientCert, Protocols: []string{protocolName},
-			}, VisibleWhen: &tlsEnabled, Help: "Optional PEM containing the client certificate and private key."},
+			}, VisibleWhen: &tlsEnabled, Help: "Optional stored client certificate and private key."},
 		}},
 		{Name: "Safety", Fields: []plugin.Field{
 			{Key: "read_only", Label: "Read-only mode", Type: plugin.FieldToggle, Default: true, Help: "Blocks INSERT, UPDATE, DELETE, DDL, TRUNCATE, OPTIMIZE, GRANT, and other write statements."},
@@ -113,7 +113,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		return options{}, fmt.Errorf("%w: username is required", plugin.ErrInvalidInput)
 	}
 	tlsMode := stringDefault(cfg.String("tls_mode"), "disable")
-	clientCertificate := dbcred.ResolvedSecret(cfg, clientCertField)
+	clientCertificate := dbcred.ApplyClientCertificateCredential(cfg, clientCertField, "", tlsMode, "").ClientCertificate
 	rowLimit, ok := cfg.Int("row_limit")
 	if !ok || rowLimit <= 0 {
 		rowLimit = defaultRowLimit

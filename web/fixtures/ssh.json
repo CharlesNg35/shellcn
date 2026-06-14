@@ -16,15 +16,48 @@
     {
       "kind": "ssh_private_key",
       "label": "SSH private key",
-      "secretLabel": "Private key",
-      "secretMultiline": true,
-      "identityLabel": "Username"
+      "fields": [
+        {
+          "key": "username",
+          "label": "Username",
+          "type": "text",
+          "required": true,
+          "public": true
+        },
+        {
+          "key": "private_key",
+          "label": "Private key",
+          "type": "textarea",
+          "required": true,
+          "secret": true
+        },
+        {
+          "key": "passphrase",
+          "label": "Key passphrase",
+          "type": "password",
+          "secret": true
+        }
+      ]
     },
     {
       "kind": "ssh_password",
       "label": "SSH password",
-      "secretLabel": "Password",
-      "identityLabel": "Username"
+      "fields": [
+        {
+          "key": "username",
+          "label": "Username",
+          "type": "text",
+          "required": true,
+          "public": true
+        },
+        {
+          "key": "password",
+          "label": "Password",
+          "type": "password",
+          "required": true,
+          "secret": true
+        }
+      ]
     }
   ],
   "supportedTransports": ["direct"],

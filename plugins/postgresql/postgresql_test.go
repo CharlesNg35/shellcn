@@ -47,16 +47,19 @@ func TestQuerySafetyStopsBeforeDatabase(t *testing.T) {
 
 func TestParseOptionsUsesTLSCredentialAsClientCertificate(t *testing.T) {
 	opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{
-		"host":                          "db.local",
-		"database":                      "postgres",
-		"auth":                          authClientCert,
-		"_auth_client_cert_id_identity": "cert-user",
-		"_auth_client_cert_id_secret":   "pem-material",
+		"host":     "db.local",
+		"database": "postgres",
+		"auth":     authClientCert,
+		plugin.CredentialValuesKey(authCertField): map[string]string{
+			"subject":     "cert-user",
+			"certificate": "cert-pem",
+			"private_key": "key-pem",
+		},
 	}})
 	if err != nil {
 		t.Fatalf("parse options: %v", err)
 	}
-	if opts.Username != "cert-user" || opts.Password != "" || opts.ClientCertificate != "pem-material" || opts.TLSMode != "require" {
+	if opts.Username != "cert-user" || opts.Password != "" || opts.ClientCertificate != "cert-pem\nkey-pem" || opts.TLSMode != "require" {
 		t.Fatalf("unexpected credential material: %+v", opts)
 	}
 }

@@ -142,8 +142,10 @@ func TestCredentialIdentityOverridesConnectionUser(t *testing.T) {
 		"host": "example.test",
 		"user": "root",
 		"auth": "stored_password",
-		plugin.CredentialSecretKey(CredentialPasswordField):   "pw",
-		plugin.CredentialIdentityKey(CredentialPasswordField): "ubuntu",
+		plugin.CredentialValuesKey(CredentialPasswordField): map[string]string{
+			"username": "ubuntu",
+			"password": "pw",
+		},
 	}})
 	if err != nil {
 		t.Fatalf("parseConnectOptions: %v", err)

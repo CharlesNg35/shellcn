@@ -133,10 +133,10 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	switch opts.Auth {
 	case "password":
 	case "credential":
-		if identity := cfg.CredentialIdentityFor(plugin.CredentialField); identity != "" {
+		if identity := cfg.CredentialValueFor(plugin.CredentialIDField, "username"); identity != "" {
 			opts.Username = identity
 		}
-		if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
+		if secret := cfg.CredentialValueFor(plugin.CredentialIDField, "password"); secret != "" {
 			opts.Password = secret
 		}
 	case "none":

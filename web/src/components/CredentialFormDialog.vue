@@ -3,20 +3,20 @@ import { computed, ref, watch } from "vue";
 import Dialog from "primevue/dialog";
 import Select from "primevue/select";
 import InputText from "primevue/inputtext";
-import Password from "primevue/password";
-import Textarea from "primevue/textarea";
 import Button from "primevue/button";
 import { ApiError } from "../api/client";
 import { credentialsApi } from "../api/credentials";
 import { useConnectionsStore } from "../stores/connections";
 import { useNotify } from "../composables/useNotify";
 import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
+import FormField from "../panels/form/FormField.vue";
 import CredentialProtocolBadges from "./CredentialProtocolBadges.vue";
 import ShareDialog from "./ShareDialog.vue";
 import type {
   CredentialKindInfo,
   CredentialSelector,
   CredentialSummary,
+  Field,
 } from "../types/projection";
 
 const props = defineProps<{
@@ -36,9 +36,7 @@ const notify = useNotify();
 const isEdit = computed(() => Boolean(props.credential));
 const name = ref("");
 const kind = ref("");
-const identity = ref("");
-const secret = ref("");
-const replacing = ref(true);
+const values = ref<Record<string, unknown>>({});
 const errors = ref<Record<string, string>>({});
 const busy = ref(false);
 const kindCatalog = ref<CredentialKindInfo[]>([]);
@@ -72,18 +70,13 @@ const kindDisplayLabel = computed(
 const selectedKind = computed(
   () => kindCatalog.value.find((k) => k.kind === kind.value) ?? null,
 );
+const fields = computed(() => selectedKind.value?.fields ?? []);
 const compatibleProtocols = computed(
   () => selectedKind.value?.compatibleProtocols ?? [],
 );
 const protocolLabels = computed(() =>
   Object.fromEntries(conns.plugins.map((p) => [p.name, p.title])),
 );
-const multiline = computed(() => selectedKind.value?.secretMultiline === true);
-const secretLabel = computed(
-  () => selectedKind.value?.secretLabel ?? "Secret material",
-);
-const identityLabel = computed(() => selectedKind.value?.identityLabel ?? "");
-const showIdentity = computed(() => identityLabel.value !== "");
 
 async function loadKindCatalog(): Promise<void> {
   if (kindCatalog.value.length || catalogLoading.value) return;
@@ -108,6 +101,15 @@ function firstAllowedKind(): string {
   return kindOptions.value[0]?.value ?? "";
 }
 
+function resetValues(): void {
+  const next: Record<string, unknown> = {};
+  const existing = props.credential?.values ?? {};
+  for (const field of fields.value) {
+    next[field.key] = field.secret ? "" : (existing[field.key] ?? "");
+  }
+  values.value = next;
+}
+
 function normalizeForKind(): void {
   if (
     kindOptions.value.length &&
@@ -115,7 +117,7 @@ function normalizeForKind(): void {
   ) {
     kind.value = firstAllowedKind();
   }
-  if (!showIdentity.value) identity.value = "";
+  resetValues();
 }
 
 watch(
@@ -125,21 +127,12 @@ watch(
     await loadKindCatalog();
     if (catalogError.value) return;
     errors.value = {};
-    secret.value = "";
     if (props.credential) {
       name.value = props.credential.name;
       kind.value = props.credential.kind;
-      identity.value =
-        props.credential.identity ??
-        (props.credential as CredentialSummary & { username?: string })
-          .username ??
-        "";
-      replacing.value = false;
     } else {
       name.value = "";
       kind.value = firstAllowedKind();
-      identity.value = "";
-      replacing.value = true;
     }
     normalizeForKind();
   },
@@ -148,13 +141,32 @@ watch(
 
 watch(kind, normalizeForKind);
 
+function setFieldValue(field: Field, value: unknown): void {
+  values.value = { ...values.value, [field.key]: value };
+  delete errors.value[field.key];
+}
+
+function isBlank(value: unknown): boolean {
+  return value === undefined || value === null || String(value).trim() === "";
+}
+
+function secretSet(field: Field): boolean {
+  return Boolean(isEdit.value && field.secret);
+}
+
 function validate(): boolean {
   const next: Record<string, string> = {};
   if (catalogLoading.value || catalogError.value) return false;
   if (!name.value.trim()) next.name = "A name is required.";
   if (!kind.value) next.kind = "A kind is required.";
-  if (!isEdit.value && !secret.value.trim())
-    next.secret = "Secret material is required.";
+  for (const field of fields.value) {
+    if (field.secret && secretSet(field) && isBlank(values.value[field.key])) {
+      continue;
+    }
+    if (field.required && isBlank(values.value[field.key])) {
+      next[field.key] = `${field.label} is required.`;
+    }
+  }
   errors.value = next;
   return Object.keys(next).length === 0;
 }
@@ -162,12 +174,16 @@ function validate(): boolean {
 async function save(): Promise<void> {
   if (!validate()) return;
   busy.value = true;
+  const bodyValues: Record<string, string> = {};
+  for (const field of fields.value) {
+    const value = values.value[field.key];
+    if (field.secret && secretSet(field) && isBlank(value)) continue;
+    bodyValues[field.key] = String(value ?? "").trim();
+  }
   const body = {
     name: name.value.trim(),
     kind: kind.value,
-    identity: showIdentity.value ? identity.value.trim() : undefined,
-    // Blank secret on edit keeps the stored material (write-only).
-    secret: replacing.value ? secret.value : "",
+    values: bodyValues,
   };
   try {
     if (isEdit.value && props.credential) {
@@ -213,122 +229,69 @@ async function save(): Promise<void> {
       <p v-else-if="catalogError" class="text-sm text-red-500">
         {{ catalogError }}
       </p>
-      <div v-else class="flex min-w-0 flex-col gap-1.5">
-        <label
-          for="cred-name"
-          class="text-sm font-medium text-surface-700 dark:text-surface-200"
-        >
-          Name <span class="text-red-500">*</span>
-        </label>
-        <InputText
-          id="cred-name"
-          :model-value="name"
-          placeholder="e.g. ops shared key"
-          @update:model-value="name = $event ?? ''"
-        />
-        <p v-if="errors.name" class="text-xs text-red-500">{{ errors.name }}</p>
-      </div>
-
-      <div
-        v-if="!catalogLoading && !catalogError"
-        class="flex min-w-0 flex-col gap-1.5"
-      >
-        <label
-          class="text-sm font-medium text-surface-700 dark:text-surface-200"
-        >
-          Kind <span class="text-red-500">*</span>
-        </label>
-        <Select
-          v-if="showKindSelect"
-          :model-value="kind"
-          :options="kindOptions"
-          option-label="label"
-          option-value="value"
-          @update:model-value="kind = $event"
-        />
-        <div
-          v-else
-          class="rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-sm text-surface-700 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200"
-        >
-          {{ kindDisplayLabel }}
+      <template v-else>
+        <div class="flex min-w-0 flex-col gap-1.5">
+          <label
+            for="cred-name"
+            class="text-sm font-medium text-surface-700 dark:text-surface-200"
+          >
+            Name <span class="text-red-500">*</span>
+          </label>
+          <InputText
+            id="cred-name"
+            :model-value="name"
+            placeholder="e.g. ops shared key"
+            @update:model-value="name = $event ?? ''"
+          />
+          <p v-if="errors.name" class="text-xs text-red-500">
+            {{ errors.name }}
+          </p>
         </div>
-      </div>
 
-      <div
-        v-if="!catalogLoading && !catalogError && showIdentity"
-        class="flex min-w-0 flex-col gap-1.5"
-      >
-        <label
-          for="cred-identity"
-          class="text-sm font-medium text-surface-700 dark:text-surface-200"
-        >
-          {{ identityLabel }}
-        </label>
-        <InputText
-          id="cred-identity"
-          :model-value="identity"
-          :placeholder="identityLabel"
-          @update:model-value="identity = $event ?? ''"
-        />
-      </div>
+        <div class="flex min-w-0 flex-col gap-1.5">
+          <label
+            class="text-sm font-medium text-surface-700 dark:text-surface-200"
+          >
+            Kind <span class="text-red-500">*</span>
+          </label>
+          <Select
+            v-if="showKindSelect"
+            :model-value="kind"
+            :options="kindOptions"
+            option-label="label"
+            option-value="value"
+            @update:model-value="kind = $event"
+          />
+          <div
+            v-else
+            class="rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-sm text-surface-700 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200"
+          >
+            {{ kindDisplayLabel }}
+          </div>
+        </div>
 
-      <div
-        v-if="!catalogLoading && !catalogError && selectedKind"
-        class="flex min-w-0 flex-col gap-1.5"
-      >
-        <label
-          class="text-sm font-medium text-surface-700 dark:text-surface-200"
-        >
-          Compatible protocols
-        </label>
-        <CredentialProtocolBadges
-          :protocols="compatibleProtocols"
-          :labels="protocolLabels"
-        />
-      </div>
+        <div v-if="selectedKind" class="flex min-w-0 flex-col gap-1.5">
+          <label
+            class="text-sm font-medium text-surface-700 dark:text-surface-200"
+          >
+            Compatible protocols
+          </label>
+          <CredentialProtocolBadges
+            :protocols="compatibleProtocols"
+            :labels="protocolLabels"
+          />
+        </div>
 
-      <div
-        v-if="!catalogLoading && !catalogError"
-        class="flex min-w-0 flex-col gap-1.5"
-      >
-        <label
-          class="text-sm font-medium text-surface-700 dark:text-surface-200"
-        >
-          {{ secretLabel }}
-          <span v-if="!isEdit" class="text-red-500">*</span>
-        </label>
-
-        <Button
-          v-if="isEdit && !replacing"
-          type="button"
-          :pt="{
-            root: 'flex w-full items-center justify-between rounded-md border border-surface-300 px-2.5 py-1.5 text-sm text-surface-500 dark:border-surface-700',
-          }"
-          @click="replacing = true"
-        >
-          <span>•••••••• Set</span>
-          <span class="text-xs text-primary-500">Replace</span>
-        </Button>
-        <Textarea
-          v-else-if="multiline"
-          :model-value="secret"
-          rows="5"
-          class="font-mono"
-          :placeholder="`Paste ${secretLabel.toLowerCase()}`"
-          @update:model-value="secret = $event ?? ''"
+        <FormField
+          v-for="field in fields"
+          :key="field.key"
+          :field="field"
+          :model-value="values[field.key]"
+          :error="errors[field.key]"
+          :secret-set="secretSet(field)"
+          @update:model-value="setFieldValue(field, $event)"
         />
-        <Password
-          v-else
-          :model-value="secret"
-          :feedback="false"
-          toggle-mask
-          :input-props="{ autocomplete: 'new-password' }"
-          @update:model-value="secret = $event ?? ''"
-        />
-        <p v-if="errors.secret" class="text-xs text-red-500">
-          {{ errors.secret }}
-        </p>
-      </div>
+      </template>
     </div>
 
     <template #footer>

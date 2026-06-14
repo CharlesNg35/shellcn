@@ -139,11 +139,14 @@ func normalizeOptions(cfg plugin.ConnectConfig, opts *Options) error {
 	switch auth {
 	case "access_key":
 	case "credential":
-		if identity := cfg.CredentialIdentityFor(plugin.CredentialField); identity != "" {
+		if identity := cfg.CredentialValueFor(plugin.CredentialIDField, "access_key_id"); identity != "" {
 			opts.AccessKeyID = identity
 		}
-		if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
+		if secret := cfg.CredentialValueFor(plugin.CredentialIDField, "secret_access_key"); secret != "" {
 			opts.SecretKey = secret
+		}
+		if token := cfg.CredentialValueFor(plugin.CredentialIDField, "session_token"); token != "" {
+			opts.SessionToken = token
 		}
 	default:
 		return fmt.Errorf("%w: unsupported authentication method %q", plugin.ErrInvalidInput, auth)

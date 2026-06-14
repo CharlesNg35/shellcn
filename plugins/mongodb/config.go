@@ -73,7 +73,7 @@ func configSchema() plugin.Schema {
 			{Key: "username", Label: "Username", Type: plugin.FieldText, VisibleWhen: &usernameAuth},
 			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kind: plugin.CredentialDBPassword, Protocols: []string{protocolName},
-			}, VisibleWhen: &credentialAuth, Help: "Reusable MongoDB password. The credential identity can also supply the username."},
+			}, VisibleWhen: &credentialAuth, Help: "Reusable MongoDB password. The stored username can also supply the username."},
 			{Key: authCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kind: plugin.CredentialTLSClientCert, Protocols: []string{protocolName},
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authClientCert}}}, Help: "Reusable X.509 client certificate and private key."},
@@ -126,10 +126,10 @@ func parseOptions(cfg plugin.ConnectConfig) (optionsData, error) {
 	}
 	tlsMode := stringDefault(cfg.String("tls_mode"), "disable")
 	auth := dbcred.ApplyPasswordCredential(cfg, cfg.String("username"), cfg.String("password"))
-	clientCertificate := dbcred.ResolvedSecret(cfg, clientCertField)
+	clientCertificate := dbcred.ApplyClientCertificateCredential(cfg, clientCertField, "", tlsMode, "").ClientCertificate
 	authMechanism := strings.TrimSpace(cfg.String("auth_mechanism"))
 	authSource := stringDefault(cfg.String("auth_source"), "admin")
-	certAuthMode := cfg.String("auth") == authClientCert || dbcred.ResolvedSecret(cfg, authCertField) != ""
+	certAuthMode := cfg.String("auth") == authClientCert || cfg.CredentialValueFor(authCertField, "certificate") != ""
 	if certAuthMode {
 		certAuth := dbcred.ApplyClientCertificateCredential(cfg, authCertField, cfg.String("username"), tlsMode, "")
 		auth.Username = certAuth.Username

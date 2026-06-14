@@ -12,8 +12,7 @@ export interface CredentialFilters {
 export interface CredentialPayload {
   name: string;
   kind: string;
-  identity?: string;
-  secret: string;
+  values: Record<string, string>;
 }
 
 function query(f: CredentialFilters): string {

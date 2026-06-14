@@ -9,30 +9,84 @@ const credentialKinds = [
   {
     kind: "ssh_private_key",
     label: "SSH private key",
-    secretLabel: "Private key",
-    secretMultiline: true,
-    identityLabel: "Username",
+    fields: [
+      {
+        key: "username",
+        label: "Username",
+        type: "text",
+        required: true,
+        public: true,
+      },
+      {
+        key: "private_key",
+        label: "Private key",
+        type: "textarea",
+        required: true,
+        secret: true,
+      },
+    ],
     compatibleProtocols: ["ssh", "sftp"],
   },
   {
     kind: "ssh_password",
     label: "SSH password",
-    secretLabel: "Password",
-    identityLabel: "Username",
+    fields: [
+      {
+        key: "username",
+        label: "Username",
+        type: "text",
+        required: true,
+        public: true,
+      },
+      {
+        key: "password",
+        label: "Password",
+        type: "password",
+        required: true,
+        secret: true,
+      },
+    ],
     compatibleProtocols: ["ssh", "sftp"],
   },
   {
     kind: "tls_client_cert",
     label: "TLS client certificate",
-    secretLabel: "Certificate and private key",
-    secretMultiline: true,
+    fields: [
+      {
+        key: "certificate",
+        label: "Client certificate",
+        type: "textarea",
+        required: true,
+        secret: true,
+      },
+      {
+        key: "private_key",
+        label: "Private key",
+        type: "textarea",
+        required: true,
+        secret: true,
+      },
+    ],
     compatibleProtocols: ["postgresql"],
   },
   {
     kind: "db_password",
     label: "Database password",
-    secretLabel: "Password",
-    identityLabel: "Database user",
+    fields: [
+      {
+        key: "username",
+        label: "Database user",
+        type: "text",
+        public: true,
+      },
+      {
+        key: "password",
+        label: "Password",
+        type: "password",
+        required: true,
+        secret: true,
+      },
+    ],
     compatibleProtocols: ["postgresql"],
   },
 ];
@@ -140,7 +194,7 @@ describe("CredentialSelect", () => {
               id: "db-pw",
               name: "database prod",
               kind: "db_password",
-              identity: "app",
+              values: { username: "app" },
             },
             {
               id: "db-cert",

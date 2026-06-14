@@ -109,6 +109,9 @@ type Field struct {
 	Type     FieldType `json:"type"`
 	Required bool      `json:"required,omitempty"`
 	Secret   bool      `json:"secret,omitempty"`
+	// Public is mainly for credential-kind fields: safe non-secret values that
+	// may be returned in credential lists and selectors.
+	Public bool `json:"public,omitempty"`
 	// Default is a UI hint. In action forms, string defaults may reference
 	// the active resource with ${resource.uid} or ${resource.name}.
 	Default     any      `json:"default,omitempty"`

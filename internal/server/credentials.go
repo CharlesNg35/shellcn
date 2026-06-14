@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -21,18 +20,9 @@ const (
 )
 
 type credentialWriteRequest struct {
-	Name     string `json:"name"`
-	Kind     string `json:"kind"`
-	Identity string `json:"identity"`
-	Username string `json:"username"`
-	Secret   string `json:"secret"`
-}
-
-func (r credentialWriteRequest) principal() string {
-	if strings.TrimSpace(r.Identity) != "" {
-		return r.Identity
-	}
-	return r.Username
+	Name   string            `json:"name"`
+	Kind   string            `json:"kind"`
+	Values map[string]string `json:"values"`
 }
 
 func canManageCredential(user models.User, cred models.Credential) bool {
@@ -61,8 +51,7 @@ func (s *Server) handleCreateCredential(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	cred, err := s.deps.Credentials.Create(ctx, service.NewCredentialInput{
-		OwnerID: user.ID, Name: req.Name, Kind: req.Kind,
-		Identity: req.principal(), Secret: req.Secret,
+		OwnerID: user.ID, Name: req.Name, Kind: req.Kind, Values: req.Values,
 	})
 	if err != nil {
 		s.auditCredEvent(ctx, user, "", credCreateEvent, plugin.RiskWrite, models.AuditError, err)
@@ -93,8 +82,7 @@ func (s *Server) handleUpdateCredential(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	updated, err := s.deps.Credentials.Update(ctx, cred.ID, service.UpdateCredentialInput{
-		Name: req.Name, Kind: req.Kind, Identity: req.principal(),
-		Secret: req.Secret,
+		Name: req.Name, Kind: req.Kind, Values: req.Values,
 	})
 	if err != nil {
 		s.auditCredEvent(ctx, user, cred.ID, credUpdateEvent, plugin.RiskWrite, models.AuditError, err)

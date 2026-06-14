@@ -120,13 +120,16 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	}
 	switch opts.Auth {
 	case "stored_password":
-		opts.Password = cfg.CredentialSecretFor(CredentialPasswordField)
-		if identity := cfg.CredentialIdentityFor(CredentialPasswordField); identity != "" {
+		opts.Password = cfg.CredentialValueFor(CredentialPasswordField, "password")
+		if identity := cfg.CredentialValueFor(CredentialPasswordField, "username"); identity != "" {
 			opts.User = identity
 		}
 	case "stored_private_key":
-		opts.PrivateKey = cfg.CredentialSecretFor(CredentialPrivateKeyField)
-		if identity := cfg.CredentialIdentityFor(CredentialPrivateKeyField); identity != "" {
+		opts.PrivateKey = cfg.CredentialValueFor(CredentialPrivateKeyField, "private_key")
+		if passphrase := cfg.CredentialValueFor(CredentialPrivateKeyField, "passphrase"); passphrase != "" {
+			opts.Passphrase = passphrase
+		}
+		if identity := cfg.CredentialValueFor(CredentialPrivateKeyField, "username"); identity != "" {
 			opts.User = identity
 		}
 	}

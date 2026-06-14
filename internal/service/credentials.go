@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -58,22 +59,21 @@ func (s *CredentialService) SetSecretAccessHook(fn func()) {
 
 // NewCredentialInput describes a credential to create.
 type NewCredentialInput struct {
-	OwnerID  string
-	Name     string
-	Kind     string
-	Identity string
-	Secret   string
+	OwnerID string
+	Name    string
+	Kind    string
+	Values  map[string]string
 }
 
 // Create encrypts the secret material and persists the credential.
 func (s *CredentialService) Create(ctx context.Context, in NewCredentialInput) (models.Credential, error) {
-	normalized, err := s.normalizeCredentialInput(in.Name, in.Kind, in.Identity, true, in.Secret)
+	normalized, err := s.normalizeCredentialInput(in.Name, in.Kind, in.Values, nil)
 	if err != nil {
 		return models.Credential{}, err
 	}
-	enc, err := s.vault.Encrypt(ctx, []byte(in.Secret))
+	enc, err := s.encryptSecretValues(ctx, normalized.secretValues)
 	if err != nil {
-		return models.Credential{}, fmt.Errorf("encrypt credential: %w", err)
+		return models.Credential{}, err
 	}
 	now := time.Now()
 	cred := models.Credential{
@@ -81,9 +81,9 @@ func (s *CredentialService) Create(ctx context.Context, in NewCredentialInput) (
 		Name:            normalized.name,
 		Kind:            normalized.kind,
 		OwnerID:         in.OwnerID,
-		Username:        normalized.identity,
+		Values:          normalized.publicValues,
 		Protocols:       normalized.protocols,
-		EncryptedSecret: enc,
+		EncryptedValues: enc,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
@@ -95,10 +95,9 @@ func (s *CredentialService) Create(ctx context.Context, in NewCredentialInput) (
 
 // UpdateCredentialInput updates metadata and optionally rotates the secret.
 type UpdateCredentialInput struct {
-	Name     string
-	Kind     string
-	Identity string
-	Secret   string
+	Name   string
+	Kind   string
+	Values map[string]string
 }
 
 // Update applies metadata changes and rotates the encrypted material when set.
@@ -107,21 +106,23 @@ func (s *CredentialService) Update(ctx context.Context, id string, in UpdateCred
 	if err != nil {
 		return models.Credential{}, err
 	}
-	normalized, err := s.normalizeCredentialInput(in.Name, in.Kind, in.Identity, false, in.Secret)
+	existingSecrets, err := s.decryptSecretValues(ctx, cred.EncryptedValues)
+	if err != nil {
+		return models.Credential{}, err
+	}
+	normalized, err := s.normalizeCredentialInput(in.Name, in.Kind, in.Values, existingSecrets)
 	if err != nil {
 		return models.Credential{}, err
 	}
 	cred.Name = normalized.name
 	cred.Kind = normalized.kind
-	cred.Username = normalized.identity
+	cred.Values = normalized.publicValues
 	cred.Protocols = normalized.protocols
-	if strings.TrimSpace(in.Secret) != "" {
-		enc, err := s.vault.Encrypt(ctx, []byte(in.Secret))
-		if err != nil {
-			return models.Credential{}, fmt.Errorf("encrypt credential: %w", err)
-		}
-		cred.EncryptedSecret = enc
+	enc, err := s.encryptSecretValues(ctx, normalized.secretValues)
+	if err != nil {
+		return models.Credential{}, err
 	}
+	cred.EncryptedValues = enc
 	cred.UpdatedAt = time.Now()
 	if err := s.creds.Update(ctx, &cred); err != nil {
 		return models.Credential{}, err
@@ -130,17 +131,19 @@ func (s *CredentialService) Update(ctx context.Context, id string, in UpdateCred
 }
 
 type normalizedCredentialInput struct {
-	name      string
-	kind      string
-	identity  string
-	protocols []string
+	name         string
+	kind         string
+	publicValues map[string]string
+	secretValues map[string]string
+	protocols    []string
 }
 
-func (s *CredentialService) normalizeCredentialInput(name, kind, identity string, requireSecret bool, secret string) (normalizedCredentialInput, error) {
+func (s *CredentialService) normalizeCredentialInput(name, kind string, values map[string]string, existingSecrets map[string]string) (normalizedCredentialInput, error) {
 	out := normalizedCredentialInput{
-		name:     strings.TrimSpace(name),
-		kind:     strings.TrimSpace(kind),
-		identity: strings.TrimSpace(identity),
+		name:         strings.TrimSpace(name),
+		kind:         strings.TrimSpace(kind),
+		publicValues: map[string]string{},
+		secretValues: map[string]string{},
 	}
 	if out.name == "" {
 		return normalizedCredentialInput{}, fmt.Errorf("%w: credential name is required", plugin.ErrInvalidInput)
@@ -152,14 +155,65 @@ func (s *CredentialService) normalizeCredentialInput(name, kind, identity string
 	if !ok {
 		return normalizedCredentialInput{}, fmt.Errorf("%w: unknown credential kind %q", plugin.ErrInvalidInput, out.kind)
 	}
-	if requireSecret && strings.TrimSpace(secret) == "" {
-		return normalizedCredentialInput{}, fmt.Errorf("%w: secret material is required", plugin.ErrInvalidInput)
+	fields := map[string]plugin.Field{}
+	for _, field := range info.Fields {
+		fields[field.Key] = field
 	}
-	if info.IdentityLabel == "" && out.identity != "" {
-		return normalizedCredentialInput{}, fmt.Errorf("%w: credential kind %q does not use identity metadata", plugin.ErrInvalidInput, out.kind)
+	for key, value := range values {
+		if _, ok := fields[key]; !ok && strings.TrimSpace(value) != "" {
+			return normalizedCredentialInput{}, fmt.Errorf("%w: credential kind %q does not declare field %q", plugin.ErrInvalidInput, out.kind, key)
+		}
+	}
+	for _, field := range info.Fields {
+		value := strings.TrimSpace(values[field.Key])
+		if field.Secret {
+			if value == "" && existingSecrets != nil {
+				value = existingSecrets[field.Key]
+			}
+			if field.Required && value == "" {
+				return normalizedCredentialInput{}, fmt.Errorf("%w: credential field %q is required", plugin.ErrInvalidInput, field.Key)
+			}
+			if value != "" {
+				out.secretValues[field.Key] = value
+			}
+			continue
+		}
+		if field.Required && value == "" {
+			return normalizedCredentialInput{}, fmt.Errorf("%w: credential field %q is required", plugin.ErrInvalidInput, field.Key)
+		}
+		if value != "" && field.Public {
+			out.publicValues[field.Key] = value
+		}
 	}
 	out.protocols = append(out.protocols, info.CompatibleProtocols...)
 	return out, nil
+}
+
+func (s *CredentialService) encryptSecretValues(ctx context.Context, values map[string]string) ([]byte, error) {
+	raw, err := json.Marshal(values)
+	if err != nil {
+		return nil, fmt.Errorf("encode credential values: %w", err)
+	}
+	enc, err := s.vault.Encrypt(ctx, raw)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt credential values: %w", err)
+	}
+	return enc, nil
+}
+
+func (s *CredentialService) decryptSecretValues(ctx context.Context, enc []byte) (map[string]string, error) {
+	if len(enc) == 0 {
+		return map[string]string{}, nil
+	}
+	raw, err := s.vault.Decrypt(ctx, enc)
+	if err != nil {
+		return nil, err
+	}
+	values := map[string]string{}
+	if err := json.Unmarshal(raw, &values); err != nil {
+		return nil, fmt.Errorf("decode credential values: %w", err)
+	}
+	return values, nil
 }
 
 // Delete removes a credential after callers enforce reference checks.
@@ -228,14 +282,8 @@ func (s *CredentialService) ensureUsableCredential(ctx context.Context, userID s
 	return nil
 }
 
-// Resolve returns decrypted material for connect-time injection after use access.
-func (s *CredentialService) Resolve(ctx context.Context, userID, credentialID string) ([]byte, error) {
-	_, secret, err := s.ResolveWithMetadata(ctx, userID, credentialID)
-	return secret, err
-}
-
 // ResolveWithMetadata returns metadata plus decrypted material after use access.
-func (s *CredentialService) ResolveWithMetadata(ctx context.Context, userID, credentialID string) (models.Credential, []byte, error) {
+func (s *CredentialService) ResolveWithMetadata(ctx context.Context, userID, credentialID string) (models.Credential, map[string]string, error) {
 	cred, err := s.creds.Get(ctx, credentialID)
 	if err != nil {
 		return models.Credential{}, nil, err
@@ -247,14 +295,21 @@ func (s *CredentialService) ResolveWithMetadata(ctx context.Context, userID, cre
 	if !ok {
 		return models.Credential{}, nil, fmt.Errorf("credential %q: %w", credentialID, models.ErrForbidden)
 	}
-	secret, err := s.vault.Decrypt(ctx, cred.EncryptedSecret)
+	secrets, err := s.decryptSecretValues(ctx, cred.EncryptedValues)
 	if err != nil {
 		return models.Credential{}, nil, err
+	}
+	values := make(map[string]string, len(cred.Values)+len(secrets))
+	for k, v := range cred.Values {
+		values[k] = v
+	}
+	for k, v := range secrets {
+		values[k] = v
 	}
 	if s.onSecretAccess != nil {
 		s.onSecretAccess()
 	}
-	return cred, secret, nil
+	return cred, values, nil
 }
 
 // ListUsable returns the non-secret summaries the user may select for a

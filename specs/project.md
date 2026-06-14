@@ -570,6 +570,7 @@ type Field struct {
     Type        FieldType
     Required    bool
     Secret      bool        // ENCRYPTED at rest; WRITE-ONLY over the API (§9.3)
+    Public      bool        // credential-kind field safe to return in lists/selectors
     Default     any
     Placeholder string
     Help        string
@@ -591,9 +592,7 @@ type CredentialKind string // ssh_private_key, ssh_password, kubeconfig, tls_cli
 type CredentialKindInfo struct {
     Kind                CredentialKind
     Label               string
-    SecretLabel         string
-    SecretMultiline     bool
-    IdentityLabel       string   // optional non-secret principal label
+    Fields              []Field  // text/password/textarea only; secret fields encrypted
     CompatibleProtocols []string // derived by core from registered plugin selectors
 }
 type CredentialSelector struct {
@@ -674,12 +673,15 @@ logs/audit, never serialize back to the client. `credential_ref` fields never
 carry secret material either; they carry only a credential ID selected from the
 user's authorized reusable credentials. The service layer resolves the credential
 and injects decrypted values into `ConnectConfig.Config` immediately before
-`Connect`, so plugin code does not learn whether the value came from an inline
-connection secret or a shared credential. It also injects the selected
-credential kind alongside the resolved material. A `credential_ref` selector
-declares exactly one kind; manifests use separate fields when a protocol supports
-alternative credential types, such as password authentication versus
-client-certificate authentication.
+`Connect`, as a structured field-value map keyed by the credential kind's
+declared `Fields`. Plugin code reads those values with
+`ConnectConfig.CredentialValueFor(field, key)` or
+`ConnectConfig.CredentialValuesFor(field)`, so it does not learn whether a value
+came from an inline connection secret or a shared credential. The gateway also
+injects the selected credential kind alongside the resolved values. A
+`credential_ref` selector declares exactly one kind; manifests use separate
+fields when a protocol supports alternative credential types, such as password
+authentication versus client-certificate authentication.
 
 Connection sharing does not imply credential sharing. A user with connection
 `use` may open the shared connection even when they cannot list or use the
@@ -752,10 +754,11 @@ to the admin Audit tab, reusing the same `AuditTable`.
 The schema renderer resolves choices for a `credential_ref` field through a core
 API, not through plugin routes: `GET /api/credentials?kind=...&protocol=...`
 returns only `CredentialSummary` records the acting user may use (`id`, `name`,
-`kind`, optional `identity`, derived `protocols`, timestamps) and filters by the
-field selector plus the selected connection protocol. The response never contains
-secret material, encrypted blobs, storage keys, or values. Selecting one stores
-the credential ID in the connection config. Each `credential_ref` field accepts
+`kind`, non-secret summary `values`, derived `protocols`, timestamps) and
+filters by the field selector plus the selected connection protocol. The
+response never contains secret material, encrypted blobs, or storage keys.
+Selecting one stores the credential ID in the connection config. Each
+`credential_ref` field accepts
 exactly one credential kind. Protocols with alternative credential types expose
 separate fields, usually behind auth-mode visibility rules, so labels and
 stored config keys stay predictable.
@@ -1894,8 +1897,9 @@ behind a `SecretStore` interface; OpenBao is a later drop-in.
 Reusable credentials are first-class records, not copied blobs. A credential has
 an owner, grants, a stable ID, a kind (`ssh_private_key`, `ssh_password`,
 `kubeconfig`, `tls_client_cert`, `db_password`, `api_token`, ...), non-secret
-metadata (display name, optional identity/principal metadata, registry-derived
-compatible protocols), and encrypted secret material in the vault. A
+metadata (display name, summary values declared by the credential kind,
+registry-derived compatible protocols), and encrypted secret material in the
+vault. A
 connection may reference a credential by ID instead of storing its own secret;
 users with `use` access can connect through it but can never read the secret
 value. Rotation updates the credential once and affects every connection that

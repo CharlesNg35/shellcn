@@ -84,14 +84,14 @@ func TestGrantDeleteIsScopedToResource(t *testing.T) {
 		t.Fatalf("connection grant should still exist, got %d", resp.Status)
 	}
 
-	credID := createCredID(t, h, "op", `{"name":"scoped","kind":"db_password","secret":"v"}`)
+	credID := createCredID(t, h, "op", `{"name":"scoped","kind":"db_password","values":{"username":"app","password":"v"}}`)
 	resp = h.do(t, http.MethodPost, "/api/credentials/"+credID+"/grants", "op",
 		strings.NewReader(`{"subjectId":"op2","access":"use"}`))
 	if resp.Status != http.StatusCreated {
 		t.Fatalf("grant credential: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
 	credGrantID := createConnID(t, resp)
-	otherCredID := createCredID(t, h, "admin", `{"name":"other","kind":"db_password","secret":"v"}`)
+	otherCredID := createCredID(t, h, "admin", `{"name":"other","kind":"db_password","values":{"username":"app","password":"v"}}`)
 	if resp := h.do(t, http.MethodDelete, "/api/credentials/"+otherCredID+"/grants/"+credGrantID, "admin", nil); resp.Status != http.StatusNotFound {
 		t.Fatalf("delete credential grant through wrong credential: want 404, got %d (%s)", resp.Status, resp.Body)
 	}
@@ -103,7 +103,7 @@ func TestGrantDeleteIsScopedToResource(t *testing.T) {
 
 func TestCredentialGrantUse(t *testing.T) {
 	h := newHarness(t)
-	credID := createCredID(t, h, "op", `{"name":"shared-cred","kind":"db_password","secret":"v"}`)
+	credID := createCredID(t, h, "op", `{"name":"shared-cred","kind":"db_password","values":{"username":"app","password":"v"}}`)
 
 	refBody := `{"name":"x","protocol":"tester","config":{"host":"h","credential_id":"` + credID + `"}}`
 

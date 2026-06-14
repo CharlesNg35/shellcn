@@ -7,15 +7,27 @@ import (
 )
 
 // CredentialKindInfo is the public metadata for a reusable credential kind.
-// It describes how the control-plane UI should label non-secret fields and
-// which protocols can consume the kind.
+// It declares the credential form the control-plane UI renders.
 type CredentialKindInfo struct {
 	Kind                CredentialKind `json:"kind"`
 	Label               string         `json:"label"`
-	SecretLabel         string         `json:"secretLabel"`
-	SecretMultiline     bool           `json:"secretMultiline,omitempty"`
-	IdentityLabel       string         `json:"identityLabel,omitempty"`
+	Fields              []Field        `json:"fields"`
 	CompatibleProtocols []string       `json:"compatibleProtocols,omitempty"`
+}
+
+// CredentialPublicField marks a credential field as non-secret metadata that
+// can be returned in credential lists and selectors.
+func CredentialPublicField(field Field) Field {
+	field.Secret = false
+	field.Public = true
+	return field
+}
+
+// CredentialSecretField marks a credential field as secret material.
+func CredentialSecretField(field Field) Field {
+	field.Secret = true
+	field.Public = false
+	return field
 }
 
 // CredentialKindCatalog resolves reusable credential kind metadata.
@@ -27,36 +39,64 @@ type CredentialKindCatalog interface {
 
 var builtInCredentialKindCatalog = []CredentialKindInfo{
 	{
-		Kind: CredentialSSHPrivateKey, Label: "SSH private key", SecretLabel: "Private key",
-		SecretMultiline: true, IdentityLabel: "Username",
+		Kind: CredentialSSHPrivateKey, Label: "SSH private key",
+		Fields: []Field{
+			CredentialPublicField(Field{Key: "username", Label: "Username", Type: FieldText, Required: true}),
+			CredentialSecretField(Field{Key: "private_key", Label: "Private key", Type: FieldTextarea, Required: true}),
+			CredentialSecretField(Field{Key: "passphrase", Label: "Key passphrase", Type: FieldPassword}),
+		},
 	},
 	{
-		Kind: CredentialSSHPassword, Label: "SSH password", SecretLabel: "Password",
-		IdentityLabel: "Username",
+		Kind: CredentialSSHPassword, Label: "SSH password",
+		Fields: []Field{
+			CredentialPublicField(Field{Key: "username", Label: "Username", Type: FieldText, Required: true}),
+			CredentialSecretField(Field{Key: "password", Label: "Password", Type: FieldPassword, Required: true}),
+		},
 	},
 	{
-		Kind: CredentialDBPassword, Label: "Database password", SecretLabel: "Password",
-		IdentityLabel: "Database user",
+		Kind: CredentialDBPassword, Label: "Database password",
+		Fields: []Field{
+			CredentialPublicField(Field{Key: "username", Label: "Database user", Type: FieldText}),
+			CredentialSecretField(Field{Key: "password", Label: "Password", Type: FieldPassword, Required: true}),
+		},
 	},
 	{
-		Kind: CredentialAPIToken, Label: "API token", SecretLabel: "Token",
-		IdentityLabel: "Token name / subject",
+		Kind: CredentialAPIToken, Label: "API token",
+		Fields: []Field{
+			CredentialPublicField(Field{Key: "subject", Label: "Token name / subject", Type: FieldText}),
+			CredentialSecretField(Field{Key: "token", Label: "Token", Type: FieldPassword, Required: true}),
+		},
 	},
 	{
-		Kind: CredentialTLSClientCert, Label: "TLS client certificate", SecretLabel: "Certificate and private key",
-		SecretMultiline: true, IdentityLabel: "Certificate subject / username",
+		Kind: CredentialTLSClientCert, Label: "TLS client certificate",
+		Fields: []Field{
+			CredentialPublicField(Field{Key: "subject", Label: "Certificate subject / username", Type: FieldText}),
+			CredentialSecretField(Field{Key: "certificate", Label: "Client certificate", Type: FieldTextarea, Required: true}),
+			CredentialSecretField(Field{Key: "private_key", Label: "Private key", Type: FieldTextarea, Required: true}),
+			CredentialSecretField(Field{Key: "passphrase", Label: "Private key passphrase", Type: FieldPassword}),
+		},
 	},
 	{
-		Kind: CredentialCloudAccessKey, Label: "Cloud access key", SecretLabel: "Secret access key",
-		IdentityLabel: "Access key ID",
+		Kind: CredentialCloudAccessKey, Label: "Cloud access key",
+		Fields: []Field{
+			CredentialPublicField(Field{Key: "access_key_id", Label: "Access key ID", Type: FieldText, Required: true}),
+			CredentialSecretField(Field{Key: "secret_access_key", Label: "Secret access key", Type: FieldPassword, Required: true}),
+			CredentialSecretField(Field{Key: "session_token", Label: "Session token", Type: FieldPassword}),
+		},
 	},
 	{
-		Kind: CredentialBasicAuth, Label: "Basic auth", SecretLabel: "Password",
-		IdentityLabel: "Username",
+		Kind: CredentialBasicAuth, Label: "Basic auth",
+		Fields: []Field{
+			CredentialPublicField(Field{Key: "username", Label: "Username", Type: FieldText, Required: true}),
+			CredentialSecretField(Field{Key: "password", Label: "Password", Type: FieldPassword, Required: true}),
+		},
 	},
 	{
-		Kind: CredentialBearerToken, Label: "Bearer token", SecretLabel: "Token",
-		IdentityLabel: "Token name / subject",
+		Kind: CredentialBearerToken, Label: "Bearer token",
+		Fields: []Field{
+			CredentialPublicField(Field{Key: "subject", Label: "Token name / subject", Type: FieldText}),
+			CredentialSecretField(Field{Key: "token", Label: "Token", Type: FieldPassword, Required: true}),
+		},
 	},
 }
 
@@ -270,11 +310,51 @@ func validateCredentialKindInfo(info CredentialKindInfo) error {
 	if info.Label == "" {
 		return fmt.Errorf("credential kind %q is missing Label", info.Kind)
 	}
-	if info.SecretLabel == "" {
-		return fmt.Errorf("credential kind %q is missing SecretLabel", info.Kind)
+	if len(info.Fields) == 0 {
+		return fmt.Errorf("credential kind %q is missing Fields", info.Kind)
 	}
 	if strings.ContainsAny(string(info.Kind), " \t\r\n") {
 		return fmt.Errorf("credential kind %q must not contain whitespace", info.Kind)
+	}
+	seenFields := map[string]bool{}
+	hasSecret := false
+	for _, field := range info.Fields {
+		field.Key = strings.TrimSpace(field.Key)
+		field.Label = strings.TrimSpace(field.Label)
+		if field.Key == "" {
+			return fmt.Errorf("credential kind %q has a field without Key", info.Kind)
+		}
+		if field.Label == "" {
+			return fmt.Errorf("credential kind %q field %q is missing Label", info.Kind, field.Key)
+		}
+		if field.Type == "" {
+			return fmt.Errorf("credential kind %q field %q is missing Type", info.Kind, field.Key)
+		}
+		if !credentialFieldTypeAllowed(field.Type) {
+			return fmt.Errorf("credential kind %q field %q has unsupported Type %q", info.Kind, field.Key, field.Type)
+		}
+		if err := validateCredentialFieldSubset(info.Kind, field); err != nil {
+			return err
+		}
+		if strings.ContainsAny(field.Key, " \t\r\n.") {
+			return fmt.Errorf("credential kind %q field %q has an invalid Key", info.Kind, field.Key)
+		}
+		if seenFields[field.Key] {
+			return fmt.Errorf("credential kind %q has duplicate field %q", info.Kind, field.Key)
+		}
+		seenFields[field.Key] = true
+		if field.Secret {
+			hasSecret = true
+		}
+		if field.Secret && field.Public {
+			return fmt.Errorf("credential kind %q field %q cannot be both secret and public", info.Kind, field.Key)
+		}
+		if !field.Secret && !field.Public {
+			return fmt.Errorf("credential kind %q field %q must be either secret or public", info.Kind, field.Key)
+		}
+	}
+	if !hasSecret {
+		return fmt.Errorf("credential kind %q must declare at least one secret field", info.Kind)
 	}
 	if len(info.CompatibleProtocols) > 0 {
 		return fmt.Errorf("credential kind %q must not declare CompatibleProtocols; protocol support is derived from credential_ref selectors", info.Kind)
@@ -282,11 +362,45 @@ func validateCredentialKindInfo(info CredentialKindInfo) error {
 	return nil
 }
 
+func credentialFieldTypeAllowed(t FieldType) bool {
+	switch t {
+	case FieldText, FieldPassword, FieldTextarea:
+		return true
+	default:
+		return false
+	}
+}
+
+func validateCredentialFieldSubset(kind CredentialKind, field Field) error {
+	if field.Default != nil ||
+		len(field.Options) > 0 ||
+		field.OptionsSource != nil ||
+		field.Credential != nil ||
+		field.VisibleWhen != nil ||
+		len(field.Validators) > 0 ||
+		field.Step != nil ||
+		len(field.Fields) > 0 ||
+		field.Item != nil ||
+		field.MinItems != 0 ||
+		field.MaxItems != 0 ||
+		field.ItemLabel != "" ||
+		field.AddLabel != "" ||
+		field.KeyLabel != "" ||
+		field.KeyPlaceholder != "" {
+		return fmt.Errorf("credential kind %q field %q uses unsupported schema features", kind, field.Key)
+	}
+	return nil
+}
+
 func normalizeCredentialKindInfo(info CredentialKindInfo) CredentialKindInfo {
 	info.Kind = CredentialKind(strings.TrimSpace(string(info.Kind)))
 	info.Label = strings.TrimSpace(info.Label)
-	info.SecretLabel = strings.TrimSpace(info.SecretLabel)
-	info.IdentityLabel = strings.TrimSpace(info.IdentityLabel)
+	for i := range info.Fields {
+		info.Fields[i].Key = strings.TrimSpace(info.Fields[i].Key)
+		info.Fields[i].Label = strings.TrimSpace(info.Fields[i].Label)
+		info.Fields[i].Placeholder = strings.TrimSpace(info.Fields[i].Placeholder)
+		info.Fields[i].Help = strings.TrimSpace(info.Fields[i].Help)
+	}
 	protocols := make([]string, 0, len(info.CompatibleProtocols))
 	seen := map[string]bool{}
 	for _, protocol := range info.CompatibleProtocols {
@@ -303,6 +417,7 @@ func normalizeCredentialKindInfo(info CredentialKindInfo) CredentialKindInfo {
 }
 
 func cloneCredentialKindInfo(info CredentialKindInfo) CredentialKindInfo {
+	info.Fields = append([]Field(nil), info.Fields...)
 	info.CompatibleProtocols = append([]string(nil), info.CompatibleProtocols...)
 	return info
 }

@@ -10,23 +10,63 @@ const credentialKinds = [
   {
     kind: "ssh_password",
     label: "SSH password",
-    secretLabel: "Password",
-    identityLabel: "Username",
+    fields: [
+      {
+        key: "username",
+        label: "Username",
+        type: "text",
+        required: true,
+        public: true,
+      },
+      {
+        key: "password",
+        label: "Password",
+        type: "password",
+        required: true,
+        secret: true,
+      },
+    ],
     compatibleProtocols: ["ssh", "sftp"],
   },
   {
     kind: "tls_client_cert",
     label: "TLS client certificate",
-    secretLabel: "Certificate and private key",
-    secretMultiline: true,
+    fields: [
+      {
+        key: "certificate",
+        label: "Client certificate",
+        type: "textarea",
+        required: true,
+        secret: true,
+      },
+      {
+        key: "private_key",
+        label: "Private key",
+        type: "textarea",
+        required: true,
+        secret: true,
+      },
+    ],
     compatibleProtocols: ["docker"],
   },
   {
     kind: "kubeconfig",
     label: "Kubeconfig",
-    secretLabel: "Kubeconfig YAML",
-    secretMultiline: true,
-    identityLabel: "Context / user",
+    fields: [
+      {
+        key: "context",
+        label: "Context / user",
+        type: "text",
+        public: true,
+      },
+      {
+        key: "kubeconfig",
+        label: "Kubeconfig YAML",
+        type: "textarea",
+        required: true,
+        secret: true,
+      },
+    ],
     compatibleProtocols: ["kubernetes"],
   },
 ];
@@ -53,6 +93,7 @@ describe("CredentialFormDialog", () => {
           id: "c1",
           name: "ops key",
           kind: "ssh_password",
+          values: { username: "ops" },
           ownerId: "u-demo",
         },
       },
@@ -73,7 +114,7 @@ describe("CredentialFormDialog", () => {
     expect(put).toMatchObject({
       name: "ops key",
       kind: "ssh_password",
-      secret: "",
+      values: { username: "ops" },
     });
     expect(put).not.toHaveProperty("protocols");
     expect(wrapper.emitted("saved")).toBeTruthy();
@@ -149,7 +190,7 @@ describe("CredentialFormDialog", () => {
     wrapper.unmount();
   });
 
-  it("hides identity metadata for credential kinds that do not use it", async () => {
+  it("renders only declared credential fields", async () => {
     installFetch((url) =>
       url.includes("/credential-kinds")
         ? { body: credentialKinds }
@@ -169,7 +210,8 @@ describe("CredentialFormDialog", () => {
     await flushPromises();
 
     expect(document.body.textContent).not.toContain("Username");
-    expect(document.body.textContent).toContain("Certificate and private key");
+    expect(document.body.textContent).toContain("Client certificate");
+    expect(document.body.textContent).toContain("Private key");
     wrapper.unmount();
   });
 

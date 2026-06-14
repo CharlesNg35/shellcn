@@ -92,6 +92,7 @@ const step = computed(() => props.field.step ?? 1);
 const sliderValue = computed(() =>
   typeof props.modelValue === "number" ? props.modelValue : (min.value ?? 0),
 );
+const controlId = computed(() => `field-${props.field.key}`);
 
 const TEXT_INPUT_TYPES: Partial<Record<Field["type"], string>> = {
   [FieldType.Email]: "email",
@@ -137,6 +138,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
   <div class="flex min-w-0 flex-col gap-1">
     <label
       v-if="!hideLabel"
+      :for="controlId"
       class="text-sm font-medium text-surface-700 dark:text-surface-200"
     >
       {{ field.label }}
@@ -166,6 +168,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
 
     <Select
       v-else-if="field.type === FieldType.Select"
+      :input-id="controlId"
       :model-value="modelValue"
       :options="options"
       option-label="label"
@@ -176,6 +179,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
 
     <MultiSelect
       v-else-if="field.type === FieldType.MultiSelect"
+      :input-id="controlId"
       :model-value="(modelValue as unknown[]) ?? []"
       :options="options"
       option-label="label"
@@ -216,6 +220,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
 
     <Textarea
       v-else-if="field.type === FieldType.Textarea"
+      :id="controlId"
       :model-value="(modelValue as string) ?? ''"
       rows="4"
       :placeholder="field.placeholder"
@@ -224,6 +229,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
 
     <Password
       v-else-if="field.type === FieldType.Password"
+      :input-id="controlId"
       :model-value="(modelValue as string) ?? ''"
       :feedback="false"
       toggle-mask
@@ -233,6 +239,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
 
     <InputNumber
       v-else-if="field.type === FieldType.Number"
+      :input-id="controlId"
       :model-value="(modelValue as number) ?? null"
       :use-grouping="false"
       :min="min"
@@ -243,6 +250,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
 
     <InputNumber
       v-else-if="field.type === FieldType.Stepper"
+      :input-id="controlId"
       :model-value="(modelValue as number) ?? null"
       :use-grouping="false"
       show-buttons
@@ -299,6 +307,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
 
     <AutoComplete
       v-else-if="field.type === FieldType.AutoComplete"
+      :input-id="controlId"
       :model-value="(modelValue as string) ?? ''"
       :suggestions="suggestions"
       dropdown
@@ -336,6 +345,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
 
     <InputText
       v-else-if="field.type === FieldType.Duration"
+      :id="controlId"
       :model-value="(modelValue as string) ?? ''"
       :placeholder="field.placeholder ?? '30s, 5m, 1h'"
       @update:model-value="update"
@@ -343,6 +353,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
 
     <InputText
       v-else
+      :id="controlId"
       :type="inputType"
       :model-value="(modelValue as string) ?? ''"
       :placeholder="field.placeholder"

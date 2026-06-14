@@ -15,24 +15,20 @@ type AuthMaterial struct {
 	UsedTLSClientCredential bool
 }
 
-func ResolvedSecret(cfg plugin.ConnectConfig, field string) string {
-	return cfg.CredentialSecretFor(field)
-}
-
-func ResolvedIdentity(cfg plugin.ConnectConfig, field string) string {
-	return cfg.CredentialIdentityFor(field)
-}
-
 func ResolvedKind(cfg plugin.ConnectConfig, field string) plugin.CredentialKind {
 	return cfg.CredentialKindFor(field)
 }
 
+func ResolvedValue(cfg plugin.ConnectConfig, field, key string) string {
+	return cfg.CredentialValueFor(field, key)
+}
+
 func ApplyPasswordCredential(cfg plugin.ConnectConfig, username, password string) AuthMaterial {
 	username = strings.TrimSpace(username)
-	if identity := cfg.CredentialIdentityFor(plugin.CredentialField); identity != "" {
+	if identity := cfg.CredentialValueFor(plugin.CredentialIDField, "username"); identity != "" {
 		username = identity
 	}
-	if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
+	if secret := cfg.CredentialValueFor(plugin.CredentialIDField, "password"); secret != "" {
 		password = secret
 	}
 	return AuthMaterial{Username: username, Password: password}
@@ -41,11 +37,13 @@ func ApplyPasswordCredential(cfg plugin.ConnectConfig, username, password string
 func ApplyClientCertificateCredential(cfg plugin.ConnectConfig, field, username, tlsMode, clientCertificate string) AuthMaterial {
 	username = strings.TrimSpace(username)
 	tlsMode = strings.TrimSpace(tlsMode)
-	if identity := ResolvedIdentity(cfg, field); identity != "" {
+	if identity := ResolvedValue(cfg, field, "subject"); identity != "" {
 		username = identity
 	}
-	if secret := ResolvedSecret(cfg, field); secret != "" {
-		clientCertificate = secret
+	certificate := ResolvedValue(cfg, field, "certificate")
+	privateKey := ResolvedValue(cfg, field, "private_key")
+	if certificate != "" || privateKey != "" {
+		clientCertificate = certificate + "\n" + privateKey
 	}
 	if clientCertificate != "" && (tlsMode == "" || tlsMode == "disable") {
 		tlsMode = "require"

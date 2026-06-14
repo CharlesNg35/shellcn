@@ -271,7 +271,8 @@ func TestReplace(t *testing.T) {
 func TestReplaceKeepsOwnCredentialKinds(t *testing.T) {
 	m, routes := sampleManifest()
 	m.CredentialKinds = []plugin.CredentialKindInfo{{
-		Kind: "sample_token", Label: "Sample token", SecretLabel: "Token",
+		Kind: "sample_token", Label: "Sample token",
+		Fields: []plugin.Field{plugin.CredentialSecretField(plugin.Field{Key: "token", Label: "Token", Type: plugin.FieldPassword, Required: true})},
 	}}
 	m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth", Fields: []plugin.Field{{
 		Key: "credential", Label: "Credential", Type: plugin.FieldCredentialRef,
@@ -324,8 +325,11 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		Category:            plugin.CategoryShell,
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		CredentialKinds: []plugin.CredentialKindInfo{{
-			Kind: testCredentialPrivateKey, Label: "Sample private key", SecretLabel: "Private key",
-			SecretMultiline: true, IdentityLabel: "Username",
+			Kind: testCredentialPrivateKey, Label: "Sample private key",
+			Fields: []plugin.Field{
+				plugin.CredentialPublicField(plugin.Field{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true}),
+				plugin.CredentialSecretField(plugin.Field{Key: "private_key", Label: "Private key", Type: plugin.FieldTextarea, Required: true}),
+			},
 		}},
 		Layout: plugin.LayoutTabs,
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{{

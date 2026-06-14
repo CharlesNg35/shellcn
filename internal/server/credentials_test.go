@@ -27,11 +27,11 @@ func TestCredentialCreateRotateAuthz(t *testing.T) {
 
 	// op creates a credential; the response is a summary with no secret value.
 	id := createCredID(t, h, "op",
-		`{"name":"db pw","kind":"db_password","username":"app","secret":"secret-value-123"}`)
+		`{"name":"db pw","kind":"db_password","values":{"username":"app","password":"secret-value-123"}}`)
 
 	// op (owner) may rotate it.
 	resp := h.do(t, http.MethodPut, "/api/credentials/"+id, "op",
-		strings.NewReader(`{"name":"db pw","kind":"db_password","username":"app","secret":"rotated-456"}`))
+		strings.NewReader(`{"name":"db pw","kind":"db_password","values":{"username":"app","password":"rotated-456"}}`))
 	if resp.Status != http.StatusOK {
 		t.Fatalf("owner rotate: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
@@ -41,7 +41,7 @@ func TestCredentialCreateRotateAuthz(t *testing.T) {
 
 	// viewer (not owner, not admin) may neither rotate nor delete.
 	if resp := h.do(t, http.MethodPut, "/api/credentials/"+id, "viewer",
-		strings.NewReader(`{"name":"x","kind":"db_password"}`)); resp.Status != http.StatusForbidden {
+		strings.NewReader(`{"name":"x","kind":"db_password","values":{"username":"app"}}`)); resp.Status != http.StatusForbidden {
 		t.Errorf("non-owner rotate: want 403, got %d", resp.Status)
 	}
 	if resp := h.do(t, http.MethodDelete, "/api/credentials/"+id, "viewer", nil); resp.Status != http.StatusForbidden {
@@ -76,7 +76,7 @@ func TestCredentialKindsEndpoint(t *testing.T) {
 		if kind.Kind == plugin.CredentialSSHPassword {
 			sshPassword = kind
 		}
-		if kind.Label == "" || kind.SecretLabel == "" {
+		if kind.Label == "" || len(kind.Fields) == 0 {
 			t.Fatalf("credential kind missing labels: %+v", kind)
 		}
 	}
@@ -92,7 +92,7 @@ func TestCredentialCreateRejectsUnknownAndDerivesProtocols(t *testing.T) {
 	h := newHarness(t)
 
 	resp := h.do(t, http.MethodPost, "/api/credentials", "op",
-		strings.NewReader(`{"name":"db","kind":"db_password","protocols":["ssh"],"secret":"x"}`))
+		strings.NewReader(`{"name":"db","kind":"db_password","protocols":["ssh"],"values":{"username":"app","password":"x"}}`))
 	if resp.Status != http.StatusCreated {
 		t.Fatalf("create with ignored manual protocols: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
@@ -107,7 +107,7 @@ func TestCredentialCreateRejectsUnknownAndDerivesProtocols(t *testing.T) {
 	}
 
 	resp = h.do(t, http.MethodPost, "/api/credentials", "op",
-		strings.NewReader(`{"name":"bad","kind":"made_up","secret":"x"}`))
+		strings.NewReader(`{"name":"bad","kind":"made_up","values":{"password":"x"}}`))
 	if resp.Status != http.StatusBadRequest {
 		t.Fatalf("unknown kind: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
@@ -118,7 +118,7 @@ func TestCredentialDeleteBlockedWhileReferenced(t *testing.T) {
 	ctx := context.Background()
 
 	credID := createCredID(t, h, "op",
-		`{"name":"shared","kind":"db_password","secret":"v"}`)
+		`{"name":"shared","kind":"db_password","values":{"username":"app","password":"v"}}`)
 
 	// A connection references it → deletion is blocked with 409.
 	connResp := h.do(t, http.MethodPost, "/api/connections", "op",
@@ -145,7 +145,7 @@ func TestCredentialDeleteBlockedForAnyCredentialRefField(t *testing.T) {
 	h := newHarness(t)
 
 	credID := createCredID(t, h, "op",
-		`{"name":"api token","kind":"api_token","secret":"v"}`)
+		`{"name":"api token","kind":"api_token","values":{"token":"v"}}`)
 
 	connResp := h.do(t, http.MethodPost, "/api/connections", "op",
 		strings.NewReader(`{"name":"uses-alt","protocol":"tester","config":{"host":"h","api_credential":"`+credID+`"}}`))

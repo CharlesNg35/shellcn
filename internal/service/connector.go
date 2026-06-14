@@ -98,15 +98,12 @@ func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connec
 					if err := c.creds.EnsureUsableFor(ctx, conn.OwnerID, credID, credentialSelectorKinds(field.Credential), conn.Protocol); err != nil {
 						return plugin.ConnectConfig{}, nil, fmt.Errorf("resolve credential: %w", err)
 					}
-					cred, material, err := c.creds.ResolveWithMetadata(ctx, conn.OwnerID, credID)
+					cred, values, err := c.creds.ResolveWithMetadata(ctx, conn.OwnerID, credID)
 					if err != nil {
 						return plugin.ConnectConfig{}, nil, fmt.Errorf("resolve credential: %w", err)
 					}
-					cfg[plugin.CredentialSecretKey(key)] = string(material)
+					cfg[plugin.CredentialValuesKey(key)] = values
 					cfg[plugin.CredentialResolvedKindKey(key)] = cred.Kind
-					if cred.Username != "" {
-						cfg[plugin.CredentialIdentityKey(key)] = cred.Username
-					}
 				}
 			}
 		}

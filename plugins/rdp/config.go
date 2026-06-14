@@ -21,7 +21,13 @@ const CredentialRDPPassword plugin.CredentialKind = "rdp_password"
 
 func credentialKinds() []plugin.CredentialKindInfo {
 	return []plugin.CredentialKindInfo{
-		{Kind: CredentialRDPPassword, Label: "RDP password", SecretLabel: "Password", IdentityLabel: "Username"},
+		{
+			Kind: CredentialRDPPassword, Label: "RDP password",
+			Fields: []plugin.Field{
+				plugin.CredentialPublicField(plugin.Field{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true}),
+				plugin.CredentialSecretField(plugin.Field{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true}),
+			},
+		},
 	}
 }
 
@@ -108,10 +114,10 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 		Height:   h,
 	}
 	if auth == "credential" {
-		if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
+		if secret := cfg.CredentialValueFor(plugin.CredentialIDField, "password"); secret != "" {
 			opts.Password = secret
 		}
-		if identity := cfg.CredentialIdentityFor(plugin.CredentialField); identity != "" {
+		if identity := cfg.CredentialValueFor(plugin.CredentialIDField, "username"); identity != "" {
 			opts.User = identity
 		}
 	}
