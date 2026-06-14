@@ -65,6 +65,7 @@ async function load(): Promise<void> {
   try {
     doc.value = await fetchDoc(props.connectionId, props.source, {
       resource: props.resource,
+      record: props.record,
     });
     loadedOnce.value = true;
   } catch (e) {

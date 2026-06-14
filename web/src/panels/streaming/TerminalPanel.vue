@@ -190,7 +190,7 @@ watch(searchTerm, () => {
 const { status, error, send, reconnect } = useStream(
   props.connectionId,
   props.source,
-  { resource: props.resource },
+  { resource: props.resource, record: props.record },
   write,
   { keySuffix: props.streamKeySuffix },
 );

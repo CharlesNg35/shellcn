@@ -48,7 +48,7 @@ function append(frame: string): void {
 const { status, error, reconnect } = useStream(
   props.connectionId,
   props.source,
-  { resource: props.resource },
+  { resource: props.resource, record: props.record },
   append,
 );
 
@@ -72,7 +72,7 @@ async function runRoute(routeId: string | undefined): Promise<void> {
     await runAction(
       props.connectionId,
       routeId,
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
       {},
       {},
       "POST",

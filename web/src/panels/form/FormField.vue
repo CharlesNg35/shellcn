@@ -39,6 +39,7 @@ const props = defineProps<{
   protocol?: string;
   connectionId?: string;
   resource?: ResourceRef | null;
+  record?: Row | null;
   hideLabel?: boolean;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: unknown] }>();
@@ -57,7 +58,12 @@ function rowOption(row: Row): Option {
 }
 
 watch(
-  () => [props.field.optionsSource, props.connectionId, props.resource?.uid],
+  () => [
+    props.field.optionsSource,
+    props.connectionId,
+    props.resource?.uid,
+    props.record,
+  ],
   async () => {
     const src = props.field.optionsSource;
     if (!src || !props.connectionId) return;
@@ -65,7 +71,7 @@ watch(
       const page = await fetchPage<Row>(
         props.connectionId,
         src,
-        { resource: props.resource ?? null },
+        { resource: props.resource ?? null, record: props.record ?? null },
         { limit: 500 },
       );
       fetchedOptions.value = page.items.map(rowOption);
@@ -322,6 +328,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
       :model-value="modelValue"
       :connection-id="connectionId"
       :resource="resource"
+      :record="record"
       @update:model-value="update"
     />
 
@@ -331,6 +338,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
       :model-value="modelValue"
       :connection-id="connectionId"
       :resource="resource"
+      :record="record"
       @update:model-value="update"
     />
 
@@ -340,6 +348,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
       :model-value="modelValue"
       :connection-id="connectionId"
       :resource="resource"
+      :record="record"
       @update:model-value="update"
     />
 

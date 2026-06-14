@@ -42,6 +42,7 @@ async function load(): Promise<void> {
   try {
     const doc = await fetchDoc(props.connectionId, props.source, {
       resource: props.resource,
+      record: props.record,
     });
     const payload = asRecord(doc);
     if (!payload) {

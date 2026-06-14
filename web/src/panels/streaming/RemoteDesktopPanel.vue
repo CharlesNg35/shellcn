@@ -50,7 +50,10 @@ const unsupported = computed(
 
 const streamRef = computed(() => ({
   routeId: props.source?.routeId ?? "",
-  params: resolveParams(props.source?.params, { resource: props.resource }),
+  params: resolveParams(props.source?.params, {
+    resource: props.resource,
+    record: props.record,
+  }),
 }));
 
 const recorder = useDesktopRecorder(props.connectionId, streamRef.value);
@@ -143,6 +146,7 @@ async function connectRemote(): Promise<void> {
     }
     const stream = await prepareStream(props.connectionId, props.source, {
       resource: props.resource,
+      record: props.record,
     });
     remoteSession = await connectRemoteDesktop({
       target: container.value,

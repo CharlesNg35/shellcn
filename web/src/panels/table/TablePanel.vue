@@ -31,6 +31,7 @@ import type {
   Field,
   FieldType as FieldTypeValue,
   Icon,
+  Page,
   ResourceEvent,
   ResourceRef,
   Row,
@@ -98,6 +99,7 @@ const sortField = ref<string | undefined>();
 const sortOrder = ref<number | undefined>();
 const first = ref(0);
 const pageSize = ref(50);
+const cursorsByFirst = reactive(new Map<number, string>());
 const selection = ref<Row[]>([]);
 const actionOutput = ref<{
   title: string;
@@ -169,6 +171,20 @@ function saveTableState(): void {
     first: first.value,
     pageSize: pageSize.value,
   });
+}
+
+function resetCursors(): void {
+  cursorsByFirst.clear();
+}
+
+function cursorFor(targetFirst: number): string {
+  if (targetFirst <= 0) return "";
+  return cursorsByFirst.get(targetFirst) ?? String(targetFirst);
+}
+
+function rememberNextCursor(targetFirst: number, page: Page<Row>): void {
+  if (!page.nextCursor) return;
+  cursorsByFirst.set(targetFirst + page.items.length, page.nextCursor);
 }
 
 const watchSource = computed(() => tableConfig.value?.watch);
@@ -319,13 +335,17 @@ async function commitStaged(): Promise<void> {
       if (deletedRows.has(id)) continue;
       if (insertedRows.has(id)) {
         if (insertSource.value)
-          await mutate(insertSource.value, insertMutation(insertValues(row)));
+          await mutate(
+            insertSource.value,
+            insertMutation(insertValues(row)),
+            row,
+          );
       } else if (edits.has(id) && updateSource.value) {
         const key = keyFor(row);
         if (!key) continue;
         const values: Record<string, unknown> = {};
         for (const field of edits.get(id)!.keys()) values[field] = row[field];
-        await mutate(updateSource.value, updateMutation(key, values));
+        await mutate(updateSource.value, updateMutation(key, values), row);
       }
     }
     for (const row of rows.value) {
@@ -333,7 +353,7 @@ async function commitStaged(): Promise<void> {
       if (!deletedRows.has(id) || insertedRows.has(id)) continue;
       const key = keyFor(row);
       if (key && deleteSource.value)
-        await mutate(deleteSource.value, deleteMutation(key));
+        await mutate(deleteSource.value, deleteMutation(key), row);
     }
     clearStaging();
     toast.add({
@@ -394,11 +414,15 @@ function coerce(prev: unknown, next: unknown): unknown {
   return next;
 }
 
-async function mutate(src: DataSource, body: RowMutation): Promise<void> {
+async function mutate(
+  src: DataSource,
+  body: RowMutation,
+  record?: Row | null,
+): Promise<void> {
   await runAction(
     props.connectionId,
     src.routeId,
-    { resource: props.resource },
+    { resource: props.resource, record },
     body,
     src.params ?? {},
     src.method ?? "POST",
@@ -431,7 +455,7 @@ async function onCellEditComplete(
     return;
   }
   try {
-    await mutate(src, updateMutation(key, { [field]: value }));
+    await mutate(src, updateMutation(key, { [field]: value }), data);
   } catch (err) {
     data[field] = e.value;
     toast.add({
@@ -479,7 +503,7 @@ async function confirmDeleteRow(): Promise<void> {
   deleteBusy.value = true;
   deleteError.value = null;
   try {
-    await mutate(src, deleteMutation(key));
+    await mutate(src, deleteMutation(key), row);
     toast.add({ severity: "success", summary: "Row deleted", life: 3000 });
     deleteTarget.value = null;
     await load(first.value);
@@ -538,7 +562,7 @@ async function submitInsert(): Promise<void> {
   }
   inserting.value = true;
   try {
-    await mutate(src, insertMutation(values));
+    await mutate(src, insertMutation(values), values as Row);
     showInsert.value = false;
     toast.add({ severity: "success", summary: "Row added", life: 3000 });
     await load(0);
@@ -608,7 +632,7 @@ async function loadDynamicColumns(): Promise<void> {
     const page = await fetchPage<Row>(
       props.connectionId,
       columnsSource.value,
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
       { limit: 500 },
     );
     dynamicColumns.value = page.items
@@ -731,9 +755,9 @@ async function load(targetFirst = first.value): Promise<void> {
     const page = await fetchPage<Row>(
       props.connectionId,
       props.source,
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
       {
-        cursor: targetFirst > 0 ? String(targetFirst) : "",
+        cursor: cursorFor(targetFirst),
         limit: pageSize.value,
         filter: filterText.value ? { q: filterText.value } : undefined,
         sort: sortField.value
@@ -742,6 +766,7 @@ async function load(targetFirst = first.value): Promise<void> {
       },
     );
     page.items.forEach(assignRid);
+    rememberNextCursor(targetFirst, page);
     rows.value = page.items;
     await loadDynamicColumns();
     total.value = page.total;
@@ -757,11 +782,13 @@ function onSort(e: DataTableSortEvent): void {
   sortField.value = (e.sortField as string) ?? undefined;
   sortOrder.value = e.sortOrder ?? undefined;
   first.value = 0;
+  resetCursors();
   saveTableState();
   void load(0);
 }
 
 function onPage(e: DataTablePageEvent): void {
+  if (e.rows !== pageSize.value) resetCursors();
   first.value = e.first;
   pageSize.value = e.rows;
   saveTableState();
@@ -991,7 +1018,7 @@ function startWatch(): void {
     ? watchResource(
         props.connectionId,
         ds,
-        { resource: props.resource },
+        { resource: props.resource, record: props.record },
         applyEvent,
       )
     : undefined;
@@ -1022,9 +1049,9 @@ async function refresh(): Promise<void> {
     const page = await fetchPage<Row>(
       props.connectionId,
       props.source,
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
       {
-        cursor: first.value > 0 ? String(first.value) : "",
+        cursor: cursorFor(first.value),
         limit: pageSize.value,
         filter: filterText.value ? { q: filterText.value } : undefined,
         sort: sortField.value
@@ -1033,6 +1060,7 @@ async function refresh(): Promise<void> {
       },
     );
     page.items.forEach(assignRid);
+    rememberNextCursor(first.value, page);
     const keep = new Set(selectedRefs.value.map((r) => r.uid));
     rows.value = page.items;
     if (keep.size)
@@ -1091,6 +1119,7 @@ vueWatch(
 vueWatch(
   () => stateKey.value,
   () => {
+    resetCursors();
     restoreTableState();
     load(first.value);
     startWatch();
@@ -1107,6 +1136,7 @@ function onFilter(): void {
   if (debounce) clearTimeout(debounce);
   debounce = setTimeout(() => {
     first.value = 0;
+    resetCursors();
     saveTableState();
     load(0);
   }, 250);
@@ -1168,9 +1198,10 @@ onUnmounted(() => {
         <ActionBar
           :connection-id="connectionId"
           :actions="rowActions"
-          :resource="selection.length === 1 ? selectedRefs[0] : null"
+          :resource="
+            selection.length === 1 ? (selection[0]?.ref ?? null) : null
+          "
           :record="selection.length === 1 ? selection[0] : null"
-          :resources="selectedRefs"
           :records="selection"
           @done="onActionDone"
         />

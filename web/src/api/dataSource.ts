@@ -77,10 +77,19 @@ export function lookupRaw(expr: string, ctx: ResolveContext): unknown {
     return ctx.resource?.[key];
   }
   if (expr.startsWith("record.")) {
-    const key = expr.slice("record.".length);
-    return ctx.record?.[key];
+    return lookupPath(ctx.record, expr.slice("record.".length));
   }
   return undefined;
+}
+
+function lookupPath(source: unknown, path: string): unknown {
+  let current = source;
+  for (const segment of path.split(".")) {
+    if (!segment) return undefined;
+    if (!current || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
 }
 
 const LONE_TOKEN = /^\$\{([^}]+)\}$/;
@@ -98,8 +107,7 @@ export function resolveParams(
       if (value) out[key] = value;
       continue;
     }
-    out[key] = TOKEN.test(template) ? interpolate(template, ctx) : template;
-    TOKEN.lastIndex = 0;
+    out[key] = template.includes("${") ? interpolate(template, ctx) : template;
   }
   return out;
 }

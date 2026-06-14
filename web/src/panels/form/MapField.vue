@@ -2,7 +2,11 @@
 import { ref, watch } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
-import type { Field, ResourceRef } from "@/types/projection";
+import type {
+  Field,
+  ResourceRef,
+  Row as ProjectionRow,
+} from "@/types/projection";
 import FormField from "./FormField.vue";
 import AppIcon from "@/components/AppIcon.vue";
 import { defaultForField } from "./defaults";
@@ -12,6 +16,7 @@ const props = defineProps<{
   modelValue: unknown;
   connectionId?: string;
   resource?: ResourceRef | null;
+  record?: ProjectionRow | null;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: Record<string, unknown>];
@@ -69,7 +74,12 @@ function add(): void {
     ...rows.value,
     {
       key: "",
-      value: props.field.item ? defaultForField(props.field.item) : "",
+      value: props.field.item
+        ? defaultForField(props.field.item, {
+            resource: props.resource,
+            record: props.record,
+          })
+        : "",
     },
   ];
 }
@@ -102,6 +112,7 @@ function removeAt(index: number): void {
           :model-value="row.value"
           :connection-id="connectionId"
           :resource="resource"
+          :record="record"
           hide-label
           @update:model-value="(value) => setValue(index, value)"
         />

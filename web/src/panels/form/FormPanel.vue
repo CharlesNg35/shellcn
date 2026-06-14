@@ -27,6 +27,7 @@ async function load(): Promise<void> {
   try {
     schema.value = await fetchDoc<Schema>(props.connectionId, props.source, {
       resource: props.resource,
+      record: props.record,
     });
   } catch (e) {
     error.value = (e as Error).message;
@@ -43,7 +44,7 @@ async function submit(value: Record<string, unknown>): Promise<void> {
     await runFormAction(
       props.connectionId,
       routeId,
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
       value,
       formConfig.value?.params ?? props.source?.params ?? {},
       formConfig.value?.submitMethod ?? "PATCH",
@@ -83,6 +84,9 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         (formConfig?.submitRouteId ? 'Save' : undefined)
       "
       :busy="submitting"
+      :connection-id="connectionId"
+      :resource="resource"
+      :record="record"
       @submit="submit"
     />
   </div>

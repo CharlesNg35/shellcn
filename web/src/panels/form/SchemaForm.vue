@@ -12,7 +12,6 @@ import FormField from "./FormField.vue";
 import { isVisible } from "./condition";
 import { collectField } from "./collect";
 import { defaultForField } from "./defaults";
-import { interpolate, lookupRaw } from "@/api/dataSource";
 
 const props = defineProps<{
   schema: Schema;
@@ -89,24 +88,10 @@ function modelMatchesValues(model?: Record<string, unknown>): boolean {
 }
 
 function fieldDefault(field: Field): unknown {
-  const value = defaultForField(field);
-  if (typeof value !== "string" || !value.includes("${")) return value;
-  const lone = value.match(/^\$\{([^}]+)\}$/);
-  if (lone) {
-    const raw = lookupRaw(lone[1].trim(), {
-      resource: props.resource,
-      record: props.record,
-    });
-    if (raw !== undefined && raw !== "") return raw;
-  }
-  try {
-    return interpolate(value, {
-      resource: props.resource,
-      record: props.record,
-    });
-  } catch {
-    return value;
-  }
+  return defaultForField(field, {
+    resource: props.resource,
+    record: props.record,
+  });
 }
 
 watch(
@@ -202,6 +187,7 @@ defineExpose({ submit: onSubmit });
         :protocol="protocol"
         :connection-id="connectionId"
         :resource="resource"
+        :record="record"
         @update:model-value="set(field, $event)"
       />
     </fieldset>

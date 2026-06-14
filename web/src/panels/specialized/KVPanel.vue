@@ -95,6 +95,7 @@ async function load(): Promise<void> {
   try {
     const page = await fetchPage<KVEntry>(props.connectionId, props.source, {
       resource: props.resource,
+      record: props.record,
     });
     entries.value = normalizeList(page);
     selected.value = entries.value[0] ?? null;
@@ -120,7 +121,7 @@ async function loadDetail(entry: KVEntry): Promise<void> {
     detail.value = await fetchDoc<KVDetail>(
       props.connectionId,
       { routeId, params: { [keyParam.value]: entry.key } },
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
     );
     editor.value = stringify(detail.value.value);
     type.value = detail.value.type ?? entry.type ?? "string";
@@ -143,7 +144,7 @@ async function save(): Promise<void> {
     await runFormAction(
       props.connectionId,
       config.value.writeRouteId,
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
       { key: selected.value.key, type: type.value, value: editor.value },
       { [keyParam.value]: selected.value.key },
       "PUT",
@@ -171,7 +172,7 @@ async function createKey(): Promise<void> {
     await runFormAction(
       props.connectionId,
       config.value.createRouteId,
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
       { key, type: createType.value, value: createValue.value },
       { [keyParam.value]: key },
       "PUT",
@@ -202,7 +203,7 @@ async function remove(): Promise<void> {
     await runFormAction(
       props.connectionId,
       config.value.deleteRouteId,
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
       {},
       { [keyParam.value]: selected.value.key },
       "DELETE",

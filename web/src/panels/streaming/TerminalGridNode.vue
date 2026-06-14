@@ -20,7 +20,7 @@ export type TerminalGridLayoutNode =
 import Splitter from "primevue/splitter";
 import type { SplitterResizeEndEvent } from "primevue/splitter";
 import SplitterPanel from "primevue/splitterpanel";
-import type { DataSource, ResourceRef } from "@/types/projection";
+import type { DataSource, ResourceRef, Row } from "@/types/projection";
 import type { ChannelStatus } from "@/stores/streamChannels";
 import TerminalPanel from "./TerminalPanel.vue";
 
@@ -32,6 +32,7 @@ const props = defineProps<{
   connectionId: string;
   source: DataSource;
   resource?: ResourceRef | null;
+  record?: Row | null;
   terminalConfig: Record<string, unknown>;
   splitSizes: Record<string, number[]>;
 }>();
@@ -98,6 +99,7 @@ function structureKey(node: TerminalGridLayoutNode): string {
         :connection-id="connectionId"
         :source="source"
         :resource="resource"
+        :record="record"
         :terminal-config="terminalConfig"
         :split-sizes="splitSizes"
         @focus="emit('focus', $event)"
@@ -125,6 +127,7 @@ function structureKey(node: TerminalGridLayoutNode): string {
       :connection-id="connectionId"
       :source="source"
       :resource="resource"
+      :record="record"
       :config="terminalConfig"
       :recording="null"
       :recording-enabled="false"

@@ -70,6 +70,7 @@ async function load(): Promise<void> {
   try {
     const doc = await fetchDoc(props.connectionId, props.source, {
       resource: props.resource,
+      record: props.record,
     });
     text.value = typeof doc === "string" ? doc : JSON.stringify(doc, null, 2);
     originalText.value = text.value;
@@ -135,7 +136,7 @@ async function save(): Promise<void> {
     await runAction(
       props.connectionId,
       routeId,
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
       body,
       editorConfig.value?.saveParams ?? props.source?.params ?? {},
       editorConfig.value?.saveMethod ?? "PUT",

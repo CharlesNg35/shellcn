@@ -119,8 +119,10 @@ describe("SchemaForm", () => {
   });
 
   it("populates a field's choices from a route (optionsSource)", async () => {
-    installFetch((url) =>
-      url.includes("table.columns")
+    const seen: string[] = [];
+    installFetch((url) => {
+      seen.push(url);
+      return url.includes("table.columns")
         ? {
             body: {
               items: [{ name: "id" }, { name: "email" }],
@@ -128,8 +130,8 @@ describe("SchemaForm", () => {
               total: 2,
             },
           }
-        : { body: {} },
-    );
+        : { body: {} };
+    });
     const w = mount(SchemaForm, {
       props: {
         connectionId: "c1",
@@ -139,6 +141,7 @@ describe("SchemaForm", () => {
           name: "users",
           uid: "u1",
         },
+        record: { schema: "audit" },
         schema: {
           groups: [
             {
@@ -150,7 +153,10 @@ describe("SchemaForm", () => {
                   type: "multiselect",
                   optionsSource: {
                     routeId: "postgresql.table.columns",
-                    params: { table: "${resource.name}" },
+                    params: {
+                      schema: "${record.schema}",
+                      table: "${resource.name}",
+                    },
                   },
                 },
               ],
@@ -164,6 +170,8 @@ describe("SchemaForm", () => {
       { value: "id", label: "id" },
       { value: "email", label: "email" },
     ]);
+    expect(seen[0]).toContain("p.schema=audit");
+    expect(seen[0]).toContain("p.table=users");
   });
 
   it("renders number fields without locale digit grouping", async () => {
@@ -523,6 +531,60 @@ describe("SchemaForm", () => {
       name: "www.example.com",
       ttl: 300,
       proxied: true,
+    });
+  });
+
+  it("interpolates record defaults inside nested object and array fields", async () => {
+    const editSchema: Schema = {
+      groups: [
+        {
+          name: "Rule",
+          fields: [
+            {
+              key: "rule",
+              label: "Rule",
+              type: "object",
+              fields: [
+                {
+                  key: "expression",
+                  label: "Expression",
+                  type: "text",
+                  default: "${record.filter.expression}",
+                },
+              ],
+            },
+            {
+              key: "hosts",
+              label: "Hosts",
+              type: "array",
+              minItems: 1,
+              item: {
+                key: "host",
+                label: "Host",
+                type: "text",
+                default: "${record.host}",
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const w = mount(SchemaForm, {
+      props: {
+        schema: editSchema,
+        submitLabel: "Save",
+        record: {
+          filter: { expression: 'http.host eq "example.com"' },
+          host: "example.com",
+        },
+      },
+    });
+    await flushPromises();
+    await w.find("form").trigger("submit");
+    const payload = w.emitted("submit")?.[0][0] as Record<string, unknown>;
+    expect(payload).toEqual({
+      rule: { expression: 'http.host eq "example.com"' },
+      hosts: ["example.com"],
     });
   });
 

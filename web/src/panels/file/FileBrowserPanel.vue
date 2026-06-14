@@ -128,7 +128,10 @@ const listEmptyText = computed(() =>
     : "This folder is empty.",
 );
 
-const operationCtx = computed(() => ({ resource: props.resource }));
+const operationCtx = computed(() => ({
+  resource: props.resource,
+  record: props.record,
+}));
 const canUpload = computed(
   () => writable.value && Boolean(uploadRouteId.value),
 );

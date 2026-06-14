@@ -89,7 +89,7 @@ const latestRow = computed<Row>(() => ({ ...latest }));
 const { status, error, reconnect } = useStream(
   props.connectionId,
   props.source,
-  { resource: props.resource },
+  { resource: props.resource, record: props.record },
   onFrame,
 );
 

@@ -361,6 +361,57 @@ describe("ActionBar", () => {
     w.unmount();
   });
 
+  it("runs row actions from record context when the row has no resource ref", async () => {
+    const action: Action = {
+      id: "dns.update",
+      label: "Edit",
+      routeId: "cloudflare.dns.update",
+      method: "PUT",
+      risk: RiskLevel.Write,
+      requiresConfirm: false,
+      params: {
+        zone: "${record.zone_id}",
+        record: "${record.id}",
+      },
+      input: {
+        groups: [
+          {
+            name: "DNS",
+            fields: [
+              {
+                key: "ttl",
+                label: "TTL",
+                type: "number",
+                default: "${record.ttl}",
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [action],
+        record: { id: "rec_1", zone_id: "zone_1", ttl: 300 },
+      },
+    });
+
+    await w.find("button").trigger("click");
+    await flushPromises();
+    (document.body.querySelector("form") as HTMLFormElement).dispatchEvent(
+      new Event("submit", { cancelable: true, bubbles: true }),
+    );
+    await flushPromises();
+
+    const url = new URL(posted[0].url, "http://localhost");
+    expect(url.searchParams.get("p.zone")).toBe("zone_1");
+    expect(url.searchParams.get("p.record")).toBe("rec_1");
+    expect((posted[0].body as { ttl: number }).ttl).toBe(300);
+    w.unmount();
+  });
+
   it("opens URL actions with input through the generic form and sends selected values as params", async () => {
     const action: Action = {
       id: "open",

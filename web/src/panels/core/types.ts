@@ -1,5 +1,5 @@
 import type { RecordingDescriptor } from "@/composables/useRecordingControl";
-import type { Action, DataSource, ResourceRef } from "@/types/projection";
+import type { Action, DataSource, ResourceRef, Row } from "@/types/projection";
 
 // Every panel component receives this shape; PanelHost binds it uniformly.
 export interface PanelProps {
@@ -9,5 +9,6 @@ export interface PanelProps {
   config?: Record<string, unknown>;
   recording?: RecordingDescriptor | null;
   resource?: ResourceRef | null;
+  record?: Row | null;
   actions?: Action[];
 }

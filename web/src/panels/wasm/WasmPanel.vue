@@ -39,6 +39,7 @@ const stageKey = computed(
       connectionId: props.connectionId,
       source: props.source,
       resource: props.resource?.uid,
+      record: props.record,
       config: props.config,
     }),
 );
@@ -50,7 +51,13 @@ const configError = computed(() =>
 );
 
 watch(
-  () => [stageKey.value, props.connectionId, props.resource, props.config],
+  () => [
+    stageKey.value,
+    props.connectionId,
+    props.resource,
+    props.record,
+    props.config,
+  ],
   () => syncPanel(),
   { deep: true },
 );
@@ -96,6 +103,7 @@ function syncPanel(): void {
     connectionId: props.connectionId,
     config,
     resource: props.resource,
+    record: props.record,
   });
   if (active.value) activateWasmPanel(registeredKey);
   void nextTick(scheduleRectUpdate);

@@ -22,6 +22,7 @@ const props = defineProps<{
   config?: Record<string, unknown>;
   recording?: RecordingDescriptor | null;
   resource?: ResourceRef | null;
+  record?: Row | null;
   actions?: Action[];
 }>();
 const emit = defineEmits<{
@@ -47,6 +48,7 @@ const panelKey = computed(() =>
     connectionId: props.connectionId,
     source: props.source,
     resource: props.resource?.uid,
+    record: props.record,
     scope: scope.key(props.connectionId),
   }),
 );
@@ -72,6 +74,7 @@ function onSelect(row: Row): void {
     :config="config"
     :recording="panelRecording"
     :resource="resource"
+    :record="record"
     :actions="actions"
     @action-done="onActionDone"
     @select="onSelect"

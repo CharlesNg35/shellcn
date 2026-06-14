@@ -26,9 +26,43 @@ const props = defineProps<{
   scope?: Record<string, string> | null;
 }>();
 
-function targets(): ResourceRef[] {
-  if (props.resources?.length) return props.resources;
-  return props.resource ? [props.resource] : [];
+interface ActionTarget {
+  resource: ResourceRef | null;
+  record: Row | null;
+}
+
+function actionTargets(): ActionTarget[] {
+  if (props.records?.length) {
+    return props.records.map((record, index) => ({
+      resource: props.resources?.[index] ?? record.ref ?? null,
+      record,
+    }));
+  }
+  if (props.resources?.length) {
+    return props.resources.map((resource) => ({ resource, record: null }));
+  }
+  if (props.resource || props.record) {
+    return [
+      {
+        resource: props.resource ?? props.record?.ref ?? null,
+        record: props.record ?? null,
+      },
+    ];
+  }
+  return [];
+}
+
+function firstTarget(): ActionTarget {
+  return (
+    actionTargets()[0] ?? {
+      resource: props.resource ?? null,
+      record: props.record ?? null,
+    }
+  );
+}
+
+function targetContext(target: ActionTarget) {
+  return { resource: target.resource, record: target.record };
 }
 
 function recordMatches(
@@ -160,8 +194,10 @@ function toggleMenu(key: string, event: Event): void {
 }
 
 function dockKey(action: Action): string {
-  if (props.resource?.uid) return props.resource.uid;
-  const params = actionParams(action);
+  const target = firstTarget();
+  if (target.resource?.uid) return target.resource.uid;
+  if (target.record) return JSON.stringify(target.record);
+  const params = actionParams(action, target);
   const sig = Object.keys(params)
     .sort()
     .map((k) => `${k}=${params[k]}`)
@@ -170,7 +206,8 @@ function dockKey(action: Action): string {
 }
 
 function dockItem(action: Action): DockItem {
-  const ref = targets()[0] ?? props.resource ?? null;
+  const target = firstTarget();
+  const ref = target.resource;
   return {
     id: `${action.id}:${dockKey(action)}`,
     title: ref?.name ? `${ref.name} · ${action.label}` : action.label,
@@ -179,10 +216,11 @@ function dockItem(action: Action): DockItem {
     source: {
       routeId: action.routeId,
       method: action.method,
-      params: actionParams(action, ref),
+      params: actionParams(action, target),
     },
     config: action.config,
     resource: ref,
+    record: target.record,
   };
 }
 
@@ -214,10 +252,11 @@ function trigger(action: Action): void {
 
 function actionParams(
   action: Action,
-  ref: ResourceRef | null | undefined = props.resource,
+  target: ActionTarget = firstTarget(),
 ): Record<string, string> {
   const base = props.scope ? { ...props.scope } : {};
   if (action.params) return { ...base, ...action.params };
+  const ref = target.resource;
   if (!ref) return base;
   const params: Record<string, string> = {
     ...base,
@@ -252,20 +291,20 @@ async function openURL(
   error.value = null;
   busy.value = true;
   busyAction.value = action.id;
-  const ref = targets()[0] ?? props.resource ?? null;
-  const params = { ...actionParams(action, ref), ...formParams(body) };
+  const target = firstTarget();
+  const params = { ...actionParams(action, target), ...formParams(body) };
   try {
     const result: unknown =
       (action.method ?? "GET") === "GET"
         ? await fetchDoc(
             props.connectionId,
             { routeId: action.routeId, params },
-            { resource: ref },
+            targetContext(target),
           )
         : await runFormAction(
             props.connectionId,
             action.routeId,
-            { resource: ref },
+            targetContext(target),
             {},
             params,
             action.method ?? "POST",
@@ -304,34 +343,34 @@ async function execute(
   busy.value = true;
   busyAction.value = action.id;
   error.value = null;
-  const refs = targets();
+  const targets = actionTargets();
   try {
-    if (refs.length > 1) {
-      for (const ref of refs) {
+    if (targets.length > 1) {
+      for (const target of targets) {
         await runFormAction(
           props.connectionId,
           action.routeId,
-          { resource: ref },
+          targetContext(target),
           body ?? {},
-          actionParams(action, ref),
+          actionParams(action, target),
           action.method ?? "POST",
         );
       }
       pending.value = null;
       toast.add({
         severity: "success",
-        summary: `${action.label}: ${refs.length} items`,
+        summary: `${action.label}: ${targets.length} items`,
         life: 4000,
       });
       emit("done", action);
     } else {
-      const ref = refs[0] ?? props.resource ?? null;
+      const target = targets[0] ?? firstTarget();
       const result = await runFormAction(
         props.connectionId,
         action.routeId,
-        { resource: ref },
+        targetContext(target),
         body ?? {},
-        actionParams(action, ref),
+        actionParams(action, target),
         action.method ?? "POST",
       );
       pending.value = null;
@@ -494,8 +533,8 @@ function onVisible(visible: boolean): void {
           :submit-label="pending.label"
           :busy="busy"
           :connection-id="connectionId"
-          :resource="targets()[0] ?? resource ?? null"
-          :record="record ?? null"
+          :resource="firstTarget().resource"
+          :record="firstTarget().record"
           @submit="submitPending(pending, $event)"
         />
 

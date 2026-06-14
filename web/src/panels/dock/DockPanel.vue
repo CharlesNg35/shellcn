@@ -109,6 +109,7 @@ onBeforeUnmount(onResizeEnd);
           :source="active.source"
           :config="active.config"
           :resource="active.resource"
+          :record="active.record"
         />
       </KeepAlive>
     </div>

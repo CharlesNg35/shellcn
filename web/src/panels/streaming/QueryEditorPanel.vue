@@ -32,7 +32,7 @@ interface Results {
 function initialQuery(): string {
   const raw = queryConfig.value?.initialQuery ?? "";
   try {
-    return interpolate(raw, { resource: props.resource });
+    return interpolate(raw, { resource: props.resource, record: props.record });
   } catch {
     return raw;
   }
@@ -111,7 +111,7 @@ const {
 } = useStream(
   props.connectionId,
   props.source,
-  { resource: props.resource },
+  { resource: props.resource, record: props.record },
   onFrame,
 );
 
@@ -146,7 +146,7 @@ async function cancel(): Promise<void> {
     await runAction(
       props.connectionId,
       routeId,
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
       {},
       queryConfig.value?.cancelParams ?? props.source?.params ?? {},
       "POST",
@@ -166,7 +166,7 @@ async function loadCompletions(): Promise<CodeMirrorCompletion[]> {
         routeId,
         params: queryConfig.value?.completionParams ?? props.source?.params,
       },
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
     );
     return Array.isArray(items) ? items : [];
   } catch {
