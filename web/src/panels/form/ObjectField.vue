@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { Field, ResourceRef } from "@/types/projection";
+import type { Field, ResourceIdentity, Row } from "@/types/projection";
 import FieldGroup from "./FieldGroup.vue";
 
 const props = defineProps<{
   field: Field;
   modelValue: unknown;
   connectionId?: string;
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
+  record?: Row | null;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: Record<string, unknown>];
@@ -31,6 +32,7 @@ function set(key: string, value: unknown): void {
       :values="record"
       :connection-id="connectionId"
       :resource="resource"
+      :record="record"
       @update="set"
     />
   </div>

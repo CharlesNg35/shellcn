@@ -50,7 +50,7 @@ async function load(): Promise<void> {
     const page = await fetchPage<Row>(
       props.connectionId,
       props.source,
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
       { limit: 100 },
     );
     rows.value = page.items;

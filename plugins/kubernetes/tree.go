@@ -13,7 +13,7 @@ func tree() []plugin.TreeGroup {
 			Key:   "overview",
 			Label: "Overview",
 			Icon:  lucide("layout-dashboard"),
-			Ref:   &plugin.ResourceRef{Kind: clusterKind, Name: "Cluster", UID: clusterKind},
+			Ref:   &plugin.ResourceIdentity{Kind: clusterKind, Name: "Cluster", UID: clusterKind},
 		},
 		kindGroup("node", "Nodes", "server"),
 	}

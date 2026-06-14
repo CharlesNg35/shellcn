@@ -70,7 +70,7 @@ func TestListResourceNamespacedPods(t *testing.T) {
 		t.Fatalf("pod age fields = %+v", r)
 	}
 	// Every list row must carry a ref so the grid can open detail + row actions.
-	ref, ok := r["ref"].(plugin.ResourceRef)
+	ref, ok := r["ref"].(plugin.ResourceIdentity)
 	if !ok || ref.Kind != "pod" || ref.Name != "web-1" || ref.Namespace != "default" {
 		t.Fatalf("pod row ref = %+v (ok=%v)", r["ref"], ok)
 	}
@@ -299,7 +299,7 @@ func TestCRDDynamicColumns(t *testing.T) {
 		t.Fatalf("crd columns = %+v", cols)
 	}
 
-	// Rows are keyed by those column names + carry a customresource ref.
+	// Rows are keyed by those column names + carry a customresource identity.
 	listOut, err := ListResource(rc(sess, map[string]string{"kind": crd}))
 	if err != nil {
 		t.Fatalf("list crd: %v", err)
@@ -308,7 +308,7 @@ func TestCRDDynamicColumns(t *testing.T) {
 	if row["Name"] != "w1" || row["Phase"] != "Ready" {
 		t.Fatalf("crd row cells = %+v", row)
 	}
-	ref, ok := row["ref"].(plugin.ResourceRef)
+	ref, ok := row["ref"].(plugin.ResourceIdentity)
 	if !ok || ref.Kind != customResourceKind || ref.Scope != crd || ref.Name != "w1" {
 		t.Fatalf("crd row ref = %+v", row["ref"])
 	}

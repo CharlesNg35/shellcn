@@ -56,7 +56,10 @@ const root = ref<HTMLElement | null>(null);
 const initialized = ref(false);
 const terminalBaseKey = computed(() =>
   props.source
-    ? channelKey(props.connectionId, props.source, { resource: props.resource })
+    ? channelKey(props.connectionId, props.source, {
+        resource: props.resource,
+        record: props.record,
+      })
     : null,
 );
 
@@ -214,7 +217,10 @@ function aspectRatio(width: number, height: number): number {
 function closePaneStream(paneId: string): void {
   if (!props.source) return;
   streams.close(
-    `${channelKey(props.connectionId, props.source, { resource: props.resource })}:${paneId}`,
+    `${channelKey(props.connectionId, props.source, {
+      resource: props.resource,
+      record: props.record,
+    })}:${paneId}`,
   );
 }
 
@@ -427,6 +433,7 @@ watch(
         :connection-id="connectionId"
         :source="source"
         :resource="resource"
+        :record="record"
         :terminal-config="terminalConfig"
         :split-sizes="splitSizes"
         @focus="activePaneId = $event"

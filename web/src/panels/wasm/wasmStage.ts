@@ -11,7 +11,8 @@ import { KEEP_ALIVE_WASM_PANELS_MAX } from "@/stores/sessionLimits";
 import type {
   DataSource,
   Method,
-  ResourceRef,
+  ResourceIdentity,
+  Row,
   WasmAsset,
   WasmBridgeRoute,
   WasmBridgeStream,
@@ -68,7 +69,8 @@ export interface WasmPanelHandle {
   key: string;
   connectionId: string;
   config: WasmPanelConfig;
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
+  record?: Row | null;
 }
 
 export interface WasmStageEntry extends WasmPanelHandle {
@@ -95,6 +97,7 @@ export function registerWasmPanel(handle: WasmPanelHandle): void {
     existing.connectionId = handle.connectionId;
     existing.config = handle.config;
     existing.resource = handle.resource;
+    existing.record = handle.record;
     existing.active = true;
     existing.lastUsed = nextStamp();
     if (existing.signature !== signature) {
@@ -350,7 +353,7 @@ async function handleRoute(
     const data = await callRoute(
       entry.connectionId,
       msg.routeId,
-      { resource: entry.resource },
+      { resource: entry.resource, record: entry.record },
       msg.body,
       { ...(allowed.params ?? {}), ...(msg.params ?? {}) },
       msg.method ?? allowed.method ?? "POST",
@@ -387,6 +390,7 @@ async function handleStreamOpen(
     };
     const handle = await prepareStream(entry.connectionId, ds, {
       resource: entry.resource,
+      record: entry.record,
     });
     const socket = new WebSocket(handle.url);
     entry.activeStreams.set(msg.id, socket);
@@ -504,8 +508,11 @@ function assetURL(entry: WasmStageEntry, asset: WasmAsset): string {
   return routeURL(
     entry.connectionId,
     asset.source.routeId,
-    { resource: entry.resource },
-    resolveParams(asset.source.params, { resource: entry.resource }),
+    { resource: entry.resource, record: entry.record },
+    resolveParams(asset.source.params, {
+      resource: entry.resource,
+      record: entry.record,
+    }),
   );
 }
 

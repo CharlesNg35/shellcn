@@ -14,8 +14,9 @@ import type {
   DataSource,
   Page,
   PageRequest,
+  Row,
   ResourceEvent,
-  ResourceRef,
+  ResourceIdentity,
 } from "../types/projection";
 
 // Reflect request outcomes in connection health. 4xx errors are operation-level
@@ -36,7 +37,8 @@ async function track<T>(connectionId: string, run: Promise<T>): Promise<T> {
 }
 
 export interface ResolveContext {
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
+  record?: Row | null;
 }
 
 function withScope(
@@ -61,12 +63,33 @@ export function interpolate(template: string, ctx: ResolveContext): string {
 }
 
 function lookup(expr: string, ctx: ResolveContext): string | undefined {
-  if (expr.startsWith("resource.")) {
-    const key = expr.slice("resource.".length) as keyof ResourceRef;
-    const v = ctx.resource?.[key];
-    return typeof v === "string" ? v : undefined;
+  const value = lookupRaw(expr, ctx);
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
   }
   return undefined;
+}
+
+export function lookupRaw(expr: string, ctx: ResolveContext): unknown {
+  if (expr.startsWith("resource.")) {
+    const key = expr.slice("resource.".length) as keyof ResourceIdentity;
+    return ctx.resource?.[key];
+  }
+  if (expr.startsWith("record.")) {
+    return lookupPath(ctx.record, expr.slice("record.".length));
+  }
+  return undefined;
+}
+
+function lookupPath(source: unknown, path: string): unknown {
+  let current = source;
+  for (const segment of path.split(".")) {
+    if (!segment) return undefined;
+    if (!current || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
 }
 
 const LONE_TOKEN = /^\$\{([^}]+)\}$/;
@@ -84,8 +107,7 @@ export function resolveParams(
       if (value) out[key] = value;
       continue;
     }
-    out[key] = TOKEN.test(template) ? interpolate(template, ctx) : template;
-    TOKEN.lastIndex = 0;
+    out[key] = template.includes("${") ? interpolate(template, ctx) : template;
   }
   return out;
 }

@@ -24,7 +24,7 @@ beforeEach(() => {
     const filter = u.searchParams.get("filter");
     if (filter === "beta")
       return { body: { items: [row("b", "beta")], nextCursor: "", total: 1 } };
-    if (cursor === "2")
+    if (cursor === "c2")
       return { body: { items: [row("c", "gamma")], nextCursor: "", total: 3 } };
     return {
       body: {
@@ -89,6 +89,41 @@ describe("TablePanel", () => {
     await flushPromises();
     expect(w.findAll("tbody tr")).toHaveLength(1);
     expect(w.text()).toContain("gamma");
+  });
+
+  it("uses the previous page nextCursor instead of treating cursor as an offset", async () => {
+    const cursors: Array<string | null> = [];
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      const u = new URL(url, "http://h");
+      cursors.push(u.searchParams.get("cursor"));
+      return u.searchParams.get("cursor") === "opaque-next"
+        ? { body: { items: [row("b", "beta")], nextCursor: "", total: 2 } }
+        : {
+            body: {
+              items: [row("a", "alpha")],
+              nextCursor: "opaque-next",
+              total: 2,
+            },
+          };
+    });
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "docker.container.list" },
+        config: { columns },
+      },
+    });
+    await flushPromises();
+
+    w.findComponent({ name: "DataTable" }).vm.$emit("page", {
+      first: 1,
+      rows: 50,
+    });
+    await flushPromises();
+
+    expect(cursors).toEqual([null, "opaque-next"]);
+    expect(w.text()).toContain("beta");
   });
 
   it("bounds and titles long cell values", async () => {

@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { KEEP_ALIVE_WORKBENCH_TABS_MAX } from "./sessionLimits";
-import type { Icon, ResourceRef, Row } from "../types/projection";
+import type { Icon, ResourceIdentity, Row } from "../types/projection";
 
 export interface OpenView {
   id: string;
@@ -9,7 +9,7 @@ export interface OpenView {
   subtitle?: string;
   icon?: Icon;
   kind: "detail" | "list";
-  ref?: ResourceRef;
+  ref?: ResourceIdentity;
   row?: Row;
   resourceKind?: string;
   groupKey?: string;

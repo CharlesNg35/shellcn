@@ -55,12 +55,11 @@ type FilePage struct {
 }
 
 type snippet struct {
-	ID        string              `json:"id"`
-	Ref       *plugin.ResourceRef `json:"ref"`
-	Name      string              `json:"name"`
-	Body      string              `json:"body"`
-	CreatedAt time.Time           `json:"createdAt"`
-	UpdatedAt time.Time           `json:"updatedAt"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type snippetRequest struct {
@@ -607,15 +606,7 @@ func pageSnippets(rows []storedSnippet, req plugin.PageRequest) plugin.Page[snip
 }
 
 func snippetFromModel(sn storedSnippet) snippet {
-	return snippet{
-		ID: sn.ID,
-		Ref: &plugin.ResourceRef{
-			Kind: "snippet",
-			Name: sn.Name,
-			UID:  sn.ID,
-		},
-		Name: sn.Name, Body: sn.Body, CreatedAt: sn.CreatedAt, UpdatedAt: sn.UpdatedAt,
-	}
+	return snippet(sn)
 }
 
 func cursorOffset(cursor string) int {

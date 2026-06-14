@@ -66,6 +66,9 @@ func TestManifestRunsSnippetsInVisibleTerminal(t *testing.T) {
 			break
 		}
 	}
+	if run.Params["id"] != "${record.id}" {
+		t.Fatalf("snippet run should use row data, not a fake resource identity: %+v", run.Params)
+	}
 	if run.OnSuccess == nil || run.OnSuccess.SelectTab != "terminal" || len(run.OnSuccess.Effects) != 1 {
 		t.Fatalf("snippet run should target the terminal on success: %+v", run.OnSuccess)
 	}

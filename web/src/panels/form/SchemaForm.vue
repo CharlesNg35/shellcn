@@ -4,14 +4,14 @@ import Button from "primevue/button";
 import type {
   CredentialRefState,
   Field,
-  ResourceRef,
+  Row,
+  ResourceIdentity,
   Schema,
 } from "@/types/projection";
 import FormField from "./FormField.vue";
 import { isVisible } from "./condition";
 import { collectField } from "./collect";
 import { defaultForField } from "./defaults";
-import { interpolate } from "@/api/dataSource";
 
 const props = defineProps<{
   schema: Schema;
@@ -24,7 +24,8 @@ const props = defineProps<{
   busy?: boolean;
   // Forwarded to fields with a route-sourced options list (optionsSource).
   connectionId?: string;
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
+  record?: Row | null;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: Record<string, unknown>];
@@ -87,13 +88,10 @@ function modelMatchesValues(model?: Record<string, unknown>): boolean {
 }
 
 function fieldDefault(field: Field): unknown {
-  const value = defaultForField(field);
-  if (typeof value !== "string" || !value.includes("${")) return value;
-  try {
-    return interpolate(value, { resource: props.resource });
-  } catch {
-    return value;
-  }
+  return defaultForField(field, {
+    resource: props.resource,
+    record: props.record,
+  });
 }
 
 watch(
@@ -189,6 +187,7 @@ defineExpose({ submit: onSubmit });
         :protocol="protocol"
         :connection-id="connectionId"
         :resource="resource"
+        :record="record"
         @update:model-value="set(field, $event)"
       />
     </fieldset>

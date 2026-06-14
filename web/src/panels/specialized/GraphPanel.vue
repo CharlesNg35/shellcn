@@ -126,6 +126,7 @@ async function load(): Promise<void> {
       props.source,
       {
         resource: props.resource,
+        record: props.record,
       },
     );
     loadedOnce.value = true;
@@ -145,7 +146,7 @@ async function expand(nodeId: string): Promise<void> {
     const incoming = await fetchDoc<GraphPayload>(
       props.connectionId,
       { routeId, params: { ...props.source?.params, [param]: nodeId } },
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
     );
     payload.value = mergeGraph(payload.value, incoming);
   } catch {

@@ -1,8 +1,12 @@
-import type { ResourceRef, ResourceType, TreeGroup } from "../types/projection";
+import type {
+  ResourceIdentity,
+  ResourceType,
+  TreeGroup,
+} from "../types/projection";
 import type { OpenView } from "./workspace";
 
 // The active sidebar-tree view encoded for the `?v=` query param, and back. The
-// codec is self-sufficient: a detail carries its ResourceRef, so a pasted/refreshed
+// codec is self-sufficient: a detail carries its ResourceIdentity, so a pasted/refreshed
 // URL reconstructs the view without any open-views state. Each dynamic piece is
 // percent-encoded, so the `:` `,` `=` delimiters never collide with a value.
 
@@ -56,7 +60,7 @@ function parsePairs(segment: string): Record<string, string> {
   return out;
 }
 
-function refSubtitle(ref: ResourceRef): string {
+function refSubtitle(ref: ResourceIdentity): string {
   const location = [ref.scope, ref.namespace].filter(Boolean).join(" / ");
   return [ref.kind, location].filter(Boolean).join(" · ");
 }
@@ -105,7 +109,7 @@ export function parseView(
     const uid = dec(segments[2] ?? "");
     if (!kind || !uid || !resources.some((r) => r.kind === kind)) return null;
     const extras = segments[3] ? parsePairs(segments[3]) : {};
-    const ref: ResourceRef = {
+    const ref: ResourceIdentity = {
       kind,
       uid,
       name: extras.n ?? uid,

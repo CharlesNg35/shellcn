@@ -19,8 +19,6 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-type row map[string]any
-
 type actionResult struct {
 	OK bool `json:"ok"`
 }
@@ -235,7 +233,7 @@ func treeDatabases(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	page := res.(plugin.Page[row])
+	page := res.(plugin.Page[plugin.TableRow])
 	nodes := make([]plugin.TreeNode, 0, len(page.Items))
 	for _, r := range page.Items {
 		name := fmt.Sprint(r["name"])
@@ -243,7 +241,7 @@ func treeDatabases(rc *plugin.RequestContext) (any, error) {
 			Key:            "db:" + name,
 			Label:          name,
 			Icon:           icon("database"),
-			Ref:            &plugin.ResourceRef{Kind: "database", Name: name, UID: name},
+			Ref:            &plugin.ResourceIdentity{Kind: "database", Name: name, UID: name},
 			ChildrenSource: &plugin.DataSource{RouteID: "mysql.relations.tree", Params: map[string]string{"database": name}},
 		})
 	}
@@ -263,8 +261,8 @@ func treeRelations(rc *plugin.RequestContext) (any, error) {
 	}
 	nodes := []plugin.TreeNode{}
 	add := func(res any, iconName string) {
-		for _, r := range res.(plugin.Page[row]).Items {
-			ref, ok := r["ref"].(plugin.ResourceRef)
+		for _, r := range res.(plugin.Page[plugin.TableRow]).Items {
+			ref, ok := r["ref"].(plugin.ResourceIdentity)
 			if !ok || ref.Kind == "" {
 				continue
 			}
@@ -309,7 +307,7 @@ ORDER BY s.SCHEMA_NAME`, nil)
 	}
 	for _, r := range rows {
 		name := fmt.Sprint(r["name"])
-		r["ref"] = plugin.ResourceRef{Kind: "database", Name: name, UID: name}
+		r["ref"] = plugin.ResourceIdentity{Kind: "database", Name: name, UID: name}
 	}
 	return pageRows(rc, rows)
 }
@@ -430,7 +428,7 @@ ORDER BY t.TABLE_SCHEMA, t.TABLE_NAME`
 	}
 	for _, r := range rows {
 		name, database := fmt.Sprint(r["name"]), fmt.Sprint(r["database"])
-		r["ref"] = plugin.ResourceRef{Kind: refKind, Namespace: database, Name: name, UID: database + "." + name}
+		r["ref"] = plugin.ResourceIdentity{Kind: refKind, Namespace: database, Name: name, UID: database + "." + name}
 	}
 	return pageRows(rc, rows)
 }
@@ -456,7 +454,7 @@ ORDER BY ROUTINE_SCHEMA, ROUTINE_NAME`, []any{database, database})
 	}
 	for _, r := range rows {
 		name, database, routineType := fmt.Sprint(r["name"]), fmt.Sprint(r["database"]), strings.ToUpper(fmt.Sprint(r["type"]))
-		r["ref"] = plugin.ResourceRef{Kind: "routine", Namespace: database, Name: name, UID: routineID(database, routineType, name)}
+		r["ref"] = plugin.ResourceIdentity{Kind: "routine", Namespace: database, Name: name, UID: routineID(database, routineType, name)}
 	}
 	return pageRows(rc, rows)
 }
@@ -475,7 +473,7 @@ ORDER BY User, Host`, nil)
 	}
 	for _, r := range rows {
 		user, host := fmt.Sprint(r["user"]), fmt.Sprint(r["host"])
-		r["ref"] = plugin.ResourceRef{Kind: "user", Namespace: host, Name: user, UID: user + "@" + host}
+		r["ref"] = plugin.ResourceIdentity{Kind: "user", Namespace: host, Name: user, UID: user + "@" + host}
 	}
 	return pageRows(rc, rows)
 }
@@ -573,12 +571,12 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if offset+len(rows) < total {
 		next = strconv.Itoa(offset + len(rows))
 	}
-	return plugin.Page[row]{Items: rows, NextCursor: next, Total: &total}, nil
+	return plugin.Page[plugin.TableRow]{Items: rows, NextCursor: next, Total: &total}, nil
 }
 
 // foreignKeys maps each FK column to the referenced table's ref, attached under
 // the generic "_links" field the grid renders as links.
-func foreignKeys(ctx context.Context, s *Session, database, table string) (map[string]plugin.ResourceRef, error) {
+func foreignKeys(ctx context.Context, s *Session, database, table string) (map[string]plugin.ResourceIdentity, error) {
 	rows, err := queryRows(ctx, s, `
 SELECT COLUMN_NAME AS col, REFERENCED_TABLE_SCHEMA AS ref_schema, REFERENCED_TABLE_NAME AS ref_table
 FROM information_schema.KEY_COLUMN_USAGE
@@ -586,15 +584,15 @@ WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL`
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]plugin.ResourceRef{}
+	out := map[string]plugin.ResourceIdentity{}
 	for _, r := range rows {
 		col, refSchema, refTable := fmt.Sprint(r["col"]), fmt.Sprint(r["ref_schema"]), fmt.Sprint(r["ref_table"])
-		out[col] = plugin.ResourceRef{Kind: "table", Namespace: refSchema, Name: refTable, UID: refSchema + "." + refTable}
+		out[col] = plugin.ResourceIdentity{Kind: "table", Namespace: refSchema, Name: refTable, UID: refSchema + "." + refTable}
 	}
 	return out, nil
 }
 
-func attachForeignKeys(rows []row, fks map[string]plugin.ResourceRef) {
+func attachForeignKeys(rows []plugin.TableRow, fks map[string]plugin.ResourceIdentity) {
 	if len(fks) == 0 {
 		return
 	}
@@ -622,8 +620,8 @@ ORDER BY ORDINAL_POSITION`, []any{database, table})
 		return nil, err
 	}
 	for i := range rows {
-		name := fmt.Sprint(rows[i]["name"])
-		rows[i]["ref"] = plugin.ResourceRef{Kind: "column", Scope: database, Namespace: table, Name: name, UID: database + "." + table + "." + name}
+		rows[i]["database"] = database
+		rows[i]["table"] = table
 	}
 	return pageRows(rc, rows)
 }
@@ -647,8 +645,8 @@ ORDER BY INDEX_NAME, SEQ_IN_INDEX`, []any{database, table})
 		return nil, err
 	}
 	for i := range rows {
-		name := fmt.Sprint(rows[i]["name"])
-		rows[i]["ref"] = plugin.ResourceRef{Kind: "index", Scope: database, Namespace: table, Name: name, UID: database + "." + table + "." + name + "." + fmt.Sprint(rows[i]["column"])}
+		rows[i]["database"] = database
+		rows[i]["table"] = table
 	}
 	return pageRows(rc, rows)
 }
@@ -677,11 +675,9 @@ ORDER BY tc.CONSTRAINT_NAME`, []any{database, table})
 		return nil, err
 	}
 	for i := range rows {
-		name := fmt.Sprint(rows[i]["name"])
-		constraintType := strings.ToUpper(fmt.Sprint(rows[i]["type"]))
-		// UID carries the constraint type so the drop action can pick MySQL's
-		// type-specific DROP syntax (PRIMARY KEY / FOREIGN KEY / CHECK / INDEX).
-		rows[i]["ref"] = plugin.ResourceRef{Kind: "constraint", Scope: database, Namespace: table, Name: name, UID: constraintType}
+		rows[i]["database"] = database
+		rows[i]["table"] = table
+		rows[i]["type"] = strings.ToUpper(fmt.Sprint(rows[i]["type"]))
 	}
 	return pageRows(rc, rows)
 }
@@ -712,7 +708,7 @@ func tableDDL(rc *plugin.RequestContext) (any, error) {
 	if definition == "" {
 		return rows[0], nil
 	}
-	return row{"database": database, "name": table, "definition": definition}, nil
+	return plugin.TableRow{"database": database, "name": table, "definition": definition}, nil
 }
 
 func viewDefinition(rc *plugin.RequestContext) (any, error) {
@@ -1420,7 +1416,7 @@ ORDER BY ORDINAL_POSITION`, []any{database, table})
 // back for UPDATE/DELETE. The grid stays read-only when the table has no primary
 // key or when a key column is itself sensitive (so a redacted value is never
 // shipped raw inside _key).
-func attachRowKeys(rows []row, pk, patterns []string) {
+func attachRowKeys(rows []plugin.TableRow, pk, patterns []string) {
 	if len(pk) == 0 || sqldb.AnyColumnRedacted(pk, patterns) {
 		return
 	}
@@ -1875,7 +1871,7 @@ func statementsRequireReview(statements []string) bool {
 	return false
 }
 
-func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]row, error) {
+func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]plugin.TableRow, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.opts.QueryTimeout)
 	defer cancel()
 	rows, err := s.db.QueryContext(ctx, sqlText, args...)
@@ -1887,13 +1883,13 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 	if err != nil {
 		return nil, mysqlErr(err)
 	}
-	out := []row{}
+	out := []plugin.TableRow{}
 	for rows.Next() {
 		values, err := scanValues(rows, columns)
 		if err != nil {
 			return nil, mysqlErr(err)
 		}
-		r := row{}
+		r := plugin.TableRow{}
 		for i, name := range columns {
 			if i < len(values) {
 				r[name] = values[i]
@@ -1920,7 +1916,7 @@ func scanValues(rows *sql.Rows, columns []string) ([]any, error) {
 	return values, nil
 }
 
-func redactRows(rows []row, patterns []string) {
+func redactRows(rows []plugin.TableRow, patterns []string) {
 	for _, r := range rows {
 		for key, value := range r {
 			if key == "_key" {
@@ -1933,17 +1929,17 @@ func redactRows(rows []row, patterns []string) {
 	}
 }
 
-func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
+func pageRows(rc *plugin.RequestContext, rows []plugin.TableRow) (plugin.Page[plugin.TableRow], error) {
 	req, err := rc.Page()
 	if err != nil {
-		return plugin.Page[row]{}, err
+		return plugin.Page[plugin.TableRow]{}, err
 	}
 	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	total := len(rows)
 	start, err := cursorOffset(req.Cursor)
 	if err != nil {
-		return plugin.Page[row]{}, err
+		return plugin.Page[plugin.TableRow]{}, err
 	}
 	if start > len(rows) {
 		start = len(rows)
@@ -1953,7 +1949,7 @@ func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
 	if end < len(rows) {
 		next = strconv.Itoa(end)
 	}
-	return plugin.Page[row]{Items: rows[start:end], NextCursor: next, Total: &total}, nil
+	return plugin.Page[plugin.TableRow]{Items: rows[start:end], NextCursor: next, Total: &total}, nil
 }
 
 func treeFromPage(rc *plugin.RequestContext, kind string, iconName string, labelKey string, load func(*plugin.RequestContext) (any, error)) (any, error) {
@@ -1961,13 +1957,13 @@ func treeFromPage(rc *plugin.RequestContext, kind string, iconName string, label
 	if err != nil {
 		return nil, err
 	}
-	page, ok := res.(plugin.Page[row])
+	page, ok := res.(plugin.Page[plugin.TableRow])
 	if !ok {
 		return nil, fmt.Errorf("%w: tree source returned invalid page", plugin.ErrUnavailable)
 	}
 	nodes := make([]plugin.TreeNode, 0, len(page.Items))
 	for _, r := range page.Items {
-		ref, _ := r["ref"].(plugin.ResourceRef)
+		ref, _ := r["ref"].(plugin.ResourceIdentity)
 		if ref.Kind == "" {
 			continue
 		}
@@ -1989,11 +1985,11 @@ func treeFromPage(rc *plugin.RequestContext, kind string, iconName string, label
 	return plugin.Page[plugin.TreeNode]{Items: nodes, NextCursor: page.NextCursor, Total: page.Total}, nil
 }
 
-func filterRows(rows []row, q string) []row {
+func filterRows(rows []plugin.TableRow, q string) []plugin.TableRow {
 	return plugin.FilterRows(rows, q)
 }
 
-func sortRows(rows []row, keys []plugin.SortKey) {
+func sortRows(rows []plugin.TableRow, keys []plugin.SortKey) {
 	if len(keys) == 0 {
 		return
 	}

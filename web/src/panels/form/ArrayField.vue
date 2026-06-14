@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Button from "primevue/button";
-import type { Field, ResourceRef } from "@/types/projection";
+import type { Field, ResourceIdentity, Row } from "@/types/projection";
 import FieldGroup from "./FieldGroup.vue";
 import FormField from "./FormField.vue";
 import AppIcon from "@/components/AppIcon.vue";
@@ -11,7 +11,8 @@ const props = defineProps<{
   field: Field;
   modelValue: unknown;
   connectionId?: string;
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
+  record?: Row | null;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: unknown[]] }>();
 
@@ -30,7 +31,13 @@ const atMin = computed(() => items.value.length <= (props.field.minItems ?? 0));
 
 function add(): void {
   if (!item.value || atMax.value) return;
-  emit("update:modelValue", [...items.value, defaultForField(item.value)]);
+  emit("update:modelValue", [
+    ...items.value,
+    defaultForField(item.value, {
+      resource: props.resource,
+      record: props.record,
+    }),
+  ]);
 }
 function removeAt(index: number): void {
   emit(
@@ -71,6 +78,7 @@ function setScalar(index: number, value: unknown): void {
           :values="(row ?? {}) as Record<string, unknown>"
           :connection-id="connectionId"
           :resource="resource"
+          :record="record"
           @update="(key, value) => setObject(index, key, value)"
         />
         <FormField
@@ -79,6 +87,7 @@ function setScalar(index: number, value: unknown): void {
           :model-value="row"
           :connection-id="connectionId"
           :resource="resource"
+          :record="record"
           @update:model-value="(value) => setScalar(index, value)"
         />
       </div>

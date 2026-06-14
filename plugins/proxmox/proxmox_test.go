@@ -109,11 +109,11 @@ func TestTermFraming(t *testing.T) {
 }
 
 func TestMetricFrame(t *testing.T) {
-	guest := metricFrame(row{"cpu": 0.5, "cpus": float64(4), "mem": float64(512), "maxmem": float64(1024)})
+	guest := metricFrame(plugin.TableRow{"cpu": 0.5, "cpus": float64(4), "mem": float64(512), "maxmem": float64(1024)})
 	if guest["cpu"] != 50.0 || guest["cpuTotal"] != int64(4) || guest["mem"] != 50.0 || guest["memUsed"] != int64(512) || guest["memTotal"] != int64(1024) {
 		t.Fatalf("guest metric = %+v", guest)
 	}
-	node := metricFrame(row{"cpu": 0.1, "maxcpu": float64(8), "memory": map[string]any{"used": float64(1), "total": float64(4)}})
+	node := metricFrame(plugin.TableRow{"cpu": 0.1, "maxcpu": float64(8), "memory": map[string]any{"used": float64(1), "total": float64(4)}})
 	if node["cpu"] != 10.0 || node["cpuTotal"] != int64(8) || node["mem"] != 25.0 || node["memUsed"] != int64(1) || node["memTotal"] != int64(4) {
 		t.Fatalf("node metric = %+v", node)
 	}
@@ -137,7 +137,7 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		if page.Items[0]["template"] != true {
 			t.Fatalf("qemu template flag = %+v", page.Items[0]["template"])
 		}
-		ref := page.Items[0]["ref"].(plugin.ResourceRef)
+		ref := page.Items[0]["ref"].(plugin.ResourceIdentity)
 		if ref.Namespace != "pve" || ref.UID != "100" {
 			t.Fatalf("qemu ref = %+v", ref)
 		}
@@ -161,7 +161,7 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		if page.Items[0]["vmstate"] != true {
 			t.Fatalf("snapshot vmstate = %+v", page.Items[0]["vmstate"])
 		}
-		ref := page.Items[0]["ref"].(plugin.ResourceRef)
+		ref := page.Items[0]["ref"].(plugin.ResourceIdentity)
 		if ref.Namespace != "pve" || ref.Name != "100" || ref.UID != "pre-upgrade" {
 			t.Fatalf("snapshot ref = %+v", ref)
 		}
@@ -189,9 +189,9 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		if len(page.Items) != 2 {
 			t.Fatalf("guest rows = %+v", page.Items)
 		}
-		var ref plugin.ResourceRef
+		var ref plugin.ResourceIdentity
 		for _, item := range page.Items {
-			candidate := item["ref"].(plugin.ResourceRef)
+			candidate := item["ref"].(plugin.ResourceIdentity)
 			if candidate.Kind == "qemu" {
 				ref = candidate
 				break
@@ -207,7 +207,7 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		if len(page.Items) != 2 {
 			t.Fatalf("storage rows = %+v", page.Items)
 		}
-		var local row
+		var local plugin.TableRow
 		for _, item := range page.Items {
 			if item["name"] == "local" {
 				local = item
@@ -220,7 +220,7 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		if local["usedPct"] != 10.0 {
 			t.Fatalf("storage usedPct = %+v", local["usedPct"])
 		}
-		ref := local["ref"].(plugin.ResourceRef)
+		ref := local["ref"].(plugin.ResourceIdentity)
 		if ref.Kind != "storage" || ref.Namespace != "pve" || ref.UID != "local" {
 			t.Fatalf("storage ref = %+v", ref)
 		}
@@ -387,7 +387,7 @@ func TestGuestOverviewMemorySemantics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("overview: %v", err)
 	}
-	got := result.(row)
+	got := result.(plugin.TableRow)
 	if got["cpuTotal"] != int64(2) {
 		t.Fatalf("cpuTotal = %+v, want sockets*cores", got["cpuTotal"])
 	}
@@ -523,13 +523,13 @@ func dialSession(t *testing.T, host, port string) *Session {
 	return s.(*Session)
 }
 
-func callList(t *testing.T, sess *Session, h plugin.Handler, params map[string]string) plugin.Page[row] {
+func callList(t *testing.T, sess *Session, h plugin.Handler, params map[string]string) plugin.Page[plugin.TableRow] {
 	t.Helper()
 	result, err := h(newRC(sess, params))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
-	page, ok := result.(plugin.Page[row])
+	page, ok := result.(plugin.Page[plugin.TableRow])
 	if !ok {
 		t.Fatalf("unexpected result type %T", result)
 	}

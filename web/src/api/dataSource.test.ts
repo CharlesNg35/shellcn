@@ -72,6 +72,27 @@ describe("dataSource resolver", () => {
     expect(params).toEqual({ vmid: "101", node: "pve1", view: "summary" });
   });
 
+  it("interpolates typed and nested ${record.*} values", () => {
+    const params = resolveParams(
+      {
+        id: "${record.id}",
+        path: "${record.metadata.name}",
+        label: "item-${record.id}",
+      },
+      {
+        record: {
+          id: 42,
+          metadata: { name: "frontend" },
+        },
+      },
+    );
+    expect(params).toEqual({
+      id: "42",
+      path: "frontend",
+      label: "item-42",
+    });
+  });
+
   it("errors on a blank inside a composed string (no silent corruption)", () => {
     expect(() => interpolate("${resource.uid}", {})).toThrow(/Cannot resolve/);
     // A token embedded in surrounding text must resolve — a blank would corrupt it.

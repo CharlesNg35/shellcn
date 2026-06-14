@@ -124,7 +124,7 @@ func bucketVersionsTableConfig() plugin.TableConfig {
 }
 
 func bucketParams() map[string]string {
-	return map[string]string{"bucket": "${resource.name}"}
+	return map[string]string{"bucket": "${record.name}"}
 }
 
 func AdminRoutes(protocol string) []plugin.Route {

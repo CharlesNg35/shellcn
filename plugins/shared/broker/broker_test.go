@@ -8,8 +8,6 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-type row map[string]any
-
 func pageRC(t *testing.T, filter string) *plugin.RequestContext {
 	t.Helper()
 	q := url.Values{}
@@ -27,7 +25,7 @@ func sortRC(t *testing.T, sort string) *plugin.RequestContext {
 }
 
 func TestPageRowsSorts(t *testing.T) {
-	rows := []row{{"name": "orders", "n": 3}, {"name": "events", "n": 1}, {"name": "Alerts", "n": 2}}
+	rows := []plugin.TableRow{{"name": "orders", "n": 3}, {"name": "events", "n": 1}, {"name": "Alerts", "n": 2}}
 
 	asc, _ := PageRows(sortRC(t, "name"), rows)
 	if asc.Items[0]["name"] != "Alerts" || asc.Items[2]["name"] != "orders" {
@@ -40,7 +38,7 @@ func TestPageRowsSorts(t *testing.T) {
 }
 
 func TestPageRowsFiltersMapRows(t *testing.T) {
-	rows := []row{{"name": "orders"}, {"name": "events"}, {"name": "order-dlq"}}
+	rows := []plugin.TableRow{{"name": "orders"}, {"name": "events"}, {"name": "order-dlq"}}
 
 	page, err := PageRows(pageRC(t, "order"), rows)
 	if err != nil {

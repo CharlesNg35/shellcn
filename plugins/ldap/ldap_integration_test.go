@@ -141,7 +141,7 @@ func attributeOf(ctx context.Context, t *testing.T, s *Session, dn, attr string)
 	if err != nil {
 		t.Fatalf("read attributes of %s: %v", dn, err)
 	}
-	for _, r := range res.(plugin.Page[row]).Items {
+	for _, r := range res.(plugin.Page[plugin.TableRow]).Items {
 		if r["attribute"] == attr {
 			return strings.Trim(asString(r["value"]), "[]\"")
 		}
@@ -161,9 +161,9 @@ func hasDN(t *testing.T, res any, err error, dn string) bool {
 	if err != nil {
 		t.Fatalf("list rows: %v", err)
 	}
-	page, ok := res.(plugin.Page[row])
+	page, ok := res.(plugin.Page[plugin.TableRow])
 	if !ok {
-		t.Fatalf("expected Page[row], got %T", res)
+		t.Fatalf("expected Page[plugin.TableRow], got %T", res)
 	}
 	for _, r := range page.Items {
 		// LDAP DNs are case-insensitive; AD normalizes attribute-type casing

@@ -20,8 +20,6 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-type row map[string]any
-
 type actionResult struct {
 	OK bool `json:"ok"`
 }
@@ -116,11 +114,11 @@ func treeDatabases(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	page := res.(plugin.Page[row])
+	page := res.(plugin.Page[plugin.TableRow])
 	nodes := make([]plugin.TreeNode, 0, len(page.Items))
 	for _, item := range page.Items {
 		name := fmt.Sprint(item["name"])
-		ref := plugin.ResourceRef{Kind: "database", Name: name, UID: name}
+		ref := plugin.ResourceIdentity{Kind: "database", Name: name, UID: name}
 		nodes = append(nodes, plugin.TreeNode{
 			Key:            "database:" + name,
 			Label:          name,
@@ -137,11 +135,11 @@ func treeCollections(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	page := res.(plugin.Page[row])
+	page := res.(plugin.Page[plugin.TableRow])
 	nodes := make([]plugin.TreeNode, 0, len(page.Items))
 	for _, item := range page.Items {
 		name, database := fmt.Sprint(item["name"]), fmt.Sprint(item["database"])
-		ref := plugin.ResourceRef{Kind: "collection", Namespace: database, Name: name, UID: database + "." + name}
+		ref := plugin.ResourceIdentity{Kind: "collection", Namespace: database, Name: name, UID: database + "." + name}
 		nodes = append(nodes, plugin.TreeNode{Key: "collection:" + ref.UID, Label: name, Icon: icon("folder"), Ref: &ref, Leaf: true})
 	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, NextCursor: page.NextCursor, Total: page.Total}, nil
@@ -158,16 +156,16 @@ func listDatabases(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, mongoErr(err)
 	}
-	rows := make([]row, 0, len(result.Databases))
+	rows := make([]plugin.TableRow, 0, len(result.Databases))
 	for _, db := range result.Databases {
 		if isInternalDatabase(db.Name) {
 			continue
 		}
-		rows = append(rows, row{
+		rows = append(rows, plugin.TableRow{
 			"name":  db.Name,
 			"size":  db.SizeOnDisk,
 			"empty": db.Empty,
-			"ref":   plugin.ResourceRef{Kind: "database", Name: db.Name, UID: db.Name},
+			"ref":   plugin.ResourceIdentity{Kind: "database", Name: db.Name, UID: db.Name},
 		})
 	}
 	return pageRows(rc, rows)
@@ -207,7 +205,7 @@ func listCollections(rc *plugin.RequestContext) (any, error) {
 		}
 		databases = list
 	}
-	rows := []row{}
+	rows := []plugin.TableRow{}
 	for _, dbName := range databases {
 		if dbName == "" || isInternalDatabase(dbName) {
 			continue
@@ -232,13 +230,13 @@ func listCollections(rc *plugin.RequestContext) (any, error) {
 			count, _ := db.Collection(name).EstimatedDocumentCount(ctx)
 			var stats bson.M
 			_ = db.RunCommand(ctx, bson.D{{Key: "collStats", Value: name}}).Decode(&stats)
-			rows = append(rows, row{
+			rows = append(rows, plugin.TableRow{
 				"name":     name,
 				"database": dbName,
 				"type":     fmt.Sprint(coll["type"]),
 				"count":    count,
 				"size":     numberValue(stats["size"]),
-				"ref":      plugin.ResourceRef{Kind: "collection", Namespace: dbName, Name: name, UID: dbName + "." + name},
+				"ref":      plugin.ResourceIdentity{Kind: "collection", Namespace: dbName, Name: name, UID: dbName + "." + name},
 			})
 		}
 	}
@@ -318,11 +316,13 @@ func listIndexes(rc *plugin.RequestContext) (any, error) {
 	if err := cur.All(ctx, &indexes); err != nil {
 		return nil, mongoErr(err)
 	}
-	rows := make([]row, 0, len(indexes))
+	rows := make([]plugin.TableRow, 0, len(indexes))
 	for _, idx := range indexes {
 		name := fmt.Sprint(idx["name"])
 		properties := mongoIndexProperties(idx)
-		rows = append(rows, row{
+		rows = append(rows, plugin.TableRow{
+			"database":   database,
+			"collection": collection,
 			"name":       name,
 			"keys":       compactJSON(idx["key"]),
 			"type":       mongoIndexType(idx["key"]),
@@ -331,7 +331,6 @@ func listIndexes(rc *plugin.RequestContext) (any, error) {
 			"hidden":     boolField(idx["hidden"]),
 			"ttl":        numberValue(idx["expireAfterSeconds"]),
 			"properties": strings.Join(properties, ", "),
-			"ref":        plugin.ResourceRef{Kind: "index", Scope: database, Namespace: collection, Name: name, UID: database + "." + collection + "." + name},
 		})
 	}
 	return pageRows(rc, rows)
@@ -531,7 +530,7 @@ func listDocuments(rc *plugin.RequestContext) (any, error) {
 	if err := cur.All(ctx, &docs); err != nil {
 		return nil, mongoErr(err)
 	}
-	rows := make([]row, 0, len(docs))
+	rows := make([]plugin.TableRow, 0, len(docs))
 	for _, doc := range docs {
 		item, err := documentRow(database, collection, doc)
 		if err != nil {
@@ -544,7 +543,7 @@ func listDocuments(rc *plugin.RequestContext) (any, error) {
 	if offset+len(rows) < total {
 		next = strconv.Itoa(offset + len(rows))
 	}
-	return plugin.Page[row]{Items: rows, NextCursor: next, Total: &total}, nil
+	return plugin.Page[plugin.TableRow]{Items: rows, NextCursor: next, Total: &total}, nil
 }
 
 func readDocument(rc *plugin.RequestContext) (any, error) {
@@ -900,17 +899,17 @@ func docRows(doc bson.M) ([]string, [][]any) {
 	return []string{"key", "value"}, rows
 }
 
-func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
+func pageRows(rc *plugin.RequestContext, rows []plugin.TableRow) (plugin.Page[plugin.TableRow], error) {
 	req, err := rc.Page()
 	if err != nil {
-		return plugin.Page[row]{}, err
+		return plugin.Page[plugin.TableRow]{}, err
 	}
 	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	total := len(rows)
 	start, err := offsetCursor(req.Cursor)
 	if err != nil {
-		return plugin.Page[row]{}, err
+		return plugin.Page[plugin.TableRow]{}, err
 	}
 	if start > len(rows) {
 		start = len(rows)
@@ -920,14 +919,14 @@ func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
 	if end < len(rows) {
 		next = strconv.Itoa(end)
 	}
-	return plugin.Page[row]{Items: rows[start:end], NextCursor: next, Total: &total}, nil
+	return plugin.Page[plugin.TableRow]{Items: rows[start:end], NextCursor: next, Total: &total}, nil
 }
 
-func filterRows(rows []row, q string) []row {
+func filterRows(rows []plugin.TableRow, q string) []plugin.TableRow {
 	return plugin.FilterRows(rows, q)
 }
 
-func sortRows(rows []row, keys []plugin.SortKey) {
+func sortRows(rows []plugin.TableRow, keys []plugin.SortKey) {
 	if len(keys) == 0 {
 		return
 	}
@@ -941,7 +940,7 @@ func sortRows(rows []row, keys []plugin.SortKey) {
 	})
 }
 
-func documentRow(database, collection string, doc bson.M) (row, error) {
+func documentRow(database, collection string, doc bson.M) (plugin.TableRow, error) {
 	id, ok := doc["_id"]
 	if !ok {
 		return nil, fmt.Errorf("%w: document is missing _id", plugin.ErrUnavailable)
@@ -950,11 +949,11 @@ func documentRow(database, collection string, doc bson.M) (row, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := row{}
+	out := plugin.TableRow{}
 	for key, value := range bsonMap(doc) {
 		out[key] = displayValue(key, value)
 	}
-	out["ref"] = plugin.ResourceRef{Kind: "document", Name: idLabel(id), UID: encoded}
+	out["ref"] = plugin.ResourceIdentity{Kind: "document", Name: idLabel(id), UID: encoded}
 	return out, nil
 }
 

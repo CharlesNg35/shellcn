@@ -41,7 +41,7 @@ func ResourceEvents(rc *plugin.RequestContext) (any, error) {
 		for key, val := range eventRow(o) {
 			row[key] = val
 		}
-		row["ref"] = plugin.ResourceRef{Kind: "event", Namespace: refNS(o), Name: refName(o), UID: str(o, "metadata", "uid")}
+		row["ref"] = plugin.ResourceIdentity{Kind: "event", Namespace: refNS(o), Name: refName(o), UID: str(o, "metadata", "uid")}
 		rows = append(rows, row)
 	}
 	sortRecentFirst(rows)

@@ -57,7 +57,7 @@ func listPods(rc *plugin.RequestContext) (any, error) {
 			"status":     p.Status,
 			"containers": len(p.Containers),
 			"createdAt":  p.Created,
-			"ref":        plugin.ResourceRef{Kind: "pod", Name: p.Name, UID: p.ID},
+			"ref":        plugin.ResourceIdentity{Kind: "pod", Name: p.Name, UID: p.ID},
 		})
 	}
 	return dockerengine.PageRows(rc, rows)
@@ -71,7 +71,7 @@ func treePods(rc *plugin.RequestContext) (any, error) {
 	page := res.(plugin.Page[dockerengine.Row])
 	nodes := make([]plugin.TreeNode, 0, len(page.Items))
 	for _, r := range page.Items {
-		ref, ok := r["ref"].(plugin.ResourceRef)
+		ref, ok := r["ref"].(plugin.ResourceIdentity)
 		if !ok {
 			continue
 		}
@@ -116,7 +116,7 @@ func podContainers(rc *plugin.RequestContext) (any, error) {
 			"id":    c.ID,
 			"name":  c.Name,
 			"state": c.State,
-			"ref":   plugin.ResourceRef{Kind: "container", Name: c.Name, UID: c.ID},
+			"ref":   plugin.ResourceIdentity{Kind: "container", Name: c.Name, UID: c.ID},
 		})
 	}
 	return dockerengine.PageRows(rc, rows)

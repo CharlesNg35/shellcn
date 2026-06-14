@@ -58,7 +58,7 @@ func (s *Session) tableList(ctx context.Context, k kind, ns string, limit int64)
 			}
 		}
 		name, namespace, uid := rowObjectMeta(tr.Object.Raw)
-		row["ref"] = plugin.ResourceRef{Kind: customResourceKind, Scope: k.name, Namespace: namespace, Name: name, UID: uid}
+		row["ref"] = plugin.ResourceIdentity{Kind: customResourceKind, Scope: k.name, Namespace: namespace, Name: name, UID: uid}
 		rows = append(rows, row)
 	}
 	return cols, rows, nil

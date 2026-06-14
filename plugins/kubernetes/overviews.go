@@ -21,7 +21,7 @@ func mapPods(items []unstructured.Unstructured) []Row {
 		for k, v := range podRow(o) {
 			row[k] = v
 		}
-		row["ref"] = plugin.ResourceRef{Kind: "pod", Namespace: refNS(o), Name: refName(o), UID: str(o, "metadata", "uid")}
+		row["ref"] = plugin.ResourceIdentity{Kind: "pod", Namespace: refNS(o), Name: refName(o), UID: str(o, "metadata", "uid")}
 		rows = append(rows, row)
 	}
 	return rows
@@ -33,7 +33,7 @@ func ClusterList(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	row := Row{"name": "Cluster", "uid": clusterKind, "ref": plugin.ResourceRef{Kind: clusterKind, Name: "Cluster", UID: clusterKind}}
+	row := Row{"name": "Cluster", "uid": clusterKind, "ref": plugin.ResourceIdentity{Kind: clusterKind, Name: "Cluster", UID: clusterKind}}
 	if v, err := s.clientset.Discovery().ServerVersion(); err == nil {
 		row["version"] = v.GitVersion
 	}

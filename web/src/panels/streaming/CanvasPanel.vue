@@ -92,7 +92,7 @@ const canvasAriaLabel = computed(
 const { status, error, send, reconnect } = useStream(
   props.connectionId,
   props.source,
-  { resource: props.resource },
+  { resource: props.resource, record: props.record },
   onFrame,
 );
 const showInitialLoader = computed(

@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+// TableRow is the canonical dynamic record shape for table responses.
+type TableRow = map[string]any
+
 // Download is a route result the core streams over HTTP instead of JSON encoding.
 // A handler sets exactly one byte source: Seeker (full Range via http.ServeContent),
 // OpenRange (single-range for offset-but-not-seek backends), or Body (full, no Range).

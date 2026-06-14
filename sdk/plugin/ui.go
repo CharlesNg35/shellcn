@@ -557,9 +557,13 @@ type Badge struct {
 	Severity Severity    `json:"severity,omitempty"`
 }
 
-// ResourceRef is a managed object's stable identity and display label. Scope is
-// an optional outer container for hierarchies deeper than namespace/name.
-type ResourceRef struct {
+// ResourceIdentity identifies a real, navigable resource exposed by a plugin.
+// Put it in a row's "ref" field only when that row should open a resource
+// detail view or feed ${resource.*} action params. Plain data rows should use
+// their own fields plus ${record.*} instead of fabricating an identity.
+// Scope is an optional outer container for hierarchies deeper than
+// namespace/name.
+type ResourceIdentity struct {
 	Kind      string `json:"kind"`
 	Scope     string `json:"scope,omitempty"`
 	Namespace string `json:"namespace,omitempty"`
@@ -569,9 +573,9 @@ type ResourceRef struct {
 
 // ResourceEvent is emitted by watch streams to patch a resource list.
 type ResourceEvent struct {
-	Type     string      `json:"type"`
-	Ref      ResourceRef `json:"ref"`
-	Resource any         `json:"resource,omitempty"`
+	Type     string           `json:"type"`
+	Ref      ResourceIdentity `json:"ref"`
+	Resource any              `json:"resource,omitempty"`
 }
 
 // Panel is a renderable tab, detail panel, or dashboard cell.
@@ -600,24 +604,24 @@ type PanelVariant struct {
 // TreeGroup is a lazy connection-sidebar root. With Source it expands; without
 // Source it opens ResourceKind or Ref directly.
 type TreeGroup struct {
-	Key          string       `json:"key"`
-	Label        string       `json:"label"`
-	Icon         Icon         `json:"icon,omitzero"`
-	Source       DataSource   `json:"source,omitzero"`
-	ResourceKind string       `json:"resourceKind,omitempty"`
-	Ref          *ResourceRef `json:"ref,omitempty"`
-	Badge        *Badge       `json:"badge,omitempty"`
+	Key          string            `json:"key"`
+	Label        string            `json:"label"`
+	Icon         Icon              `json:"icon,omitzero"`
+	Source       DataSource        `json:"source,omitzero"`
+	ResourceKind string            `json:"resourceKind,omitempty"`
+	Ref          *ResourceIdentity `json:"ref,omitempty"`
+	Badge        *Badge            `json:"badge,omitempty"`
 }
 
 // TreeNode is one node returned by a tree DataSource.
 type TreeNode struct {
-	Key            string       `json:"key"`
-	Label          string       `json:"label"`
-	Icon           Icon         `json:"icon,omitzero"`
-	Ref            *ResourceRef `json:"ref,omitempty"`
-	Leaf           bool         `json:"leaf,omitempty"`
-	ChildrenSource *DataSource  `json:"childrenSource,omitempty"`
-	Badge          *Badge       `json:"badge,omitempty"`
+	Key            string            `json:"key"`
+	Label          string            `json:"label"`
+	Icon           Icon              `json:"icon,omitzero"`
+	Ref            *ResourceIdentity `json:"ref,omitempty"`
+	Leaf           bool              `json:"leaf,omitempty"`
+	ChildrenSource *DataSource       `json:"childrenSource,omitempty"`
+	Badge          *Badge            `json:"badge,omitempty"`
 	// ResourceKind opens a resource list instead of a single-resource detail.
 	ResourceKind string `json:"resourceKind,omitempty"`
 	// ListParams merge into the resource list DataSource params.

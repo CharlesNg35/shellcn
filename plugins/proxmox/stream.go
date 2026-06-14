@@ -57,7 +57,7 @@ func metricsLoop(rc *plugin.RequestContext, client plugin.ClientStream, statusPa
 	}
 }
 
-func metricFrame(status row) map[string]any {
+func metricFrame(status plugin.TableRow) map[string]any {
 	cpu := round1(numFloat(status["cpu"]) * 100)
 	cpuTotal := numInt(status["cpus"])
 	if cpuTotal == 0 {

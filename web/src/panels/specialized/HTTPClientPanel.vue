@@ -142,7 +142,7 @@ async function send(): Promise<void> {
     response.value = (await runFormAction(
       props.connectionId,
       routeId,
-      { resource: props.resource },
+      { resource: props.resource, record: props.record },
       {
         method: method.value,
         url: url.value,

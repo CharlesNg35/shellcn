@@ -86,7 +86,7 @@ design seam for contributor ergonomics, not a dynamic-loading mechanism.
 | **Session**    | A live, authenticated runtime for one connection. Holds all per-connection state.                                                                                    |
 | **Channel**    | One stream inside a session: a terminal, log tail, VNC framebuffer, metrics feed, streaming query. Tracked by the core for lifecycle/audit.                          |
 | **Capability** | Declarative tag of what a connection/resource supports (`terminal`, `filesystem`…). Feature detection / panel selection only — **never** behavior dispatch.          |
-| **Resource**   | A managed object exposed by a connection (a container, pod, VM, table), identified by a stable `ResourceRef`.                                                        |
+| **Resource**   | A managed object exposed by a connection (a container, pod, VM, table), identified by a stable `ResourceIdentity`.                                                        |
 | **Action**     | A named operation on a connection/resource (`start`, `scale`). A UI affordance pointing at a **route**; risk/permission live on the route.                           |
 | **Stream**     | A long-lived channel a panel binds to (terminal, logs, desktop, metrics). Points at a WS **route**.                                                                  |
 | **Route**      | A typed server endpoint with metadata (id, method, permission, risk, audit, input schema). The **only** behavior mechanism.                                          |
@@ -457,7 +457,7 @@ read and stream request as `p.<Param>` — under any explicit params, which alwa
 win — so lists, watches, detail docs, and streams observe one scope without each
 panel remembering to wire it. Changing a selector re-fetches open list-style data
 and re-attaches watches; it must not collapse expanded tree nodes or remount a
-resource detail that is already identified by its own `ResourceRef`. It is
+resource detail that is already identified by its own `ResourceIdentity`. It is
 **plugin-agnostic**: the core treats the params as opaque, and route handlers read
 them where relevant (a cluster-scoped kind simply ignores its scope param). This
 is strictly better than a per-table filter: one selector, one source of truth,
@@ -506,10 +506,10 @@ stay deliberately lean: a resource's `Row` actions are limited to destructive
 removal/termination (delete/drop/truncate/purge, or a single kill/cancel);
 lifecycle, edit, and single-item actions live on the detail header (`Detail`).
 
-### 5.6 ResourceRef — stable identity vs display label
+### 5.6 ResourceIdentity — stable identity vs display label
 
 ```go
-type ResourceRef struct {
+type ResourceIdentity struct {
     Kind      string // "vm", "container", "pod", "table"
     Scope     string // optional outer container (database, cluster) — one level above Namespace
     Namespace string // optional scope (k8s namespace, db schema)
@@ -659,12 +659,16 @@ help.
 **Route-sourced choices.** A `select`/`radio`/`multiselect` field may set
 `OptionsSource` instead of (or in addition to) static `Options`: the renderer
 fetches it when the form opens and maps each row to `{value,label}`. Its params
-interpolate `${resource.*}` from the form's resource context, so a field can
-offer the live values of a related resource — e.g. a _Create index_ form whose
-_Columns_ field is a multiselect of the table's real columns, instead of a
-free-typed comma-separated string. Plugin-agnostic: the core only fetches rows
-and reads `value`/`name`/`label`; the plugin's route decides what the choices
-are. This keeps any "name an existing thing" field a picker, not free text.
+interpolate from the same form context as other route params: `${resource.*}`
+for the active `ResourceIdentity` and `${record.*}` for the row/object that opened the
+form. Defaults use the same resolver, including nested values and typed single
+tokens, so an edit form can seed fields directly from the selected row without a
+plugin-specific frontend path. This lets a field offer the live values of a
+related resource — e.g. a _Create index_ form whose _Columns_ field is a
+multiselect of the table's real columns, instead of a free-typed comma-separated
+string. Plugin-agnostic: the core only fetches rows and reads
+`value`/`name`/`label`; the plugin's route decides what the choices are. This
+keeps any "name an existing thing" field a picker, not free text.
 
 Rules normally read submitted schema fields. Reserved `$...` field names read
 ambient form context supplied by the core, currently `$transport` and
@@ -855,11 +859,12 @@ const (
 )
 
 // A panel binds to data via a route ID, not a raw URL. Params interpolate from
-// the active resource ("${resource.uid}") or static values. The core resolves
-// the RouteID + params to a concrete URL (§7.1).
+// the active resource ("${resource.uid}"), the active row/data record
+// ("${record.id}"), or static values. The core resolves the RouteID + params to
+// a concrete URL (§7.1).
 type DataSource struct {
     RouteID string
-    Params  map[string]string // {"vmid": "${resource.uid}", "node": "${resource.namespace}"}
+    Params  map[string]string // {"vmid": "${resource.uid}", "record": "${record.id}"}
 }
 ```
 
@@ -870,6 +875,13 @@ resource), the param is **omitted** and the route handler applies its own
 default/validation — never a blank request. A token _embedded_ in a larger
 string must resolve, since a blank would corrupt the value, so that errors
 loudly. The resolver special-cases no field name — only the token structure.
+`${resource.*}` is the navigable identity context (`ResourceIdentity`) and is present
+only when a row/tree/detail actually represents a resource. `${record.*}` is the
+current data row/object context and is available to row actions, row-hosted
+forms, options sources, dock/dialog panels opened from a row, table mutations,
+WASM bridge calls, and detail panels reached from a tree/table row. Nested paths
+such as `${record.metadata.name}` are valid. Use `${record.*}` for table rows
+that are not resources; do not fake a `ref` just to pass action params.
 
 ```go
 // Panel is one renderable panel — a detail/connection tab OR a dashboard cell
@@ -902,10 +914,10 @@ type TableConfig struct {
     // Declaring RowActionIDs makes the table's rows selectable (checkbox column,
     // multi-select). The row-action bar then operates on the selection: a route
     // action runs once per selected row (bulk), gated by Action.EnabledWhen
-    // across every selected row. A row's ResourceRef supplies each target's
-    // params. Set Selectable instead to keep checkboxes but no row bar (a browse
-    // table whose actions live in the detail). Inline-editable grids keep their
-    // own row controls instead.
+    // across every selected row. Row action params resolve from both the row's
+    // ResourceIdentity, when present, and the selected row data. Set Selectable
+    // instead to keep checkboxes but no row bar (a browse table whose actions
+    // live in the detail). Inline-editable grids keep their own row controls.
 
     // Editable data grid — plugin-agnostic; the renderer assumes nothing about
     // what the data represents.
@@ -925,6 +937,8 @@ type RowMutation struct {
     Key    map[string]any `json:"key,omitempty"`
     Values map[string]any `json:"values,omitempty"`
 }
+
+type TableRow = map[string]any
 ```
 
 The grid is fully generic: it has no notion of databases, keys, or links beyond
@@ -942,7 +956,7 @@ on its own:
   when absent the row is read-only. Mutation bodies are uniform across plugins
   (`{values}` / `{key,values}` / `{key}`), so the renderer ships zero per-plugin
   code. A plugin may also declare static `RowKey` columns instead.
-- `_links` — map of column key → `ResourceRef`; the grid turns those cells into
+- `_links` — map of column key → `ResourceIdentity`; the grid turns those cells into
   links that open the related resource. The renderer doesn't know or care _why_
   they're related (the SQL plugins derive them from foreign keys; others could
   use ownership, parentage, etc.).
@@ -1022,7 +1036,7 @@ type TreeGroup struct {
     Icon         Icon
     Source       DataSource   // expandable: returns Page[TreeNode], loaded lazily
     ResourceKind string       // leaf: click opens this resource's list
-    Ref          *ResourceRef // leaf: click opens this resource's detail
+    Ref          *ResourceIdentity // leaf: click opens this resource's detail
     Badge        *Badge       // optional count/status, route-backed
 }
 
@@ -1030,7 +1044,7 @@ type TreeNode struct {
     Key            string
     Label          string
     Icon           Icon
-    Ref            *ResourceRef       // opens this resource's detail
+    Ref            *ResourceIdentity       // opens this resource's detail
     Leaf           bool               // true means no expandable children
     ChildrenSource *DataSource        // expandable: returns child TreeNode rows
     Badge          *Badge
@@ -1272,9 +1286,9 @@ the choice is stored in user preferences. The default is a suggestion, not a loc
 
 ```go
 type ResourceType struct {
-    Kind          string          // matches ResourceRef.Kind
+    Kind          string          // matches ResourceIdentity.Kind
     Title         string
-    List          DataSource      // route → Page[Row]
+    List          DataSource      // route → Page[TableRow]
     Watch         *DataSource     // optional WS route → stream of ResourceEvent (§7.3)
     Columns       []Column        // static columns
     ColumnsSource *DataSource     // optional: route → column defs {name,label} when only known at runtime
@@ -1533,7 +1547,7 @@ patches the table/tree in place:
 type EventType string // added, updated, deleted
 type ResourceEvent struct {
     Type     EventType
-    Ref      ResourceRef
+    Ref      ResourceIdentity
     Resource json.RawMessage
 }
 ```

@@ -501,7 +501,7 @@ func serviceEvent(msg events.Message) *plugin.ResourceEvent {
 	if name == "" {
 		name = dockerengine.ShortID(id)
 	}
-	ref := plugin.ResourceRef{Kind: "service", Name: name, UID: id}
+	ref := plugin.ResourceIdentity{Kind: "service", Name: name, UID: id}
 	return &plugin.ResourceEvent{Type: evType, Ref: ref, Resource: dockerengine.Row{"id": id, "name": name, "ref": ref}}
 }
 
@@ -518,7 +518,7 @@ func serviceRows(items []swarm.Service) []dockerengine.Row {
 			"ports":     servicePorts(s.Endpoint.Ports),
 			"stack":     s.Spec.Labels[stackNamespaceLabel],
 			"createdAt": s.CreatedAt.UTC().Format(time.RFC3339),
-			"ref":       plugin.ResourceRef{Kind: "service", Name: s.Spec.Name, UID: s.ID},
+			"ref":       plugin.ResourceIdentity{Kind: "service", Name: s.Spec.Name, UID: s.ID},
 		})
 	}
 	return rows
@@ -541,7 +541,7 @@ func nodeRows(items []swarm.Node) []dockerengine.Row {
 			"leader":       leader,
 			"engine":       n.Description.Engine.EngineVersion,
 			"address":      n.Status.Addr,
-			"ref":          plugin.ResourceRef{Kind: "node", Name: name, UID: n.ID},
+			"ref":          plugin.ResourceIdentity{Kind: "node", Name: name, UID: n.ID},
 		})
 	}
 	return rows
@@ -562,7 +562,7 @@ func taskRows(items []swarm.Task, svcNames map[string]string) []dockerengine.Row
 			"image":        cleanImage(specImage(t.Spec)),
 			"error":        t.Status.Err,
 			"createdAt":    t.CreatedAt.UTC().Format(time.RFC3339),
-			"ref":          plugin.ResourceRef{Kind: "task", Name: name, UID: t.ID},
+			"ref":          plugin.ResourceIdentity{Kind: "task", Name: name, UID: t.ID},
 		})
 	}
 	return rows
@@ -585,7 +585,7 @@ func stackRows(rc *plugin.RequestContext) ([]dockerengine.Row, error) {
 		}
 		r, ok := stacks[ns]
 		if !ok {
-			r = dockerengine.Row{"name": ns, "services": 0, "ref": plugin.ResourceRef{Kind: "stack", Name: ns, UID: ns}}
+			r = dockerengine.Row{"name": ns, "services": 0, "ref": plugin.ResourceIdentity{Kind: "stack", Name: ns, UID: ns}}
 			stacks[ns] = r
 		}
 		r["services"] = r["services"].(int) + 1
@@ -626,7 +626,7 @@ func buildTree(rc *plugin.RequestContext, kind string, ic plugin.Icon, list func
 	}
 	nodes := make([]plugin.TreeNode, 0, len(page.Items))
 	for _, r := range page.Items {
-		ref, ok := r["ref"].(plugin.ResourceRef)
+		ref, ok := r["ref"].(plugin.ResourceIdentity)
 		if !ok {
 			continue
 		}

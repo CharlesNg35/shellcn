@@ -1,5 +1,5 @@
 import type { DataSource, Icon } from "./core";
-import type { Badge, Column, ResourceRef, Severity, Tab } from "./panels";
+import type { Badge, Column, ResourceIdentity, Severity, Tab } from "./panels";
 
 export interface FilterOption {
   value: string;
@@ -36,7 +36,7 @@ export interface TreeGroup {
   icon?: Icon;
   source?: DataSource;
   resourceKind?: string;
-  ref?: ResourceRef;
+  ref?: ResourceIdentity;
   badge?: Badge;
 }
 
@@ -44,7 +44,7 @@ export interface TreeNode {
   key: string;
   label: string;
   icon?: Icon;
-  ref?: ResourceRef;
+  ref?: ResourceIdentity;
   leaf?: boolean;
   childrenSource?: DataSource;
   badge?: Badge;
@@ -92,6 +92,6 @@ export type EventType = (typeof EventType)[keyof typeof EventType];
 
 export interface ResourceEvent {
   type: EventType;
-  ref: ResourceRef;
+  ref: ResourceIdentity;
   resource?: unknown;
 }

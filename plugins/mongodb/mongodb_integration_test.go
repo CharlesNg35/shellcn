@@ -50,7 +50,7 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list databases: %v", err)
 	}
-	if !pageHasName(databases.(plugin.Page[row]), "shellcn") {
+	if !pageHasName(databases.(plugin.Page[plugin.TableRow]), "shellcn") {
 		t.Fatalf("shellcn database missing: %#v", databases)
 	}
 
@@ -58,7 +58,7 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list documents: %v", err)
 	}
-	page := docs.(plugin.Page[row])
+	page := docs.(plugin.Page[plugin.TableRow])
 	if len(page.Items) != 1 || page.Items[0]["name"] != "Ada" {
 		t.Fatalf("unexpected documents: %#v", page.Items)
 	}
@@ -77,7 +77,7 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 	defer func() { _ = s.client.Database("shellcn_it_db").Drop(context.Background()) }()
 	if dbs, err := listDatabases(rc); err != nil {
 		t.Fatalf("list databases: %v", err)
-	} else if !pageHasName(dbs.(plugin.Page[row]), "shellcn_it_db") {
+	} else if !pageHasName(dbs.(plugin.Page[plugin.TableRow]), "shellcn_it_db") {
 		t.Fatalf("created database missing: %#v", dbs)
 	}
 
@@ -90,7 +90,7 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list collections: %v", err)
 	}
-	if !pageHasName(collections.(plugin.Page[row]), "shellcn_it_coll") {
+	if !pageHasName(collections.(plugin.Page[plugin.TableRow]), "shellcn_it_coll") {
 		t.Fatalf("created collection missing: %#v", collections)
 	}
 
@@ -103,7 +103,7 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list indexes: %v", err)
 	}
-	if !pageHasName(indexes.(plugin.Page[row]), "role_1") {
+	if !pageHasName(indexes.(plugin.Page[plugin.TableRow]), "role_1") {
 		t.Fatalf("created index missing: %#v", indexes)
 	}
 	dropParams := map[string]string{"database": "shellcn", "collection": "people", "name": "role_1"}
@@ -177,7 +177,7 @@ func run(ctx context.Context, t *testing.T, name string, args ...string) string 
 	return string(out)
 }
 
-func pageHasName(page plugin.Page[row], name string) bool {
+func pageHasName(page plugin.Page[plugin.TableRow], name string) bool {
 	for _, item := range page.Items {
 		if item["name"] == name {
 			return true

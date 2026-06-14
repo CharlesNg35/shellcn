@@ -135,6 +135,7 @@ async function load(): Promise<void> {
       props.source,
       {
         resource: props.resource,
+        record: props.record,
       },
     );
     selected.value = null;

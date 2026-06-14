@@ -43,7 +43,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				Label:       "Run",
 				Icon:        plugin.Icon{Type: plugin.IconLucide, Value: "play"},
 				RouteID:     "ssh.snippet.run",
-				Params:      map[string]string{"id": "${resource.uid}"},
+				Params:      map[string]string{"id": "${record.id}"},
 				Confirm:     true,
 				ConfirmText: "Run this snippet on the SSH host?",
 				OnSuccess: &plugin.ActionSuccess{
@@ -63,7 +63,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				Label:       "Delete",
 				Icon:        plugin.Icon{Type: plugin.IconLucide, Value: "trash"},
 				RouteID:     "ssh.snippet.delete",
-				Params:      map[string]string{"id": "${resource.uid}"},
+				Params:      map[string]string{"id": "${record.id}"},
 				Confirm:     true,
 				ConfirmText: "Delete this snippet?",
 			},

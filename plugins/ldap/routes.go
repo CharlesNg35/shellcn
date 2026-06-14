@@ -12,8 +12,6 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-type row map[string]any
-
 type actionResult struct {
 	OK bool `json:"ok"`
 }
@@ -191,7 +189,7 @@ func searchEntries(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]row, 0, len(entries))
+	rows := make([]plugin.TableRow, 0, len(entries))
 	for _, entry := range entries {
 		rows = append(rows, entryRow(entry, s.opts.ReadOnly))
 	}
@@ -211,7 +209,7 @@ func childEntries(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]row, 0, len(entries))
+	rows := make([]plugin.TableRow, 0, len(entries))
 	for _, entry := range entries {
 		rows = append(rows, entryRow(entry, s.opts.ReadOnly))
 	}
@@ -242,9 +240,9 @@ func entryOptions(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]row, 0, len(entries))
+	rows := make([]plugin.TableRow, 0, len(entries))
 	for _, entry := range entries {
-		rows = append(rows, row{
+		rows = append(rows, plugin.TableRow{
 			"value": entry.DN,
 			"label": entry.DN,
 			"name":  rdnOf(entry.DN),
@@ -267,9 +265,9 @@ func entryAttributes(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]row, 0, len(entry.Attributes))
+	rows := make([]plugin.TableRow, 0, len(entry.Attributes))
 	for _, attr := range entry.Attributes {
-		rows = append(rows, row{"attribute": attr.Name, "value": attributeValue(attr.Values)})
+		rows = append(rows, plugin.TableRow{"attribute": attr.Name, "value": attributeValue(attr.Values)})
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
 		return fmt.Sprint(rows[i]["attribute"]) < fmt.Sprint(rows[j]["attribute"])
@@ -315,7 +313,7 @@ func entryLDIF(rc *plugin.RequestContext) (any, error) {
 			fmt.Fprintf(&b, "%s: %s\n", attr.Name, value)
 		}
 	}
-	return row{"name": rdnOf(entry.DN), "dn": entry.DN, "definition": b.String()}, nil
+	return plugin.TableRow{"name": rdnOf(entry.DN), "dn": entry.DN, "definition": b.String()}, nil
 }
 
 // --- attribute mutations ------------------------------------------------
@@ -625,11 +623,11 @@ func treeNode(entry *ldapv3.Entry, readOnly bool) plugin.TreeNode {
 	return node
 }
 
-func entryRow(entry *ldapv3.Entry, readOnly bool) row {
+func entryRow(entry *ldapv3.Entry, readOnly bool) plugin.TableRow {
 	ref := entryRef(entry.DN)
 	classes := entry.GetAttributeValues("objectClass")
 	hasChildren := !strings.EqualFold(entry.GetAttributeValue("hasSubordinates"), "FALSE")
-	return row{
+	return plugin.TableRow{
 		"name":        ref.Name,
 		"dn":          entry.DN,
 		"parent":      parentOf(entry.DN),
@@ -642,8 +640,8 @@ func entryRow(entry *ldapv3.Entry, readOnly bool) row {
 	}
 }
 
-func entryRef(dn string) *plugin.ResourceRef {
-	return &plugin.ResourceRef{Kind: "entry", Name: rdnOf(dn), Namespace: parentOf(dn), UID: dn}
+func entryRef(dn string) *plugin.ResourceIdentity {
+	return &plugin.ResourceIdentity{Kind: "entry", Name: rdnOf(dn), Namespace: parentOf(dn), UID: dn}
 }
 
 func iconForEntry(classes []string) plugin.Icon {
@@ -837,32 +835,32 @@ func ldapErr(err error) error {
 
 // --- paging -------------------------------------------------------------
 
-func paginate(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
+func paginate(rc *plugin.RequestContext, rows []plugin.TableRow) (plugin.Page[plugin.TableRow], error) {
 	req, err := rc.Page()
 	if err != nil {
-		return plugin.Page[row]{}, err
+		return plugin.Page[plugin.TableRow]{}, err
 	}
 	sortRows(rows, req.Sort)
 	return sliceRows(rows, req)
 }
 
-func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
+func pageRows(rc *plugin.RequestContext, rows []plugin.TableRow) (plugin.Page[plugin.TableRow], error) {
 	req, err := rc.Page()
 	if err != nil {
-		return plugin.Page[row]{}, err
+		return plugin.Page[plugin.TableRow]{}, err
 	}
 	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	return sliceRows(rows, req)
 }
 
-func sliceRows(rows []row, req plugin.PageRequest) (plugin.Page[row], error) {
+func sliceRows(rows []plugin.TableRow, req plugin.PageRequest) (plugin.Page[plugin.TableRow], error) {
 	total := len(rows)
 	start := 0
 	if req.Cursor != "" {
 		n, err := strconv.Atoi(req.Cursor)
 		if err != nil || n < 0 {
-			return plugin.Page[row]{}, fmt.Errorf("%w: cursor must be an offset", plugin.ErrInvalidInput)
+			return plugin.Page[plugin.TableRow]{}, fmt.Errorf("%w: cursor must be an offset", plugin.ErrInvalidInput)
 		}
 		start = n
 	}
@@ -874,14 +872,14 @@ func sliceRows(rows []row, req plugin.PageRequest) (plugin.Page[row], error) {
 	if end < total {
 		next = strconv.Itoa(end)
 	}
-	return plugin.Page[row]{Items: rows[start:end], NextCursor: next, Total: &total}, nil
+	return plugin.Page[plugin.TableRow]{Items: rows[start:end], NextCursor: next, Total: &total}, nil
 }
 
-func filterRows(rows []row, q string) []row {
+func filterRows(rows []plugin.TableRow, q string) []plugin.TableRow {
 	return plugin.FilterRows(rows, q)
 }
 
-func sortRows(rows []row, keys []plugin.SortKey) {
+func sortRows(rows []plugin.TableRow, keys []plugin.SortKey) {
 	if len(keys) == 0 {
 		return
 	}

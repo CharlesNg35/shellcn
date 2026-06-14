@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { Field, ResourceRef } from "@/types/projection";
+import type { Field, ResourceIdentity, Row } from "@/types/projection";
 import FormField from "./FormField.vue";
 import { isVisible } from "./condition";
 
@@ -8,7 +8,8 @@ const props = defineProps<{
   fields: Field[];
   values: Record<string, unknown>;
   connectionId?: string;
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
+  record?: Row | null;
 }>();
 const emit = defineEmits<{ update: [key: string, value: unknown] }>();
 
@@ -26,6 +27,7 @@ const visible = computed(() =>
       :model-value="values[field.key]"
       :connection-id="connectionId"
       :resource="resource"
+      :record="record"
       @update:model-value="emit('update', field.key, $event)"
     />
   </div>

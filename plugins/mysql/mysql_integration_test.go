@@ -54,7 +54,7 @@ func TestMySQLPluginIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list databases after create: %v", err)
 	}
-	if !pageHasName(databases.(plugin.Page[row]), createdDatabase) {
+	if !pageHasName(databases.(plugin.Page[plugin.TableRow]), createdDatabase) {
 		t.Fatalf("created database was not listed: %#v", databases)
 	}
 
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	if err != nil {
 		t.Fatalf("list tables: %v", err)
 	}
-	if !pageHasName(list.(plugin.Page[row]), "shellcn_people") {
+	if !pageHasName(list.(plugin.Page[plugin.TableRow]), "shellcn_people") {
 		t.Fatalf("created table was not listed: %#v", list)
 	}
 
@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	if err != nil {
 		t.Fatalf("table rows: %v", err)
 	}
-	page := rows.(plugin.Page[row])
+	page := rows.(plugin.Page[plugin.TableRow])
 	if len(page.Items) != 1 || page.Items[0]["access_token"] != sqldb.RedactedValue {
 		t.Fatalf("expected redacted table data, got %#v", page.Items)
 	}
@@ -115,15 +115,15 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	if err != nil {
 		t.Fatalf("filtered rows: %v", err)
 	}
-	if len(matched.(plugin.Page[row]).Items) != 1 {
-		t.Fatalf("filter 'alice' should match 1 row, got %#v", matched.(plugin.Page[row]).Items)
+	if len(matched.(plugin.Page[plugin.TableRow]).Items) != 1 {
+		t.Fatalf("filter 'alice' should match 1 row, got %#v", matched.(plugin.Page[plugin.TableRow]).Items)
 	}
 	missed, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, people, url.Values{"filter": {"zzz-nomatch"}}, nil))
 	if err != nil {
 		t.Fatalf("filtered rows (miss): %v", err)
 	}
-	if len(missed.(plugin.Page[row]).Items) != 0 {
-		t.Fatalf("filter 'zzz-nomatch' should match 0 rows, got %#v", missed.(plugin.Page[row]).Items)
+	if len(missed.(plugin.Page[plugin.TableRow]).Items) != 0 {
+		t.Fatalf("filter 'zzz-nomatch' should match 0 rows, got %#v", missed.(plugin.Page[plugin.TableRow]).Items)
 	}
 
 	result, err := executeQueryRequest(ctx, s, sqldb.QueryRequest{Query: `SELECT name, access_token FROM shellcn_people`})
@@ -303,7 +303,7 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 		t.Fatalf("list users: %v", err)
 	}
 	foundUser := false
-	for _, u := range users.(plugin.Page[row]).Items {
+	for _, u := range users.(plugin.Page[plugin.TableRow]).Items {
 		if u["user"] == itUser {
 			foundUser = true
 		}
@@ -353,8 +353,8 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	if err != nil {
 		t.Fatalf("child table rows: %v", err)
 	}
-	if links, ok := orderRows.(plugin.Page[row]).Items[0]["_links"].(map[string]plugin.ResourceRef); !ok || links["person_id"].Name != "shellcn_people" {
-		t.Fatalf("expected _links[person_id] -> shellcn_people, got %#v", orderRows.(plugin.Page[row]).Items[0]["_links"])
+	if links, ok := orderRows.(plugin.Page[plugin.TableRow]).Items[0]["_links"].(map[string]plugin.ResourceIdentity); !ok || links["person_id"].Name != "shellcn_people" {
+		t.Fatalf("expected _links[person_id] -> shellcn_people, got %#v", orderRows.(plugin.Page[plugin.TableRow]).Items[0]["_links"])
 	}
 
 	// Foreign-key relationship graph (ERD) over the FK created above.
@@ -483,7 +483,7 @@ func run(ctx context.Context, t *testing.T, name string, args ...string) string 
 	return string(out)
 }
 
-func pageHasName(page plugin.Page[row], name string) bool {
+func pageHasName(page plugin.Page[plugin.TableRow], name string) bool {
 	for _, item := range page.Items {
 		if item["name"] == name {
 			return true
