@@ -495,6 +495,7 @@ function onVisible(visible: boolean): void {
           :busy="busy"
           :connection-id="connectionId"
           :resource="targets()[0] ?? resource ?? null"
+          :record="record ?? null"
           @submit="submitPending(pending, $event)"
         />
 

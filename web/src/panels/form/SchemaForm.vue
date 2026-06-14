@@ -4,6 +4,7 @@ import Button from "primevue/button";
 import type {
   CredentialRefState,
   Field,
+  Row,
   ResourceRef,
   Schema,
 } from "@/types/projection";
@@ -11,7 +12,7 @@ import FormField from "./FormField.vue";
 import { isVisible } from "./condition";
 import { collectField } from "./collect";
 import { defaultForField } from "./defaults";
-import { interpolate } from "@/api/dataSource";
+import { interpolate, lookupRaw } from "@/api/dataSource";
 
 const props = defineProps<{
   schema: Schema;
@@ -25,6 +26,7 @@ const props = defineProps<{
   // Forwarded to fields with a route-sourced options list (optionsSource).
   connectionId?: string;
   resource?: ResourceRef | null;
+  record?: Row | null;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: Record<string, unknown>];
@@ -89,8 +91,19 @@ function modelMatchesValues(model?: Record<string, unknown>): boolean {
 function fieldDefault(field: Field): unknown {
   const value = defaultForField(field);
   if (typeof value !== "string" || !value.includes("${")) return value;
+  const lone = value.match(/^\$\{([^}]+)\}$/);
+  if (lone) {
+    const raw = lookupRaw(lone[1].trim(), {
+      resource: props.resource,
+      record: props.record,
+    });
+    if (raw !== undefined && raw !== "") return raw;
+  }
   try {
-    return interpolate(value, { resource: props.resource });
+    return interpolate(value, {
+      resource: props.resource,
+      record: props.record,
+    });
   } catch {
     return value;
   }

@@ -481,6 +481,51 @@ describe("SchemaForm", () => {
     expect(payload.archive).toBe("vzdump-qemu-101-2026_06_13-10_00_00.vma.zst");
   });
 
+  it("interpolates typed record defaults for row action forms", async () => {
+    const editSchema: Schema = {
+      groups: [
+        {
+          name: "DNS record",
+          fields: [
+            {
+              key: "name",
+              label: "Name",
+              type: "text",
+              default: "${record.name}",
+            },
+            {
+              key: "ttl",
+              label: "TTL",
+              type: "number",
+              default: "${record.ttl}",
+            },
+            {
+              key: "proxied",
+              label: "Proxied",
+              type: "toggle",
+              default: "${record.proxied}",
+            },
+          ],
+        },
+      ],
+    };
+    const w = mount(SchemaForm, {
+      props: {
+        schema: editSchema,
+        submitLabel: "Save",
+        record: { name: "www.example.com", ttl: 300, proxied: true },
+      },
+    });
+    await flushPromises();
+    await w.find("form").trigger("submit");
+    const payload = w.emitted("submit")?.[0][0] as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      name: "www.example.com",
+      ttl: 300,
+      proxied: true,
+    });
+  });
+
   it("keeps unresolved token defaults literal", async () => {
     const tokenSchema: Schema = {
       groups: [

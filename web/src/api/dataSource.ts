@@ -14,6 +14,7 @@ import type {
   DataSource,
   Page,
   PageRequest,
+  Row,
   ResourceEvent,
   ResourceRef,
 } from "../types/projection";
@@ -37,6 +38,7 @@ async function track<T>(connectionId: string, run: Promise<T>): Promise<T> {
 
 export interface ResolveContext {
   resource?: ResourceRef | null;
+  record?: Row | null;
 }
 
 function withScope(
@@ -61,10 +63,22 @@ export function interpolate(template: string, ctx: ResolveContext): string {
 }
 
 function lookup(expr: string, ctx: ResolveContext): string | undefined {
+  const value = lookupRaw(expr, ctx);
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return undefined;
+}
+
+export function lookupRaw(expr: string, ctx: ResolveContext): unknown {
   if (expr.startsWith("resource.")) {
     const key = expr.slice("resource.".length) as keyof ResourceRef;
-    const v = ctx.resource?.[key];
-    return typeof v === "string" ? v : undefined;
+    return ctx.resource?.[key];
+  }
+  if (expr.startsWith("record.")) {
+    const key = expr.slice("record.".length);
+    return ctx.record?.[key];
   }
   return undefined;
 }
