@@ -11,7 +11,8 @@ func TestNormalizeOptionsValidatesAuthFields(t *testing.T) {
 	for name, cfg := range map[string]map[string]any{
 		"password missing password": {"host": "ftp.example.com", "auth": "password", "username": "alice"},
 		"credential missing secret": {
-			"host": "ftp.example.com", "auth": "credential", plugin.CredentialIdentity: "alice",
+			"host": "ftp.example.com", "auth": "credential",
+			plugin.CredentialValuesKey(plugin.CredentialIDField): map[string]string{"username": "alice"},
 		},
 		"unsupported auth": {"host": "ftp.example.com", "auth": "token", "username": "alice", "password": "pw"},
 	} {
@@ -37,7 +38,7 @@ func TestNormalizeOptionsValidatesAuthFields(t *testing.T) {
 	t.Run("credential", func(t *testing.T) {
 		cfg := plugin.ConnectConfig{Config: map[string]any{
 			"host": "ftp.example.com", "auth": "credential",
-			plugin.CredentialIdentity: "alice", plugin.CredentialSecret: "pw",
+			plugin.CredentialValuesKey(plugin.CredentialIDField): map[string]string{"username": "alice", "password": "pw"},
 		}}
 		var opts Options
 		if err := normalizeOptions(cfg, &opts); err != nil {

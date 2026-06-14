@@ -624,16 +624,16 @@ func testCredentials(t *testing.T, s *store.Store) {
 	ctx := context.Background()
 	cr := &models.Credential{
 		ID: "cr1", Name: "ops key", Kind: "ssh_private_key", OwnerID: "u1",
-		Username: "ops", Protocols: []string{"ssh"}, EncryptedSecret: []byte("enc-key"),
+		Values: map[string]string{"username": "ops"}, Protocols: []string{"ssh"}, EncryptedValues: []byte("enc-key"),
 	}
 	if err := s.Credentials.Create(ctx, cr); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	got, err := s.Credentials.Get(ctx, "cr1")
-	if err != nil || string(got.EncryptedSecret) != "enc-key" {
+	if err != nil || string(got.EncryptedValues) != "enc-key" {
 		t.Fatalf("get: %+v err=%v", got, err)
 	}
-	if sum := got.Summary(); len(sum.Protocols) != 1 || sum.Protocols[0] != "ssh" {
+	if sum := got.Summary(); len(sum.Protocols) != 1 || sum.Protocols[0] != "ssh" || sum.Values["username"] != "ops" {
 		t.Errorf("summary protocols: %+v", sum)
 	}
 	list, _ := s.Credentials.ListByOwner(ctx, "u1")
@@ -674,7 +674,7 @@ func testGrants(t *testing.T, s *store.Store) {
 // (use-grant present) without duplicating the secret material.
 func testCredentialReference(t *testing.T, s *store.Store) {
 	ctx := context.Background()
-	cr := &models.Credential{ID: "cr-shared", Name: "shared", Kind: "ssh_password", OwnerID: "owner", EncryptedSecret: []byte("enc")}
+	cr := &models.Credential{ID: "cr-shared", Name: "shared", Kind: "ssh_password", OwnerID: "owner", EncryptedValues: []byte("enc")}
 	if err := s.Credentials.Create(ctx, cr); err != nil {
 		t.Fatalf("create credential: %v", err)
 	}

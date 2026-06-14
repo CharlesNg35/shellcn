@@ -42,15 +42,18 @@ func TestCommandSafetyStopsBeforeMongo(t *testing.T) {
 
 func TestParseOptionsUsesTLSCredentialAsX509Auth(t *testing.T) {
 	opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{
-		"host":                          "mongo.local",
-		"auth":                          authClientCert,
-		"_auth_client_cert_id_identity": "CN=app",
-		"_auth_client_cert_id_secret":   "pem-material",
+		"host": "mongo.local",
+		"auth": authClientCert,
+		plugin.CredentialValuesKey(authCertField): map[string]string{
+			"subject":     "CN=app",
+			"certificate": "cert-pem",
+			"private_key": "key-pem",
+		},
 	}})
 	if err != nil {
 		t.Fatalf("parse options: %v", err)
 	}
-	if opts.Username != "CN=app" || opts.Password != "" || opts.ClientCertificate != "pem-material" || opts.TLSMode != "require" || opts.AuthMechanism != "MONGODB-X509" || opts.AuthSource != "$external" {
+	if opts.Username != "CN=app" || opts.Password != "" || opts.ClientCertificate != "cert-pem\nkey-pem" || opts.TLSMode != "require" || opts.AuthMechanism != "MONGODB-X509" || opts.AuthSource != "$external" {
 		t.Fatalf("unexpected credential material: %+v", opts)
 	}
 }

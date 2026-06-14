@@ -22,16 +22,25 @@ const nonPluginFixtures = new Set(["connections.json", "credentials.json"]);
 interface CredentialKindInfo {
   kind: string;
   label: string;
-  secretLabel: string;
-  secretMultiline?: boolean;
-  identityLabel?: string;
+  fields: CredentialKindField[];
   compatibleProtocols?: string[];
+}
+
+interface CredentialKindField {
+  key: string;
+  label: string;
+  type: string;
+  required?: boolean;
+  secret?: boolean;
+  public?: boolean;
+  placeholder?: string;
+  help?: string;
 }
 
 interface CredentialField {
   type?: string;
   credential?: {
-    kinds?: string[];
+    kind?: string;
     protocols?: string[];
   };
 }
@@ -54,39 +63,132 @@ const builtInCredentialKinds: CredentialKindInfo[] = [
   {
     kind: "db_password",
     label: "Database password",
-    secretLabel: "Password",
-    identityLabel: "Database user",
+    fields: [
+      { key: "username", label: "Database user", type: "text", public: true },
+      {
+        key: "password",
+        label: "Password",
+        type: "password",
+        required: true,
+        secret: true,
+      },
+    ],
   },
   {
     kind: "api_token",
     label: "API token",
-    secretLabel: "Token",
-    identityLabel: "Token name / subject",
+    fields: [
+      {
+        key: "subject",
+        label: "Token name / subject",
+        type: "text",
+        public: true,
+      },
+      {
+        key: "token",
+        label: "Token",
+        type: "password",
+        required: true,
+        secret: true,
+      },
+    ],
   },
   {
     kind: "tls_client_cert",
     label: "TLS client certificate",
-    secretLabel: "Certificate and private key",
-    secretMultiline: true,
-    identityLabel: "Certificate subject / username",
+    fields: [
+      {
+        key: "subject",
+        label: "Certificate subject / username",
+        type: "text",
+        public: true,
+      },
+      {
+        key: "certificate",
+        label: "Client certificate",
+        type: "textarea",
+        required: true,
+        secret: true,
+      },
+      {
+        key: "private_key",
+        label: "Private key",
+        type: "textarea",
+        required: true,
+        secret: true,
+      },
+      {
+        key: "passphrase",
+        label: "Private key passphrase",
+        type: "password",
+        secret: true,
+      },
+    ],
   },
   {
     kind: "cloud_access_key",
     label: "Cloud access key",
-    secretLabel: "Secret access key",
-    identityLabel: "Access key ID",
+    fields: [
+      {
+        key: "access_key_id",
+        label: "Access key ID",
+        type: "text",
+        required: true,
+        public: true,
+      },
+      {
+        key: "secret_access_key",
+        label: "Secret access key",
+        type: "password",
+        required: true,
+        secret: true,
+      },
+      {
+        key: "session_token",
+        label: "Session token",
+        type: "password",
+        secret: true,
+      },
+    ],
   },
   {
     kind: "basic_auth",
     label: "Basic auth",
-    secretLabel: "Password",
-    identityLabel: "Username",
+    fields: [
+      {
+        key: "username",
+        label: "Username",
+        type: "text",
+        required: true,
+        public: true,
+      },
+      {
+        key: "password",
+        label: "Password",
+        type: "password",
+        required: true,
+        secret: true,
+      },
+    ],
   },
   {
     kind: "bearer_token",
     label: "Bearer token",
-    secretLabel: "Token",
-    identityLabel: "Token name / subject",
+    fields: [
+      {
+        key: "subject",
+        label: "Token name / subject",
+        type: "text",
+        public: true,
+      },
+      {
+        key: "token",
+        label: "Token",
+        type: "password",
+        required: true,
+        secret: true,
+      },
+    ],
   },
 ];
 
@@ -110,7 +212,8 @@ function credentialKinds(): CredentialKindInfo[] {
         const protocols = field.credential.protocols?.length
           ? field.credential.protocols
           : [plugin.name];
-        for (const kind of field.credential.kinds ?? []) {
+        const kind = field.credential.kind;
+        if (kind) {
           if (!supports.has(kind)) supports.set(kind, new Set<string>());
           for (const protocol of protocols) supports.get(kind)?.add(protocol);
         }
@@ -1099,7 +1202,7 @@ function handleHTTP(
         name: body.name,
         kind: body.kind,
         ownerId: "u-demo",
-        identity: body.identity ?? body.username,
+        values: body.values ?? {},
         protocols: body.protocols,
         updatedAt: new Date().toISOString(),
       };
@@ -1117,7 +1220,7 @@ function handleHTTP(
         const body = raw as Json;
         cred.name = body.name ?? cred.name;
         cred.kind = body.kind ?? cred.kind;
-        cred.identity = body.identity ?? body.username;
+        cred.values = body.values ?? cred.values;
         cred.protocols = body.protocols;
         cred.updatedAt = new Date().toISOString();
         send(res, 200, cred);

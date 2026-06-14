@@ -8,9 +8,11 @@ import (
 
 func TestApplyPasswordCredentialIgnoresCredentialKindRouting(t *testing.T) {
 	got := ApplyPasswordCredential(plugin.ConnectConfig{Config: map[string]any{
-		plugin.CredentialIdentityKey(plugin.CredentialField):     "default",
-		plugin.CredentialSecretKey(plugin.CredentialField):       "redis-password",
-		plugin.CredentialResolvedKindKey(plugin.CredentialField): string(plugin.CredentialTLSClientCert),
+		plugin.CredentialValuesKey(plugin.CredentialIDField): map[string]string{
+			"username": "default",
+			"password": "redis-password",
+		},
+		plugin.CredentialResolvedKindKey(plugin.CredentialIDField): string(plugin.CredentialTLSClientCert),
 	}}, "", "")
 	if got.Username != "default" || got.Password != "redis-password" || got.ClientCertificate != "" || got.TLSMode != "" {
 		t.Fatalf("unexpected password-only material: %+v", got)
@@ -19,10 +21,13 @@ func TestApplyPasswordCredentialIgnoresCredentialKindRouting(t *testing.T) {
 
 func TestApplyClientCertificateCredentialUsesFieldSpecificSecret(t *testing.T) {
 	got := ApplyClientCertificateCredential(plugin.ConnectConfig{Config: map[string]any{
-		plugin.CredentialIdentityKey("auth_client_cert_id"): "cert-user",
-		plugin.CredentialSecretKey("auth_client_cert_id"):   "pem-material",
+		plugin.CredentialValuesKey("auth_client_cert_id"): map[string]string{
+			"subject":     "cert-user",
+			"certificate": "cert-pem",
+			"private_key": "key-pem",
+		},
 	}}, "auth_client_cert_id", "", "disable", "")
-	if got.Username != "cert-user" || got.Password != "" || got.ClientCertificate != "pem-material" || !got.UsedTLSClientCredential {
+	if got.Username != "cert-user" || got.Password != "" || got.ClientCertificate != "cert-pem\nkey-pem" || !got.UsedTLSClientCredential {
 		t.Fatalf("unexpected client certificate material: %+v", got)
 	}
 	if got.TLSMode != "require" {

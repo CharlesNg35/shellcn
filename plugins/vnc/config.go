@@ -17,7 +17,12 @@ const CredentialVNCPassword plugin.CredentialKind = "vnc_password"
 
 func credentialKinds() []plugin.CredentialKindInfo {
 	return []plugin.CredentialKindInfo{
-		{Kind: CredentialVNCPassword, Label: "VNC password", SecretLabel: "Password"},
+		{
+			Kind: CredentialVNCPassword, Label: "VNC password",
+			Fields: []plugin.Field{
+				plugin.CredentialSecretField(plugin.Field{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true}),
+			},
+		},
 	}
 }
 
@@ -35,7 +40,7 @@ func configSchema(protocol string) plugin.Schema {
 				{Label: "None", Value: "none"},
 			}},
 			{Key: "credential_id", Label: "Stored password", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kinds: []plugin.CredentialKind{CredentialVNCPassword}, Protocols: []string{protocol}, Required: true,
+				Kind: CredentialVNCPassword, Protocols: []string{protocol}, Required: true,
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 		}},
@@ -76,7 +81,7 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	if strings.ContainsAny(opts.Host, " \t\r\n/") {
 		return connectOptions{}, fmt.Errorf("%w: host must be a host name or IP address, not a URL", plugin.ErrInvalidInput)
 	}
-	if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" && auth == "credential" {
+	if secret := cfg.CredentialValueFor(plugin.CredentialIDField, "password"); secret != "" && auth == "credential" {
 		opts.Password = secret
 	}
 	if auth == "none" {

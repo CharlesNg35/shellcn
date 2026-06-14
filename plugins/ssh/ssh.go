@@ -148,14 +148,18 @@ func configSchema(protocol string) plugin.Schema {
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: "password", Options: []plugin.Option{
 				{Label: "Password", Value: "password"},
 				{Label: "Private key", Value: "private_key"},
-				{Label: "Stored credential", Value: "credential"},
+				{Label: "Stored SSH password", Value: "stored_password"},
+				{Label: "Stored SSH private key", Value: "stored_private_key"},
 			}},
-			{Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kinds: []plugin.CredentialKind{sshsftp.CredentialSSHPrivateKey, sshsftp.CredentialSSHPassword}, Protocols: []string{protocol}, Required: true,
-			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
+			{Key: sshsftp.CredentialPasswordField, Label: "Stored SSH password", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
+				Kind: sshsftp.CredentialSSHPassword, Protocols: []string{protocol}, Required: true,
+			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "stored_password"}}}},
+			{Key: sshsftp.CredentialPrivateKeyField, Label: "Stored SSH private key", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
+				Kind: sshsftp.CredentialSSHPrivateKey, Protocols: []string{protocol}, Required: true,
+			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "stored_private_key"}}}},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 			{Key: "private_key", Label: "Private key", Type: plugin.FieldTextarea, Required: true, Secret: true, Help: "PEM-encoded private key.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "private_key"}}}},
-			{Key: "passphrase", Label: "Key passphrase", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "private_key"}}}},
+			{Key: "passphrase", Label: "Key passphrase", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "private_key"}, {Field: "auth", Op: plugin.OpEq, Value: "stored_private_key"}}}},
 		}},
 		{Name: "Terminal", Fields: []plugin.Field{
 			{Key: "terminal_layout", Label: "Terminal layout", Type: plugin.FieldSelect, Required: true, Default: "single", Options: []plugin.Option{

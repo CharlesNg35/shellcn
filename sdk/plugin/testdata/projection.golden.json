@@ -65,9 +65,7 @@
             "label": "Credential",
             "type": "credential_ref",
             "credential": {
-              "kinds": [
-                "sample_private_key"
-              ],
+              "kind": "sample_private_key",
               "protocols": [
                 "ssh"
               ],
@@ -86,9 +84,22 @@
     {
       "kind": "sample_private_key",
       "label": "Sample private key",
-      "secretLabel": "Private key",
-      "secretMultiline": true,
-      "identityLabel": "Username"
+      "fields": [
+        {
+          "key": "username",
+          "label": "Username",
+          "type": "text",
+          "required": true,
+          "public": true
+        },
+        {
+          "key": "private_key",
+          "label": "Private key",
+          "type": "textarea",
+          "required": true,
+          "secret": true
+        }
+      ]
     }
   ],
   "supportedTransports": [
@@ -186,7 +197,7 @@
             "label": "Summary",
             "panel": "object_detail",
             "source": {
-              "routeId": "sample.summary"
+              "routeId": "sample.public"
             },
             "config": {
               "sections": [

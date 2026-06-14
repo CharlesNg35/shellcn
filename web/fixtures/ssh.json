@@ -16,15 +16,48 @@
     {
       "kind": "ssh_private_key",
       "label": "SSH private key",
-      "secretLabel": "Private key",
-      "secretMultiline": true,
-      "identityLabel": "Username"
+      "fields": [
+        {
+          "key": "username",
+          "label": "Username",
+          "type": "text",
+          "required": true,
+          "public": true
+        },
+        {
+          "key": "private_key",
+          "label": "Private key",
+          "type": "textarea",
+          "required": true,
+          "secret": true
+        },
+        {
+          "key": "passphrase",
+          "label": "Key passphrase",
+          "type": "password",
+          "secret": true
+        }
+      ]
     },
     {
       "kind": "ssh_password",
       "label": "SSH password",
-      "secretLabel": "Password",
-      "identityLabel": "Username"
+      "fields": [
+        {
+          "key": "username",
+          "label": "Username",
+          "type": "text",
+          "required": true,
+          "public": true
+        },
+        {
+          "key": "password",
+          "label": "Password",
+          "type": "password",
+          "required": true,
+          "secret": true
+        }
+      ]
     }
   ],
   "supportedTransports": ["direct"],
@@ -72,20 +105,41 @@
             "options": [
               { "label": "Password", "value": "password" },
               { "label": "Private key", "value": "private_key" },
-              { "label": "Stored credential", "value": "credential" }
+              { "label": "Stored SSH password", "value": "stored_password" },
+              {
+                "label": "Stored SSH private key",
+                "value": "stored_private_key"
+              }
             ]
           },
           {
-            "key": "credential_id",
-            "label": "Credential",
+            "key": "credential_password_id",
+            "label": "Stored SSH password",
             "type": "credential_ref",
             "credential": {
-              "kinds": ["ssh_private_key", "ssh_password"],
+              "kind": "ssh_password",
               "protocols": ["ssh"],
               "required": true
             },
             "visibleWhen": {
-              "allOf": [{ "field": "auth", "op": "eq", "value": "credential" }]
+              "allOf": [
+                { "field": "auth", "op": "eq", "value": "stored_password" }
+              ]
+            }
+          },
+          {
+            "key": "credential_private_key_id",
+            "label": "Stored SSH private key",
+            "type": "credential_ref",
+            "credential": {
+              "kind": "ssh_private_key",
+              "protocols": ["ssh"],
+              "required": true
+            },
+            "visibleWhen": {
+              "allOf": [
+                { "field": "auth", "op": "eq", "value": "stored_private_key" }
+              ]
             }
           },
           {
@@ -113,7 +167,10 @@
             "type": "password",
             "secret": true,
             "visibleWhen": {
-              "allOf": [{ "field": "auth", "op": "eq", "value": "private_key" }]
+              "anyOf": [
+                { "field": "auth", "op": "eq", "value": "private_key" },
+                { "field": "auth", "op": "eq", "value": "stored_private_key" }
+              ]
             }
           }
         ]

@@ -16,7 +16,8 @@ func (s *Server) spaHandler() http.HandlerFunc {
 		if clean == "" {
 			clean = "index.html"
 		}
-		if _, err := fs.Stat(s.deps.StaticFS, clean); err != nil {
+		info, err := fs.Stat(s.deps.StaticFS, clean)
+		if err != nil || info.IsDir() {
 			// Not a real file → serve the SPA shell.
 			r2 := r.Clone(r.Context())
 			r2.URL.Path = "/"

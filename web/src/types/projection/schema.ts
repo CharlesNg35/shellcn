@@ -35,14 +35,12 @@ export type CredentialKind = string;
 export interface CredentialKindInfo {
   kind: CredentialKind;
   label: string;
-  secretLabel: string;
-  secretMultiline?: boolean;
-  identityLabel?: string;
+  fields: Field[];
   compatibleProtocols?: string[];
 }
 
 export interface CredentialSelector {
-  kinds: CredentialKind[];
+  kind: CredentialKind;
   protocols?: string[];
   required?: boolean;
 }
@@ -88,6 +86,7 @@ export interface Field {
   type: FieldType;
   required?: boolean;
   secret?: boolean;
+  public?: boolean;
   default?: unknown;
   placeholder?: string;
   help?: string;

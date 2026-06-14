@@ -6,6 +6,7 @@ import { totpApi } from "../api/twofactor";
 import { useAuthStore } from "../stores/auth";
 import AppIcon from "../components/AppIcon.vue";
 import TwoFactorEnroll from "../components/auth/TwoFactorEnroll.vue";
+import { decodeRedirectTarget } from "../router/redirect";
 
 const auth = useAuthStore();
 const route = useRoute();
@@ -15,8 +16,7 @@ const enrolling = ref(false);
 const busy = ref(false);
 
 function destination(): string {
-  const redirect = route.query.redirect;
-  return typeof redirect === "string" ? redirect : "/";
+  return decodeRedirectTarget(route.query.redirect);
 }
 
 async function remindLater(): Promise<void> {

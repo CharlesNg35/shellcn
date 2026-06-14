@@ -44,10 +44,13 @@ function kindLabel(kind: string): string {
   return kindInfo(kind)?.label ?? kind;
 }
 
-function identityLabel(c: CredentialSummary): string {
-  const label = kindInfo(c.kind)?.identityLabel;
-  if (!label || !c.identity) return "—";
-  return `${label}: ${c.identity}`;
+function summaryLabel(c: CredentialSummary): string {
+  const fields = kindInfo(c.kind)?.fields ?? [];
+  const values = c.values ?? {};
+  const parts = fields
+    .filter((field) => field.public && values[field.key])
+    .map((field) => `${field.label}: ${values[field.key]}`);
+  return parts.length ? parts.join(" · ") : "—";
 }
 
 function credentialProtocols(c: CredentialSummary): string[] {
@@ -155,9 +158,9 @@ const hasItems = computed(() => items.value.length > 0);
           {{ kindLabel((data as CredentialSummary).kind) }}
         </template>
       </Column>
-      <Column header="Identity">
+      <Column header="Summary">
         <template #body="{ data }">
-          {{ identityLabel(data as CredentialSummary) }}
+          {{ summaryLabel(data as CredentialSummary) }}
         </template>
       </Column>
       <Column header="Protocols">

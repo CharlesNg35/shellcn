@@ -69,8 +69,8 @@ func configSchema() plugin.Schema {
 			}},
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Placeholder: "default", VisibleWhen: &passwordAuth},
 			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
-				Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}, Protocols: []string{protocolName},
-			}, VisibleWhen: &credentialAuth, Help: "Reusable Redis password. The credential identity can also supply the ACL username."},
+				Kind: plugin.CredentialDBPassword, Protocols: []string{protocolName},
+			}, VisibleWhen: &credentialAuth, Help: "Reusable Redis password. The stored username can also supply the ACL username."},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &passwordAuth},
 		}},
 		{Name: "TLS", Fields: []plugin.Field{
@@ -82,7 +82,7 @@ func configSchema() plugin.Schema {
 			}},
 			{Key: "ca_certificate", Label: "CA certificate", Type: plugin.FieldTextarea, Secret: true, VisibleWhen: &verifyTLS, Help: "PEM CA bundle used for verify-ca and verify-full."},
 			{Key: clientCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kinds: []plugin.CredentialKind{plugin.CredentialTLSClientCert}, Protocols: []string{protocolName},
+				Kind: plugin.CredentialTLSClientCert, Protocols: []string{protocolName},
 			}, VisibleWhen: &tlsEnabled, Help: "Optional PEM containing the client certificate and private key."},
 		}},
 		{Name: "Safety", Fields: []plugin.Field{
@@ -138,7 +138,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		Password:          auth.Password,
 		TLSMode:           tlsMode,
 		CACertificate:     cfg.String("ca_certificate"),
-		ClientCertificate: dbcred.ResolvedSecret(cfg, clientCertField),
+		ClientCertificate: dbcred.ApplyClientCertificateCredential(cfg, clientCertField, "", tlsMode, "").ClientCertificate,
 		ReadOnly:          boolValue(cfg.Config["read_only"], true),
 		RequireConfirm:    boolValue(cfg.Config["require_write_confirmation"], true),
 		Timeout:           durationValue(cfg.Config["timeout"], defaultTimeout),

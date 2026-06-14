@@ -57,7 +57,7 @@
             "label": "Saved credential",
             "type": "credential_ref",
             "credential": {
-              "kinds": ["db_password"],
+              "kind": "db_password",
               "protocols": ["postgres"]
             },
             "help": "Reuse a stored database password without copying it into this connection."

@@ -26,8 +26,11 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		Capabilities:        []plugin.Capability{"terminal", "filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		CredentialKinds: []plugin.CredentialKindInfo{{
-			Kind: testCredentialPrivateKey, Label: "Sample private key", SecretLabel: "Private key",
-			SecretMultiline: true, IdentityLabel: "Username",
+			Kind: testCredentialPrivateKey, Label: "Sample private key",
+			Fields: []plugin.Field{
+				plugin.CredentialPublicField(plugin.Field{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true}),
+				plugin.CredentialSecretField(plugin.Field{Key: "private_key", Label: "Private key", Type: plugin.FieldTextarea, Required: true}),
+			},
 		}},
 		Layout: plugin.LayoutSidebarTree,
 		Config: plugin.Schema{Groups: []plugin.Group{{
@@ -41,7 +44,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 					AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}},
 				}},
 				{Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-					Kinds: []plugin.CredentialKind{testCredentialPrivateKey}, Protocols: []string{"ssh"}, Required: true,
+					Kind: testCredentialPrivateKey, Protocols: []string{"ssh"}, Required: true,
 				}},
 			},
 		}}},
@@ -73,7 +76,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 				DefaultTab: "editor",
 				Tabs: []plugin.Panel{
 					{Key: "logs", Label: "Logs", Type: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "sample.logs", Method: plugin.MethodWS}},
-					{Key: "summary", Label: "Summary", Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "sample.summary"}, Config: plugin.ObjectDetailConfig{
+					{Key: "summary", Label: "Summary", Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "sample.public"}, Config: plugin.ObjectDetailConfig{
 						Sections: []plugin.ObjectDetailSection{{Title: "Usage", Fields: []plugin.ObjectDetailField{
 							{Key: "memoryPct", Label: "Memory", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{
 								PercentKey: "memoryPct",
@@ -132,7 +135,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		{ID: "sample.files.delete", Method: plugin.MethodDelete, Path: "/files/delete", Permission: "sample.files.write", Risk: plugin.RiskDestructive, AuditEvent: "sample.files.delete", Handle: noop},
 		{ID: "sample.list", Method: plugin.MethodGet, Path: "/containers", Permission: "sample.read", Risk: plugin.RiskSafe, AuditEvent: "sample.list", Handle: noop},
 		{ID: "sample.logs", Method: plugin.MethodWS, Path: "/logs", Permission: "sample.read", Risk: plugin.RiskSafe, AuditEvent: "sample.logs", Stream: stream},
-		{ID: "sample.summary", Method: plugin.MethodGet, Path: "/summary", Permission: "sample.read", Risk: plugin.RiskSafe, AuditEvent: "sample.summary", Handle: noop},
+		{ID: "sample.public", Method: plugin.MethodGet, Path: "/summary", Permission: "sample.read", Risk: plugin.RiskSafe, AuditEvent: "sample.public", Handle: noop},
 		{ID: "sample.form", Method: plugin.MethodGet, Path: "/form", Permission: "sample.read", Risk: plugin.RiskSafe, AuditEvent: "sample.form", Handle: noop},
 		{ID: "sample.form.save", Method: plugin.MethodPatch, Path: "/form", Permission: "sample.write", Risk: plugin.RiskWrite, AuditEvent: "sample.form.save", Handle: noop},
 		{ID: "sample.doc", Method: plugin.MethodGet, Path: "/doc", Permission: "sample.read", Risk: plugin.RiskSafe, AuditEvent: "sample.doc", Handle: noop},

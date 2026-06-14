@@ -139,11 +139,13 @@ func TestConnectRejectsUnsupportedAgentAuth(t *testing.T) {
 
 func TestCredentialIdentityOverridesConnectionUser(t *testing.T) {
 	opts, err := parseConnectOptions(plugin.ConnectConfig{Config: map[string]any{
-		"host":                 "example.test",
-		"user":                 "root",
-		"auth":                 "credential",
-		"_credential_secret":   "pw",
-		"_credential_identity": "ubuntu",
+		"host": "example.test",
+		"user": "root",
+		"auth": "stored_password",
+		plugin.CredentialValuesKey(CredentialPasswordField): map[string]string{
+			"username": "ubuntu",
+			"password": "pw",
+		},
 	}})
 	if err != nil {
 		t.Fatalf("parseConnectOptions: %v", err)
@@ -151,8 +153,8 @@ func TestCredentialIdentityOverridesConnectionUser(t *testing.T) {
 	if opts.User != "ubuntu" {
 		t.Fatalf("user = %q, want credential identity", opts.User)
 	}
-	if opts.Password != "pw" || opts.PrivateKey != "pw" {
-		t.Fatal("credential secret was not injected into auth material")
+	if opts.Password != "pw" || opts.PrivateKey != "" {
+		t.Fatal("stored password credential was not injected into password auth material")
 	}
 }
 

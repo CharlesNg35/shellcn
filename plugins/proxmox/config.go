@@ -18,8 +18,11 @@ const CredentialProxmoxToken plugin.CredentialKind = "proxmox_api_token"
 func credentialKinds() []plugin.CredentialKindInfo {
 	return []plugin.CredentialKindInfo{
 		{
-			Kind: CredentialProxmoxToken, Label: "Proxmox API token", SecretLabel: "Token secret",
-			IdentityLabel: "Token ID (user@realm!name)",
+			Kind: CredentialProxmoxToken, Label: "Proxmox API token",
+			Fields: []plugin.Field{
+				plugin.CredentialPublicField(plugin.Field{Key: "token_id", Label: "Token ID (user@realm!name)", Type: plugin.FieldText, Required: true}),
+				plugin.CredentialSecretField(plugin.Field{Key: "token_secret", Label: "Token secret", Type: plugin.FieldPassword, Required: true}),
+			},
 		},
 	}
 }
@@ -45,7 +48,7 @@ func configSchema(protocol string) plugin.Schema {
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "root@pam", VisibleWhen: whenPassword},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: whenPassword},
 			{Key: "credential_id", Label: "API token credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kinds: []plugin.CredentialKind{CredentialProxmoxToken}, Protocols: []string{protocol}, Required: true,
+				Kind: CredentialProxmoxToken, Protocols: []string{protocol}, Required: true,
 			}, VisibleWhen: whenCredential},
 		}},
 	}}
@@ -97,8 +100,8 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 		opts.Password = cfg.String("password")
 	case "credential":
 		opts.Method = authToken
-		opts.TokenID = cfg.CredentialIdentityFor(plugin.CredentialField)
-		opts.TokenSecret = cfg.CredentialSecretFor(plugin.CredentialField)
+		opts.TokenID = cfg.CredentialValueFor(plugin.CredentialIDField, "token_id")
+		opts.TokenSecret = cfg.CredentialValueFor(plugin.CredentialIDField, "token_secret")
 	default:
 		return connectOptions{}, fmt.Errorf("%w: unsupported authentication method", plugin.ErrInvalidInput)
 	}

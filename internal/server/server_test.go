@@ -70,11 +70,11 @@ func (testPlugin) Manifest() plugin.Manifest {
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true},
 			{
 				Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}},
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialDBPassword},
 			},
 			{
 				Key: "api_credential", Label: "API Credential", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialAPIToken}},
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialAPIToken},
 			},
 		}}}},
 		Agent: &plugin.AgentProfile{

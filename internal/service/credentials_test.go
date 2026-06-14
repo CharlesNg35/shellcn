@@ -26,28 +26,33 @@ func (credentialCatalogPlugin) Manifest() plugin.Manifest {
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		CredentialKinds: []plugin.CredentialKindInfo{
 			{
-				Kind: testCredentialKubeconfig, Label: "Kubeconfig", SecretLabel: "Kubeconfig YAML",
-				SecretMultiline: true, IdentityLabel: "Context / user",
+				Kind: testCredentialKubeconfig, Label: "Kubeconfig",
+				Fields: []plugin.Field{
+					plugin.CredentialPublicField(plugin.Field{Key: "context", Label: "Context / user", Type: plugin.FieldText}),
+					plugin.CredentialSecretField(plugin.Field{Key: "kubeconfig", Label: "Kubeconfig YAML", Type: plugin.FieldTextarea, Required: true}),
+				},
 			},
 		},
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Auth", Fields: []plugin.Field{
 			{
-				Key: "ssh_credential", Label: "SSH credential", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{
-					Kinds: []plugin.CredentialKind{plugin.CredentialSSHPrivateKey, plugin.CredentialSSHPassword}, Protocols: []string{"ssh"},
-				},
+				Key: "ssh_key_credential", Label: "SSH key credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialSSHPrivateKey, Protocols: []string{"ssh"}},
+			},
+			{
+				Key: "ssh_password_credential", Label: "SSH password credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialSSHPassword, Protocols: []string{"ssh"}},
 			},
 			{
 				Key: "db_credential", Label: "Database credential", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}, Protocols: []string{"postgres"}},
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialDBPassword, Protocols: []string{"postgres"}},
 			},
 			{
 				Key: "api_credential", Label: "API credential", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialAPIToken}, Protocols: []string{"http-api"}},
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialAPIToken, Protocols: []string{"http-api"}},
 			},
 			{
 				Key: "kube_credential", Label: "Kube credential", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{testCredentialKubeconfig}, Protocols: []string{"kubernetes"}},
+				Credential: &plugin.CredentialSelector{Kind: testCredentialKubeconfig, Protocols: []string{"kubernetes"}},
 			},
 		}}}},
 	}
@@ -79,17 +84,18 @@ func TestCredentialCreateEncryptsAtRest(t *testing.T) {
 	svc, st := newCredentialService(t)
 
 	cred, err := svc.Create(ctx, service.NewCredentialInput{
-		OwnerID: "owner", Name: "ops", Kind: "ssh_password", Secret: "hunter2",
+		OwnerID: "owner", Name: "ops", Kind: "ssh_password",
+		Values: map[string]string{"username": "ops", "password": "hunter2"},
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
 	stored, _ := st.Credentials.Get(ctx, cred.ID)
-	if len(stored.EncryptedSecret) == 0 {
+	if len(stored.EncryptedValues) == 0 {
 		t.Fatal("no encrypted secret stored")
 	}
-	if string(stored.EncryptedSecret) == "hunter2" || containsBytes(stored.EncryptedSecret, "hunter2") {
+	if string(stored.EncryptedValues) == "hunter2" || containsBytes(stored.EncryptedValues, "hunter2") {
 		t.Error("plaintext leaked into stored credential")
 	}
 	if len(stored.Protocols) != 1 || stored.Protocols[0] != "ssh" {
@@ -99,24 +105,30 @@ func TestCredentialCreateEncryptsAtRest(t *testing.T) {
 	if sum.ID != cred.ID || sum.Kind != "ssh_password" {
 		t.Errorf("summary wrong: %+v", sum)
 	}
+	if sum.Values["username"] != "ops" {
+		t.Errorf("summary values = %+v, want username", sum.Values)
+	}
 }
 
 func TestCredentialResolveOwnerAndGrant(t *testing.T) {
 	ctx := context.Background()
 	svc, st := newCredentialService(t)
-	cred, _ := svc.Create(ctx, service.NewCredentialInput{OwnerID: "owner", Name: "k", Kind: "ssh_password", Secret: "topsecret"})
+	cred, _ := svc.Create(ctx, service.NewCredentialInput{
+		OwnerID: "owner", Name: "k", Kind: "ssh_password",
+		Values: map[string]string{"username": "ops", "password": "topsecret"},
+	})
 	secretAccesses := 0
 	svc.SetSecretAccessHook(func() { secretAccesses++ })
 
-	pt, err := svc.Resolve(ctx, "owner", cred.ID)
-	if err != nil || string(pt) != "topsecret" {
-		t.Fatalf("owner resolve: pt=%q err=%v", pt, err)
+	_, values, err := svc.ResolveWithMetadata(ctx, "owner", cred.ID)
+	if err != nil || values["password"] != "topsecret" || values["username"] != "ops" {
+		t.Fatalf("owner resolve: values=%+v err=%v", values, err)
 	}
 	if secretAccesses != 1 {
 		t.Fatalf("secret access hook calls = %d, want 1", secretAccesses)
 	}
 
-	if _, err := svc.Resolve(ctx, "stranger", cred.ID); !errors.Is(err, models.ErrForbidden) {
+	if _, _, err := svc.ResolveWithMetadata(ctx, "stranger", cred.ID); !errors.Is(err, models.ErrForbidden) {
 		t.Errorf("stranger resolve: want ErrForbidden, got %v", err)
 	}
 	if secretAccesses != 1 {
@@ -124,9 +136,9 @@ func TestCredentialResolveOwnerAndGrant(t *testing.T) {
 	}
 
 	_ = st.CredentialGrants.Create(ctx, &models.CredentialGrant{ID: "cg1", CredentialID: cred.ID, SubjectID: "stranger", Access: models.AccessUse})
-	pt, err = svc.Resolve(ctx, "stranger", cred.ID)
-	if err != nil || string(pt) != "topsecret" {
-		t.Errorf("granted resolve: pt=%q err=%v", pt, err)
+	_, values, err = svc.ResolveWithMetadata(ctx, "stranger", cred.ID)
+	if err != nil || values["password"] != "topsecret" {
+		t.Errorf("granted resolve: values=%+v err=%v", values, err)
 	}
 	if secretAccesses != 2 {
 		t.Fatalf("secret access hook calls = %d, want 2", secretAccesses)
@@ -136,31 +148,40 @@ func TestCredentialResolveOwnerAndGrant(t *testing.T) {
 func TestCredentialRotateAndResolve(t *testing.T) {
 	ctx := context.Background()
 	svc, st := newCredentialService(t)
-	cred, _ := svc.Create(ctx, service.NewCredentialInput{OwnerID: "owner", Name: "k", Kind: "ssh_password", Secret: "old-secret"})
+	cred, _ := svc.Create(ctx, service.NewCredentialInput{
+		OwnerID: "owner", Name: "k", Kind: "ssh_password",
+		Values: map[string]string{"username": "ops", "password": "old-secret"},
+	})
 
-	if pt, err := svc.Resolve(ctx, "owner", cred.ID); err != nil || string(pt) != "old-secret" {
-		t.Fatalf("initial resolve: pt=%q err=%v", pt, err)
+	if _, values, err := svc.ResolveWithMetadata(ctx, "owner", cred.ID); err != nil || values["password"] != "old-secret" {
+		t.Fatalf("initial resolve: values=%+v err=%v", values, err)
 	}
 
-	if _, err := svc.Update(ctx, cred.ID, service.UpdateCredentialInput{Name: "k", Kind: "ssh_password", Secret: "new-secret"}); err != nil {
+	if _, err := svc.Update(ctx, cred.ID, service.UpdateCredentialInput{
+		Name: "k", Kind: "ssh_password",
+		Values: map[string]string{"username": "ops", "password": "new-secret"},
+	}); err != nil {
 		t.Fatalf("rotate: %v", err)
 	}
-	if pt, err := svc.Resolve(ctx, "owner", cred.ID); err != nil || string(pt) != "new-secret" {
-		t.Fatalf("post-rotate resolve: pt=%q err=%v", pt, err)
+	if _, values, err := svc.ResolveWithMetadata(ctx, "owner", cred.ID); err != nil || values["password"] != "new-secret" {
+		t.Fatalf("post-rotate resolve: values=%+v err=%v", values, err)
 	}
 
-	if _, err := svc.Update(ctx, cred.ID, service.UpdateCredentialInput{Name: "renamed", Kind: "ssh_password", Secret: ""}); err != nil {
+	if _, err := svc.Update(ctx, cred.ID, service.UpdateCredentialInput{
+		Name: "renamed", Kind: "ssh_password",
+		Values: map[string]string{"username": "ops"},
+	}); err != nil {
 		t.Fatalf("metadata-only update: %v", err)
 	}
-	if pt, err := svc.Resolve(ctx, "owner", cred.ID); err != nil || string(pt) != "new-secret" {
-		t.Fatalf("resolve after metadata update: pt=%q err=%v", pt, err)
+	if _, values, err := svc.ResolveWithMetadata(ctx, "owner", cred.ID); err != nil || values["password"] != "new-secret" {
+		t.Fatalf("resolve after metadata update: values=%+v err=%v", values, err)
 	}
 
 	stored, _ := st.Credentials.Get(ctx, cred.ID)
 	if stored.Name != "renamed" {
 		t.Errorf("metadata not persisted: %+v", stored)
 	}
-	if containsBytes(stored.EncryptedSecret, "new-secret") {
+	if containsBytes(stored.EncryptedValues, "new-secret") {
 		t.Error("plaintext leaked into stored credential after rotation")
 	}
 }
@@ -168,7 +189,7 @@ func TestCredentialRotateAndResolve(t *testing.T) {
 func TestCredentialResolveNotFound(t *testing.T) {
 	ctx := context.Background()
 	svc, _ := newCredentialService(t)
-	if _, err := svc.Resolve(ctx, "owner", "ghost"); !errors.Is(err, store.ErrNotFound) {
+	if _, _, err := svc.ResolveWithMetadata(ctx, "owner", "ghost"); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("missing credential: want ErrNotFound, got %v", err)
 	}
 }
@@ -176,10 +197,10 @@ func TestCredentialResolveNotFound(t *testing.T) {
 func TestCredentialListUsableFilters(t *testing.T) {
 	ctx := context.Background()
 	svc, _ := newCredentialService(t)
-	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "ssh-key", Kind: "ssh_private_key", Secret: "a"})
-	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "db-pw", Kind: "db_password", Secret: "b"})
-	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "api-token", Kind: "api_token", Secret: "c"})
-	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "kube", Kind: "kubeconfig", Secret: "d"})
+	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "ssh-key", Kind: "ssh_private_key", Values: map[string]string{"username": "ops", "private_key": "a"}})
+	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "db-pw", Kind: "db_password", Values: map[string]string{"username": "db", "password": "b"}})
+	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "api-token", Kind: "api_token", Values: map[string]string{"subject": "svc", "token": "c"}})
+	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "kube", Kind: "kubeconfig", Values: map[string]string{"context": "prod", "kubeconfig": "d"}})
 
 	// Filter by kind.
 	got, err := svc.ListUsable(ctx, "u", []string{"ssh_private_key"}, "")
@@ -216,7 +237,7 @@ func TestCredentialCreateValidatesKindAndSecret(t *testing.T) {
 	svc, _ := newCredentialService(t)
 
 	if _, err := svc.Create(ctx, service.NewCredentialInput{
-		OwnerID: "u", Name: "bad", Kind: "made_up", Secret: "x",
+		OwnerID: "u", Name: "bad", Kind: "made_up", Values: map[string]string{"password": "x"},
 	}); !errors.Is(err, plugin.ErrInvalidInput) {
 		t.Fatalf("unknown kind: want ErrInvalidInput, got %v", err)
 	}

@@ -19,6 +19,9 @@ import (
 
 const (
 	defaultPort = 22
+
+	CredentialPasswordField   = "credential_password_id"
+	CredentialPrivateKeyField = "credential_private_key_id"
 )
 
 type connectOptions struct {
@@ -115,14 +118,20 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	default:
 		return connectOptions{}, fmt.Errorf("%w: unsupported host key verification %q", plugin.ErrInvalidInput, opts.HostKeyMode)
 	}
-	if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
-		if opts.Auth == "credential" {
-			opts.Password = secret
-			opts.PrivateKey = secret
+	switch opts.Auth {
+	case "stored_password":
+		opts.Password = cfg.CredentialValueFor(CredentialPasswordField, "password")
+		if identity := cfg.CredentialValueFor(CredentialPasswordField, "username"); identity != "" {
+			opts.User = identity
 		}
-	}
-	if identity := cfg.CredentialIdentityFor(plugin.CredentialField); opts.Auth == "credential" && identity != "" {
-		opts.User = identity
+	case "stored_private_key":
+		opts.PrivateKey = cfg.CredentialValueFor(CredentialPrivateKeyField, "private_key")
+		if passphrase := cfg.CredentialValueFor(CredentialPrivateKeyField, "passphrase"); passphrase != "" {
+			opts.Passphrase = passphrase
+		}
+		if identity := cfg.CredentialValueFor(CredentialPrivateKeyField, "username"); identity != "" {
+			opts.User = identity
+		}
 	}
 	return opts, nil
 }
@@ -162,14 +171,13 @@ func authMethods(opts connectOptions) ([]ssh.AuthMethod, error) {
 		return []ssh.AuthMethod{ssh.Password(opts.Password)}, nil
 	case "private_key":
 		return privateKeyAuth(opts.PrivateKey, opts.Passphrase)
-	case "credential":
-		if method, err := privateKeyAuth(opts.PrivateKey, opts.Passphrase); err == nil {
-			return method, nil
-		}
+	case "stored_password":
 		if opts.Password == "" {
-			return nil, fmt.Errorf("%w: credential secret is required", plugin.ErrInvalidInput)
+			return nil, fmt.Errorf("%w: stored password credential is required", plugin.ErrInvalidInput)
 		}
 		return []ssh.AuthMethod{ssh.Password(opts.Password)}, nil
+	case "stored_private_key":
+		return privateKeyAuth(opts.PrivateKey, opts.Passphrase)
 	default:
 		return nil, fmt.Errorf("%w: unsupported auth method %q", plugin.ErrInvalidInput, opts.Auth)
 	}

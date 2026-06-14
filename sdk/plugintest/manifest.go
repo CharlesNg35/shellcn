@@ -59,12 +59,8 @@ func CredentialKindSupported(schema plugin.Schema, kind plugin.CredentialKind) b
 }
 
 func fieldCredentialKindSupported(field plugin.Field, kind plugin.CredentialKind) bool {
-	if field.Credential != nil {
-		for _, candidate := range field.Credential.Kinds {
-			if candidate == kind {
-				return true
-			}
-		}
+	if field.Credential != nil && field.Credential.Kind == kind {
+		return true
 	}
 	for _, child := range field.Fields {
 		if fieldCredentialKindSupported(child, kind) {

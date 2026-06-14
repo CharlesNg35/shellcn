@@ -10,7 +10,8 @@ func TestParseOptionsValidatesAuthFields(t *testing.T) {
 	for name, cfg := range map[string]map[string]any{
 		"password missing password": {"host": "smb.example.com", "share": "files", "auth": "password", "username": "alice"},
 		"credential missing secret": {
-			"host": "smb.example.com", "share": "files", "auth": "credential", plugin.CredentialIdentity: "alice",
+			"host": "smb.example.com", "share": "files", "auth": "credential",
+			plugin.CredentialValuesKey(plugin.CredentialIDField): map[string]string{"username": "alice"},
 		},
 		"unsupported auth": {"host": "smb.example.com", "share": "files", "auth": "token", "username": "alice", "password": "pw"},
 	} {
@@ -34,7 +35,7 @@ func TestParseOptionsValidatesAuthFields(t *testing.T) {
 	t.Run("credential", func(t *testing.T) {
 		opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{
 			"host": "smb.example.com", "share": "files", "auth": "credential",
-			plugin.CredentialIdentity: "alice", plugin.CredentialSecret: "pw",
+			plugin.CredentialValuesKey(plugin.CredentialIDField): map[string]string{"username": "alice", "password": "pw"},
 		}})
 		if err != nil {
 			t.Fatalf("credential auth should validate: %v", err)

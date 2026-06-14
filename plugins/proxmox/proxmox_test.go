@@ -64,7 +64,10 @@ func TestParseConnectOptions(t *testing.T) {
 			name: "credential",
 			cfg: map[string]any{
 				"host": "pve", "auth": "credential",
-				plugin.CredentialIdentity: "root@pam!stored", plugin.CredentialSecret: "secret",
+				plugin.CredentialValuesKey(plugin.CredentialIDField): map[string]string{
+					"token_id":     "root@pam!stored",
+					"token_secret": "secret",
+				},
 			},
 			check: func(o connectOptions) bool { return o.Method == authToken && o.TokenID == "root@pam!stored" },
 		},

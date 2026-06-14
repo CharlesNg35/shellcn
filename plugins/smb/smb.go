@@ -102,7 +102,7 @@ func authFields() []plugin.Field {
 		{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 		{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 		{Key: "credential_id", Label: "SMB credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-			Kinds: []plugin.CredentialKind{plugin.CredentialBasicAuth}, Protocols: []string{protocolName}, Required: true,
+			Kind: plugin.CredentialBasicAuth, Protocols: []string{protocolName}, Required: true,
 		}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 	}
 }
@@ -148,10 +148,10 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	switch opts.Auth {
 	case "password":
 	case "credential":
-		if identity := cfg.CredentialIdentityFor(plugin.CredentialField); identity != "" {
+		if identity := cfg.CredentialValueFor(plugin.CredentialIDField, "username"); identity != "" {
 			opts.Username = identity
 		}
-		if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
+		if secret := cfg.CredentialValueFor(plugin.CredentialIDField, "password"); secret != "" {
 			opts.Password = secret
 		}
 	case "guest":

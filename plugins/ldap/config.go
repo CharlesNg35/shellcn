@@ -66,7 +66,7 @@ func configSchema() plugin.Schema {
 			{Key: "tls_skip_verify", Label: "Skip certificate verification", Type: plugin.FieldToggle, VisibleWhen: &encrypted, Help: "Accept any server certificate. Use only for trusted networks or self-signed test servers."},
 			{Key: "ca_certificate", Label: "CA certificate", Type: plugin.FieldTextarea, Secret: true, VisibleWhen: &encrypted, Help: "PEM CA bundle used to verify the server certificate."},
 			{Key: clientCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kinds: []plugin.CredentialKind{plugin.CredentialTLSClientCert}, Protocols: []string{protocolName},
+				Kind: plugin.CredentialTLSClientCert, Protocols: []string{protocolName},
 			}, VisibleWhen: &encrypted, Help: "Optional PEM containing the client certificate and private key for mutual TLS."},
 		}},
 		{Name: "Authentication", Fields: []plugin.Field{
@@ -78,8 +78,8 @@ func configSchema() plugin.Schema {
 			{Key: "bind_dn", Label: "Bind DN", Type: plugin.FieldText, Placeholder: "cn=admin,dc=example,dc=com", VisibleWhen: &simpleAuth},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &simpleAuth},
 			{Key: credentialIDField, Label: "Stored bind credential", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
-				Kinds: []plugin.CredentialKind{plugin.CredentialBasicAuth}, Protocols: []string{protocolName},
-			}, VisibleWhen: &credentialAuth, Help: "Reusable bind credential. Its identity is the bind DN and its secret is the password."},
+				Kind: plugin.CredentialBasicAuth, Protocols: []string{protocolName},
+			}, VisibleWhen: &credentialAuth, Help: "Reusable bind credential. Its username is the bind DN."},
 		}},
 		{Name: "Safety", Fields: []plugin.Field{
 			{Key: "read_only", Label: "Read-only mode", Type: plugin.FieldToggle, Default: true, Help: "Blocks add, modify, delete, and rename operations when enabled."},
@@ -138,7 +138,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		Encryption:        encryption,
 		SkipVerify:        boolValue(cfg.Config["tls_skip_verify"], false),
 		CACertificate:     cfg.String("ca_certificate"),
-		ClientCertificate: dbcred.ResolvedSecret(cfg, clientCertField),
+		ClientCertificate: dbcred.ApplyClientCertificateCredential(cfg, clientCertField, "", encryption, "").ClientCertificate,
 		AuthMode:          authMode,
 		BindDN:            bindDN,
 		Password:          password,

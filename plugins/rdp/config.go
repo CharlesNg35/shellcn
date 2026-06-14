@@ -21,7 +21,13 @@ const CredentialRDPPassword plugin.CredentialKind = "rdp_password"
 
 func credentialKinds() []plugin.CredentialKindInfo {
 	return []plugin.CredentialKindInfo{
-		{Kind: CredentialRDPPassword, Label: "RDP password", SecretLabel: "Password", IdentityLabel: "Username"},
+		{
+			Kind: CredentialRDPPassword, Label: "RDP password",
+			Fields: []plugin.Field{
+				plugin.CredentialPublicField(plugin.Field{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true}),
+				plugin.CredentialSecretField(plugin.Field{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true}),
+			},
+		},
 	}
 }
 
@@ -41,7 +47,7 @@ func configSchema(protocol string) plugin.Schema {
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 			{Key: "credential_id", Label: "Stored password", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kinds: []plugin.CredentialKind{CredentialRDPPassword}, Protocols: []string{protocol}, Required: true,
+				Kind: CredentialRDPPassword, Protocols: []string{protocol}, Required: true,
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 		}},
 		{Name: "Display", Fields: []plugin.Field{
@@ -108,10 +114,10 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 		Height:   h,
 	}
 	if auth == "credential" {
-		if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
+		if secret := cfg.CredentialValueFor(plugin.CredentialIDField, "password"); secret != "" {
 			opts.Password = secret
 		}
-		if identity := cfg.CredentialIdentityFor(plugin.CredentialField); identity != "" {
+		if identity := cfg.CredentialValueFor(plugin.CredentialIDField, "username"); identity != "" {
 			opts.User = identity
 		}
 	}

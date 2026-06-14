@@ -295,29 +295,73 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
 			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
 				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{"made_up"}},
+				Credential: &plugin.CredentialSelector{Kind: "made_up"},
 			})
 		}},
 		{"credential kind duplicates existing catalog", "duplicate credential kind", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
-			m.CredentialKinds = []plugin.CredentialKindInfo{{Kind: plugin.CredentialDBPassword, Label: "Database password", SecretLabel: "Password"}}
+			m.CredentialKinds = []plugin.CredentialKindInfo{{
+				Kind: plugin.CredentialDBPassword, Label: "Database password",
+				Fields: []plugin.Field{plugin.CredentialSecretField(plugin.Field{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true})},
+			}}
 			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
 				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}},
+				Credential: &plugin.CredentialSelector{Kind: plugin.CredentialDBPassword},
 			})
 		}},
 		{"credential kind protocol list is derived", "must not declare CompatibleProtocols", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
 			m.CredentialKinds = []plugin.CredentialKindInfo{{
-				Kind: "custom_password", Label: "Custom password", SecretLabel: "Password", CompatibleProtocols: []string{"x"},
+				Kind: "custom_password", Label: "Custom password",
+				Fields:              []plugin.Field{plugin.CredentialSecretField(plugin.Field{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true})},
+				CompatibleProtocols: []string{"x"},
 			}}
 			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
 				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{"custom_password"}},
+				Credential: &plugin.CredentialSelector{Kind: "custom_password"},
+			})
+		}},
+		{"credential kind public cannot be secret", "cannot be both secret and public", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
+			m.CredentialKinds = []plugin.CredentialKindInfo{{
+				Kind: "custom_password", Label: "Custom password",
+				Fields: []plugin.Field{{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, Public: true}},
+			}}
+			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
+				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kind: "custom_password"},
+			})
+		}},
+		{"credential kind field must persist", "must be either secret or public", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
+			m.CredentialKinds = []plugin.CredentialKindInfo{{
+				Kind: "custom_password", Label: "Custom password",
+				Fields: []plugin.Field{
+					{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true},
+					plugin.CredentialSecretField(plugin.Field{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true}),
+				},
+			}}
+			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
+				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kind: "custom_password"},
+			})
+		}},
+		{"credential kind rejects broad schema features", "uses unsupported schema features", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
+			m.CredentialKinds = []plugin.CredentialKindInfo{{
+				Kind: "custom_password", Label: "Custom password",
+				Fields: []plugin.Field{plugin.CredentialSecretField(plugin.Field{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Options: []plugin.Option{{Label: "A", Value: "a"}}})},
+			}}
+			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
+				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kind: "custom_password"},
 			})
 		}},
 		{"credential kind declared but unused", "declared but not used", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.CredentialKinds = []plugin.CredentialKindInfo{{Kind: "custom_password", Label: "Custom password", SecretLabel: "Password"}}
+			m.CredentialKinds = []plugin.CredentialKindInfo{{
+				Kind: "custom_password", Label: "Custom password",
+				Fields: []plugin.Field{plugin.CredentialSecretField(plugin.Field{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true})},
+			}}
 		}},
 	}
 

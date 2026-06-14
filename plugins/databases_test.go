@@ -13,11 +13,8 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s should expose credential_id", name)
 		}
-		if !credentialKindsContain(field.Credential.Kinds, plugin.CredentialDBPassword) {
-			t.Fatalf("%s auth credential selector should support database password: %+v", name, field.Credential.Kinds)
-		}
-		if credentialKindsContain(field.Credential.Kinds, plugin.CredentialTLSClientCert) {
-			t.Fatalf("%s stored password selector should not advertise TLS client certificates: %+v", name, field.Credential.Kinds)
+		if field.Credential.Kind != plugin.CredentialDBPassword {
+			t.Fatalf("%s auth credential selector should support database password: %+v", name, field.Credential.Kind)
 		}
 	}
 
@@ -27,8 +24,8 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s should expose auth_client_cert_id for certificate authentication", name)
 		}
-		if !credentialKindsContain(field.Credential.Kinds, plugin.CredentialTLSClientCert) || credentialKindsContain(field.Credential.Kinds, plugin.CredentialDBPassword) {
-			t.Fatalf("%s certificate auth selector should only advertise TLS client certificates: %+v", name, field.Credential.Kinds)
+		if field.Credential.Kind != plugin.CredentialTLSClientCert {
+			t.Fatalf("%s certificate auth selector should only advertise TLS client certificates: %+v", name, field.Credential.Kind)
 		}
 	}
 
@@ -45,8 +42,8 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s should expose client_cert_id in TLS settings", name)
 		}
-		if !credentialKindsContain(tlsField.Credential.Kinds, plugin.CredentialTLSClientCert) {
-			t.Fatalf("%s TLS client certificate field should support TLS client certificates: %+v", name, tlsField.Credential.Kinds)
+		if tlsField.Credential.Kind != plugin.CredentialTLSClientCert {
+			t.Fatalf("%s TLS client certificate field should support TLS client certificates: %+v", name, tlsField.Credential.Kind)
 		}
 	}
 }
@@ -208,15 +205,6 @@ func manifestHasAction(m plugin.Manifest, actionID string, routeID string) bool 
 func stringSliceContains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
-			return true
-		}
-	}
-	return false
-}
-
-func credentialKindsContain(kinds []plugin.CredentialKind, want plugin.CredentialKind) bool {
-	for _, kind := range kinds {
-		if kind == want {
 			return true
 		}
 	}

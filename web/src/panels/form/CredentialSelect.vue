@@ -33,12 +33,22 @@ const requestProtocol = computed(
 const choices = computed(() =>
   options.value.map((c) => ({
     value: c.id,
-    label: `${c.name} · ${kindLabel(c.kind)}${c.identity ? ` (${c.identity})` : ""}`,
+    label: `${c.name} · ${kindLabel(c.kind)}${summaryLabel(c)}`,
   })),
 );
 
 function kindLabel(kind: string): string {
   return kindCatalog.value.find((k) => k.kind === kind)?.label ?? kind;
+}
+
+function summaryLabel(c: CredentialSummary): string {
+  const kind = kindCatalog.value.find((k) => k.kind === c.kind);
+  const values = c.values ?? {};
+  const summary = (kind?.fields ?? [])
+    .filter((field) => field.public && values[field.key])
+    .map((field) => values[field.key])
+    .join(", ");
+  return summary ? ` (${summary})` : "";
 }
 
 async function load(): Promise<void> {
@@ -47,9 +57,7 @@ async function load(): Promise<void> {
   try {
     const [nextOptions, nextKinds] = await Promise.all([
       credentialsApi.list({
-        kind: props.selector.kinds.length
-          ? props.selector.kinds.join(",")
-          : undefined,
+        kind: props.selector.kind || undefined,
         protocol: requestProtocol.value || undefined,
       }),
       kindCatalog.value.length
