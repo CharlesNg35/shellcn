@@ -6,7 +6,7 @@ import { fetchDoc, fetchPage } from "@/api/dataSource";
 import type {
   DataSource,
   Icon,
-  ResourceRef,
+  ResourceIdentity,
   Row,
   TreeGroup,
   TreeNode,
@@ -16,7 +16,7 @@ import AppIcon from "@/components/AppIcon.vue";
 interface NodeData {
   isGroup?: boolean;
   icon?: Icon;
-  ref?: ResourceRef;
+  ref?: ResourceIdentity;
   row?: Row;
   source?: DataSource;
   resourceKind?: string;

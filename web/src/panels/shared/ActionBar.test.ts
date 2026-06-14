@@ -361,7 +361,7 @@ describe("ActionBar", () => {
     w.unmount();
   });
 
-  it("runs row actions from record context when the row has no resource ref", async () => {
+  it("runs row actions from record context when the row has no resource identity", async () => {
     const action: Action = {
       id: "dns.update",
       label: "Edit",

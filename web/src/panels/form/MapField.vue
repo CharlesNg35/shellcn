@@ -4,7 +4,7 @@ import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import type {
   Field,
-  ResourceRef,
+  ResourceIdentity,
   Row as ProjectionRow,
 } from "@/types/projection";
 import FormField from "./FormField.vue";
@@ -15,7 +15,7 @@ const props = defineProps<{
   field: Field;
   modelValue: unknown;
   connectionId?: string;
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
   record?: ProjectionRow | null;
 }>();
 const emit = defineEmits<{

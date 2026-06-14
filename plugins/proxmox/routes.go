@@ -220,7 +220,7 @@ func treeStorage(rc *plugin.RequestContext) (any, error) {
 			Key:   "storage:" + node + ":" + storage,
 			Label: storage + " (" + node + ")",
 			Icon:  icon("database"),
-			Ref:   &plugin.ResourceRef{Kind: "storage", Namespace: node, Name: storage, UID: storage},
+			Ref:   &plugin.ResourceIdentity{Kind: "storage", Namespace: node, Name: storage, UID: storage},
 			Leaf:  true,
 		})
 	}
@@ -272,7 +272,7 @@ func listGuests(kind string) plugin.Handler {
 				"maxmem":   numInt(g["maxmem"]),
 				"uptime":   numInt(g["uptime"]),
 				"tags":     str(g["tags"]),
-				"ref":      plugin.ResourceRef{Kind: guestKind, Namespace: node, Name: name, UID: vmid},
+				"ref":      plugin.ResourceIdentity{Kind: guestKind, Namespace: node, Name: name, UID: vmid},
 			})
 		}
 		return pageRows(rc, rows)
@@ -321,7 +321,7 @@ func listNodes(rc *plugin.RequestContext) (any, error) {
 			"mem":    numInt(n["mem"]),
 			"maxmem": numInt(n["maxmem"]),
 			"uptime": numInt(n["uptime"]),
-			"ref":    plugin.ResourceRef{Kind: "node", Namespace: name, Name: name, UID: name},
+			"ref":    plugin.ResourceIdentity{Kind: "node", Namespace: name, Name: name, UID: name},
 		})
 	}
 	return pageRows(rc, rows)
@@ -484,7 +484,7 @@ func storageRow(node string, st plugin.TableRow) (plugin.TableRow, bool) {
 		"used":    used,
 		"total":   total,
 		"status":  status,
-		"ref":     plugin.ResourceRef{Kind: "storage", Namespace: node, Name: storage, UID: storage},
+		"ref":     plugin.ResourceIdentity{Kind: "storage", Namespace: node, Name: storage, UID: storage},
 	}, true
 }
 
@@ -592,7 +592,7 @@ func taskRows(items []plugin.TableRow) []plugin.TableRow {
 			"starttime":  rfcTime(t["starttime"]),
 			"endtime":    rfcTime(t["endtime"]),
 			"_id":        upid,
-			"ref":        plugin.ResourceRef{Kind: "task", Namespace: node, Name: node, UID: upid},
+			"ref":        plugin.ResourceIdentity{Kind: "task", Namespace: node, Name: node, UID: upid},
 		})
 	}
 	return rows
@@ -620,7 +620,7 @@ func listSnapshots(kind string) plugin.Handler {
 				"description": str(sn["description"]),
 				"vmstate":     rowBool(sn["vmstate"]),
 				"snaptime":    rfcTime(sn["snaptime"]),
-				"ref":         plugin.ResourceRef{Kind: "snapshot", Namespace: node, Name: vmid, UID: name},
+				"ref":         plugin.ResourceIdentity{Kind: "snapshot", Namespace: node, Name: vmid, UID: name},
 			})
 		}
 		return pageRows(rc, rows)
@@ -1046,8 +1046,8 @@ func memoryPercent(used, maximum any) float64 {
 	return round1(numFloat(used) / limit * 100)
 }
 
-func refForVolume(kind, node, storage, volid string) plugin.ResourceRef {
-	return plugin.ResourceRef{Kind: kind, Namespace: node, Name: storage, UID: volid}
+func refForVolume(kind, node, storage, volid string) plugin.ResourceIdentity {
+	return plugin.ResourceIdentity{Kind: kind, Namespace: node, Name: storage, UID: volid}
 }
 
 func icon(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide, Value: name} }

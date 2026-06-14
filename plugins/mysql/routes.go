@@ -241,7 +241,7 @@ func treeDatabases(rc *plugin.RequestContext) (any, error) {
 			Key:            "db:" + name,
 			Label:          name,
 			Icon:           icon("database"),
-			Ref:            &plugin.ResourceRef{Kind: "database", Name: name, UID: name},
+			Ref:            &plugin.ResourceIdentity{Kind: "database", Name: name, UID: name},
 			ChildrenSource: &plugin.DataSource{RouteID: "mysql.relations.tree", Params: map[string]string{"database": name}},
 		})
 	}
@@ -262,7 +262,7 @@ func treeRelations(rc *plugin.RequestContext) (any, error) {
 	nodes := []plugin.TreeNode{}
 	add := func(res any, iconName string) {
 		for _, r := range res.(plugin.Page[plugin.TableRow]).Items {
-			ref, ok := r["ref"].(plugin.ResourceRef)
+			ref, ok := r["ref"].(plugin.ResourceIdentity)
 			if !ok || ref.Kind == "" {
 				continue
 			}
@@ -307,7 +307,7 @@ ORDER BY s.SCHEMA_NAME`, nil)
 	}
 	for _, r := range rows {
 		name := fmt.Sprint(r["name"])
-		r["ref"] = plugin.ResourceRef{Kind: "database", Name: name, UID: name}
+		r["ref"] = plugin.ResourceIdentity{Kind: "database", Name: name, UID: name}
 	}
 	return pageRows(rc, rows)
 }
@@ -428,7 +428,7 @@ ORDER BY t.TABLE_SCHEMA, t.TABLE_NAME`
 	}
 	for _, r := range rows {
 		name, database := fmt.Sprint(r["name"]), fmt.Sprint(r["database"])
-		r["ref"] = plugin.ResourceRef{Kind: refKind, Namespace: database, Name: name, UID: database + "." + name}
+		r["ref"] = plugin.ResourceIdentity{Kind: refKind, Namespace: database, Name: name, UID: database + "." + name}
 	}
 	return pageRows(rc, rows)
 }
@@ -454,7 +454,7 @@ ORDER BY ROUTINE_SCHEMA, ROUTINE_NAME`, []any{database, database})
 	}
 	for _, r := range rows {
 		name, database, routineType := fmt.Sprint(r["name"]), fmt.Sprint(r["database"]), strings.ToUpper(fmt.Sprint(r["type"]))
-		r["ref"] = plugin.ResourceRef{Kind: "routine", Namespace: database, Name: name, UID: routineID(database, routineType, name)}
+		r["ref"] = plugin.ResourceIdentity{Kind: "routine", Namespace: database, Name: name, UID: routineID(database, routineType, name)}
 	}
 	return pageRows(rc, rows)
 }
@@ -473,7 +473,7 @@ ORDER BY User, Host`, nil)
 	}
 	for _, r := range rows {
 		user, host := fmt.Sprint(r["user"]), fmt.Sprint(r["host"])
-		r["ref"] = plugin.ResourceRef{Kind: "user", Namespace: host, Name: user, UID: user + "@" + host}
+		r["ref"] = plugin.ResourceIdentity{Kind: "user", Namespace: host, Name: user, UID: user + "@" + host}
 	}
 	return pageRows(rc, rows)
 }
@@ -576,7 +576,7 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 
 // foreignKeys maps each FK column to the referenced table's ref, attached under
 // the generic "_links" field the grid renders as links.
-func foreignKeys(ctx context.Context, s *Session, database, table string) (map[string]plugin.ResourceRef, error) {
+func foreignKeys(ctx context.Context, s *Session, database, table string) (map[string]plugin.ResourceIdentity, error) {
 	rows, err := queryRows(ctx, s, `
 SELECT COLUMN_NAME AS col, REFERENCED_TABLE_SCHEMA AS ref_schema, REFERENCED_TABLE_NAME AS ref_table
 FROM information_schema.KEY_COLUMN_USAGE
@@ -584,15 +584,15 @@ WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL`
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]plugin.ResourceRef{}
+	out := map[string]plugin.ResourceIdentity{}
 	for _, r := range rows {
 		col, refSchema, refTable := fmt.Sprint(r["col"]), fmt.Sprint(r["ref_schema"]), fmt.Sprint(r["ref_table"])
-		out[col] = plugin.ResourceRef{Kind: "table", Namespace: refSchema, Name: refTable, UID: refSchema + "." + refTable}
+		out[col] = plugin.ResourceIdentity{Kind: "table", Namespace: refSchema, Name: refTable, UID: refSchema + "." + refTable}
 	}
 	return out, nil
 }
 
-func attachForeignKeys(rows []plugin.TableRow, fks map[string]plugin.ResourceRef) {
+func attachForeignKeys(rows []plugin.TableRow, fks map[string]plugin.ResourceIdentity) {
 	if len(fks) == 0 {
 		return
 	}
@@ -1963,7 +1963,7 @@ func treeFromPage(rc *plugin.RequestContext, kind string, iconName string, label
 	}
 	nodes := make([]plugin.TreeNode, 0, len(page.Items))
 	for _, r := range page.Items {
-		ref, _ := r["ref"].(plugin.ResourceRef)
+		ref, _ := r["ref"].(plugin.ResourceIdentity)
 		if ref.Kind == "" {
 			continue
 		}

@@ -47,7 +47,7 @@ func icon(name string) plugin.Icon {
 
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
-		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "postgresql.tree.databases"}, Ref: &plugin.ResourceRef{Kind: "server", Name: "Databases", UID: "server"}},
+		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "postgresql.tree.databases"}, Ref: &plugin.ResourceIdentity{Kind: "server", Name: "Databases", UID: "server"}},
 	}
 }
 

@@ -151,7 +151,7 @@ func TreeCompose(rc *plugin.RequestContext) (any, error) {
 			Key:   "compose:" + name,
 			Label: name,
 			Icon:  plugin.Icon{Type: plugin.IconLucide, Value: "workflow"},
-			Ref:   &plugin.ResourceRef{Kind: "compose", Name: name, UID: name},
+			Ref:   &plugin.ResourceIdentity{Kind: "compose", Name: name, UID: name},
 			Leaf:  true,
 			Badge: &plugin.Badge{Value: r["containers"], Severity: plugin.SeverityInfo},
 			Data:  r,
@@ -390,7 +390,7 @@ func ContainerEnv(rc *plugin.RequestContext) (any, error) {
 			rows = append(rows, Row{
 				"key":   key,
 				"value": value,
-				"ref":   plugin.ResourceRef{Kind: "env", Name: key, UID: key},
+				"ref":   plugin.ResourceIdentity{Kind: "env", Name: key, UID: key},
 			})
 		}
 	}
@@ -422,7 +422,7 @@ func ContainerMounts(rc *plugin.RequestContext) (any, error) {
 			"mode":        m.Mode,
 			"rw":          m.RW,
 			"propagation": string(m.Propagation),
-			"ref":         plugin.ResourceRef{Kind: "mount", Name: name, UID: uid},
+			"ref":         plugin.ResourceIdentity{Kind: "mount", Name: name, UID: uid},
 		})
 	}
 	return PageRows(rc, rows)
@@ -973,7 +973,7 @@ func ContainerRows(items []container.Summary) []Row {
 			"ports":          ports(c.Ports),
 			"compose":        c.Labels[ComposeProjectLabel],
 			"composeService": c.Labels["com.docker.compose.service"],
-			"ref":            plugin.ResourceRef{Kind: "container", Name: name, UID: c.ID},
+			"ref":            plugin.ResourceIdentity{Kind: "container", Name: name, UID: c.ID},
 		})
 	}
 	return rows
@@ -991,7 +991,7 @@ func ImageRows(items []image.Summary) []Row {
 			"size":       img.Size,
 			"containers": img.Containers,
 			"createdAt":  unixTime(img.Created),
-			"ref":        plugin.ResourceRef{Kind: "image", Name: name, UID: img.ID},
+			"ref":        plugin.ResourceIdentity{Kind: "image", Name: name, UID: img.ID},
 		})
 	}
 	return rows
@@ -1019,7 +1019,7 @@ func VolumeRows(items []volume.Volume) []Row {
 			"refs":       refs,
 			"createdAt":  v.CreatedAt,
 			"compose":    v.Labels[ComposeProjectLabel],
-			"ref":        plugin.ResourceRef{Kind: "volume", Name: v.Name, UID: v.Name},
+			"ref":        plugin.ResourceIdentity{Kind: "volume", Name: v.Name, UID: v.Name},
 		})
 	}
 	return rows
@@ -1038,7 +1038,7 @@ func NetworkRows(items []network.Summary) []Row {
 			"ingress":    n.Ingress,
 			"createdAt":  n.Created.String(),
 			"compose":    n.Labels[ComposeProjectLabel],
-			"ref":        plugin.ResourceRef{Kind: "network", Name: n.Name, UID: n.ID},
+			"ref":        plugin.ResourceIdentity{Kind: "network", Name: n.Name, UID: n.ID},
 		})
 	}
 	return rows
@@ -1070,7 +1070,7 @@ func composeRows(rc *plugin.RequestContext) ([]Row, error) {
 				"running":    0,
 				"services":   0,
 				"status":     "Stopped",
-				"ref":        plugin.ResourceRef{Kind: "compose", Name: project, UID: project},
+				"ref":        plugin.ResourceIdentity{Kind: "compose", Name: project, UID: project},
 			}
 			projects[project] = r
 		}
@@ -1163,7 +1163,7 @@ func TreeFromRows(rc *plugin.RequestContext, kind string, fn func(*plugin.Reques
 	}
 	nodes := make([]plugin.TreeNode, 0, len(page.Items))
 	for _, r := range page.Items {
-		ref, ok := r["ref"].(plugin.ResourceRef)
+		ref, ok := r["ref"].(plugin.ResourceIdentity)
 		if !ok {
 			continue
 		}
@@ -1288,7 +1288,7 @@ func resourceEventFromDocker(msg events.Message) *plugin.ResourceEvent {
 	if name == "" {
 		name = shortID(id)
 	}
-	ref := plugin.ResourceRef{Kind: "container", Name: name, UID: id}
+	ref := plugin.ResourceIdentity{Kind: "container", Name: name, UID: id}
 	resource := Row{
 		"id":     id,
 		"name":   name,

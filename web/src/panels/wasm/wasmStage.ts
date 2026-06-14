@@ -11,7 +11,7 @@ import { KEEP_ALIVE_WASM_PANELS_MAX } from "@/stores/sessionLimits";
 import type {
   DataSource,
   Method,
-  ResourceRef,
+  ResourceIdentity,
   Row,
   WasmAsset,
   WasmBridgeRoute,
@@ -69,7 +69,7 @@ export interface WasmPanelHandle {
   key: string;
   connectionId: string;
   config: WasmPanelConfig;
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
   record?: Row | null;
 }
 

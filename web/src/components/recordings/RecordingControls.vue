@@ -11,7 +11,7 @@ import AppIcon from "../AppIcon.vue";
 import {
   RecordingClass,
   type DataSource,
-  type ResourceRef,
+  type ResourceIdentity,
 } from "@/types/projection";
 import {
   ChannelStatus,
@@ -21,7 +21,7 @@ import {
 const props = defineProps<{
   connectionId: string;
   source: DataSource;
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
   descriptor: RecordingDescriptor;
   streamStatus?: ChannelStatusValue;
   disabledReason?: string | null;

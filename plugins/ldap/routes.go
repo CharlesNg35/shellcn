@@ -640,8 +640,8 @@ func entryRow(entry *ldapv3.Entry, readOnly bool) plugin.TableRow {
 	}
 }
 
-func entryRef(dn string) *plugin.ResourceRef {
-	return &plugin.ResourceRef{Kind: "entry", Name: rdnOf(dn), Namespace: parentOf(dn), UID: dn}
+func entryRef(dn string) *plugin.ResourceIdentity {
+	return &plugin.ResourceIdentity{Kind: "entry", Name: rdnOf(dn), Namespace: parentOf(dn), UID: dn}
 }
 
 func iconForEntry(classes []string) plugin.Icon {

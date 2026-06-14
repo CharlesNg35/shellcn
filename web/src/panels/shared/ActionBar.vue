@@ -5,7 +5,7 @@ import Button from "primevue/button";
 import Menu from "primevue/menu";
 import { useToast } from "primevue/usetoast";
 import { fetchDoc, runFormAction } from "@/api/dataSource";
-import type { Action, ResourceRef, Row } from "@/types/projection";
+import type { Action, ResourceIdentity, Row } from "@/types/projection";
 import { RiskLevel } from "@/types/projection";
 import AppIcon from "@/components/AppIcon.vue";
 import SchemaForm from "../form/SchemaForm.vue";
@@ -19,15 +19,15 @@ const dock = useDockStore();
 const props = defineProps<{
   connectionId: string;
   actions: Action[];
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
   record?: Row | null;
-  resources?: ResourceRef[] | null;
+  resources?: ResourceIdentity[] | null;
   records?: Row[] | null;
   scope?: Record<string, string> | null;
 }>();
 
 interface ActionTarget {
-  resource: ResourceRef | null;
+  resource: ResourceIdentity | null;
   record: Row | null;
 }
 

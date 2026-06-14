@@ -137,7 +137,7 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		if page.Items[0]["template"] != true {
 			t.Fatalf("qemu template flag = %+v", page.Items[0]["template"])
 		}
-		ref := page.Items[0]["ref"].(plugin.ResourceRef)
+		ref := page.Items[0]["ref"].(plugin.ResourceIdentity)
 		if ref.Namespace != "pve" || ref.UID != "100" {
 			t.Fatalf("qemu ref = %+v", ref)
 		}
@@ -161,7 +161,7 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		if page.Items[0]["vmstate"] != true {
 			t.Fatalf("snapshot vmstate = %+v", page.Items[0]["vmstate"])
 		}
-		ref := page.Items[0]["ref"].(plugin.ResourceRef)
+		ref := page.Items[0]["ref"].(plugin.ResourceIdentity)
 		if ref.Namespace != "pve" || ref.Name != "100" || ref.UID != "pre-upgrade" {
 			t.Fatalf("snapshot ref = %+v", ref)
 		}
@@ -189,9 +189,9 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		if len(page.Items) != 2 {
 			t.Fatalf("guest rows = %+v", page.Items)
 		}
-		var ref plugin.ResourceRef
+		var ref plugin.ResourceIdentity
 		for _, item := range page.Items {
-			candidate := item["ref"].(plugin.ResourceRef)
+			candidate := item["ref"].(plugin.ResourceIdentity)
 			if candidate.Kind == "qemu" {
 				ref = candidate
 				break
@@ -220,7 +220,7 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		if local["usedPct"] != 10.0 {
 			t.Fatalf("storage usedPct = %+v", local["usedPct"])
 		}
-		ref := local["ref"].(plugin.ResourceRef)
+		ref := local["ref"].(plugin.ResourceIdentity)
 		if ref.Kind != "storage" || ref.Namespace != "pve" || ref.UID != "local" {
 			t.Fatalf("storage ref = %+v", ref)
 		}

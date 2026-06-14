@@ -16,8 +16,8 @@ const OverviewKind = "overview"
 const overviewInterval = 5 * time.Second
 
 // OverviewRef opens the overview dashboard from a tree group.
-func OverviewRef() *plugin.ResourceRef {
-	return &plugin.ResourceRef{Kind: OverviewKind, Name: "Overview", UID: OverviewKind}
+func OverviewRef() *plugin.ResourceIdentity {
+	return &plugin.ResourceIdentity{Kind: OverviewKind, Name: "Overview", UID: OverviewKind}
 }
 
 // OverviewList is the single row backing the overview ResourceType.

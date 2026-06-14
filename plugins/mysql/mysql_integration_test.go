@@ -353,7 +353,7 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	if err != nil {
 		t.Fatalf("child table rows: %v", err)
 	}
-	if links, ok := orderRows.(plugin.Page[plugin.TableRow]).Items[0]["_links"].(map[string]plugin.ResourceRef); !ok || links["person_id"].Name != "shellcn_people" {
+	if links, ok := orderRows.(plugin.Page[plugin.TableRow]).Items[0]["_links"].(map[string]plugin.ResourceIdentity); !ok || links["person_id"].Name != "shellcn_people" {
 		t.Fatalf("expected _links[person_id] -> shellcn_people, got %#v", orderRows.(plugin.Page[plugin.TableRow]).Items[0]["_links"])
 	}
 

@@ -11,13 +11,13 @@ import PanelHost from "../core/PanelHost.vue";
 import AppIcon from "@/components/AppIcon.vue";
 import type {
   Action,
-  ResourceRef,
+  ResourceIdentity,
   ResourceType,
   Row,
   TreeGroup,
 } from "@/types/projection";
 
-function refSubtitle(ref: ResourceRef): string {
+function refSubtitle(ref: ResourceIdentity): string {
   const location = [ref.scope, ref.namespace].filter(Boolean).join(" / ");
   return [ref.kind, location].filter(Boolean).join(" · ");
 }

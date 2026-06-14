@@ -150,7 +150,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	if err != nil {
 		t.Fatalf("child table rows: %v", err)
 	}
-	links, ok := orderRows.(plugin.Page[plugin.TableRow]).Items[0]["_links"].(map[string]plugin.ResourceRef)
+	links, ok := orderRows.(plugin.Page[plugin.TableRow]).Items[0]["_links"].(map[string]plugin.ResourceIdentity)
 	if !ok || links["person_id"].Name != "shellcn_people" {
 		t.Fatalf("expected _links[person_id] -> shellcn_people, got %#v", orderRows.(plugin.Page[plugin.TableRow]).Items[0]["_links"])
 	}

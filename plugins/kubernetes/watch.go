@@ -71,7 +71,7 @@ func watchFrame(k kind, ev watch.Event) *plugin.ResourceEvent {
 	}
 	return &plugin.ResourceEvent{
 		Type: resourceEventType(ev.Type),
-		Ref: plugin.ResourceRef{
+		Ref: plugin.ResourceIdentity{
 			Kind:      k.name,
 			Namespace: refNS(o),
 			Name:      refName(o),

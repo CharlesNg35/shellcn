@@ -16,7 +16,7 @@ import type {
   PageRequest,
   Row,
   ResourceEvent,
-  ResourceRef,
+  ResourceIdentity,
 } from "../types/projection";
 
 // Reflect request outcomes in connection health. 4xx errors are operation-level
@@ -37,7 +37,7 @@ async function track<T>(connectionId: string, run: Promise<T>): Promise<T> {
 }
 
 export interface ResolveContext {
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
   record?: Row | null;
 }
 
@@ -73,7 +73,7 @@ function lookup(expr: string, ctx: ResolveContext): string | undefined {
 
 export function lookupRaw(expr: string, ctx: ResolveContext): unknown {
   if (expr.startsWith("resource.")) {
-    const key = expr.slice("resource.".length) as keyof ResourceRef;
+    const key = expr.slice("resource.".length) as keyof ResourceIdentity;
     return ctx.resource?.[key];
   }
   if (expr.startsWith("record.")) {

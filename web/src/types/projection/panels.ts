@@ -442,7 +442,9 @@ export interface Badge {
   severity?: Severity;
 }
 
-export interface ResourceRef {
+// ResourceIdentity marks a row/tree node as a real navigable resource. Plain
+// table rows use their own fields and record-context params instead.
+export interface ResourceIdentity {
   kind: string;
   scope?: string;
   namespace?: string;
@@ -556,9 +558,9 @@ export type PanelConfigPropertyType =
   (typeof PanelConfigPropertyType)[keyof typeof PanelConfigPropertyType];
 
 export type Row = Record<string, unknown> & {
-  ref?: ResourceRef;
+  ref?: ResourceIdentity;
   _key?: Record<string, unknown>;
-  _links?: Record<string, ResourceRef>;
+  _links?: Record<string, ResourceIdentity>;
 };
 
 export interface FileEntry {

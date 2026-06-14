@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { Field, ResourceRef, Row } from "@/types/projection";
+import type { Field, ResourceIdentity, Row } from "@/types/projection";
 import FieldGroup from "./FieldGroup.vue";
 
 const props = defineProps<{
   field: Field;
   modelValue: unknown;
   connectionId?: string;
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
   record?: Row | null;
 }>();
 const emit = defineEmits<{

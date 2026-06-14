@@ -105,7 +105,7 @@ func HelmReleases(rc *plugin.RequestContext) (any, error) {
 			"chart":      rel.Chart.Metadata.Name + "-" + rel.Chart.Metadata.Version,
 			"appVersion": rel.Chart.Metadata.AppVersion,
 			"updatedAt":  rel.Info.LastDeployed,
-			"ref":        plugin.ResourceRef{Kind: helmKind, Namespace: rel.Namespace, Name: rel.Name, UID: rel.Namespace + "/" + rel.Name},
+			"ref":        plugin.ResourceIdentity{Kind: helmKind, Namespace: rel.Namespace, Name: rel.Name, UID: rel.Namespace + "/" + rel.Name},
 		})
 	}
 	return pageRows(rc, rows)

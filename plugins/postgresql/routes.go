@@ -269,7 +269,7 @@ func treeDatabases(rc *plugin.RequestContext) (any, error) {
 			Key:            "db:" + name,
 			Label:          name,
 			Icon:           icon("database"),
-			Ref:            &plugin.ResourceRef{Kind: "database", Name: name, UID: name},
+			Ref:            &plugin.ResourceIdentity{Kind: "database", Name: name, UID: name},
 			ChildrenSource: &plugin.DataSource{RouteID: "postgresql.tree.schemas", Params: map[string]string{"database": name}},
 		})
 	}
@@ -290,7 +290,7 @@ func treeSchemas(rc *plugin.RequestContext) (any, error) {
 			Key:            "db:" + database + ":schema:" + name,
 			Label:          name,
 			Icon:           icon("folder-tree"),
-			Ref:            &plugin.ResourceRef{Kind: "schema", Scope: database, Name: name, UID: database + "." + name},
+			Ref:            &plugin.ResourceIdentity{Kind: "schema", Scope: database, Name: name, UID: database + "." + name},
 			ChildrenSource: &plugin.DataSource{RouteID: "postgresql.tree.relations", Params: map[string]string{"database": database, "schema": name}},
 		})
 	}
@@ -328,7 +328,7 @@ ORDER BY c.relname`, []any{schema})
 			Key:   "db:" + database + ":rel:" + schema + "." + name,
 			Label: name,
 			Icon:  icon(iconName),
-			Ref:   &plugin.ResourceRef{Kind: kind, Scope: database, Namespace: schema, Name: name, UID: database + "." + schema + "." + name},
+			Ref:   &plugin.ResourceIdentity{Kind: kind, Scope: database, Namespace: schema, Name: name, UID: database + "." + schema + "." + name},
 			Leaf:  true,
 		})
 	}
@@ -354,7 +354,7 @@ ORDER BY d.datname`, nil)
 	}
 	for _, r := range rows {
 		name := fmt.Sprint(r["name"])
-		r["ref"] = plugin.ResourceRef{Kind: "database", Name: name, UID: name}
+		r["ref"] = plugin.ResourceIdentity{Kind: "database", Name: name, UID: name}
 	}
 	return pageRows(rc, rows)
 }
@@ -399,7 +399,7 @@ ORDER BY n.nspname`, nil)
 	}
 	for _, r := range rows {
 		name := fmt.Sprint(r["name"])
-		r["ref"] = plugin.ResourceRef{Kind: "schema", Scope: database, Name: name, UID: database + "." + name}
+		r["ref"] = plugin.ResourceIdentity{Kind: "schema", Scope: database, Name: name, UID: database + "." + name}
 	}
 	return pageRows(rc, rows)
 }
@@ -516,7 +516,7 @@ ORDER BY n.nspname, c.relname`, []any{kinds, schema})
 	}
 	for _, r := range rows {
 		name, ns := fmt.Sprint(r["name"]), fmt.Sprint(r["schema"])
-		r["ref"] = plugin.ResourceRef{Kind: refKind, Scope: database, Namespace: ns, Name: name, UID: database + "." + ns + "." + name}
+		r["ref"] = plugin.ResourceIdentity{Kind: refKind, Scope: database, Namespace: ns, Name: name, UID: database + "." + ns + "." + name}
 	}
 	return pageRows(rc, rows)
 }
@@ -547,7 +547,7 @@ ORDER BY n.nspname, p.proname`, []any{schema})
 	}
 	for _, r := range rows {
 		name, ns, oid := fmt.Sprint(r["name"]), fmt.Sprint(r["schema"]), fmt.Sprint(r["oid"])
-		r["ref"] = plugin.ResourceRef{Kind: "function", Scope: database, Namespace: ns, Name: name, UID: oid}
+		r["ref"] = plugin.ResourceIdentity{Kind: "function", Scope: database, Namespace: ns, Name: name, UID: oid}
 	}
 	return pageRows(rc, rows)
 }
@@ -573,7 +573,7 @@ ORDER BY sequence_schema, sequence_name`, []any{schema})
 	}
 	for _, r := range rows {
 		name, ns := fmt.Sprint(r["name"]), fmt.Sprint(r["schema"])
-		r["ref"] = plugin.ResourceRef{Kind: "sequence", Scope: database, Namespace: ns, Name: name, UID: database + "." + ns + "." + name}
+		r["ref"] = plugin.ResourceIdentity{Kind: "sequence", Scope: database, Namespace: ns, Name: name, UID: database + "." + ns + "." + name}
 	}
 	return pageRows(rc, rows)
 }
@@ -660,9 +660,9 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	return plugin.Page[plugin.TableRow]{Items: rows, NextCursor: next, Total: &total}, nil
 }
 
-// foreignKeys maps each FK column of a table to the ResourceRef of the table it
+// foreignKeys maps each FK column of a table to the ResourceIdentity of the table it
 // references, so the grid can turn those cells into navigation links.
-func foreignKeys(ctx context.Context, pool *pgxpool.Pool, timeout time.Duration, database, schema, table string) (map[string]plugin.ResourceRef, error) {
+func foreignKeys(ctx context.Context, pool *pgxpool.Pool, timeout time.Duration, database, schema, table string) (map[string]plugin.ResourceIdentity, error) {
 	rows, err := queryRows(ctx, pool, timeout, `
 SELECT kcu.column_name AS col, ccu.table_schema AS ref_schema, ccu.table_name AS ref_table
 FROM information_schema.table_constraints tc
@@ -674,17 +674,17 @@ WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = $1 AND tc.table_n
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]plugin.ResourceRef{}
+	out := map[string]plugin.ResourceIdentity{}
 	for _, r := range rows {
 		col, refSchema, refTable := fmt.Sprint(r["col"]), fmt.Sprint(r["ref_schema"]), fmt.Sprint(r["ref_table"])
-		out[col] = plugin.ResourceRef{Kind: "table", Scope: database, Namespace: refSchema, Name: refTable, UID: database + "." + refSchema + "." + refTable}
+		out[col] = plugin.ResourceIdentity{Kind: "table", Scope: database, Namespace: refSchema, Name: refTable, UID: database + "." + refSchema + "." + refTable}
 	}
 	return out, nil
 }
 
 // attachForeignKeys tags rows with the table-level link map (column -> referenced
 // table ref) under the generic "_links" field the grid renders as links.
-func attachForeignKeys(rows []plugin.TableRow, fks map[string]plugin.ResourceRef) {
+func attachForeignKeys(rows []plugin.TableRow, fks map[string]plugin.ResourceIdentity) {
 	if len(fks) == 0 {
 		return
 	}

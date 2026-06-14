@@ -7,7 +7,7 @@ import type {
   Action,
   DataSource,
   PanelType,
-  ResourceRef,
+  ResourceIdentity,
   Row,
 } from "@/types/projection";
 import type { RecordingDescriptor } from "@/composables/useRecordingControl";
@@ -21,7 +21,7 @@ const props = defineProps<{
   source?: DataSource;
   config?: Record<string, unknown>;
   recording?: RecordingDescriptor | null;
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
   record?: Row | null;
   actions?: Action[];
 }>();

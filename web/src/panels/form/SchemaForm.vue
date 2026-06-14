@@ -5,7 +5,7 @@ import type {
   CredentialRefState,
   Field,
   Row,
-  ResourceRef,
+  ResourceIdentity,
   Schema,
 } from "@/types/projection";
 import FormField from "./FormField.vue";
@@ -24,7 +24,7 @@ const props = defineProps<{
   busy?: boolean;
   // Forwarded to fields with a route-sourced options list (optionsSource).
   connectionId?: string;
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
   record?: Row | null;
 }>();
 const emit = defineEmits<{

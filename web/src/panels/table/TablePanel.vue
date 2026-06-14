@@ -33,7 +33,7 @@ import type {
   Icon,
   Page,
   ResourceEvent,
-  ResourceRef,
+  ResourceIdentity,
   Row,
   TablePanelConfig,
 } from "@/types/projection";
@@ -240,7 +240,9 @@ const selectable = computed(
     !editable.value,
 );
 const selectedRefs = computed(() =>
-  selection.value.map((r) => r.ref).filter((r): r is ResourceRef => Boolean(r)),
+  selection.value
+    .map((r) => r.ref)
+    .filter((r): r is ResourceIdentity => Boolean(r)),
 );
 const addRowLoading = computed(
   () => columnsLoading.value || (loading.value && !columns.value.length),
@@ -643,11 +645,11 @@ async function loadDynamicColumns(): Promise<void> {
   }
 }
 
-function linkRef(row: Row, col: ColumnSpec): ResourceRef | null {
+function linkRef(row: Row, col: ColumnSpec): ResourceIdentity | null {
   const ref = row._links?.[col.key];
   return ref && row[col.key] != null && row[col.key] !== "" ? ref : null;
 }
-function openLink(ref: ResourceRef): void {
+function openLink(ref: ResourceIdentity): void {
   emit("select", { ref } as Row);
 }
 

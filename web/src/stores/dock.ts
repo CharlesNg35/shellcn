@@ -5,7 +5,7 @@ import type {
   Icon,
   PanelType,
   Row,
-  ResourceRef,
+  ResourceIdentity,
 } from "../types/projection";
 
 export interface DockItem {
@@ -15,7 +15,7 @@ export interface DockItem {
   panel: PanelType;
   source: DataSource;
   config?: Record<string, unknown>;
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
   record?: Row | null;
 }
 

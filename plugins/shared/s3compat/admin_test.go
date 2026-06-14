@@ -166,7 +166,7 @@ func TestAdminManifestUX(t *testing.T) {
 		t.Fatalf("versions action should open a table dialog: %+v", versions)
 	}
 	if versions.Params["bucket"] != "${record.name}" {
-		t.Fatalf("bucket row actions should use row data, not resource refs: %+v", versions.Params)
+		t.Fatalf("bucket row actions should use row data, not resource identities: %+v", versions.Params)
 	}
 	versionsCfg, ok := versions.Config.(plugin.TableConfig)
 	if !ok || versionsCfg.DefaultSort == nil || versionsCfg.DefaultSort.Field != "modTime" || !versionsCfg.Exportable {

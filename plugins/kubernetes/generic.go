@@ -52,8 +52,8 @@ func mapList(k kind, list *unstructured.UnstructuredList) []Row {
 // rowRef is the navigation/action identity the generic table reads from each
 // row. CRD rows resolve to the generic customresource type with the concrete
 // GVR carried in scope.
-func rowRef(k kind, o obj) plugin.ResourceRef {
-	ref := plugin.ResourceRef{Kind: k.name, Namespace: refNS(o), Name: refName(o), UID: str(o, "metadata", "uid")}
+func rowRef(k kind, o obj) plugin.ResourceIdentity {
+	ref := plugin.ResourceIdentity{Kind: k.name, Namespace: refNS(o), Name: refName(o), UID: str(o, "metadata", "uid")}
 	if strings.HasPrefix(k.name, crdParamPrefix) {
 		ref.Kind = customResourceKind
 		ref.Scope = k.name

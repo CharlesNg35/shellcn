@@ -49,7 +49,7 @@ func commonRow(o obj) Row {
 	}
 }
 
-// ref builds the ResourceRef identity for a tree node from an object.
+// ref builds the ResourceIdentity identity for a tree node from an object.
 func refName(o obj) string { return str(o, "metadata", "name") }
 func refNS(o obj) string   { return str(o, "metadata", "namespace") }
 

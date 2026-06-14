@@ -17,7 +17,7 @@ import type {
   CredentialRefState,
   Field,
   Option,
-  ResourceRef,
+  ResourceIdentity,
   Row,
   ValidatorType as ValidatorTypeValue,
 } from "@/types/projection";
@@ -38,7 +38,7 @@ const props = defineProps<{
   credentialState?: CredentialRefState;
   protocol?: string;
   connectionId?: string;
-  resource?: ResourceRef | null;
+  resource?: ResourceIdentity | null;
   record?: Row | null;
   hideLabel?: boolean;
 }>();

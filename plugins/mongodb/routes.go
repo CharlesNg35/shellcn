@@ -118,7 +118,7 @@ func treeDatabases(rc *plugin.RequestContext) (any, error) {
 	nodes := make([]plugin.TreeNode, 0, len(page.Items))
 	for _, item := range page.Items {
 		name := fmt.Sprint(item["name"])
-		ref := plugin.ResourceRef{Kind: "database", Name: name, UID: name}
+		ref := plugin.ResourceIdentity{Kind: "database", Name: name, UID: name}
 		nodes = append(nodes, plugin.TreeNode{
 			Key:            "database:" + name,
 			Label:          name,
@@ -139,7 +139,7 @@ func treeCollections(rc *plugin.RequestContext) (any, error) {
 	nodes := make([]plugin.TreeNode, 0, len(page.Items))
 	for _, item := range page.Items {
 		name, database := fmt.Sprint(item["name"]), fmt.Sprint(item["database"])
-		ref := plugin.ResourceRef{Kind: "collection", Namespace: database, Name: name, UID: database + "." + name}
+		ref := plugin.ResourceIdentity{Kind: "collection", Namespace: database, Name: name, UID: database + "." + name}
 		nodes = append(nodes, plugin.TreeNode{Key: "collection:" + ref.UID, Label: name, Icon: icon("folder"), Ref: &ref, Leaf: true})
 	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, NextCursor: page.NextCursor, Total: page.Total}, nil
@@ -165,7 +165,7 @@ func listDatabases(rc *plugin.RequestContext) (any, error) {
 			"name":  db.Name,
 			"size":  db.SizeOnDisk,
 			"empty": db.Empty,
-			"ref":   plugin.ResourceRef{Kind: "database", Name: db.Name, UID: db.Name},
+			"ref":   plugin.ResourceIdentity{Kind: "database", Name: db.Name, UID: db.Name},
 		})
 	}
 	return pageRows(rc, rows)
@@ -236,7 +236,7 @@ func listCollections(rc *plugin.RequestContext) (any, error) {
 				"type":     fmt.Sprint(coll["type"]),
 				"count":    count,
 				"size":     numberValue(stats["size"]),
-				"ref":      plugin.ResourceRef{Kind: "collection", Namespace: dbName, Name: name, UID: dbName + "." + name},
+				"ref":      plugin.ResourceIdentity{Kind: "collection", Namespace: dbName, Name: name, UID: dbName + "." + name},
 			})
 		}
 	}
@@ -953,7 +953,7 @@ func documentRow(database, collection string, doc bson.M) (plugin.TableRow, erro
 	for key, value := range bsonMap(doc) {
 		out[key] = displayValue(key, value)
 	}
-	out["ref"] = plugin.ResourceRef{Kind: "document", Name: idLabel(id), UID: encoded}
+	out["ref"] = plugin.ResourceIdentity{Kind: "document", Name: idLabel(id), UID: encoded}
 	return out, nil
 }
 
