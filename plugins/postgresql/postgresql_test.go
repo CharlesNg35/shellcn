@@ -50,12 +50,14 @@ func TestParseOptionsUsesTLSCredentialAsClientCertificate(t *testing.T) {
 		"host":     "db.local",
 		"database": "postgres",
 		"auth":     authClientCert,
-		plugin.CredentialValuesKey(authCertField): map[string]string{
+	}, Credentials: plugin.NewResolvedCredentials(plugin.CredentialBinding{
+		Field: authCertField,
+		Credential: plugin.ResolvedCredential{Kind: plugin.CredentialTLSClientCert, Values: map[string]string{
 			"subject":     "cert-user",
 			"certificate": "cert-pem",
 			"private_key": "key-pem",
-		},
-	}})
+		}},
+	})})
 	if err != nil {
 		t.Fatalf("parse options: %v", err)
 	}

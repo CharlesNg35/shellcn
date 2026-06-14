@@ -82,7 +82,6 @@ type Option struct {
 type CredentialSelector struct {
 	Kind      CredentialKind `json:"kind"`
 	Protocols []string       `json:"protocols,omitempty"`
-	Required  bool           `json:"required,omitempty"`
 }
 
 type Rule struct {

@@ -20,6 +20,7 @@ type ConnectConfig struct {
 	ConnectionID string
 	Transport    Transport
 	Config       map[string]any
+	Credentials  ResolvedCredentials
 	Net          NetTransport
 	Storage      Storage
 }

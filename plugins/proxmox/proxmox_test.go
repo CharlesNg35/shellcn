@@ -64,10 +64,6 @@ func TestParseConnectOptions(t *testing.T) {
 			name: "credential",
 			cfg: map[string]any{
 				"host": "pve", "auth": "credential",
-				plugin.CredentialValuesKey(plugin.CredentialIDField): map[string]string{
-					"token_id":     "root@pam!stored",
-					"token_secret": "secret",
-				},
 			},
 			check: func(o connectOptions) bool { return o.Method == authToken && o.TokenID == "root@pam!stored" },
 		},
@@ -76,7 +72,17 @@ func TestParseConnectOptions(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts, err := parseConnectOptions(plugin.ConnectConfig{Config: tc.cfg})
+			cfg := plugin.ConnectConfig{Config: tc.cfg}
+			if tc.name == "credential" {
+				cfg.Credentials = plugin.NewResolvedCredentials(plugin.CredentialBinding{
+					Field: plugin.CredentialIDField,
+					Credential: plugin.ResolvedCredential{Kind: CredentialProxmoxToken, Values: map[string]string{
+						"token_id":     "root@pam!stored",
+						"token_secret": "secret",
+					}},
+				})
+			}
+			opts, err := parseConnectOptions(cfg)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")

@@ -159,12 +159,16 @@ type Plugin interface {
 type ConnectConfig struct {
     ConnectionID string      // stable connection id, for plugin-owned caches/log labels
     Transport    Transport   // "direct" | "agent"
-    Config    map[string]any // decrypted connection config (typed via Schema)
-    Net       NetTransport   // how to reach the target (same API for both modes)
+    Config      map[string]any      // decrypted connection config (typed via Schema)
+    Credentials ResolvedCredentials // decrypted reusable credentials by credential_ref field
+    Net         NetTransport        // how to reach the target (same API for both modes)
 }
 
 func (c ConnectConfig) String(key string) string
 func (c ConnectConfig) Int(key string) (int, bool)
+func (c ConnectConfig) CredentialFor(field string) (ResolvedCredential, bool)
+func (c ConnectConfig) RequiredCredentialFor(field string, kind CredentialKind) (ResolvedCredential, error)
+func (c ConnectConfig) CredentialValueFor(field, key string) string
 
 // NetTransport exposes the upstream at the layer the protocol needs. A bare
 // dialer is enough for socket/TCP protocols but NOT for fat HTTP clients (e.g.
@@ -598,7 +602,6 @@ type CredentialKindInfo struct {
 type CredentialSelector struct {
     Kind      CredentialKind   // the single credential kind this field accepts
     Protocols []string         // optional protocol filter; empty = any compatible kind
-    Required  bool             // true when inline secret fallback is not allowed
 }
 
 type Condition struct {
@@ -672,13 +675,13 @@ uses an agent tunnel without storing transport metadata inside plugin config.
 logs/audit, never serialize back to the client. `credential_ref` fields never
 carry secret material either; they carry only a credential ID selected from the
 user's authorized reusable credentials. The service layer resolves the credential
-and injects decrypted values into `ConnectConfig.Config` immediately before
-`Connect`, as a structured field-value map keyed by the credential kind's
-declared `Fields`. Plugin code reads those values with
+and attaches decrypted values to `ConnectConfig.Credentials` immediately before
+`Connect`, keyed by the `credential_ref` field that selected the credential.
+Plugin code reads those values with
 `ConnectConfig.CredentialValueFor(field, key)` or
-`ConnectConfig.CredentialValuesFor(field)`, so it does not learn whether a value
-came from an inline connection secret or a shared credential. The gateway also
-injects the selected credential kind alongside the resolved values. A
+`ConnectConfig.CredentialFor(field)`, so credential material never collides with
+ordinary connection config keys. The gateway also provides the selected
+credential kind alongside the resolved values. A
 `credential_ref` selector declares exactly one kind; manifests use separate
 fields when a protocol supports alternative credential types, such as password
 authentication versus client-certificate authentication.

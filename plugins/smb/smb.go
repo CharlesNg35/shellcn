@@ -101,8 +101,8 @@ func authFields() []plugin.Field {
 		}},
 		{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 		{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
-		{Key: "credential_id", Label: "SMB credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-			Kind: plugin.CredentialBasicAuth, Protocols: []string{protocolName}, Required: true,
+		{Key: "credential_id", Label: "SMB credential", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+			Kind: plugin.CredentialBasicAuth, Protocols: []string{protocolName},
 		}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 	}
 }

@@ -47,8 +47,8 @@ func configSchema(protocol string) plugin.Schema {
 			{Key: "token_secret", Label: "Token secret", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: whenToken},
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "root@pam", VisibleWhen: whenPassword},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: whenPassword},
-			{Key: "credential_id", Label: "API token credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kind: CredentialProxmoxToken, Protocols: []string{protocol}, Required: true,
+			{Key: "credential_id", Label: "API token credential", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+				Kind: CredentialProxmoxToken, Protocols: []string{protocol},
 			}, VisibleWhen: whenCredential},
 		}},
 	}}

@@ -42,7 +42,6 @@ export interface CredentialKindInfo {
 export interface CredentialSelector {
   kind: CredentialKind;
   protocols?: string[];
-  required?: boolean;
 }
 
 export const Operator = {

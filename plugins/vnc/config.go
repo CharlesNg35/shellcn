@@ -39,8 +39,8 @@ func configSchema(protocol string) plugin.Schema {
 				{Label: "Stored password", Value: "credential"},
 				{Label: "None", Value: "none"},
 			}},
-			{Key: "credential_id", Label: "Stored password", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kind: CredentialVNCPassword, Protocols: []string{protocol}, Required: true,
+			{Key: "credential_id", Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+				Kind: CredentialVNCPassword, Protocols: []string{protocol},
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 		}},

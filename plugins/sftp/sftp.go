@@ -39,11 +39,12 @@ func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.
 }
 
 func configSchema() plugin.Schema {
+	inlineAuth := plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}, {Field: "auth", Op: plugin.OpEq, Value: "private_key"}}}
 	return plugin.Schema{Groups: []plugin.Group{
 		{Name: "Basic", Fields: []plugin.Field{
 			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, Placeholder: "10.0.0.1"},
 			{Key: "port", Label: "Port", Type: plugin.FieldNumber, Default: 22, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}},
-			{Key: "user", Label: "Username", Type: plugin.FieldText, Required: true, Default: "root"},
+			{Key: "user", Label: "Username", Type: plugin.FieldText, Required: true, Default: "root", VisibleWhen: &inlineAuth},
 			{Key: "host_key_verification", Label: "Host key verification", Type: plugin.FieldSelect, Required: true, Default: "pinned", Options: []plugin.Option{
 				{Label: "Verify pinned host key", Value: "pinned"},
 				{Label: "Do not verify (unsafe)", Value: "insecure"},
@@ -57,15 +58,15 @@ func configSchema() plugin.Schema {
 				{Label: "Stored SSH password", Value: "stored_password"},
 				{Label: "Stored SSH private key", Value: "stored_private_key"},
 			}},
-			{Key: sshsftp.CredentialPasswordField, Label: "Stored SSH password", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kind: sshsftp.CredentialSSHPassword, Protocols: []string{"sftp"}, Required: true,
+			{Key: sshsftp.CredentialPasswordField, Label: "Stored SSH password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+				Kind: sshsftp.CredentialSSHPassword, Protocols: []string{"sftp"},
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "stored_password"}}}},
-			{Key: sshsftp.CredentialPrivateKeyField, Label: "Stored SSH private key", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kind: sshsftp.CredentialSSHPrivateKey, Protocols: []string{"sftp"}, Required: true,
+			{Key: sshsftp.CredentialPrivateKeyField, Label: "Stored SSH private key", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+				Kind: sshsftp.CredentialSSHPrivateKey, Protocols: []string{"sftp"},
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "stored_private_key"}}}},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 			{Key: "private_key", Label: "Private key", Type: plugin.FieldTextarea, Required: true, Secret: true, Help: "PEM-encoded private key.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "private_key"}}}},
-			{Key: "passphrase", Label: "Key passphrase", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "private_key"}, {Field: "auth", Op: plugin.OpEq, Value: "stored_private_key"}}}},
+			{Key: "passphrase", Label: "Key passphrase", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "private_key"}}}},
 		}},
 	}}
 }

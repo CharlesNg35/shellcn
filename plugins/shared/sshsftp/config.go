@@ -99,9 +99,6 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	if opts.Port < 1 || opts.Port > 65535 {
 		return connectOptions{}, fmt.Errorf("%w: port must be between 1 and 65535", plugin.ErrInvalidInput)
 	}
-	if opts.User == "" {
-		return connectOptions{}, fmt.Errorf("%w: user is required", plugin.ErrInvalidInput)
-	}
 	switch opts.HostKeyMode {
 	case "":
 		if opts.HostKey != "" {
@@ -120,18 +117,37 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	}
 	switch opts.Auth {
 	case "stored_password":
-		opts.Password = cfg.CredentialValueFor(CredentialPasswordField, "password")
-		if identity := cfg.CredentialValueFor(CredentialPasswordField, "username"); identity != "" {
-			opts.User = identity
+		cred, err := cfg.RequiredCredentialFor(CredentialPasswordField, CredentialSSHPassword)
+		if err != nil {
+			return connectOptions{}, err
+		}
+		user, err := cred.RequiredValue("username")
+		if err != nil {
+			return connectOptions{}, err
+		}
+		opts.User = strings.TrimSpace(user)
+		opts.Password, err = cred.RequiredValue("password")
+		if err != nil {
+			return connectOptions{}, err
 		}
 	case "stored_private_key":
-		opts.PrivateKey = cfg.CredentialValueFor(CredentialPrivateKeyField, "private_key")
-		if passphrase := cfg.CredentialValueFor(CredentialPrivateKeyField, "passphrase"); passphrase != "" {
-			opts.Passphrase = passphrase
+		cred, err := cfg.RequiredCredentialFor(CredentialPrivateKeyField, CredentialSSHPrivateKey)
+		if err != nil {
+			return connectOptions{}, err
 		}
-		if identity := cfg.CredentialValueFor(CredentialPrivateKeyField, "username"); identity != "" {
-			opts.User = identity
+		user, err := cred.RequiredValue("username")
+		if err != nil {
+			return connectOptions{}, err
 		}
+		opts.User = strings.TrimSpace(user)
+		opts.PrivateKey, err = cred.RequiredValue("private_key")
+		if err != nil {
+			return connectOptions{}, err
+		}
+		opts.Passphrase = cred.Value("passphrase")
+	}
+	if opts.User == "" {
+		return connectOptions{}, fmt.Errorf("%w: user is required", plugin.ErrInvalidInput)
 	}
 	return opts, nil
 }

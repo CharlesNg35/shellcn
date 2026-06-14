@@ -44,12 +44,14 @@ func TestParseOptionsUsesTLSCredentialAsX509Auth(t *testing.T) {
 	opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{
 		"host": "mongo.local",
 		"auth": authClientCert,
-		plugin.CredentialValuesKey(authCertField): map[string]string{
+	}, Credentials: plugin.NewResolvedCredentials(plugin.CredentialBinding{
+		Field: authCertField,
+		Credential: plugin.ResolvedCredential{Kind: plugin.CredentialTLSClientCert, Values: map[string]string{
 			"subject":     "CN=app",
 			"certificate": "cert-pem",
 			"private_key": "key-pem",
-		},
-	}})
+		}},
+	})})
 	if err != nil {
 		t.Fatalf("parse options: %v", err)
 	}

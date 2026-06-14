@@ -300,7 +300,7 @@ func TestReplaceRecomputesCredentialProtocols(t *testing.T) {
 	updated := m
 	updated.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{{
 		Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
-		Credential: &plugin.CredentialSelector{Kind: testCredentialPrivateKey, Protocols: []string{"sftp"}, Required: true},
+		Credential: &plugin.CredentialSelector{Kind: testCredentialPrivateKey, Protocols: []string{"sftp"}},
 	}}}}}
 	if err := reg.Replace(&stubPlugin{manifest: updated, routes: routes}); err != nil {
 		t.Fatalf("replace: %v", err)
@@ -334,7 +334,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		Layout: plugin.LayoutTabs,
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{{
 			Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
-			Credential: &plugin.CredentialSelector{Kind: testCredentialPrivateKey, Protocols: []string{"ssh"}, Required: true},
+			Credential: &plugin.CredentialSelector{Kind: testCredentialPrivateKey, Protocols: []string{"ssh"}},
 		}}}}},
 	}
 	routes := []plugin.Route{
@@ -350,7 +350,7 @@ func protocolCredentialManifest(name string, kinds []plugin.CredentialKind) (plu
 	for _, kind := range kinds {
 		fields = append(fields, plugin.Field{
 			Key: string(kind) + "_credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
-			Credential: &plugin.CredentialSelector{Kind: kind, Protocols: []string{name}, Required: true},
+			Credential: &plugin.CredentialSelector{Kind: kind, Protocols: []string{name}},
 		})
 	}
 	m := plugin.Manifest{
