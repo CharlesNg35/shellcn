@@ -659,12 +659,16 @@ help.
 **Route-sourced choices.** A `select`/`radio`/`multiselect` field may set
 `OptionsSource` instead of (or in addition to) static `Options`: the renderer
 fetches it when the form opens and maps each row to `{value,label}`. Its params
-interpolate `${resource.*}` from the form's resource context, so a field can
-offer the live values of a related resource — e.g. a _Create index_ form whose
-_Columns_ field is a multiselect of the table's real columns, instead of a
-free-typed comma-separated string. Plugin-agnostic: the core only fetches rows
-and reads `value`/`name`/`label`; the plugin's route decides what the choices
-are. This keeps any "name an existing thing" field a picker, not free text.
+interpolate from the same form context as other route params: `${resource.*}`
+for the active `ResourceRef` and `${record.*}` for the row/object that opened the
+form. Defaults use the same resolver, including nested values and typed single
+tokens, so an edit form can seed fields directly from the selected row without a
+plugin-specific frontend path. This lets a field offer the live values of a
+related resource — e.g. a _Create index_ form whose _Columns_ field is a
+multiselect of the table's real columns, instead of a free-typed comma-separated
+string. Plugin-agnostic: the core only fetches rows and reads
+`value`/`name`/`label`; the plugin's route decides what the choices are. This
+keeps any "name an existing thing" field a picker, not free text.
 
 Rules normally read submitted schema fields. Reserved `$...` field names read
 ambient form context supplied by the core, currently `$transport` and
@@ -855,11 +859,12 @@ const (
 )
 
 // A panel binds to data via a route ID, not a raw URL. Params interpolate from
-// the active resource ("${resource.uid}") or static values. The core resolves
-// the RouteID + params to a concrete URL (§7.1).
+// the active resource ("${resource.uid}"), the active row/data record
+// ("${record.id}"), or static values. The core resolves the RouteID + params to
+// a concrete URL (§7.1).
 type DataSource struct {
     RouteID string
-    Params  map[string]string // {"vmid": "${resource.uid}", "node": "${resource.namespace}"}
+    Params  map[string]string // {"vmid": "${resource.uid}", "record": "${record.id}"}
 }
 ```
 
@@ -870,6 +875,13 @@ resource), the param is **omitted** and the route handler applies its own
 default/validation — never a blank request. A token _embedded_ in a larger
 string must resolve, since a blank would corrupt the value, so that errors
 loudly. The resolver special-cases no field name — only the token structure.
+`${resource.*}` is the navigable identity context (`ResourceRef`) and is present
+only when a row/tree/detail actually represents a resource. `${record.*}` is the
+current data row/object context and is available to row actions, row-hosted
+forms, options sources, dock/dialog panels opened from a row, table mutations,
+WASM bridge calls, and detail panels reached from a tree/table row. Nested paths
+such as `${record.metadata.name}` are valid. Use `${record.*}` for table rows
+that are not resources; do not fake a `ref` just to pass action params.
 
 ```go
 // Panel is one renderable panel — a detail/connection tab OR a dashboard cell

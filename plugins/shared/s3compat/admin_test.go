@@ -165,6 +165,9 @@ func TestAdminManifestUX(t *testing.T) {
 	if versions.Open != plugin.OpenDialog || versions.Panel != plugin.PanelTable {
 		t.Fatalf("versions action should open a table dialog: %+v", versions)
 	}
+	if versions.Params["bucket"] != "${record.name}" {
+		t.Fatalf("bucket row actions should use row data, not resource refs: %+v", versions.Params)
+	}
 	versionsCfg, ok := versions.Config.(plugin.TableConfig)
 	if !ok || versionsCfg.DefaultSort == nil || versionsCfg.DefaultSort.Field != "modTime" || !versionsCfg.Exportable {
 		t.Fatalf("versions action should declare an exportable typed table: %#v", versions.Config)
