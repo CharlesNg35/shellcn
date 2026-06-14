@@ -15,15 +15,13 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-type row = map[string]any
-
 func sess(rc *plugin.RequestContext) (*Session, error) {
 	return Unwrap(rc.Session)
 }
 
 // list GETs a JSON array endpoint into rows.
-func (s *Session) list(ctx context.Context, path string) ([]row, error) {
-	var out []row
+func (s *Session) list(ctx context.Context, path string) ([]plugin.TableRow, error) {
+	var out []plugin.TableRow
 	if err := s.client.Get(ctx, path, &out); err != nil {
 		return nil, mapErr(err)
 	}
@@ -31,8 +29,8 @@ func (s *Session) list(ctx context.Context, path string) ([]row, error) {
 }
 
 // object GETs a single JSON object endpoint.
-func (s *Session) object(ctx context.Context, path string) (row, error) {
-	var out row
+func (s *Session) object(ctx context.Context, path string) (plugin.TableRow, error) {
+	var out plugin.TableRow
 	if err := s.client.Get(ctx, path, &out); err != nil {
 		return nil, mapErr(err)
 	}
@@ -134,10 +132,10 @@ func round1(f float64) float64 { return math.Round(f*10) / 10 }
 
 // pageRows applies filter/sort/cursor pagination to in-memory rows, mirroring the
 // Docker plugin's list contract so the generic table panel behaves identically.
-func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
+func pageRows(rc *plugin.RequestContext, rows []plugin.TableRow) (plugin.Page[plugin.TableRow], error) {
 	req, err := rc.Page()
 	if err != nil {
-		return plugin.Page[row]{}, err
+		return plugin.Page[plugin.TableRow]{}, err
 	}
 	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
@@ -146,7 +144,7 @@ func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
 	if req.Cursor != "" {
 		start, err = strconv.Atoi(req.Cursor)
 		if err != nil || start < 0 {
-			return plugin.Page[row]{}, fmt.Errorf("%w: cursor must be an offset", plugin.ErrInvalidInput)
+			return plugin.Page[plugin.TableRow]{}, fmt.Errorf("%w: cursor must be an offset", plugin.ErrInvalidInput)
 		}
 	}
 	if start > len(rows) {
@@ -157,14 +155,14 @@ func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
 	if end < len(rows) {
 		next = strconv.Itoa(end)
 	}
-	return plugin.Page[row]{Items: rows[start:end], NextCursor: next, Total: &total}, nil
+	return plugin.Page[plugin.TableRow]{Items: rows[start:end], NextCursor: next, Total: &total}, nil
 }
 
-func filterRows(rows []row, q string) []row {
+func filterRows(rows []plugin.TableRow, q string) []plugin.TableRow {
 	return plugin.FilterRows(rows, q)
 }
 
-func sortRows(rows []row, keys []plugin.SortKey) {
+func sortRows(rows []plugin.TableRow, keys []plugin.SortKey) {
 	if len(keys) == 0 {
 		keys = []plugin.SortKey{{Field: "name"}}
 	}

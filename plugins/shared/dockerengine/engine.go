@@ -25,9 +25,8 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-// Row is one generic record returned by the shared handlers. It is an alias so
-// plugin packages can build rows as plain maps and still feed PageRows/TreeFromRows.
-type Row = map[string]any
+// Row is one generic record returned by the shared handlers.
+type Row = plugin.TableRow
 
 // ComposeProjectLabel groups containers/volumes into a Compose project.
 const ComposeProjectLabel = "com.docker.compose.project"

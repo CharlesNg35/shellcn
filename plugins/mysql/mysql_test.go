@@ -245,7 +245,7 @@ func TestRoutineIDRoundTrip(t *testing.T) {
 }
 
 func TestRedactRowsMasksConfiguredColumns(t *testing.T) {
-	rows := []row{{"id": int64(1), "access_token": "plain", "name": "alice", "_key": map[string]any{"id": int64(1)}}}
+	rows := []plugin.TableRow{{"id": int64(1), "access_token": "plain", "name": "alice", "_key": map[string]any{"id": int64(1)}}}
 	redactRows(rows, sqldb.DefaultRedactColumnPatterns())
 	if rows[0]["access_token"] != sqldb.RedactedValue || rows[0]["name"] != "alice" {
 		t.Fatalf("unexpected row redaction: %#v", rows)

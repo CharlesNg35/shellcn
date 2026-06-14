@@ -67,7 +67,7 @@ func TestParseOptionsUsesTLSCredentialAsClientCertificate(t *testing.T) {
 }
 
 func TestRedactRowsMasksConfiguredColumnsButKeepsRowKey(t *testing.T) {
-	rows := []row{{"id": int64(1), "password": "plain", "name": "alice", "_key": map[string]any{"id": int64(1)}}}
+	rows := []plugin.TableRow{{"id": int64(1), "password": "plain", "name": "alice", "_key": map[string]any{"id": int64(1)}}}
 	redactRows(rows, sqldb.DefaultRedactColumnPatterns())
 	if rows[0]["password"] != sqldb.RedactedValue || rows[0]["name"] != "alice" {
 		t.Fatalf("unexpected row redaction: %#v", rows)
@@ -78,19 +78,19 @@ func TestRedactRowsMasksConfiguredColumnsButKeepsRowKey(t *testing.T) {
 }
 
 func TestAttachRowKeysOnlyWithPrimaryKey(t *testing.T) {
-	withPK := []row{{"id": int64(7), "name": "a"}}
+	withPK := []plugin.TableRow{{"id": int64(7), "name": "a"}}
 	attachRowKeys(withPK, []string{"id"}, nil)
 	key, ok := withPK[0]["_key"].(map[string]any)
 	if !ok || key["id"] != int64(7) {
 		t.Fatalf("expected _key from primary key, got %#v", withPK[0])
 	}
-	keyless := []row{{"name": "a"}}
+	keyless := []plugin.TableRow{{"name": "a"}}
 	attachRowKeys(keyless, nil, nil)
 	if _, ok := keyless[0]["_key"]; ok {
 		t.Fatal("keyless tables must stay read-only (no _key)")
 	}
 	// A primary key that is itself sensitive must not be shipped raw via _key.
-	secretPK := []row{{"api_key": "live_xyz", "name": "a"}}
+	secretPK := []plugin.TableRow{{"api_key": "live_xyz", "name": "a"}}
 	attachRowKeys(secretPK, []string{"api_key"}, sqldb.DefaultRedactColumnPatterns())
 	if _, ok := secretPK[0]["_key"]; ok {
 		t.Fatal("tables keyed by a sensitive column must stay read-only (no _key leak)")

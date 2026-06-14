@@ -21,8 +21,6 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-type row map[string]any
-
 type actionResult struct {
 	OK bool `json:"ok"`
 }
@@ -263,7 +261,7 @@ func treeDatabases(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	page := res.(plugin.Page[row])
+	page := res.(plugin.Page[plugin.TableRow])
 	nodes := make([]plugin.TreeNode, 0, len(page.Items))
 	for _, r := range page.Items {
 		name := fmt.Sprint(r["name"])
@@ -284,7 +282,7 @@ func treeSchemas(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	page := res.(plugin.Page[row])
+	page := res.(plugin.Page[plugin.TableRow])
 	nodes := make([]plugin.TreeNode, 0, len(page.Items))
 	for _, r := range page.Items {
 		name := fmt.Sprint(r["name"])
@@ -659,7 +657,7 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if offset+len(rows) < total {
 		next = strconv.Itoa(offset + len(rows))
 	}
-	return plugin.Page[row]{Items: rows, NextCursor: next, Total: &total}, nil
+	return plugin.Page[plugin.TableRow]{Items: rows, NextCursor: next, Total: &total}, nil
 }
 
 // foreignKeys maps each FK column of a table to the ResourceRef of the table it
@@ -686,7 +684,7 @@ WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = $1 AND tc.table_n
 
 // attachForeignKeys tags rows with the table-level link map (column -> referenced
 // table ref) under the generic "_links" field the grid renders as links.
-func attachForeignKeys(rows []row, fks map[string]plugin.ResourceRef) {
+func attachForeignKeys(rows []plugin.TableRow, fks map[string]plugin.ResourceRef) {
 	if len(fks) == 0 {
 		return
 	}
@@ -699,7 +697,7 @@ func attachForeignKeys(rows []row, fks map[string]plugin.ResourceRef) {
 // echoes back for UPDATE/DELETE. The grid stays read-only when the table has no
 // primary key, or when a key column is itself sensitive (so a redacted value is
 // never shipped raw inside _key).
-func attachRowKeys(rows []row, pk, patterns []string) {
+func attachRowKeys(rows []plugin.TableRow, pk, patterns []string) {
 	if len(pk) == 0 || sqldb.AnyColumnRedacted(pk, patterns) {
 		return
 	}
@@ -750,8 +748,8 @@ ORDER BY ordinal_position`, []any{schema, table})
 		return nil, err
 	}
 	for i := range rows {
-		name := fmt.Sprint(rows[i]["name"])
-		rows[i]["ref"] = plugin.ResourceRef{Kind: "column", Scope: schema, Namespace: table, Name: name, UID: schema + "." + table + "." + name}
+		rows[i]["schema"] = schema
+		rows[i]["table"] = table
 	}
 	return pageRows(rc, rows)
 }
@@ -778,8 +776,8 @@ ORDER BY i.relname`, []any{schema, table})
 		return nil, err
 	}
 	for i := range rows {
-		name := fmt.Sprint(rows[i]["name"])
-		rows[i]["ref"] = plugin.ResourceRef{Kind: "index", Scope: schema, Namespace: table, Name: name, UID: schema + "." + table + "." + name}
+		rows[i]["schema"] = schema
+		rows[i]["table"] = table
 	}
 	return pageRows(rc, rows)
 }
@@ -806,8 +804,8 @@ ORDER BY con.conname`, []any{schema, table})
 		return nil, err
 	}
 	for i := range rows {
-		name := fmt.Sprint(rows[i]["name"])
-		rows[i]["ref"] = plugin.ResourceRef{Kind: "constraint", Scope: schema, Namespace: table, Name: name, UID: schema + "." + table + "." + name}
+		rows[i]["schema"] = schema
+		rows[i]["table"] = table
 	}
 	return pageRows(rc, rows)
 }
@@ -849,7 +847,7 @@ ORDER BY ordinal_position`, []any{schema, table})
 		b.WriteString("\n")
 	}
 	b.WriteString(");")
-	return row{"schema": schema, "name": table, "definition": b.String()}, nil
+	return plugin.TableRow{"schema": schema, "name": table, "definition": b.String()}, nil
 }
 
 func viewDefinition(rc *plugin.RequestContext) (any, error) {
@@ -865,7 +863,7 @@ func viewDefinition(rc *plugin.RequestContext) (any, error) {
 	if err := pool.QueryRow(rc.Ctx, `SELECT pg_get_viewdef(($1 || '.' || $2)::regclass, true)`, schema, table).Scan(&def); err != nil {
 		return nil, pgErr(err)
 	}
-	return row{"schema": schema, "name": table, "definition": def.String}, nil
+	return plugin.TableRow{"schema": schema, "name": table, "definition": def.String}, nil
 }
 
 func functionDefinition(rc *plugin.RequestContext) (any, error) {
@@ -881,7 +879,7 @@ func functionDefinition(rc *plugin.RequestContext) (any, error) {
 	if err := pool.QueryRow(rc.Ctx, `SELECT pg_get_functiondef($1::oid)`, oid).Scan(&def); err != nil {
 		return nil, pgErr(err)
 	}
-	return row{"definition": def}, nil
+	return plugin.TableRow{"definition": def}, nil
 }
 
 func sequenceOverview(rc *plugin.RequestContext) (any, error) {
@@ -1691,7 +1689,7 @@ func statementsRequireReview(statements []string) bool {
 
 // --- shared query/paging helpers ----------------------------------------
 
-func queryRows(ctx context.Context, pool *pgxpool.Pool, timeout time.Duration, sqlText string, args []any) ([]row, error) {
+func queryRows(ctx context.Context, pool *pgxpool.Pool, timeout time.Duration, sqlText string, args []any) ([]plugin.TableRow, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	rows, err := pool.Query(ctx, sqlText, args...)
@@ -1700,13 +1698,13 @@ func queryRows(ctx context.Context, pool *pgxpool.Pool, timeout time.Duration, s
 	}
 	defer rows.Close()
 	names := fieldNames(rows.FieldDescriptions())
-	out := []row{}
+	out := []plugin.TableRow{}
 	for rows.Next() {
 		values, err := rows.Values()
 		if err != nil {
 			return nil, pgErr(err)
 		}
-		r := row{}
+		r := plugin.TableRow{}
 		for i, name := range names {
 			if i < len(values) {
 				r[name] = sqldb.DisplayValue(name, values[i])
@@ -1720,7 +1718,7 @@ func queryRows(ctx context.Context, pool *pgxpool.Pool, timeout time.Duration, s
 	return out, nil
 }
 
-func redactRows(rows []row, patterns []string) {
+func redactRows(rows []plugin.TableRow, patterns []string) {
 	for _, r := range rows {
 		for key, value := range r {
 			if key == "_key" {
@@ -1741,17 +1739,17 @@ func fieldNames(fields []pgconn.FieldDescription) []string {
 	return out
 }
 
-func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
+func pageRows(rc *plugin.RequestContext, rows []plugin.TableRow) (plugin.Page[plugin.TableRow], error) {
 	req, err := rc.Page()
 	if err != nil {
-		return plugin.Page[row]{}, err
+		return plugin.Page[plugin.TableRow]{}, err
 	}
 	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	total := len(rows)
 	start, err := cursorOffset(req.Cursor)
 	if err != nil {
-		return plugin.Page[row]{}, err
+		return plugin.Page[plugin.TableRow]{}, err
 	}
 	if start > len(rows) {
 		start = len(rows)
@@ -1765,14 +1763,14 @@ func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
 	if end < len(rows) {
 		next = strconv.Itoa(end)
 	}
-	return plugin.Page[row]{Items: rows[start:end], NextCursor: next, Total: &total}, nil
+	return plugin.Page[plugin.TableRow]{Items: rows[start:end], NextCursor: next, Total: &total}, nil
 }
 
-func filterRows(rows []row, q string) []row {
+func filterRows(rows []plugin.TableRow, q string) []plugin.TableRow {
 	return plugin.FilterRows(rows, q)
 }
 
-func sortRows(rows []row, keys []plugin.SortKey) {
+func sortRows(rows []plugin.TableRow, keys []plugin.SortKey) {
 	if len(keys) == 0 {
 		return
 	}

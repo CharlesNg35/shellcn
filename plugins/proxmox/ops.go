@@ -321,9 +321,9 @@ func taskLog(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]row, 0, len(lines))
+	rows := make([]plugin.TableRow, 0, len(lines))
 	for _, l := range lines {
-		rows = append(rows, row{"n": numInt(l["n"]), "t": str(l["t"])})
+		rows = append(rows, plugin.TableRow{"n": numInt(l["n"]), "t": str(l["t"])})
 	}
 	return pageRows(rc, rows)
 }

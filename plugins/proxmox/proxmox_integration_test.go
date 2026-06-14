@@ -113,7 +113,7 @@ func TestProxmoxPluginIntegration(t *testing.T) {
 
 	// Read the clone task's status through the handler.
 	statusRes := call(taskStatus, map[string]string{"node": node, "upid": cloneTask.UPID}, "")
-	if st := str(statusRes.(row)["status"]); st != "stopped" {
+	if st := str(statusRes.(plugin.TableRow)["status"]); st != "stopped" {
 		t.Fatalf("clone task status = %q, want stopped", st)
 	}
 

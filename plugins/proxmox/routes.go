@@ -239,7 +239,7 @@ func listGuests(kind string) plugin.Handler {
 		if err != nil {
 			return nil, err
 		}
-		rows := make([]row, 0, len(items))
+		rows := make([]plugin.TableRow, 0, len(items))
 		onlyNode := rc.Query().Get("p.node")
 		if onlyNode == "" {
 			onlyNode = rc.Param("node")
@@ -258,7 +258,7 @@ func listGuests(kind string) plugin.Handler {
 			}
 			vmid := str(g["vmid"])
 			name := guestName(g, guestKind, vmid)
-			rows = append(rows, row{
+			rows = append(rows, plugin.TableRow{
 				"kindIcon": guestKindIcon(guestKind),
 				"name":     name,
 				"type":     guestKind,
@@ -286,7 +286,7 @@ func guestKindIcon(kind string) string {
 	return "monitor"
 }
 
-func guestMode(g row) string {
+func guestMode(g plugin.TableRow) string {
 	if isTemplateValue(g["template"]) {
 		return "Template"
 	}
@@ -311,10 +311,10 @@ func listNodes(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]row, 0, len(items))
+	rows := make([]plugin.TableRow, 0, len(items))
 	for _, n := range items {
 		name := str(n["node"])
-		rows = append(rows, row{
+		rows = append(rows, plugin.TableRow{
 			"name":   name,
 			"status": str(n["status"]),
 			"cpu":    round1(numFloat(n["cpu"]) * 100),
@@ -336,7 +336,7 @@ func nodeOptions(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]row, 0, len(items))
+	rows := make([]plugin.TableRow, 0, len(items))
 	source := rc.Param("node")
 	for _, n := range items {
 		name := str(n["node"])
@@ -347,7 +347,7 @@ func nodeOptions(rc *plugin.RequestContext) (any, error) {
 		if status := str(n["status"]); status != "" {
 			label += " (" + status + ")"
 		}
-		rows = append(rows, row{
+		rows = append(rows, plugin.TableRow{
 			"name":   name,
 			"label":  label,
 			"value":  name,
@@ -385,7 +385,7 @@ func storageOptions(rc *plugin.RequestContext, requiredContent string) (any, err
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]row, 0, len(items))
+	rows := make([]plugin.TableRow, 0, len(items))
 	for _, st := range items {
 		storage := str(st["storage"])
 		if storage == "" || !validStorage(storage) || !storageSupportsContent(st, requiredContent) {
@@ -395,7 +395,7 @@ func storageOptions(rc *plugin.RequestContext, requiredContent string) (any, err
 		if typ := str(st["type"]); typ != "" {
 			label += " (" + typ + ")"
 		}
-		rows = append(rows, row{
+		rows = append(rows, plugin.TableRow{
 			"name":  storage,
 			"label": label,
 			"value": storage,
@@ -404,7 +404,7 @@ func storageOptions(rc *plugin.RequestContext, requiredContent string) (any, err
 	return pageRows(rc, rows)
 }
 
-func storageSupportsContent(st row, content string) bool {
+func storageSupportsContent(st plugin.TableRow, content string) bool {
 	for _, part := range strings.Split(str(st["content"]), ",") {
 		if strings.TrimSpace(part) == content {
 			return true
@@ -422,7 +422,7 @@ func listStorage(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]row, 0, len(items))
+	rows := make([]plugin.TableRow, 0, len(items))
 	for _, st := range items {
 		node := str(st["node"])
 		if r, ok := storageRow(node, st); ok {
@@ -445,7 +445,7 @@ func listNodeStorage(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]row, 0, len(items))
+	rows := make([]plugin.TableRow, 0, len(items))
 	for _, st := range items {
 		if r, ok := storageRow(node, st); ok {
 			rows = append(rows, r)
@@ -454,7 +454,7 @@ func listNodeStorage(rc *plugin.RequestContext) (any, error) {
 	return pageRows(rc, rows)
 }
 
-func storageRow(node string, st row) (row, bool) {
+func storageRow(node string, st plugin.TableRow) (plugin.TableRow, bool) {
 	storage := str(st["storage"])
 	if storage == "" {
 		return nil, false
@@ -475,7 +475,7 @@ func storageRow(node string, st row) (row, bool) {
 	if status == "" {
 		status = nodeStorageStatus(st)
 	}
-	return row{
+	return plugin.TableRow{
 		"name":    storage,
 		"node":    node,
 		"type":    typ,
@@ -495,7 +495,7 @@ func percent(used, total int64) float64 {
 	return round1(float64(used) / float64(total) * 100)
 }
 
-func nodeStorageStatus(st row) string {
+func nodeStorageStatus(st plugin.TableRow) string {
 	if st["enabled"] != nil && numInt(st["enabled"]) == 0 {
 		return "disabled"
 	}
@@ -518,11 +518,11 @@ func listStorageContent(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]row, 0, len(items))
+	rows := make([]plugin.TableRow, 0, len(items))
 	for _, it := range items {
 		volid := str(it["volid"])
 		content := str(it["content"])
-		rows = append(rows, row{
+		rows = append(rows, plugin.TableRow{
 			"name":      volid,
 			"content":   content,
 			"guestType": backupGuestType(volid),
@@ -550,7 +550,7 @@ func listTasks(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	itemsWithNode := make([]row, 0, len(items))
+	itemsWithNode := make([]plugin.TableRow, 0, len(items))
 	for _, t := range items {
 		if str(t["node"]) == "" {
 			t["node"] = node
@@ -572,8 +572,8 @@ func listClusterTasks(rc *plugin.RequestContext) (any, error) {
 	return pageRows(rc, taskRows(items))
 }
 
-func taskRows(items []row) []row {
-	rows := make([]row, 0, len(items))
+func taskRows(items []plugin.TableRow) []plugin.TableRow {
+	rows := make([]plugin.TableRow, 0, len(items))
 	for _, t := range items {
 		upid := str(t["upid"])
 		node := str(t["node"])
@@ -583,7 +583,7 @@ func taskRows(items []row) []row {
 		} else if status == "" {
 			status = str(t["exitstatus"])
 		}
-		rows = append(rows, row{
+		rows = append(rows, plugin.TableRow{
 			"name":       str(t["type"]),
 			"id":         str(t["id"]),
 			"user":       str(t["user"]),
@@ -612,10 +612,10 @@ func listSnapshots(kind string) plugin.Handler {
 		if err != nil {
 			return nil, err
 		}
-		rows := make([]row, 0, len(items))
+		rows := make([]plugin.TableRow, 0, len(items))
 		for _, sn := range items {
 			name := str(sn["name"])
-			rows = append(rows, row{
+			rows = append(rows, plugin.TableRow{
 				"name":        name,
 				"description": str(sn["description"]),
 				"vmstate":     rowBool(sn["vmstate"]),
@@ -640,7 +640,7 @@ func listBackups(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows := []row{}
+	rows := []plugin.TableRow{}
 	for _, st := range stores {
 		if !strings.Contains(str(st["content"]), "backup") {
 			continue
@@ -659,7 +659,7 @@ func listBackups(rc *plugin.RequestContext) (any, error) {
 			}
 			volid := str(it["volid"])
 			guestType := backupGuestType(volid)
-			rows = append(rows, row{
+			rows = append(rows, plugin.TableRow{
 				"name":      volid,
 				"content":   "backup",
 				"guestType": guestType,
@@ -716,7 +716,7 @@ func guestOverview(kind string) plugin.Handler {
 		if cpuTotal == 0 {
 			cpuTotal = cores
 		}
-		out := row{
+		out := plugin.TableRow{
 			"node":             node,
 			"vmid":             vmid,
 			"name":             stringOr(str(cfg["name"]), str(cfg["hostname"])),
@@ -983,7 +983,7 @@ func backupSchema() *plugin.Schema {
 
 // --- Helpers --------------------------------------------------------------
 
-func guestName(g row, kind, vmid string) string {
+func guestName(g plugin.TableRow, kind, vmid string) string {
 	if name := str(g["name"]); name != "" {
 		return name
 	}

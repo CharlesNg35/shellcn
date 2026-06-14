@@ -293,7 +293,7 @@ func TestOpsAgainstFakeProxmox(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		obj := res.(row)
+		obj := res.(plugin.TableRow)
 		if obj["status"] != "stopped" || obj["exitstatus"] != "OK" {
 			t.Fatalf("task status = %+v", obj)
 		}
@@ -305,7 +305,7 @@ func TestOpsAgainstFakeProxmox(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		page := res.(plugin.Page[row])
+		page := res.(plugin.Page[plugin.TableRow])
 		if len(page.Items) != 2 || page.Items[0]["t"] != "starting" {
 			t.Fatalf("task log = %+v", page.Items)
 		}

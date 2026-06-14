@@ -64,7 +64,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	if err != nil {
 		t.Fatalf("list tables: %v", err)
 	}
-	if !pageHasName(list.(plugin.Page[row]), "shellcn_people") {
+	if !pageHasName(list.(plugin.Page[plugin.TableRow]), "shellcn_people") {
 		t.Fatalf("created table was not listed: %#v", list)
 	}
 
@@ -84,7 +84,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	if err != nil {
 		t.Fatalf("list tables after database-level create: %v", err)
 	}
-	if !pageHasName(dbList.(plugin.Page[row]), "shellcn_dbcreate") {
+	if !pageHasName(dbList.(plugin.Page[plugin.TableRow]), "shellcn_dbcreate") {
 		t.Fatalf("database-level created table was not listed: %#v", dbList)
 	}
 
@@ -92,7 +92,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	if err != nil {
 		t.Fatalf("table rows: %v", err)
 	}
-	page := rows.(plugin.Page[row])
+	page := rows.(plugin.Page[plugin.TableRow])
 	if len(page.Items) != 1 || page.Items[0]["password"] != sqldb.RedactedValue {
 		t.Fatalf("expected redacted table data, got %#v", page.Items)
 	}
@@ -150,9 +150,9 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	if err != nil {
 		t.Fatalf("child table rows: %v", err)
 	}
-	links, ok := orderRows.(plugin.Page[row]).Items[0]["_links"].(map[string]plugin.ResourceRef)
+	links, ok := orderRows.(plugin.Page[plugin.TableRow]).Items[0]["_links"].(map[string]plugin.ResourceRef)
 	if !ok || links["person_id"].Name != "shellcn_people" {
-		t.Fatalf("expected _links[person_id] -> shellcn_people, got %#v", orderRows.(plugin.Page[row]).Items[0]["_links"])
+		t.Fatalf("expected _links[person_id] -> shellcn_people, got %#v", orderRows.(plugin.Page[plugin.TableRow]).Items[0]["_links"])
 	}
 
 	graph, err := relationGraph(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, url.Values{"p.schema": {"public"}}, nil))
@@ -229,7 +229,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	if err != nil {
 		t.Fatalf("columns route after alter: %v", err)
 	}
-	if !pageHasName(cres.(plugin.Page[row]), "full_name") {
+	if !pageHasName(cres.(plugin.Page[plugin.TableRow]), "full_name") {
 		t.Fatalf("renamed column full_name not listed: %#v", cres)
 	}
 	var dtype string
@@ -246,7 +246,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	if err != nil {
 		t.Fatalf("list tables after rename: %v", err)
 	}
-	if !pageHasName(renamed.(plugin.Page[row]), "shellcn_persons") {
+	if !pageHasName(renamed.(plugin.Page[plugin.TableRow]), "shellcn_persons") {
 		t.Fatalf("renamed table shellcn_persons not listed: %#v", renamed)
 	}
 	if _, err := renameTable(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_persons"}, map[string]any{"newName": "shellcn_people"})); err != nil {
@@ -371,7 +371,7 @@ func run(ctx context.Context, t *testing.T, name string, args ...string) string 
 	return string(out)
 }
 
-func pageHasName(page plugin.Page[row], name string) bool {
+func pageHasName(page plugin.Page[plugin.TableRow], name string) bool {
 	for _, item := range page.Items {
 		if item["name"] == name {
 			return true

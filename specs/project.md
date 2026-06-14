@@ -914,10 +914,10 @@ type TableConfig struct {
     // Declaring RowActionIDs makes the table's rows selectable (checkbox column,
     // multi-select). The row-action bar then operates on the selection: a route
     // action runs once per selected row (bulk), gated by Action.EnabledWhen
-    // across every selected row. A row's ResourceRef supplies each target's
-    // params. Set Selectable instead to keep checkboxes but no row bar (a browse
-    // table whose actions live in the detail). Inline-editable grids keep their
-    // own row controls instead.
+    // across every selected row. Row action params resolve from both the row's
+    // ResourceRef, when present, and the selected row data. Set Selectable
+    // instead to keep checkboxes but no row bar (a browse table whose actions
+    // live in the detail). Inline-editable grids keep their own row controls.
 
     // Editable data grid — plugin-agnostic; the renderer assumes nothing about
     // what the data represents.
@@ -937,6 +937,8 @@ type RowMutation struct {
     Key    map[string]any `json:"key,omitempty"`
     Values map[string]any `json:"values,omitempty"`
 }
+
+type TableRow = map[string]any
 ```
 
 The grid is fully generic: it has no notion of databases, keys, or links beyond
@@ -1286,7 +1288,7 @@ the choice is stored in user preferences. The default is a suggestion, not a loc
 type ResourceType struct {
     Kind          string          // matches ResourceRef.Kind
     Title         string
-    List          DataSource      // route → Page[Row]
+    List          DataSource      // route → Page[TableRow]
     Watch         *DataSource     // optional WS route → stream of ResourceEvent (§7.3)
     Columns       []Column        // static columns
     ColumnsSource *DataSource     // optional: route → column defs {name,label} when only known at runtime
