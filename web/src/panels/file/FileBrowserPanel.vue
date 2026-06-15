@@ -251,7 +251,7 @@ const statusLabel = computed(() => {
   if (operation.value === "mkdir") return "Creating folder";
   if (operation.value === "rename") return "Renaming item";
   if (operation.value === "delete") return "Deleting item";
-  if (loadingList.value) return "Loading folder";
+  if (loadingList.value) return "";
   return "";
 });
 
