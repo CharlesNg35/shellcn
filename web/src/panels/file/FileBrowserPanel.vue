@@ -23,6 +23,7 @@ import {
   type Page,
 } from "@/types/projection";
 import type { PanelProps } from "../core/types";
+import AppAlert from "@/components/AppAlert.vue";
 import AppIcon from "@/components/AppIcon.vue";
 import FileCrumbs from "./FileCrumbs.vue";
 import FileEntryGrid from "./FileEntryGrid.vue";
@@ -101,6 +102,7 @@ const destPath = ref("");
 const chmodMode = ref("");
 const uploadProgress = ref<UploadProgress | null>(null);
 const uploadLabel = ref("");
+const uploadWarning = ref("");
 const mkdirOpen = ref(false);
 const renameOpen = ref(false);
 const deleteOpen = ref(false);
@@ -270,6 +272,7 @@ async function loadList(path: string): Promise<void> {
   if (!props.source) return;
   loadingList.value = true;
   listError.value = null;
+  uploadWarning.value = "";
   selected.value = null;
   selectedPaths.value = new Set();
   content.value = null;
@@ -379,6 +382,32 @@ function notifyError(e: unknown): void {
   });
 }
 
+function notifyUploadWarning(detail: string): void {
+  uploadWarning.value = detail;
+}
+
+function uploadSizeWarning(files: File[], maxBytes: number): string {
+  const names = files
+    .slice(0, 3)
+    .map((file) => file.name)
+    .join(", ");
+  const suffix = files.length > 3 ? ` and ${files.length - 3} more` : "";
+  if (files.length === 1) {
+    const file = files[0]!;
+    return `${file.name} is ${formatBytes(file.size)}. Maximum upload size is ${formatBytes(maxBytes)}.`;
+  }
+  return `${files.length} files exceed the ${formatBytes(maxBytes)} upload limit: ${names}${suffix}.`;
+}
+
+function validUploadFiles(files: File[]): File[] | null {
+  const maxBytes = uploadConfig.value?.maxBytes ?? 0;
+  if (maxBytes <= 0) return files;
+  const oversized = files.filter((file) => file.size > maxBytes);
+  if (!oversized.length) return files;
+  notifyUploadWarning(uploadSizeWarning(oversized, maxBytes));
+  return null;
+}
+
 function upload(event: FileUploadUploaderEvent): void {
   const files = Array.isArray(event.files) ? event.files : [event.files];
   void uploadFileList(files);
@@ -387,11 +416,14 @@ function upload(event: FileUploadUploaderEvent): void {
 async function uploadFileList(files: File[]): Promise<void> {
   const routeId = uploadRouteId.value;
   if (!routeId || files.length === 0) return;
+  const validFiles = validUploadFiles(files);
+  if (!validFiles) return;
+  uploadWarning.value = "";
   const total = files.reduce((sum, file) => sum + file.size, 0);
   uploadLabel.value =
-    files.length === 1
-      ? (files[0]?.name ?? "file")
-      : `${files.length} files (${formatBytes(total)})`;
+    validFiles.length === 1
+      ? (validFiles[0]?.name ?? "file")
+      : `${validFiles.length} files (${formatBytes(total)})`;
   uploadProgress.value = {
     loaded: 0,
     total,
@@ -405,7 +437,7 @@ async function uploadFileList(files: File[]): Promise<void> {
       props.connectionId,
       routeId,
       operationCtx.value,
-      files,
+      validFiles,
       operationParams(cwd.value),
       uploadFieldName.value,
       {
@@ -415,9 +447,9 @@ async function uploadFileList(files: File[]): Promise<void> {
       },
     );
     notifySuccess(
-      files.length === 1
+      validFiles.length === 1
         ? "Uploaded 1 file."
-        : `Uploaded ${files.length} files.`,
+        : `Uploaded ${validFiles.length} files.`,
     );
     await loadList(cwd.value);
   } catch (e) {
@@ -733,6 +765,20 @@ watch(
       @delete="deleteOpen = true"
       @refresh="loadList(cwd)"
     />
+
+    <div
+      v-if="uploadWarning"
+      class="border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+    >
+      <AppAlert
+        tone="warning"
+        title="Upload blocked"
+        closable
+        @close="uploadWarning = ''"
+      >
+        {{ uploadWarning }}
+      </AppAlert>
+    </div>
 
     <FileSelectionBar
       v-if="selectable && hasSelection"

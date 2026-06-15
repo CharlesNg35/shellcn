@@ -14,4 +14,15 @@ describe("AppAlert", () => {
     expect(wrapper.text()).toContain("Could not connect");
     expect(wrapper.text()).toContain("Authentication failed");
   });
+
+  it("forwards close events from closable messages", async () => {
+    const wrapper = mount(AppAlert, {
+      props: { tone: "warning", title: "Upload blocked", closable: true },
+      slots: { default: "File is too large" },
+    });
+
+    await wrapper.getComponent(Message).vm.$emit("close", new Event("close"));
+
+    expect(wrapper.emitted("close")).toHaveLength(1);
+  });
 });

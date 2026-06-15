@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "@/test/fetchMock";
 import { FileTransferOperation } from "@/types/projection";
 import FileBrowserPanel from "./FileBrowserPanel.vue";
+import FileToolbar from "./FileToolbar.vue";
 
 const codeMirrorEditors = vi.hoisted(
   () =>
@@ -510,6 +511,43 @@ describe("FileBrowserPanel", () => {
     expect(del.url).toContain("p.path=%2FREADME.md");
     expect(del.init?.method).toBe("DELETE");
     expect(JSON.parse(String(del.init?.body))).toEqual({ path: "/README.md" });
+  });
+
+  it("blocks oversized uploads in the file browser UI instead of PrimeVue's upload message area", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url, init) => {
+      calls.push({ url, init });
+      return { body: { items: rootEntries, nextCursor: "" } };
+    });
+
+    const config = writableConfig();
+    config.upload = { ...config.upload, maxBytes: 50 };
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config,
+      },
+    });
+    await flushPromises();
+
+    const largeFile = new File(["x".repeat(64)], "UpworkSetup64.exe", {
+      type: "application/octet-stream",
+    });
+    w.findComponent(FileToolbar).vm.$emit("upload", { files: [largeFile] });
+    await flushPromises();
+
+    expect(w.text()).toContain("Upload blocked");
+    expect(w.text()).toContain("UpworkSetup64.exe is 64 B");
+    expect(w.text()).toContain("Maximum upload size is 50 B");
+    expect(calls.some((c) => c.url.includes("ssh.sftp.upload"))).toBe(false);
+
+    await w
+      .findComponent({ name: "AppAlert" })
+      .vm.$emit("close", new Event("close"));
+    await nextTick();
+    expect(w.text()).not.toContain("Upload blocked");
   });
 
   it("shows the selection bar once an entry is selected via its checkbox", async () => {

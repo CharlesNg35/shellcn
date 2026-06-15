@@ -46,6 +46,8 @@ const icon = computed(() => {
       return "info";
   }
 });
+
+const emit = defineEmits<{ close: [event: Event] }>();
 </script>
 
 <template>
@@ -54,6 +56,7 @@ const icon = computed(() => {
     :closable="closable"
     class="w-full"
     role="alert"
+    @close="emit('close', $event)"
   >
     <template #icon>
       <AppIcon :icon="{ type: 'lucide', value: icon }" :size="16" />

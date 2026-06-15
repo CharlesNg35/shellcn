@@ -473,7 +473,7 @@ export const primeVuePassthrough = {
     icon: "mt-0.5 h-4 w-4 shrink-0",
     text: "min-w-0 flex-1",
     closeButton:
-      "ml-auto shrink-0 rounded p-0.5 text-current/60 transition-colors hover:bg-black/5 hover:text-current dark:hover:bg-white/10",
+      "ml-auto inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-current/60 transition-colors hover:bg-black/5 hover:text-current focus-visible:ring-2 focus-visible:ring-current/30 focus-visible:outline-none dark:hover:bg-white/10",
     closeIcon: "h-4 w-4",
   },
 
