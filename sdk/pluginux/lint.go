@@ -267,20 +267,6 @@ func (l *linter) streamMatch(path string, p plugin.Panel) {
 	}
 }
 
-func (l *linter) streamSourceMatch(path string, source *plugin.DataSource, expected plugin.StreamKind) {
-	if source == nil {
-		return
-	}
-	stream, ok := l.streams[source.RouteID]
-	if !ok {
-		l.add(Error, path, "stream route %q is not declared in manifest streams", source.RouteID)
-		return
-	}
-	if stream.Kind != expected {
-		l.add(Error, path, "stream route %q is %q but requires %q", source.RouteID, stream.Kind, expected)
-	}
-}
-
 func expectedStreamKind(panel plugin.PanelType) (plugin.StreamKind, bool) {
 	switch panel {
 	case plugin.PanelTerminal, plugin.PanelTerminalGrid:

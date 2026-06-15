@@ -97,7 +97,7 @@ func Routes(prefix, protocol string) []plugin.Route {
 	}
 }
 
-func Streams(prefix string) []plugin.Stream {
+func Streams(_ string) []plugin.Stream {
 	return nil
 }
 
