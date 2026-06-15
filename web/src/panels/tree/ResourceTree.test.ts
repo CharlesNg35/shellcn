@@ -32,6 +32,20 @@ describe("ResourceTree", () => {
     expect(w.emitted("select-group")?.[0]).toEqual(["workloads"]);
   });
 
+  it("uses a full-height scroll region for workspace navigation", () => {
+    const w = mountTree();
+    const tree = w.findComponent({ name: "Tree" });
+
+    expect(tree.classes()).toEqual(
+      expect.arrayContaining(["h-full", "min-h-0"]),
+    );
+    expect(tree.props("pt")).toMatchObject({
+      root: expect.stringContaining("h-full"),
+      wrapper: expect.stringContaining("flex-1"),
+    });
+    expect(String(tree.props("pt").wrapper)).not.toContain("max-h-56");
+  });
+
   it("emits select-list with the kind for a list-opening node", async () => {
     const w = mountTree();
     const dt = w.findComponent({ name: "Tree" });

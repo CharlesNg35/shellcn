@@ -180,9 +180,9 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
 </script>
 
 <template>
-  <div class="flex h-full">
+  <div class="flex h-full min-h-0">
     <div
-      class="w-64 shrink-0 border-r border-surface-200 dark:border-surface-800"
+      class="h-full min-h-0 w-64 shrink-0 overflow-hidden border-r border-surface-200 dark:border-surface-800"
     >
       <ResourceTree
         :refresh-key="scopeKey"

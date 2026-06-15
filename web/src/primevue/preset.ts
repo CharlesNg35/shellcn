@@ -404,7 +404,7 @@ export const primeVuePassthrough = {
     root: cn(
       "rounded-md border border-surface-200 bg-surface-0 text-sm text-surface-800 dark:border-surface-800 dark:bg-surface-950 dark:text-surface-100",
     ),
-    wrapper: "max-h-56 overflow-auto p-1",
+    wrapper: "min-h-0 overflow-auto p-1",
     rootChildren: "space-y-0.5",
     nodeContent:
       "flex min-w-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-sm text-surface-700 transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/15 dark:data-[p-selected=true]:text-primary-300",

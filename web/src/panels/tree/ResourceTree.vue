@@ -216,7 +216,11 @@ onMounted(async () => {
     :value="nodes"
     selection-mode="single"
     loading-mode="icon"
-    class="h-full"
+    class="h-full min-h-0"
+    :pt="{
+      root: 'flex h-full min-h-0 flex-col',
+      wrapper: 'min-h-0 flex-1 overflow-auto p-1',
+    }"
     :expanded-keys="expandedKeys"
     :selection-keys="selectionKeys"
     @node-expand="onNodeExpand"

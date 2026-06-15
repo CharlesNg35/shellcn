@@ -82,6 +82,12 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.tablist.nextButton).toContain("right-0");
   });
 
+  it("does not globally cap tree height", () => {
+    expect(primeVuePassthrough.tree.wrapper).toContain("min-h-0");
+    expect(primeVuePassthrough.tree.wrapper).toContain("overflow-auto");
+    expect(primeVuePassthrough.tree.wrapper).not.toContain("max-h-56");
+  });
+
   it("applies tablist pass-through classes to PrimeVue scroll navigators", () => {
     const wrapper = mount(
       {
