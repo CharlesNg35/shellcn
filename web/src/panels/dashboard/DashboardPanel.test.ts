@@ -53,6 +53,34 @@ describe("DashboardPanel", () => {
     expect(wrapper.emitted("select")?.[0]).toEqual([row]);
   });
 
+  it("passes active resource context to dashboard child panels", () => {
+    const resource = { kind: "database", name: "app", uid: "app" };
+    const wrapper = mount(DashboardPanel, {
+      props: {
+        connectionId: "c1",
+        config: {
+          cells: [
+            {
+              key: "summary",
+              label: "Summary",
+              panel: "object_detail",
+              source: {
+                routeId: "postgresql.database.overview",
+                params: { database: "${resource.uid}" },
+              },
+            },
+          ],
+        } satisfies DashboardPanelConfig,
+        resource,
+      },
+      global: { stubs: { AppIcon: true, PanelHost: true } },
+    });
+
+    expect(wrapper.findComponent(PanelHost).props("resource")).toEqual(
+      resource,
+    );
+  });
+
   it("shows an empty state when there are no cells", () => {
     const wrapper = mount(DashboardPanel, {
       props: { connectionId: "c1", config: { cells: [] } },

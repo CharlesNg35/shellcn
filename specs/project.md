@@ -883,6 +883,18 @@ WASM bridge calls, and detail panels reached from a tree/table row. Nested paths
 such as `${record.metadata.name}` are valid. Use `${record.*}` for table rows
 that are not resources; do not fake a `ref` just to pass action params.
 
+**Renderer context invariant.** Every generic panel host receives the same
+context tuple: `connectionId`, `source`, `config`, optional `resource`, optional
+`record`, and available actions. Any renderer-owned container that mounts child
+panels — detail views, dashboards, split panels, dock/dialog panels, tree
+workspaces, and future composite panels — must pass `resource` and `record`
+through unchanged unless it is deliberately creating a new row/resource context.
+This is not cosmetic prop plumbing: it is the contract that makes
+`${resource.*}` and `${record.*}` interpolation work without plugin-specific
+frontend code. Dropping either context silently omits single-token params; if the
+route path contains the omitted value, the core correctly rejects the request as
+missing a mandatory route param.
+
 ```go
 // Panel is one renderable panel — a detail/connection tab OR a dashboard cell
 // (they are the same shape, so there is one type). Config holds a typed config
