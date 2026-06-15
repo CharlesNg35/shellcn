@@ -3,8 +3,8 @@ import { mount } from "@vue/test-utils";
 import { ref, nextTick } from "vue";
 import PrimeVue from "primevue/config";
 import { primeVuePassthrough } from "@/primevue/preset";
-import { FileTransferOperation } from "@/types/projection";
-import FileTransferDialog from "./FileTransferDialog.vue";
+import { FileJobOperation } from "@/types/projection";
+import FileJobDialog from "./FileJobDialog.vue";
 
 const send = vi.hoisted(() => vi.fn());
 const reconnect = vi.hoisted(() => vi.fn());
@@ -32,7 +32,7 @@ beforeEach(() => {
   send.mockClear();
   reconnect.mockClear();
   onFrame = undefined;
-  vi.stubGlobal("crypto", { randomUUID: () => "transfer-1" });
+  vi.stubGlobal("crypto", { randomUUID: () => "file-job-1" });
 });
 
 function bodyButton(text: string): HTMLButtonElement {
@@ -43,18 +43,18 @@ function bodyButton(text: string): HTMLButtonElement {
   return button as HTMLButtonElement;
 }
 
-describe("FileTransferDialog", () => {
+describe("FileJobDialog", () => {
   it("starts, cancels, and renders progress frames", async () => {
-    const w = mount(FileTransferDialog, {
+    const w = mount(FileJobDialog, {
       props: {
         visible: true,
         connectionId: "c1",
         ctx: {},
         config: {
-          source: { routeId: "sftp.transfer" },
-          operations: [FileTransferOperation.Copy],
+          source: { routeId: "sftp.jobs" },
+          operations: [FileJobOperation.Copy],
         },
-        operation: FileTransferOperation.Copy,
+        operation: FileJobOperation.Copy,
         paths: ["/README.md"],
         defaultDestination: "/archive",
       },
@@ -65,7 +65,7 @@ describe("FileTransferDialog", () => {
 
     await nextTick();
     const input = document.body.querySelector(
-      'input[aria-label="Transfer destination"]',
+      'input[aria-label="Job destination"]',
     ) as HTMLInputElement;
     input.value = "/dst";
     input.dispatchEvent(new Event("input"));
@@ -74,8 +74,8 @@ describe("FileTransferDialog", () => {
 
     expect(JSON.parse(send.mock.calls[0]![0])).toEqual({
       type: "start",
-      transferId: "transfer-1",
-      operation: FileTransferOperation.Copy,
+      jobId: "file-job-1",
+      operation: FileJobOperation.Copy,
       paths: ["/README.md"],
       destination: "/dst",
     });
@@ -83,7 +83,7 @@ describe("FileTransferDialog", () => {
     onFrame?.(
       JSON.stringify({
         type: "progress",
-        transferId: "transfer-1",
+        jobId: "file-job-1",
         status: "Copying",
         bytesDone: 512,
         bytesTotal: 1024,
@@ -100,13 +100,13 @@ describe("FileTransferDialog", () => {
     bodyButton("Cancel").click();
     expect(JSON.parse(send.mock.calls[1]![0])).toEqual({
       type: "cancel",
-      transferId: "transfer-1",
+      jobId: "file-job-1",
     });
 
     onFrame?.(
       JSON.stringify({
         type: "complete",
-        transferId: "transfer-1",
+        jobId: "file-job-1",
         message: "Copied",
       }),
     );

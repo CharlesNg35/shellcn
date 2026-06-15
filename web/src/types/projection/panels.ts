@@ -40,7 +40,7 @@ export const StreamKind = {
   Query: "query",
   Desktop: "desktop",
   Metrics: "metrics",
-  FileTransfer: "file_transfer",
+  FileJob: "file_job",
   Task: "task",
   Canvas: "canvas",
 } as const;
@@ -116,7 +116,7 @@ export interface FileBrowserConfig {
   routes?: FileBrowserRoutes;
   upload?: FileUploadConfig;
   writable?: boolean;
-  transfer?: FileTransferConfig;
+  jobs?: FileJobConfig;
 }
 
 export interface FileBrowserRoutes {
@@ -137,7 +137,7 @@ export interface FileUploadConfig {
   maxBytes?: number;
 }
 
-export const FileTransferOperation = {
+export const FileJobOperation = {
   Move: "move",
   Copy: "copy",
   Archive: "archive",
@@ -145,12 +145,12 @@ export const FileTransferOperation = {
   Sync: "sync",
 } as const;
 
-export type FileTransferOperation =
-  (typeof FileTransferOperation)[keyof typeof FileTransferOperation];
+export type FileJobOperation =
+  (typeof FileJobOperation)[keyof typeof FileJobOperation];
 
-export interface FileTransferConfig {
+export interface FileJobConfig {
   source?: DataSource;
-  operations?: FileTransferOperation[];
+  operations?: FileJobOperation[];
   emptyText?: string;
 }
 

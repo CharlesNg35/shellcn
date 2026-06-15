@@ -1,9 +1,9 @@
 package plugin
 
-// FileTransferRequest is sent by the renderer to a StreamFileTransfer handler.
-type FileTransferRequest struct {
+// FileJobRequest is sent by the renderer to a StreamFileJob handler.
+type FileJobRequest struct {
 	Type        string            `json:"type"`
-	TransferID  string            `json:"transferId,omitempty"`
+	JobID       string            `json:"jobId,omitempty"`
 	Operation   string            `json:"operation,omitempty"`
 	Paths       []string          `json:"paths,omitempty"`
 	Destination string            `json:"destination,omitempty"`
@@ -12,15 +12,15 @@ type FileTransferRequest struct {
 }
 
 const (
-	FileTransferRequestStart  = "start"
-	FileTransferRequestCancel = "cancel"
+	FileJobRequestStart  = "start"
+	FileJobRequestCancel = "cancel"
 )
 
-// FileTransferFrame is emitted by a StreamFileTransfer handler to report lifecycle,
+// FileJobFrame is emitted by a StreamFileJob handler to report lifecycle,
 // progress, logs, completion, and failures.
-type FileTransferFrame struct {
+type FileJobFrame struct {
 	Type        string            `json:"type"`
-	TransferID  string            `json:"transferId,omitempty"`
+	JobID       string            `json:"jobId,omitempty"`
 	Status      string            `json:"status,omitempty"`
 	Message     string            `json:"message,omitempty"`
 	Path        string            `json:"path,omitempty"`
@@ -37,9 +37,9 @@ type FileTransferFrame struct {
 }
 
 const (
-	FileTransferFrameStatus   = "status"
-	FileTransferFrameProgress = "progress"
-	FileTransferFrameLog      = "log"
-	FileTransferFrameComplete = "complete"
-	FileTransferFrameError    = "error"
+	FileJobFrameStatus   = "status"
+	FileJobFrameProgress = "progress"
+	FileJobFrameLog      = "log"
+	FileJobFrameComplete = "complete"
+	FileJobFrameError    = "error"
 )

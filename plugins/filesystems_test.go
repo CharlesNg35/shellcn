@@ -13,7 +13,7 @@ func TestFilesystemPluginsValidateAndRegister(t *testing.T) {
 		if proj.Category.Key != plugin.CategoryFiles {
 			t.Fatalf("%s category: got %q want %q", name, proj.Category.Key, plugin.CategoryFiles)
 		}
-		// Every filesystem plugin leads with a file browser. Pure transfer
+		// Every filesystem plugin leads with a file browser. Pure file job
 		// protocols expose exactly that; object stores add bucket
 		// management tabs alongside it.
 		objectStore := name == "s3"

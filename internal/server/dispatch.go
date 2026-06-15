@@ -712,7 +712,7 @@ func streamKindKeepAlivePolicy(kind plugin.StreamKind) streamKeepAlivePolicy {
 	if kind == plugin.StreamLogs {
 		return streamKeepAlivePolicy{enabled: true, controlReader: true}
 	}
-	if kind == plugin.StreamQuery || kind == plugin.StreamFileTransfer {
+	if kind == plugin.StreamQuery || kind == plugin.StreamFileJob {
 		return streamKeepAlivePolicy{enabled: true}
 	}
 	return streamKeepAlivePolicy{}

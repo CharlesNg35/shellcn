@@ -16,8 +16,8 @@ func TestBulkRoutesDeclareActionableInputSchemas(t *testing.T) {
 			t.Fatalf("%s missing input schema", id)
 		}
 	}
-	if routes["test.sftp.transfer"].Method != plugin.MethodWS || routes["test.sftp.transfer"].Stream == nil {
-		t.Fatalf("transfer route should be websocket-backed: %+v", routes["test.sftp.transfer"])
+	if routes["test.sftp.jobs"].Method != plugin.MethodWS || routes["test.sftp.jobs"].Stream == nil {
+		t.Fatalf("file job route should be websocket-backed: %+v", routes["test.sftp.jobs"])
 	}
 
 	chmodMode := requireBulkField(t, routes["test.sftp.chmod"].Input, "mode")

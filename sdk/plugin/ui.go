@@ -70,14 +70,14 @@ func (WasmConfig) panelConfig()          {}
 type StreamKind string
 
 const (
-	StreamTerminal     StreamKind = "terminal"
-	StreamLogs         StreamKind = "logs"
-	StreamQuery        StreamKind = "query"
-	StreamDesktop      StreamKind = "desktop"
-	StreamMetrics      StreamKind = "metrics"
-	StreamFileTransfer StreamKind = "file_transfer"
-	StreamTask         StreamKind = "task"
-	StreamCanvas       StreamKind = "canvas"
+	StreamTerminal StreamKind = "terminal"
+	StreamLogs     StreamKind = "logs"
+	StreamQuery    StreamKind = "query"
+	StreamDesktop  StreamKind = "desktop"
+	StreamMetrics  StreamKind = "metrics"
+	StreamFileJob  StreamKind = "file_job"
+	StreamTask     StreamKind = "task"
+	StreamCanvas   StreamKind = "canvas"
 )
 
 // DataSource binds a panel to a route by id; params interpolate from the active
@@ -173,18 +173,18 @@ type TableConfig struct {
 }
 
 // FileBrowserConfig wires the generic file browser to plugin routes. Keep
-// request/response routes, upload settings, and stream transfers separate so
+// request/response routes, upload settings, and stream-backed jobs separate so
 // manifests stay readable as file capabilities grow.
 type FileBrowserConfig struct {
-	PathParam string              `json:"pathParam,omitempty"`
-	Routes    FileBrowserRoutes   `json:"routes,omitempty"`
-	Upload    FileUploadConfig    `json:"upload,omitempty"`
-	Writable  bool                `json:"writable,omitempty"`
-	Transfer  *FileTransferConfig `json:"transfer,omitempty"`
+	PathParam string            `json:"pathParam,omitempty"`
+	Routes    FileBrowserRoutes `json:"routes,omitempty"`
+	Upload    FileUploadConfig  `json:"upload,omitempty"`
+	Writable  bool              `json:"writable,omitempty"`
+	Jobs      *FileJobConfig    `json:"jobs,omitempty"`
 }
 
 // FileBrowserRoutes groups request/response file operations. Long-running
-// transfer jobs belong in FileTransferConfig instead.
+// file jobs belong in FileJobConfig instead.
 type FileBrowserRoutes struct {
 	Read     string `json:"read,omitempty"`
 	Download string `json:"download,omitempty"`
@@ -204,24 +204,24 @@ type FileUploadConfig struct {
 	MaxBytes  int64  `json:"maxBytes,omitempty"`
 }
 
-// FileTransferOperation names a long-running filesystem operation driven by a
-// file browser transfer stream.
-type FileTransferOperation string
+// FileJobOperation names a long-running filesystem operation driven by a
+// file browser job stream.
+type FileJobOperation string
 
 const (
-	FileTransferMove    FileTransferOperation = "move"
-	FileTransferCopy    FileTransferOperation = "copy"
-	FileTransferArchive FileTransferOperation = "archive"
-	FileTransferExtract FileTransferOperation = "extract"
-	FileTransferSync    FileTransferOperation = "sync"
+	FileJobMove    FileJobOperation = "move"
+	FileJobCopy    FileJobOperation = "copy"
+	FileJobArchive FileJobOperation = "archive"
+	FileJobExtract FileJobOperation = "extract"
+	FileJobSync    FileJobOperation = "sync"
 )
 
-// FileTransferConfig enables progress-aware file operations inside a
-// FileBrowser panel. Source must point at a StreamFileTransfer route.
-type FileTransferConfig struct {
-	Source     *DataSource             `json:"source,omitempty"`
-	Operations []FileTransferOperation `json:"operations,omitempty"`
-	EmptyText  string                  `json:"emptyText,omitempty"`
+// FileJobConfig enables progress-aware file operations inside a
+// FileBrowser panel. Source must point at a StreamFileJob route.
+type FileJobConfig struct {
+	Source     *DataSource        `json:"source,omitempty"`
+	Operations []FileJobOperation `json:"operations,omitempty"`
+	EmptyText  string             `json:"emptyText,omitempty"`
 }
 
 type FormPanelConfig struct {

@@ -204,12 +204,11 @@
         "upload": {
           "routeId": "ssh.sftp.upload",
           "fieldName": "files",
-          "multiple": true,
-          "maxBytes": 52428800
+          "multiple": true
         },
         "writable": true,
-        "transfer": {
-          "source": { "routeId": "ssh.sftp.transfer", "method": "WS" },
+        "jobs": {
+          "source": { "routeId": "ssh.sftp.jobs", "method": "WS" },
           "operations": ["move", "copy"]
         }
       }

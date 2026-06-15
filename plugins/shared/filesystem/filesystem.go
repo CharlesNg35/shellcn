@@ -92,23 +92,23 @@ func Routes(prefix, protocol string) []plugin.Route {
 		{ID: prefix + ".files.delete", Method: plugin.MethodDelete, Path: "/files/delete/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskDestructive, AuditEvent: protocol + ".files.delete", Handle: deleteEntry},
 		{ID: prefix + ".files.chmod", Method: plugin.MethodPost, Path: "/files/chmod", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.chmod", Input: chmodSchema(), Handle: chmod},
 		{ID: prefix + ".files.archive", Method: plugin.MethodPost, Path: "/files/archive", Permission: protocol + ".files.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".files.archive", Input: pathsSchema("Archive"), Handle: archive},
-		{ID: prefix + ".files.transfer", Method: plugin.MethodWS, Path: "/files/transfer", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.transfer", Stream: fileTransfer},
+		{ID: prefix + ".files.jobs", Method: plugin.MethodWS, Path: "/files/jobs", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.jobs", Stream: fileJob},
 	}
 }
 
 func Streams(prefix string) []plugin.Stream {
-	return []plugin.Stream{{ID: prefix + ".files.transfer", Kind: plugin.StreamFileTransfer, RouteID: prefix + ".files.transfer"}}
+	return []plugin.Stream{{ID: prefix + ".files.jobs", Kind: plugin.StreamFileJob, RouteID: prefix + ".files.jobs"}}
 }
 
 // FilesOption opts a FilesTab into optional filesystem operations a backend supports.
 type FilesOption func(*plugin.FileBrowserConfig)
 
 func WithMove(prefix string) FilesOption {
-	return func(c *plugin.FileBrowserConfig) { addTransferOperation(c, prefix, plugin.FileTransferMove) }
+	return func(c *plugin.FileBrowserConfig) { addJobOperation(c, prefix, plugin.FileJobMove) }
 }
 
 func WithCopy(prefix string) FilesOption {
-	return func(c *plugin.FileBrowserConfig) { addTransferOperation(c, prefix, plugin.FileTransferCopy) }
+	return func(c *plugin.FileBrowserConfig) { addJobOperation(c, prefix, plugin.FileJobCopy) }
 }
 
 func WithChmod(prefix string) FilesOption {
@@ -119,18 +119,18 @@ func WithArchive(prefix string) FilesOption {
 	return func(c *plugin.FileBrowserConfig) { c.Routes.Archive = prefix + ".files.archive" }
 }
 
-func addTransferOperation(c *plugin.FileBrowserConfig, prefix string, op plugin.FileTransferOperation) {
-	if c.Transfer == nil {
-		c.Transfer = &plugin.FileTransferConfig{
-			Source: &plugin.DataSource{RouteID: prefix + ".files.transfer", Method: plugin.MethodWS},
+func addJobOperation(c *plugin.FileBrowserConfig, prefix string, op plugin.FileJobOperation) {
+	if c.Jobs == nil {
+		c.Jobs = &plugin.FileJobConfig{
+			Source: &plugin.DataSource{RouteID: prefix + ".files.jobs", Method: plugin.MethodWS},
 		}
 	}
-	for _, existing := range c.Transfer.Operations {
+	for _, existing := range c.Jobs.Operations {
 		if existing == op {
 			return
 		}
 	}
-	c.Transfer.Operations = append(c.Transfer.Operations, op)
+	c.Jobs.Operations = append(c.Jobs.Operations, op)
 }
 
 func FilesTab(prefix string, opts ...FilesOption) plugin.Panel {
@@ -148,7 +148,6 @@ func FilesTab(prefix string, opts ...FilesOption) plugin.Panel {
 			RouteID:   prefix + ".files.upload",
 			FieldName: "files",
 			Multiple:  true,
-			MaxBytes:  52428800,
 		},
 		Writable: true,
 	}

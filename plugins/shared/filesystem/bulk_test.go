@@ -68,27 +68,27 @@ func TestBulkMoveCopyChmodOnCapableBackend(t *testing.T) {
 	c.dirs["/dest"] = true
 	routes := bulkRoutes(t)
 
-	if err := runFileTransfer(context.Background(), c, plugin.FileTransferRequest{
-		Type:        plugin.FileTransferRequestStart,
-		TransferID:  "move-1",
-		Operation:   string(plugin.FileTransferMove),
+	if err := runFileJob(context.Background(), c, plugin.FileJobRequest{
+		Type:        plugin.FileJobRequestStart,
+		JobID:       "move-1",
+		Operation:   string(plugin.FileJobMove),
 		Paths:       []string{"/a.txt"},
 		Destination: "/dest",
-	}, func(plugin.FileTransferFrame) error { return nil }); err != nil {
+	}, func(plugin.FileJobFrame) error { return nil }); err != nil {
 		t.Fatalf("move: %v", err)
 	}
 	if _, ok := c.files["/dest/a.txt"]; !ok {
 		t.Fatal("move did not relocate /a.txt to /dest/a.txt")
 	}
 
-	var copyFrames []plugin.FileTransferFrame
-	if err := runFileTransfer(context.Background(), c, plugin.FileTransferRequest{
-		Type:        plugin.FileTransferRequestStart,
-		TransferID:  "copy-1",
-		Operation:   string(plugin.FileTransferCopy),
+	var copyFrames []plugin.FileJobFrame
+	if err := runFileJob(context.Background(), c, plugin.FileJobRequest{
+		Type:        plugin.FileJobRequestStart,
+		JobID:       "copy-1",
+		Operation:   string(plugin.FileJobCopy),
 		Paths:       []string{"/b.txt"},
 		Destination: "/dest",
-	}, func(frame plugin.FileTransferFrame) error {
+	}, func(frame plugin.FileJobFrame) error {
 		copyFrames = append(copyFrames, frame)
 		return nil
 	}); err != nil {
@@ -100,7 +100,7 @@ func TestBulkMoveCopyChmodOnCapableBackend(t *testing.T) {
 	if !bytes.Equal(c.files["/dest/b.txt"], []byte("beta")) {
 		t.Fatal("copy did not duplicate the content")
 	}
-	if len(copyFrames) < 2 || copyFrames[len(copyFrames)-1].Type != plugin.FileTransferFrameComplete {
+	if len(copyFrames) < 2 || copyFrames[len(copyFrames)-1].Type != plugin.FileJobFrameComplete {
 		t.Fatalf("copy frames missing completion: %+v", copyFrames)
 	}
 
@@ -121,8 +121,8 @@ func TestBulkRoutesDeclareActionableInputSchemas(t *testing.T) {
 			t.Fatalf("%s missing input schema", id)
 		}
 	}
-	if routes["test.files.transfer"].Method != plugin.MethodWS || routes["test.files.transfer"].Stream == nil {
-		t.Fatalf("transfer route should be websocket-backed: %+v", routes["test.files.transfer"])
+	if routes["test.files.jobs"].Method != plugin.MethodWS || routes["test.files.jobs"].Stream == nil {
+		t.Fatalf("file job route should be websocket-backed: %+v", routes["test.files.jobs"])
 	}
 
 	chmodMode := requireBulkField(t, routes["test.files.chmod"].Input, "mode")
@@ -139,14 +139,14 @@ func TestBulkUnsupportedReturnsCleanError(t *testing.T) {
 	m := newMemFS() // no Move/Copy/Chmod capabilities
 	routes := bulkRoutes(t)
 
-	for _, op := range []plugin.FileTransferOperation{plugin.FileTransferMove, plugin.FileTransferCopy} {
-		err := runFileTransfer(context.Background(), m, plugin.FileTransferRequest{
-			Type:        plugin.FileTransferRequestStart,
-			TransferID:  "transfer-1",
+	for _, op := range []plugin.FileJobOperation{plugin.FileJobMove, plugin.FileJobCopy} {
+		err := runFileJob(context.Background(), m, plugin.FileJobRequest{
+			Type:        plugin.FileJobRequestStart,
+			JobID:       "file-job-1",
 			Operation:   string(op),
 			Paths:       []string{"/x"},
 			Destination: "/d",
-		}, func(plugin.FileTransferFrame) error { return nil })
+		}, func(plugin.FileJobFrame) error { return nil })
 		if !errors.Is(err, plugin.ErrInvalidInput) {
 			t.Fatalf("%s: expected ErrInvalidInput for unsupported backend, got %v", op, err)
 		}
@@ -160,23 +160,23 @@ func TestBulkUnsupportedReturnsCleanError(t *testing.T) {
 func TestBulkRejectsEmptyAndRootPaths(t *testing.T) {
 	c := newCapFS()
 
-	err := runFileTransfer(context.Background(), c, plugin.FileTransferRequest{
-		Type:        plugin.FileTransferRequestStart,
-		TransferID:  "transfer-1",
-		Operation:   string(plugin.FileTransferMove),
+	err := runFileJob(context.Background(), c, plugin.FileJobRequest{
+		Type:        plugin.FileJobRequestStart,
+		JobID:       "file-job-1",
+		Operation:   string(plugin.FileJobMove),
 		Paths:       []string{},
 		Destination: "/d",
-	}, func(plugin.FileTransferFrame) error { return nil })
+	}, func(plugin.FileJobFrame) error { return nil })
 	if !errors.Is(err, plugin.ErrInvalidInput) {
 		t.Fatalf("empty paths: expected ErrInvalidInput, got %v", err)
 	}
-	err = runFileTransfer(context.Background(), c, plugin.FileTransferRequest{
-		Type:        plugin.FileTransferRequestStart,
-		TransferID:  "transfer-1",
-		Operation:   string(plugin.FileTransferMove),
+	err = runFileJob(context.Background(), c, plugin.FileJobRequest{
+		Type:        plugin.FileJobRequestStart,
+		JobID:       "file-job-1",
+		Operation:   string(plugin.FileJobMove),
 		Paths:       []string{"/"},
 		Destination: "/d",
-	}, func(plugin.FileTransferFrame) error { return nil })
+	}, func(plugin.FileJobFrame) error { return nil })
 	if !errors.Is(err, plugin.ErrInvalidInput) {
 		t.Fatalf("root path: expected ErrInvalidInput, got %v", err)
 	}

@@ -118,7 +118,7 @@ func parseMode(raw string) (fs.FileMode, error) {
 	return fs.FileMode(v), nil
 }
 
-func fileTransfer(rc *plugin.RequestContext, client plugin.ClientStream) error {
+func fileJob(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	c, err := fsSession(rc)
 	if err != nil {
 		return err
@@ -129,14 +129,14 @@ func fileTransfer(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	var cancel context.CancelFunc
 	active := false
 
-	writeFrame := func(frame plugin.FileTransferFrame) error {
+	writeFrame := func(frame plugin.FileJobFrame) error {
 		mu.Lock()
 		defer mu.Unlock()
 		return enc.Encode(frame)
 	}
 
 	for {
-		var req plugin.FileTransferRequest
+		var req plugin.FileJobRequest
 		if err := dec.Decode(&req); err != nil {
 			if cancel != nil {
 				cancel()
@@ -144,18 +144,18 @@ func fileTransfer(rc *plugin.RequestContext, client plugin.ClientStream) error {
 			return err
 		}
 		switch req.Type {
-		case plugin.FileTransferRequestCancel:
+		case plugin.FileJobRequestCancel:
 			if cancel != nil {
 				cancel()
 			}
-		case plugin.FileTransferRequestStart:
+		case plugin.FileJobRequestStart:
 			mu.Lock()
 			if active {
 				mu.Unlock()
-				_ = writeFrame(plugin.FileTransferFrame{
-					Type:       plugin.FileTransferFrameError,
-					TransferID: req.TransferID,
-					Error:      "Another file transfer is already running.",
+				_ = writeFrame(plugin.FileJobFrame{
+					Type:  plugin.FileJobFrameError,
+					JobID: req.JobID,
+					Error: "Another file job is already running.",
 				})
 				continue
 			}
@@ -163,19 +163,19 @@ func fileTransfer(rc *plugin.RequestContext, client plugin.ClientStream) error {
 			ctx, cancel = context.WithCancel(client.Context())
 			active = true
 			mu.Unlock()
-			go func(req plugin.FileTransferRequest) {
+			go func(req plugin.FileJobRequest) {
 				defer func() {
 					mu.Lock()
 					active = false
 					cancel = nil
 					mu.Unlock()
 				}()
-				if err := runFileTransfer(ctx, c, req, writeFrame); err != nil {
-					_ = writeFrame(plugin.FileTransferFrame{
-						Type:       plugin.FileTransferFrameError,
-						TransferID: req.TransferID,
-						Operation:  req.Operation,
-						Error:      err.Error(),
+				if err := runFileJob(ctx, c, req, writeFrame); err != nil {
+					_ = writeFrame(plugin.FileJobFrame{
+						Type:      plugin.FileJobFrameError,
+						JobID:     req.JobID,
+						Operation: req.Operation,
+						Error:     err.Error(),
 					})
 				}
 			}(req)
@@ -183,7 +183,7 @@ func fileTransfer(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	}
 }
 
-func runFileTransfer(ctx context.Context, c Client, req plugin.FileTransferRequest, writeFrame func(plugin.FileTransferFrame) error) error {
+func runFileJob(ctx context.Context, c Client, req plugin.FileJobRequest, writeFrame func(plugin.FileJobFrame) error) error {
 	paths, err := resolvePaths(req.Paths)
 	if err != nil {
 		return err
@@ -192,37 +192,37 @@ func runFileTransfer(ctx context.Context, c Client, req plugin.FileTransferReque
 	if err != nil {
 		return err
 	}
-	switch plugin.FileTransferOperation(req.Operation) {
-	case plugin.FileTransferMove:
+	switch plugin.FileJobOperation(req.Operation) {
+	case plugin.FileJobMove:
 		mover, ok := c.(Mover)
 		if !ok {
 			return errUnsupported("move")
 		}
-		return transferEach(ctx, c, mover.Move, req, paths, dest, writeFrame)
-	case plugin.FileTransferCopy:
+		return jobEach(ctx, c, mover.Move, req, paths, dest, writeFrame)
+	case plugin.FileJobCopy:
 		copier, ok := c.(Copier)
 		if !ok {
 			return errUnsupported("copy")
 		}
-		return transferEach(ctx, c, copier.Copy, req, paths, dest, writeFrame)
+		return jobEach(ctx, c, copier.Copy, req, paths, dest, writeFrame)
 	default:
 		return errUnsupported(req.Operation)
 	}
 }
 
-func transferEach(
+func jobEach(
 	ctx context.Context,
 	c Client,
 	run func(context.Context, string, string) error,
-	req plugin.FileTransferRequest,
+	req plugin.FileJobRequest,
 	paths []string,
 	dest string,
-	writeFrame func(plugin.FileTransferFrame) error,
+	writeFrame func(plugin.FileJobFrame) error,
 ) error {
 	total := len(paths)
-	if err := writeFrame(plugin.FileTransferFrame{
-		Type:       plugin.FileTransferFrameStatus,
-		TransferID: req.TransferID,
+	if err := writeFrame(plugin.FileJobFrame{
+		Type:       plugin.FileJobFrameStatus,
+		JobID:      req.JobID,
 		Operation:  req.Operation,
 		Status:     "Starting",
 		FilesTotal: total,
@@ -235,16 +235,16 @@ func transferEach(
 		}
 		dst := joinRemote(dest, path.Base(src))
 		pct := float64(i) / float64(total) * 100
-		if err := writeFrame(plugin.FileTransferFrame{
-			Type:       plugin.FileTransferFrameProgress,
-			TransferID: req.TransferID,
+		if err := writeFrame(plugin.FileJobFrame{
+			Type:       plugin.FileJobFrameProgress,
+			JobID:      req.JobID,
 			Operation:  req.Operation,
-			Status:     transferOperationLabel(req.Operation),
+			Status:     jobOperationLabel(req.Operation),
 			Path:       src,
 			Percent:    &pct,
 			FilesDone:  i,
 			FilesTotal: total,
-			Message:    fmt.Sprintf("%s %s", transferOperationLabel(req.Operation), src),
+			Message:    fmt.Sprintf("%s %s", jobOperationLabel(req.Operation), src),
 		}); err != nil {
 			return err
 		}
@@ -253,27 +253,27 @@ func transferEach(
 		}
 	}
 	done := 100.0
-	return writeFrame(plugin.FileTransferFrame{
-		Type:       plugin.FileTransferFrameComplete,
-		TransferID: req.TransferID,
+	return writeFrame(plugin.FileJobFrame{
+		Type:       plugin.FileJobFrameComplete,
+		JobID:      req.JobID,
 		Operation:  req.Operation,
 		Status:     "Complete",
 		Percent:    &done,
 		FilesDone:  total,
 		FilesTotal: total,
-		Message:    "Transfer complete.",
+		Message:    "Job complete.",
 	})
 }
 
-func transferOperationLabel(operation string) string {
-	switch plugin.FileTransferOperation(operation) {
-	case plugin.FileTransferMove:
+func jobOperationLabel(operation string) string {
+	switch plugin.FileJobOperation(operation) {
+	case plugin.FileJobMove:
 		return "Move"
-	case plugin.FileTransferCopy:
+	case plugin.FileJobCopy:
 		return "Copy"
 	default:
 		if operation == "" {
-			return "Transfer"
+			return "File operation"
 		}
 		return operation
 	}

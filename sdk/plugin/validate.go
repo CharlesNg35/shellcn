@@ -727,13 +727,13 @@ func checkPanelConfigRoutes(
 		checkWriteRouteID(ctx+" routes.delete", c.Routes.Delete)
 		checkWriteRouteID(ctx+" routes.chmod", c.Routes.Chmod)
 		checkRouteID(ctx+" routes.archive", c.Routes.Archive)
-		if c.Transfer != nil {
-			checkStreamSource(ctx+" transfer.source", c.Transfer.Source)
-			for i, op := range c.Transfer.Operations {
+		if c.Jobs != nil {
+			checkStreamSource(ctx+" jobs.source", c.Jobs.Source)
+			for i, op := range c.Jobs.Operations {
 				switch op {
-				case FileTransferMove, FileTransferCopy, FileTransferArchive, FileTransferExtract, FileTransferSync:
+				case FileJobMove, FileJobCopy, FileJobArchive, FileJobExtract, FileJobSync:
 				default:
-					add("%s transfer.operations[%d] has unsupported operation %q", ctx, i, op)
+					add("%s jobs.operations[%d] has unsupported operation %q", ctx, i, op)
 				}
 			}
 		}

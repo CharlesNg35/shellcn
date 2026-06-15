@@ -70,7 +70,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		},
 		Streams: []plugin.Stream{
 			{ID: "ssh.shell", Kind: plugin.StreamTerminal, RouteID: "ssh.shell"},
-			{ID: "ssh.sftp.transfer", Kind: plugin.StreamFileTransfer, RouteID: "ssh.sftp.transfer"},
+			{ID: "ssh.sftp.jobs", Kind: plugin.StreamFileJob, RouteID: "ssh.sftp.jobs"},
 		},
 		Recording: []plugin.RecordingCapability{{
 			Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2},
@@ -195,12 +195,11 @@ func filesTab(prefix string) plugin.Panel {
 				RouteID:   prefix + ".sftp.upload",
 				FieldName: "files",
 				Multiple:  true,
-				MaxBytes:  52428800,
 			},
 			Writable: true,
-			Transfer: &plugin.FileTransferConfig{
-				Source:     &plugin.DataSource{RouteID: prefix + ".sftp.transfer", Method: plugin.MethodWS},
-				Operations: []plugin.FileTransferOperation{plugin.FileTransferMove, plugin.FileTransferCopy},
+			Jobs: &plugin.FileJobConfig{
+				Source:     &plugin.DataSource{RouteID: prefix + ".sftp.jobs", Method: plugin.MethodWS},
+				Operations: []plugin.FileJobOperation{plugin.FileJobMove, plugin.FileJobCopy},
 			},
 		},
 	}

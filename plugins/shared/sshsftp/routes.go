@@ -88,7 +88,7 @@ func Routes(prefix, protocol string, includeShell bool) []plugin.Route {
 		{ID: prefix + ".sftp.delete", Method: plugin.MethodDelete, Path: "/sftp/delete/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskDestructive, AuditEvent: protocol + ".sftp.delete", Handle: deleteEntry},
 		{ID: prefix + ".sftp.chmod", Method: plugin.MethodPost, Path: "/sftp/chmod", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".sftp.chmod", Input: chmodSchema(), Handle: chmod},
 		{ID: prefix + ".sftp.archive", Method: plugin.MethodPost, Path: "/sftp/archive", Permission: protocol + ".files.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".sftp.archive", Input: pathsSchema("Archive"), Handle: archive},
-		{ID: prefix + ".sftp.transfer", Method: plugin.MethodWS, Path: "/sftp/transfer", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".sftp.transfer", Stream: fileTransfer},
+		{ID: prefix + ".sftp.jobs", Method: plugin.MethodWS, Path: "/sftp/jobs", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".sftp.jobs", Stream: fileJob},
 	}
 	if includeShell {
 		routes = append([]plugin.Route{{

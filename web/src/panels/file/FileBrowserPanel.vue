@@ -16,7 +16,7 @@ import {
 import type { UploadProgress } from "@/api/dataSource";
 import { apiFetch } from "@/api/client";
 import {
-  FileTransferOperation,
+  FileJobOperation,
   type FileBrowserConfig,
   type FileContent,
   type FileEntry,
@@ -31,7 +31,7 @@ import FileEntryList from "./FileEntryList.vue";
 import FilePane from "./FilePane.vue";
 import FileSelectionBar from "./FileSelectionBar.vue";
 import FileToolbar from "./FileToolbar.vue";
-import FileTransferDialog from "./FileTransferDialog.vue";
+import FileJobDialog from "./FileJobDialog.vue";
 import {
   formatBytes,
   languageFor,
@@ -59,7 +59,7 @@ const renameRouteId = computed(() => routes.value?.rename);
 const deleteRouteId = computed(() => routes.value?.delete);
 const chmodRouteId = computed(() => routes.value?.chmod);
 const archiveRouteId = computed(() => routes.value?.archive);
-const transferConfig = computed(() => fileConfig.value?.transfer);
+const jobConfig = computed(() => fileConfig.value?.jobs);
 const writable = computed(() => Boolean(fileConfig.value?.writable));
 const multipleUpload = computed(() => uploadConfig.value?.multiple ?? true);
 const uploadFieldName = computed(
@@ -87,17 +87,15 @@ type FilePanelOperation =
   | "rename"
   | "delete"
   | "chmod"
-  | FileTransferOperation
+  | FileJobOperation
   | null;
 const operation = ref<FilePanelOperation>(null);
 
 const selectedPaths = ref<Set<string>>(new Set());
 const chmodOpen = ref(false);
 const bulkDeleteOpen = ref(false);
-const transferOpen = ref(false);
-const transferOperation = ref<FileTransferOperation>(
-  FileTransferOperation.Copy,
-);
+const jobOpen = ref(false);
+const jobOperation = ref<FileJobOperation>(FileJobOperation.Copy);
 const destPath = ref("");
 const chmodMode = ref("");
 const uploadProgress = ref<UploadProgress | null>(null);
@@ -172,16 +170,14 @@ const canBulkDelete = computed(
   () => writable.value && Boolean(deleteRouteId.value),
 );
 const canMove = computed(
-  () => writable.value && supportsTransfer(FileTransferOperation.Move),
+  () => writable.value && supportsJob(FileJobOperation.Move),
 );
 const canCopy = computed(
-  () => writable.value && supportsTransfer(FileTransferOperation.Copy),
+  () => writable.value && supportsJob(FileJobOperation.Copy),
 );
 const canChmod = computed(() => writable.value && Boolean(chmodRouteId.value));
 const canArchive = computed(
-  () =>
-    Boolean(archiveRouteId.value) ||
-    supportsTransfer(FileTransferOperation.Archive),
+  () => Boolean(archiveRouteId.value) || supportsJob(FileJobOperation.Archive),
 );
 const selectable = computed(
   () =>
@@ -566,26 +562,24 @@ function clearSelection(): void {
   selectedPaths.value = new Set();
 }
 
-function supportsTransfer(kind: FileTransferOperation): boolean {
-  const transfer = transferConfig.value;
-  return Boolean(
-    transfer?.source?.routeId && (transfer.operations ?? []).includes(kind),
-  );
+function supportsJob(kind: FileJobOperation): boolean {
+  const job = jobConfig.value;
+  return Boolean(job?.source?.routeId && (job.operations ?? []).includes(kind));
 }
 
-function beginStreamTransfer(kind: FileTransferOperation): void {
-  transferOperation.value = kind;
-  transferOpen.value = true;
+function beginFileJob(kind: FileJobOperation): void {
+  jobOperation.value = kind;
+  jobOpen.value = true;
 }
 
 function beginMove(): void {
   destPath.value = cwd.value;
-  beginStreamTransfer(FileTransferOperation.Move);
+  beginFileJob(FileJobOperation.Move);
 }
 
 function beginCopy(): void {
   destPath.value = cwd.value;
-  beginStreamTransfer(FileTransferOperation.Copy);
+  beginFileJob(FileJobOperation.Copy);
 }
 
 function beginChmod(): void {
@@ -655,12 +649,12 @@ function archiveSelected(): void {
   const routeId = archiveRouteId.value;
   const paths = selectedEntries.value.map((e) => e.path);
   if (paths.length === 0) return;
-  if (supportsTransfer(FileTransferOperation.Archive)) {
-    beginStreamTransfer(FileTransferOperation.Archive);
+  if (supportsJob(FileJobOperation.Archive)) {
+    beginFileJob(FileJobOperation.Archive);
     return;
   }
   if (!routeId) return;
-  operation.value = FileTransferOperation.Archive;
+  operation.value = FileJobOperation.Archive;
   mutating.value = true;
   downloadArchive(routeId, paths)
     .then(() => {
@@ -673,9 +667,8 @@ function archiveSelected(): void {
     });
 }
 
-function onTransferComplete(): void {
-  if (transferOperation.value !== FileTransferOperation.Archive)
-    clearSelection();
+function onJobComplete(): void {
+  if (jobOperation.value !== FileJobOperation.Archive) clearSelection();
   void loadList(cwd.value);
 }
 
@@ -1024,16 +1017,16 @@ watch(
       </div>
     </Dialog>
 
-    <FileTransferDialog
-      v-if="transferConfig?.source && transferOpen"
-      v-model:visible="transferOpen"
+    <FileJobDialog
+      v-if="jobConfig?.source && jobOpen"
+      v-model:visible="jobOpen"
       :connection-id="props.connectionId"
       :ctx="operationCtx"
-      :config="transferConfig"
-      :operation="transferOperation"
+      :config="jobConfig"
+      :operation="jobOperation"
       :paths="selectedEntries.map((entry) => entry.path)"
       :default-destination="destPath"
-      @complete="onTransferComplete"
+      @complete="onJobComplete"
     />
   </div>
 </template>

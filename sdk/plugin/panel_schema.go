@@ -46,7 +46,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("routes", fileBrowserRoutes()),
 				prop("upload", fileUpload()),
 				prop("writable", boolProp()),
-				prop("transfer", fileTransfer()),
+				prop("jobs", fileJob()),
 			),
 		},
 		PanelLogStream: {Type: "object", Properties: props()},
@@ -294,17 +294,17 @@ func fileUpload() PanelConfigProperty {
 	}
 }
 
-func fileTransfer() PanelConfigProperty {
+func fileJob() PanelConfigProperty {
 	return PanelConfigProperty{
 		Type: "object",
 		Properties: props(
 			prop("source", dataSource()),
 			prop("operations", array(enum(
-				string(FileTransferMove),
-				string(FileTransferCopy),
-				string(FileTransferArchive),
-				string(FileTransferExtract),
-				string(FileTransferSync),
+				string(FileJobMove),
+				string(FileJobCopy),
+				string(FileJobArchive),
+				string(FileJobExtract),
+				string(FileJobSync),
 			))),
 			prop("emptyText", stringProp()),
 		),

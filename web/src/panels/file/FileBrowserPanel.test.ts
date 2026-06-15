@@ -3,7 +3,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "@/test/fetchMock";
-import { FileTransferOperation } from "@/types/projection";
+import { FileJobOperation } from "@/types/projection";
 import FileBrowserPanel from "./FileBrowserPanel.vue";
 import FileToolbar from "./FileToolbar.vue";
 
@@ -129,9 +129,9 @@ function bulkConfig() {
       chmod: "ssh.sftp.chmod",
       archive: "ssh.sftp.archive",
     },
-    transfer: {
-      source: { routeId: "ssh.sftp.transfer", method: "WS" },
-      operations: [FileTransferOperation.Move, FileTransferOperation.Copy],
+    jobs: {
+      source: { routeId: "ssh.sftp.jobs", method: "WS" },
+      operations: [FileJobOperation.Move, FileJobOperation.Copy],
     },
   };
 }
@@ -617,7 +617,7 @@ describe("FileBrowserPanel", () => {
 
   it("hides a bulk button when its route id is absent", async () => {
     const config = bulkConfig();
-    config.transfer.operations = [FileTransferOperation.Copy];
+    config.jobs.operations = [FileJobOperation.Copy];
     const w = mount(FileBrowserPanel, {
       props: {
         connectionId: "c1",
@@ -687,7 +687,7 @@ describe("FileBrowserPanel", () => {
     expect(bodies.sort()).toEqual(["/README.md", "/etc"]);
   });
 
-  it("opens a move transfer dialog with the current folder as destination", async () => {
+  it("opens a move job dialog with the current folder as destination", async () => {
     vi.unstubAllGlobals();
     installFetch((url, init) => {
       if (init?.method && init.method !== "GET") return { body: { ok: true } };
@@ -716,7 +716,7 @@ describe("FileBrowserPanel", () => {
 
     expect(document.body.textContent).toContain("Move 1 item");
     const input = document.body.querySelector(
-      'input[aria-label="Transfer destination"]',
+      'input[aria-label="Job destination"]',
     ) as HTMLInputElement;
     expect(input.value).toBe("/");
   });

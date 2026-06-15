@@ -377,7 +377,7 @@ type TerminalInputEffect struct {
     AppendNewline bool
 }
 
-type StreamKind string // terminal, logs, query, desktop, metrics, file_transfer, task, canvas
+type StreamKind string // terminal, logs, query, desktop, metrics, file_job, task, canvas
 type Stream struct {
     ID      string // "docker.container.logs"
     Kind    StreamKind
@@ -1397,7 +1397,7 @@ type FileBrowserConfig struct {
     Routes    FileBrowserRoutes
     Upload    FileUploadConfig
     Writable  bool
-    Transfer  *FileTransferConfig
+    Jobs     *FileJobConfig
 }
 
 type FileBrowserRoutes struct {
@@ -1418,9 +1418,9 @@ type FileUploadConfig struct {
     MaxBytes  int64
 }
 
-type FileTransferConfig struct {
-    Source     *DataSource              // must resolve to a StreamFileTransfer route
-    Operations []FileTransferOperation  // move, copy, archive, extract, sync
+type FileJobConfig struct {
+    Source     *DataSource              // must resolve to a StreamFileJob route
+    Operations []FileJobOperation // move, copy, archive, extract, sync
     EmptyText  string
 }
 ```
@@ -1481,22 +1481,22 @@ type FileTransferConfig struct {
   when uploads are enabled); rename/mkdir submit is disabled until the value is
   non-empty and actually changed, so a no-op can't be triggered.
 
-- **Long-running transfers.** Move/copy and other folder-scale transfers use
-  `FileBrowserConfig.Transfer` with a `Source` pointing at a
-  `StreamFileTransfer` websocket route (`Kind: "file_transfer"`). The same file
-  browser then opens an inline transfer dialog for declared operations (`move`,
+- **Long-running file jobs.** Move/copy and other folder-scale operations use
+  `FileBrowserConfig.Jobs` with a `Source` pointing at a
+  `StreamFileJob` websocket route (`Kind: "file_job"`). The same file
+  browser then opens an inline job dialog for declared operations (`move`,
   `copy`, `archive`, `extract`, `sync`) and sends typed control frames:
 
   ```json
-  {"type":"start","transferId":"...","operation":"copy","paths":["/a"],"destination":"/b"}
-  {"type":"cancel","transferId":"..."}
+  {"type":"start","jobId":"...","operation":"copy","paths":["/a"],"destination":"/b"}
+  {"type":"cancel","jobId":"..."}
   ```
 
-  The plugin emits `FileTransferFrame` JSON with `type` values `status`,
+  The plugin emits `FileJobFrame` JSON with `type` values `status`,
   `progress`, `log`, `complete`, or `error`, including optional byte/file
   counts, percent, current path, message, and `downloadUrl`. This is intentionally
   an optional capability of `file_browser`, not a separate panel: plugins with
-  only normal list/read/upload/download behavior never declare `StreamFileTransfer`.
+  only normal list/read/upload/download behavior never declare `StreamFileJob`.
 
 - **Selected-file pane.** Selecting a file opens a pane with a header (name,
   size, modified time, permissions, symlink target, download) above the

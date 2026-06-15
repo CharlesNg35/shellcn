@@ -82,13 +82,13 @@ func TestSFTPPluginIntegration(t *testing.T) {
 
 	// Move c.txt into a fresh subdirectory.
 	callIT(ctx, t, routes["sftp.sftp.mkdir"], sess, map[string]string{"path": base}, mustJSONIT(t, map[string]any{"name": "moved"}))
-	transferIT(ctx, t, routes["sftp.sftp.transfer"], sess, plugin.FileTransferMove, []string{base + "/c.txt"}, base+"/moved")
+	fileJobIT(ctx, t, routes["sftp.sftp.jobs"], sess, plugin.FileJobMove, []string{base + "/c.txt"}, base+"/moved")
 	if got := listNamesIT(ctx, t, routes["sftp.sftp.list"], sess, base+"/moved"); !containsAll(got, "c.txt") {
 		t.Fatalf("move did not place c.txt under moved/: %v", got)
 	}
 
 	// Copy d.txt; the original must remain.
-	transferIT(ctx, t, routes["sftp.sftp.transfer"], sess, plugin.FileTransferCopy, []string{base + "/d.txt"}, base+"/moved")
+	fileJobIT(ctx, t, routes["sftp.sftp.jobs"], sess, plugin.FileJobCopy, []string{base + "/d.txt"}, base+"/moved")
 	if got := listNamesIT(ctx, t, routes["sftp.sftp.list"], sess, base); !containsAll(got, "d.txt") {
 		t.Fatalf("copy removed the source d.txt: %v", got)
 	}
@@ -229,11 +229,11 @@ func (s *streamClientIT) String() string {
 	return s.out.String()
 }
 
-func transferIT(ctx context.Context, t *testing.T, route plugin.Route, sess plugin.Session, op plugin.FileTransferOperation, paths []string, dest string) {
+func fileJobIT(ctx context.Context, t *testing.T, route plugin.Route, sess plugin.Session, op plugin.FileJobOperation, paths []string, dest string) {
 	t.Helper()
-	payload := mustJSONIT(t, plugin.FileTransferRequest{
-		Type:        plugin.FileTransferRequestStart,
-		TransferID:  "transfer-it",
+	payload := mustJSONIT(t, plugin.FileJobRequest{
+		Type:        plugin.FileJobRequestStart,
+		JobID:       "file-job-it",
 		Operation:   string(op),
 		Paths:       paths,
 		Destination: dest,

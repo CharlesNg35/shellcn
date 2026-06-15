@@ -26,7 +26,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities:        []plugin.Capability{"filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutSingle,
-		Streams:             []plugin.Stream{{ID: "sftp.sftp.transfer", Kind: plugin.StreamFileTransfer, RouteID: "sftp.sftp.transfer"}},
+		Streams:             []plugin.Stream{{ID: "sftp.sftp.jobs", Kind: plugin.StreamFileJob, RouteID: "sftp.sftp.jobs"}},
 		Tabs:                []plugin.Panel{filesTab()},
 	}
 }
@@ -93,12 +93,11 @@ func filesTab() plugin.Panel {
 				RouteID:   "sftp.sftp.upload",
 				FieldName: "files",
 				Multiple:  true,
-				MaxBytes:  52428800,
 			},
 			Writable: true,
-			Transfer: &plugin.FileTransferConfig{
-				Source:     &plugin.DataSource{RouteID: "sftp.sftp.transfer", Method: plugin.MethodWS},
-				Operations: []plugin.FileTransferOperation{plugin.FileTransferMove, plugin.FileTransferCopy},
+			Jobs: &plugin.FileJobConfig{
+				Source:     &plugin.DataSource{RouteID: "sftp.sftp.jobs", Method: plugin.MethodWS},
+				Operations: []plugin.FileJobOperation{plugin.FileJobMove, plugin.FileJobCopy},
 			},
 		},
 	}

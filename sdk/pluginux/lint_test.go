@@ -162,9 +162,9 @@ func TestLintRequiresFileBrowserTransferFileStream(t *testing.T) {
 			Type:   plugin.PanelFileBrowser,
 			Source: &plugin.DataSource{RouteID: "x.list"},
 			Config: plugin.FileBrowserConfig{
-				Transfer: &plugin.FileTransferConfig{
+				Jobs: &plugin.FileJobConfig{
 					Source:     &plugin.DataSource{RouteID: "x.transfer", Method: plugin.MethodWS},
-					Operations: []plugin.FileTransferOperation{plugin.FileTransferCopy},
+					Operations: []plugin.FileJobOperation{plugin.FileJobCopy},
 				},
 			},
 		}},
@@ -174,10 +174,10 @@ func TestLintRequiresFileBrowserTransferFileStream(t *testing.T) {
 		{ID: "x.list", Method: plugin.MethodGet, Permission: "x.files", Risk: plugin.RiskSafe, Handle: noop},
 		{ID: "x.transfer", Method: plugin.MethodWS, Permission: "x.write", Risk: plugin.RiskWrite, Stream: stream},
 	}
-	if !hasError(pluginux.Lint(m, routes), `stream route "x.transfer" is "logs" but requires "file_transfer"`) {
-		t.Fatalf("expected file transfer stream kind mismatch error")
+	if !hasError(pluginux.Lint(m, routes), `stream route "x.transfer" is "logs" but requires "file_job"`) {
+		t.Fatalf("expected file job stream kind mismatch error")
 	}
-	m.Streams[0].Kind = plugin.StreamFileTransfer
+	m.Streams[0].Kind = plugin.StreamFileJob
 	if findings := pluginux.Errors(pluginux.Lint(m, routes)); len(findings) != 0 {
 		t.Fatalf("unexpected UX errors: %#v", findings)
 	}

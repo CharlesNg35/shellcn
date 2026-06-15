@@ -6,17 +6,14 @@ import InputText from "primevue/inputtext";
 import ProgressBar from "primevue/progressbar";
 import { useStream } from "@/composables/useStream";
 import type { ResolveContext } from "@/api/dataSource";
-import {
-  FileTransferOperation,
-  type FileTransferConfig,
-} from "@/types/projection";
+import { FileJobOperation, type FileJobConfig } from "@/types/projection";
 import AppIcon from "@/components/AppIcon.vue";
 import StreamStatusBar from "../streaming/StreamStatusBar.vue";
 import { formatBytes } from "./fileTypes";
 
-interface TransferFrame {
+interface FileJobFrame {
   type?: string;
-  transferId?: string;
+  jobId?: string;
   status?: string;
   message?: string;
   path?: string;
@@ -36,8 +33,8 @@ const visible = defineModel<boolean>("visible", { default: false });
 const props = defineProps<{
   connectionId: string;
   ctx: ResolveContext;
-  config: FileTransferConfig;
-  operation: FileTransferOperation;
+  config: FileJobConfig;
+  operation: FileJobOperation;
   paths: string[];
   defaultDestination?: string;
 }>();
@@ -47,7 +44,7 @@ const emit = defineEmits<{
 }>();
 
 const destination = ref(props.defaultDestination ?? "");
-const transferId = ref("");
+const jobId = ref("");
 const active = ref(false);
 const finished = ref(false);
 const failed = ref(false);
@@ -66,23 +63,23 @@ const { status, error, send, reconnect } = useStream(
   props.config.source,
   props.ctx,
   handleFrame,
-  { keySuffix: "file-transfer" },
+  { keySuffix: "file-job" },
 );
 
 const operationLabel = computed(() => {
   switch (props.operation) {
-    case FileTransferOperation.Move:
+    case FileJobOperation.Move:
       return "Move";
-    case FileTransferOperation.Copy:
+    case FileJobOperation.Copy:
       return "Copy";
-    case FileTransferOperation.Archive:
+    case FileJobOperation.Archive:
       return "Archive";
-    case FileTransferOperation.Extract:
+    case FileJobOperation.Extract:
       return "Extract";
-    case FileTransferOperation.Sync:
+    case FileJobOperation.Sync:
       return "Sync";
     default:
-      return "Transfer";
+      return "File operation";
   }
 });
 
@@ -94,13 +91,13 @@ const headerText = computed(() => `${operationLabel.value} ${itemLabel.value}`);
 
 const destinationLabel = computed(() => {
   switch (props.operation) {
-    case FileTransferOperation.Move:
+    case FileJobOperation.Move:
       return "Move to folder";
-    case FileTransferOperation.Copy:
+    case FileJobOperation.Copy:
       return "Copy to folder";
-    case FileTransferOperation.Extract:
+    case FileJobOperation.Extract:
       return "Extract to folder";
-    case FileTransferOperation.Sync:
+    case FileJobOperation.Sync:
       return "Sync with folder";
     default:
       return "Destination folder";
@@ -109,10 +106,10 @@ const destinationLabel = computed(() => {
 
 const destinationRequired = computed(() =>
   [
-    FileTransferOperation.Move,
-    FileTransferOperation.Copy,
-    FileTransferOperation.Extract,
-    FileTransferOperation.Sync,
+    FileJobOperation.Move,
+    FileJobOperation.Copy,
+    FileJobOperation.Extract,
+    FileJobOperation.Sync,
   ].includes(props.operation),
 );
 
@@ -146,7 +143,7 @@ const detailText = computed(() => {
 });
 
 function reset(): void {
-  transferId.value = "";
+  jobId.value = "";
   active.value = false;
   finished.value = false;
   failed.value = false;
@@ -161,23 +158,23 @@ function reset(): void {
   lines.value = [];
 }
 
-function makeTransferId(): string {
+function makeJobId(): string {
   return (
     globalThis.crypto?.randomUUID?.() ??
-    `transfer-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    `file-job-${Date.now()}-${Math.random().toString(36).slice(2)}`
   );
 }
 
-function startTransfer(): void {
+function startJob(): void {
   if (!canStart.value) return;
   reset();
-  transferId.value = makeTransferId();
+  jobId.value = makeJobId();
   active.value = true;
   statusText.value = `${operationLabel.value} started`;
   send(
     JSON.stringify({
       type: "start",
-      transferId: transferId.value,
+      jobId: jobId.value,
       operation: props.operation,
       paths: props.paths,
       destination: destination.value.trim(),
@@ -185,9 +182,9 @@ function startTransfer(): void {
   );
 }
 
-function cancelTransfer(): void {
-  if (!active.value || !transferId.value) return;
-  send(JSON.stringify({ type: "cancel", transferId: transferId.value }));
+function cancelJob(): void {
+  if (!active.value || !jobId.value) return;
+  send(JSON.stringify({ type: "cancel", jobId: jobId.value }));
   statusText.value = "Cancel requested";
 }
 
@@ -196,19 +193,14 @@ function appendLine(line: string): void {
 }
 
 function handleFrame(raw: string): void {
-  let frame: TransferFrame;
+  let frame: FileJobFrame;
   try {
-    frame = JSON.parse(raw) as TransferFrame;
+    frame = JSON.parse(raw) as FileJobFrame;
   } catch {
     appendLine(raw);
     return;
   }
-  if (
-    frame.transferId &&
-    transferId.value &&
-    frame.transferId !== transferId.value
-  )
-    return;
+  if (frame.jobId && jobId.value && frame.jobId !== jobId.value) return;
   if (frame.message) appendLine(frame.message);
   if (frame.path) statusText.value = frame.path;
   if (frame.status) statusText.value = frame.status;
@@ -283,7 +275,7 @@ watch(
         <InputText
           v-model="destination"
           class="w-full"
-          aria-label="Transfer destination"
+          aria-label="Job destination"
           :disabled="active"
         />
         <span class="block text-xs text-surface-500 dark:text-surface-400">
@@ -309,7 +301,7 @@ watch(
           :value="progressValue"
           :mode="progressMode"
           :show-value="false"
-          aria-label="File transfer progress"
+          aria-label="File job progress"
           style="height: 0.5rem"
         />
       </div>
@@ -339,17 +331,12 @@ watch(
           type="button"
           severity="danger"
           outlined
-          @click="cancelTransfer"
+          @click="cancelJob"
         >
           <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="15" />
           Cancel
         </Button>
-        <Button
-          v-else
-          type="button"
-          :disabled="!canStart"
-          @click="startTransfer"
-        >
+        <Button v-else type="button" :disabled="!canStart" @click="startJob">
           <AppIcon :icon="{ type: 'lucide', value: 'play' }" :size="15" />
           {{ operationLabel }}
         </Button>

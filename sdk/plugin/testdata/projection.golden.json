@@ -612,39 +612,7 @@
     "file_browser": {
       "type": "object",
       "properties": {
-        "pathParam": {
-          "type": "string"
-        },
-        "routes": {
-          "type": "object",
-          "properties": {
-            "archive": {
-              "type": "string"
-            },
-            "chmod": {
-              "type": "string"
-            },
-            "delete": {
-              "type": "string"
-            },
-            "download": {
-              "type": "string"
-            },
-            "mkdir": {
-              "type": "string"
-            },
-            "read": {
-              "type": "string"
-            },
-            "rename": {
-              "type": "string"
-            },
-            "write": {
-              "type": "string"
-            }
-          }
-        },
-        "transfer": {
+        "jobs": {
           "type": "object",
           "properties": {
             "emptyText": {
@@ -692,6 +660,38 @@
               "required": [
                 "routeId"
               ]
+            }
+          }
+        },
+        "pathParam": {
+          "type": "string"
+        },
+        "routes": {
+          "type": "object",
+          "properties": {
+            "archive": {
+              "type": "string"
+            },
+            "chmod": {
+              "type": "string"
+            },
+            "delete": {
+              "type": "string"
+            },
+            "download": {
+              "type": "string"
+            },
+            "mkdir": {
+              "type": "string"
+            },
+            "read": {
+              "type": "string"
+            },
+            "rename": {
+              "type": "string"
+            },
+            "write": {
+              "type": "string"
             }
           }
         },
