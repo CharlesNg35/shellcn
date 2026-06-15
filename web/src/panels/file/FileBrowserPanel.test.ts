@@ -3,7 +3,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "@/test/fetchMock";
-import { FileJobOperation } from "@/types/projection";
+import { FileJobOperation, type FileBrowserConfig } from "@/types/projection";
 import FileBrowserPanel from "./FileBrowserPanel.vue";
 import FileToolbar from "./FileToolbar.vue";
 
@@ -101,7 +101,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function writableConfig() {
+type TestFileBrowserConfig = FileBrowserConfig & Record<string, unknown>;
+
+function writableConfig(): TestFileBrowserConfig {
   return {
     pathParam: "path",
     routes: {
@@ -118,7 +120,7 @@ function writableConfig() {
       multiple: true,
     },
     writable: true,
-  };
+  } as TestFileBrowserConfig;
 }
 
 function bulkConfig() {
@@ -687,9 +689,52 @@ describe("FileBrowserPanel", () => {
     expect(bodies.sort()).toEqual(["/README.md", "/etc"]);
   });
 
-  it("opens a move job dialog with the current folder as destination", async () => {
+  it("offers permission presets before applying chmod", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
     vi.unstubAllGlobals();
     installFetch((url, init) => {
+      calls.push({ url, init });
+      if (init?.method && init.method !== "GET") return { body: { ok: true } };
+      return { body: { items: rootEntries, nextCursor: "" } };
+    });
+
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: bulkConfig(),
+      },
+    });
+    await flushPromises();
+
+    await w
+      .findAll('input[type="checkbox"]')
+      .find((c) => c.attributes("aria-label") === "Select README.md")!
+      .trigger("change");
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((b) => b.text().includes("Permissions"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(document.body.textContent).toContain(
+      "Owner read/write, everyone read",
+    );
+    bodyButton("Apply")!.click();
+    await flushPromises();
+
+    const chmod = calls.find((c) => c.url.includes("ssh.sftp.chmod"))!;
+    expect(JSON.parse(String(chmod.init?.body))).toEqual({
+      paths: ["/README.md"],
+      mode: "0644",
+    });
+  });
+
+  it("opens a move job dialog with the current folder as destination", async () => {
+    vi.unstubAllGlobals();
+    installFetch((_url, init) => {
       if (init?.method && init.method !== "GET") return { body: { ok: true } };
       return { body: { items: rootEntries, nextCursor: "" } };
     });

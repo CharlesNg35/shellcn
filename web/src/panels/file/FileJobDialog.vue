@@ -4,9 +4,15 @@ import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import ProgressBar from "primevue/progressbar";
+import Tree from "primevue/tree";
 import { useStream } from "@/composables/useStream";
-import type { ResolveContext } from "@/api/dataSource";
-import { FileJobOperation, type FileJobConfig } from "@/types/projection";
+import { fetchPage, type ResolveContext } from "@/api/dataSource";
+import {
+  FileJobOperation,
+  type DataSource,
+  type FileEntry,
+  type FileJobConfig,
+} from "@/types/projection";
 import AppIcon from "@/components/AppIcon.vue";
 import StreamStatusBar from "../streaming/StreamStatusBar.vue";
 import { formatBytes } from "./fileTypes";
@@ -28,6 +34,21 @@ interface FileJobFrame {
   error?: string;
 }
 
+interface FolderNode {
+  key: string;
+  label: string;
+  icon: string;
+  data: { path: string };
+  leaf: boolean;
+  loading?: boolean;
+  children?: FolderNode[];
+}
+
+interface FolderTreeNode {
+  data?: { path?: string };
+  children?: unknown;
+}
+
 const visible = defineModel<boolean>("visible", { default: false });
 
 const props = defineProps<{
@@ -37,6 +58,8 @@ const props = defineProps<{
   operation: FileJobOperation;
   paths: string[];
   defaultDestination?: string;
+  folderSource?: DataSource;
+  pathParam?: string;
 }>();
 
 const emit = defineEmits<{
@@ -57,6 +80,12 @@ const filesTotal = ref(0);
 const rateBps = ref(0);
 const downloadUrl = ref("");
 const lines = ref<string[]>([]);
+const folderNodes = ref<FolderNode[]>([]);
+const folderRoot = ref("");
+const folderError = ref("");
+const folderLoading = ref(false);
+const expandedKeys = ref<Record<string, boolean>>({});
+const selectedFolderKeys = ref<Record<string, boolean>>({});
 
 const { status, error, send, reconnect } = useStream(
   props.connectionId,
@@ -110,7 +139,11 @@ const destinationRequired = computed(() =>
     FileJobOperation.Copy,
     FileJobOperation.Extract,
     FileJobOperation.Sync,
-  ].includes(props.operation),
+  ].some((operation) => operation === props.operation),
+);
+
+const canBrowseFolders = computed(
+  () => destinationRequired.value && Boolean(props.folderSource?.routeId),
 );
 
 const canStart = computed(
@@ -119,6 +152,13 @@ const canStart = computed(
     props.paths.length > 0 &&
     !active.value &&
     (!destinationRequired.value || Boolean(destination.value.trim())),
+);
+
+const parentDisabled = computed(
+  () =>
+    active.value ||
+    !canBrowseFolders.value ||
+    parentPath(folderRoot.value) === folderRoot.value,
 );
 
 const progressMode = computed(() =>
@@ -188,6 +228,135 @@ function cancelJob(): void {
   statusText.value = "Cancel requested";
 }
 
+function cleanPath(path: string | undefined): string {
+  const trimmed = path?.trim();
+  return trimmed || ".";
+}
+
+function parentPath(path: string): string {
+  const p = cleanPath(path);
+  if (p === "." || p === "/") return p;
+  const trimmed = p.endsWith("/") ? p.slice(0, -1) : p;
+  const index = trimmed.lastIndexOf("/");
+  if (index <= 0) return p.startsWith("/") ? "/" : ".";
+  return trimmed.slice(0, index);
+}
+
+function folderLabel(path: string): string {
+  if (path === "/") return "/";
+  if (path === ".") return ".";
+  const trimmed = path.endsWith("/") ? path.slice(0, -1) : path;
+  return trimmed.slice(trimmed.lastIndexOf("/") + 1) || trimmed;
+}
+
+function makeFolderNode(path: string, label = folderLabel(path)): FolderNode {
+  return {
+    key: path,
+    label,
+    icon: "pi pi-folder",
+    data: { path },
+    leaf: false,
+  };
+}
+
+function withFolderParam(path: string): DataSource | undefined {
+  if (!props.folderSource) return undefined;
+  return {
+    ...props.folderSource,
+    params: {
+      ...props.folderSource.params,
+      [props.pathParam ?? "path"]: path,
+    },
+  };
+}
+
+function replaceFolderNode(
+  nodes: FolderNode[],
+  key: string,
+  update: (node: FolderNode) => FolderNode,
+): FolderNode[] {
+  return nodes.map((node) => {
+    if (node.key === key) return update(node);
+    if (!node.children) return node;
+    return { ...node, children: replaceFolderNode(node.children, key, update) };
+  });
+}
+
+async function loadFolderChildren(path: string): Promise<void> {
+  const source = withFolderParam(path);
+  if (!source) return;
+  folderError.value = "";
+  folderNodes.value = replaceFolderNode(folderNodes.value, path, (node) => ({
+    ...node,
+    loading: true,
+  }));
+  try {
+    const page = await fetchPage<FileEntry>(
+      props.connectionId,
+      source,
+      props.ctx,
+      { limit: 250 },
+    );
+    const children = page.items
+      .filter((entry) => entry.isDir)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((entry) => makeFolderNode(entry.path, entry.name));
+    folderNodes.value = replaceFolderNode(folderNodes.value, path, (node) => ({
+      ...node,
+      children,
+      leaf: children.length === 0,
+      loading: false,
+    }));
+  } catch (e) {
+    folderError.value =
+      e instanceof Error ? e.message : "Could not load folders.";
+    folderNodes.value = replaceFolderNode(folderNodes.value, path, (node) => ({
+      ...node,
+      loading: false,
+    }));
+  }
+}
+
+async function openFolderRoot(path?: string): Promise<void> {
+  if (!canBrowseFolders.value) return;
+  const root = cleanPath(path);
+  folderRoot.value = root;
+  destination.value = root;
+  folderError.value = "";
+  folderLoading.value = true;
+  folderNodes.value = [makeFolderNode(root, root)];
+  expandedKeys.value = { [root]: true };
+  selectedFolderKeys.value = { [root]: true };
+  try {
+    await loadFolderChildren(root);
+  } finally {
+    folderLoading.value = false;
+  }
+}
+
+function selectFolder(path: string): void {
+  destination.value = path;
+  selectedFolderKeys.value = { [path]: true };
+}
+
+function onFolderSelect(node: FolderTreeNode): void {
+  const path = node.data?.path;
+  if (path) selectFolder(path);
+}
+
+function onFolderExpand(node: FolderTreeNode): void {
+  const path = node.data?.path;
+  if (path && node.children === undefined) void loadFolderChildren(path);
+}
+
+function openParentFolder(): void {
+  void openFolderRoot(parentPath(folderRoot.value));
+}
+
+function openDefaultFolder(): void {
+  void openFolderRoot(props.defaultDestination);
+}
+
 function appendLine(line: string): void {
   lines.value = [...lines.value.slice(-80), line];
 }
@@ -235,6 +404,7 @@ watch(
     if (!visible.value) return;
     destination.value = props.defaultDestination ?? "";
     reset();
+    void openFolderRoot(props.defaultDestination);
   },
   { immediate: true },
 );
@@ -266,22 +436,93 @@ watch(
         </div>
       </div>
 
-      <label v-if="destinationRequired" class="block space-y-1">
-        <span
-          class="text-xs font-medium tracking-wide text-surface-500 uppercase dark:text-surface-400"
-        >
-          {{ destinationLabel }}
-        </span>
-        <InputText
-          v-model="destination"
-          class="w-full"
-          aria-label="Job destination"
-          :disabled="active"
-        />
-        <span class="block text-xs text-surface-500 dark:text-surface-400">
-          Each item keeps its current name.
-        </span>
-      </label>
+      <div v-if="destinationRequired" class="space-y-2">
+        <div class="flex items-center justify-between gap-3">
+          <span
+            class="text-xs font-medium tracking-wide text-surface-500 uppercase dark:text-surface-400"
+          >
+            {{ destinationLabel }}
+          </span>
+          <div v-if="canBrowseFolders" class="flex items-center gap-1">
+            <Button
+              type="button"
+              size="small"
+              severity="secondary"
+              outlined
+              :disabled="parentDisabled"
+              @click="openParentFolder"
+            >
+              <AppIcon
+                :icon="{ type: 'lucide', value: 'corner-left-up' }"
+                :size="14"
+              />
+              Parent
+            </Button>
+            <Button
+              type="button"
+              size="small"
+              severity="secondary"
+              outlined
+              :disabled="active"
+              @click="openDefaultFolder"
+            >
+              <AppIcon :icon="{ type: 'lucide', value: 'folder' }" :size="14" />
+              Current
+            </Button>
+          </div>
+        </div>
+
+        <div v-if="canBrowseFolders" class="space-y-2">
+          <Tree
+            v-model:expandedKeys="expandedKeys"
+            v-model:selectionKeys="selectedFolderKeys"
+            :value="folderNodes"
+            selection-mode="single"
+            :meta-key-selection="false"
+            loading-mode="icon"
+            aria-label="Destination folders"
+            @node-select="onFolderSelect"
+            @node-expand="onFolderExpand"
+          />
+          <div
+            v-if="folderLoading"
+            class="text-xs text-surface-500 dark:text-surface-400"
+          >
+            Loading folders...
+          </div>
+          <div
+            v-if="folderError"
+            class="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
+          >
+            <span class="min-w-0 flex-1">{{ folderError }}</span>
+            <Button
+              type="button"
+              size="small"
+              severity="warn"
+              text
+              @click="openFolderRoot(folderRoot)"
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
+
+        <label class="block space-y-1">
+          <span class="text-xs text-surface-500 dark:text-surface-400">
+            Selected path
+          </span>
+          <InputText
+            v-model="destination"
+            class="w-full"
+            aria-label="Job destination"
+            :disabled="active"
+          />
+          <span class="block text-xs text-surface-500 dark:text-surface-400">
+            Select a folder above or type a destination path. Each item keeps
+            its current name.
+          </span>
+        </label>
+      </div>
 
       <div v-if="active || finished || failed" class="space-y-2">
         <div class="flex items-center justify-between gap-3 text-sm">

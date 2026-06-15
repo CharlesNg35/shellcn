@@ -5,6 +5,7 @@ import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
 import InputText from "primevue/inputtext";
+import Select from "primevue/select";
 import { useToast } from "primevue/usetoast";
 import {
   fetchDoc,
@@ -98,6 +99,15 @@ const jobOpen = ref(false);
 const jobOperation = ref<FileJobOperation>(FileJobOperation.Copy);
 const destPath = ref("");
 const chmodMode = ref("");
+const chmodPresets = [
+  { label: "Owner read/write, everyone read", value: "0644" },
+  { label: "Owner read/write/execute, everyone read/execute", value: "0755" },
+  { label: "Owner only", value: "0600" },
+  { label: "Owner full access only", value: "0700" },
+  { label: "Team writable", value: "0664" },
+  { label: "Team writable executable", value: "0775" },
+  { label: "Read-only for everyone", value: "0444" },
+];
 const uploadProgress = ref<UploadProgress | null>(null);
 const uploadLabel = ref("");
 const uploadWarning = ref("");
@@ -955,18 +965,50 @@ watch(
     </Dialog>
 
     <Dialog v-model:visible="chmodOpen" modal header="Change permissions">
-      <form class="flex w-80 flex-col gap-4" @submit.prevent="bulkChmod">
-        <p class="text-sm text-surface-600 dark:text-surface-300">
-          Set octal mode for {{ selectionCount }}
-          {{ selectionCount === 1 ? "item" : "items" }}:
-        </p>
-        <InputText
-          v-model="chmodMode"
-          autofocus
-          placeholder="0644"
-          aria-label="Octal permission mode"
-          :invalid="Boolean(chmodMode.trim()) && !validMode"
-        />
+      <form
+        class="flex w-96 max-w-full flex-col gap-4"
+        @submit.prevent="bulkChmod"
+      >
+        <div class="space-y-1">
+          <p class="text-sm font-medium text-surface-900 dark:text-surface-50">
+            {{ selectionCount }} {{ selectionCount === 1 ? "item" : "items" }}
+          </p>
+          <p class="text-sm text-surface-600 dark:text-surface-300">
+            Choose a common permission set or enter an octal mode.
+          </p>
+        </div>
+        <label class="space-y-1">
+          <span
+            class="text-xs font-medium text-surface-500 uppercase dark:text-surface-400"
+          >
+            Preset
+          </span>
+          <Select
+            v-model="chmodMode"
+            :options="chmodPresets"
+            option-label="label"
+            option-value="value"
+            placeholder="Choose permissions"
+            fluid
+            :disabled="mutating"
+          />
+        </label>
+        <label class="space-y-1">
+          <span
+            class="text-xs font-medium text-surface-500 uppercase dark:text-surface-400"
+          >
+            Octal mode
+          </span>
+          <InputText
+            v-model="chmodMode"
+            autofocus
+            placeholder="0644"
+            aria-label="Octal permission mode"
+            class="font-mono"
+            :invalid="Boolean(chmodMode.trim()) && !validMode"
+            :disabled="mutating"
+          />
+        </label>
         <small
           v-if="Boolean(chmodMode.trim()) && !validMode"
           class="text-danger-500"
@@ -1026,6 +1068,8 @@ watch(
       :operation="jobOperation"
       :paths="selectedEntries.map((entry) => entry.path)"
       :default-destination="destPath"
+      :folder-source="props.source"
+      :path-param="pathParam"
       @complete="onJobComplete"
     />
   </div>

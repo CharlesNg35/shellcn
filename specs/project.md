@@ -1485,7 +1485,9 @@ type FileJobConfig struct {
   `FileBrowserConfig.Jobs` with a `Source` pointing at a
   `StreamFileJob` websocket route (`Kind: "file_job"`). The same file
   browser then opens an inline job dialog for declared operations (`move`,
-  `copy`, `archive`, `extract`, `sync`) and sends typed control frames:
+  `copy`, `archive`, `extract`, `sync`). Destination-based operations must use
+  the file browser's list route to render a lazy folder picker; typing a path is
+  only a fallback. The renderer sends typed control frames:
 
   ```json
   {"type":"start","jobId":"...","operation":"copy","paths":["/a"],"destination":"/b"}
