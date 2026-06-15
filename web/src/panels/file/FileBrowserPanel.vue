@@ -15,11 +15,12 @@ import {
 } from "@/api/dataSource";
 import type { UploadProgress } from "@/api/dataSource";
 import { apiFetch } from "@/api/client";
-import type {
-  FileBrowserConfig,
-  FileContent,
-  FileEntry,
-  Page,
+import {
+  FileTransferOperation,
+  type FileBrowserConfig,
+  type FileContent,
+  type FileEntry,
+  type Page,
 } from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import AppIcon from "@/components/AppIcon.vue";
@@ -29,6 +30,7 @@ import FileEntryList from "./FileEntryList.vue";
 import FilePane from "./FilePane.vue";
 import FileSelectionBar from "./FileSelectionBar.vue";
 import FileToolbar from "./FileToolbar.vue";
+import FileTransferDialog from "./FileTransferDialog.vue";
 import {
   formatBytes,
   languageFor,
@@ -45,21 +47,22 @@ const fileConfig = computed(
   () => props.config as FileBrowserConfig | undefined,
 );
 const pathParam = computed(() => fileConfig.value?.pathParam ?? "path");
-const readRouteId = computed(() => fileConfig.value?.readRouteId);
-const downloadRouteId = computed(() => fileConfig.value?.downloadRouteId);
-const writeRouteId = computed(() => fileConfig.value?.writeRouteId);
-const uploadRouteId = computed(() => fileConfig.value?.uploadRouteId);
-const mkdirRouteId = computed(() => fileConfig.value?.mkdirRouteId);
-const renameRouteId = computed(() => fileConfig.value?.renameRouteId);
-const deleteRouteId = computed(() => fileConfig.value?.deleteRouteId);
-const moveRouteId = computed(() => fileConfig.value?.moveRouteId);
-const copyRouteId = computed(() => fileConfig.value?.copyRouteId);
-const chmodRouteId = computed(() => fileConfig.value?.chmodRouteId);
-const archiveRouteId = computed(() => fileConfig.value?.archiveRouteId);
+const routes = computed(() => fileConfig.value?.routes);
+const uploadConfig = computed(() => fileConfig.value?.upload);
+const readRouteId = computed(() => routes.value?.read);
+const downloadRouteId = computed(() => routes.value?.download);
+const writeRouteId = computed(() => routes.value?.write);
+const uploadRouteId = computed(() => uploadConfig.value?.routeId);
+const mkdirRouteId = computed(() => routes.value?.mkdir);
+const renameRouteId = computed(() => routes.value?.rename);
+const deleteRouteId = computed(() => routes.value?.delete);
+const chmodRouteId = computed(() => routes.value?.chmod);
+const archiveRouteId = computed(() => routes.value?.archive);
+const transferConfig = computed(() => fileConfig.value?.transfer);
 const writable = computed(() => Boolean(fileConfig.value?.writable));
-const multipleUpload = computed(() => fileConfig.value?.multipleUpload ?? true);
+const multipleUpload = computed(() => uploadConfig.value?.multiple ?? true);
 const uploadFieldName = computed(
-  () => fileConfig.value?.uploadFieldName ?? "files",
+  () => uploadConfig.value?.fieldName ?? "files",
 );
 
 const startPath = computed(
@@ -76,24 +79,24 @@ const editContent = ref("");
 const loadingContent = ref(false);
 const contentError = ref<string | null>(null);
 const mutating = ref(false);
-const operation = ref<
+type FilePanelOperation =
   | "upload"
   | "save"
   | "mkdir"
   | "rename"
   | "delete"
-  | "move"
-  | "copy"
   | "chmod"
-  | "archive"
-  | null
->(null);
+  | FileTransferOperation
+  | null;
+const operation = ref<FilePanelOperation>(null);
 
 const selectedPaths = ref<Set<string>>(new Set());
-const moveOpen = ref(false);
-const copyOpen = ref(false);
 const chmodOpen = ref(false);
 const bulkDeleteOpen = ref(false);
+const transferOpen = ref(false);
+const transferOperation = ref<FileTransferOperation>(
+  FileTransferOperation.Copy,
+);
 const destPath = ref("");
 const chmodMode = ref("");
 const uploadProgress = ref<UploadProgress | null>(null);
@@ -166,10 +169,18 @@ const allSelected = computed(
 const canBulkDelete = computed(
   () => writable.value && Boolean(deleteRouteId.value),
 );
-const canMove = computed(() => writable.value && Boolean(moveRouteId.value));
-const canCopy = computed(() => writable.value && Boolean(copyRouteId.value));
+const canMove = computed(
+  () => writable.value && supportsTransfer(FileTransferOperation.Move),
+);
+const canCopy = computed(
+  () => writable.value && supportsTransfer(FileTransferOperation.Copy),
+);
 const canChmod = computed(() => writable.value && Boolean(chmodRouteId.value));
-const canArchive = computed(() => Boolean(archiveRouteId.value));
+const canArchive = computed(
+  () =>
+    Boolean(archiveRouteId.value) ||
+    supportsTransfer(FileTransferOperation.Archive),
+);
 const selectable = computed(
   () =>
     canBulkDelete.value ||
@@ -179,7 +190,6 @@ const selectable = computed(
     canArchive.value,
 );
 const validMode = computed(() => /^[0-7]{3,4}$/.test(chmodMode.value.trim()));
-const validDest = computed(() => Boolean(destPath.value.trim()));
 const dirty = computed(
   () =>
     Boolean(canEdit.value) &&
@@ -524,14 +534,26 @@ function clearSelection(): void {
   selectedPaths.value = new Set();
 }
 
+function supportsTransfer(kind: FileTransferOperation): boolean {
+  const transfer = transferConfig.value;
+  return Boolean(
+    transfer?.source?.routeId && (transfer.operations ?? []).includes(kind),
+  );
+}
+
+function beginStreamTransfer(kind: FileTransferOperation): void {
+  transferOperation.value = kind;
+  transferOpen.value = true;
+}
+
 function beginMove(): void {
   destPath.value = cwd.value;
-  moveOpen.value = true;
+  beginStreamTransfer(FileTransferOperation.Move);
 }
 
 function beginCopy(): void {
   destPath.value = cwd.value;
-  copyOpen.value = true;
+  beginStreamTransfer(FileTransferOperation.Copy);
 }
 
 function beginChmod(): void {
@@ -561,34 +583,6 @@ async function bulkDelete(): Promise<void> {
     notifySuccess(
       paths.length === 1 ? "Deleted." : `Deleted ${paths.length} items.`,
     );
-    await loadList(cwd.value);
-  } catch (e) {
-    notifyError(e);
-  } finally {
-    mutating.value = false;
-    operation.value = null;
-  }
-}
-
-async function bulkTransfer(kind: "move" | "copy"): Promise<void> {
-  const routeId = kind === "move" ? moveRouteId.value : copyRouteId.value;
-  const dest = destPath.value.trim();
-  const paths = selectedEntries.value.map((e) => e.path);
-  if (!routeId || !dest || paths.length === 0) return;
-  mutating.value = true;
-  operation.value = kind;
-  try {
-    await runAction(
-      props.connectionId,
-      routeId,
-      operationCtx.value,
-      { paths, dest },
-      props.source?.params,
-    );
-    moveOpen.value = false;
-    copyOpen.value = false;
-    clearSelection();
-    notifySuccess(kind === "move" ? "Moved." : "Copied.");
     await loadList(cwd.value);
   } catch (e) {
     notifyError(e);
@@ -628,8 +622,13 @@ async function bulkChmod(): Promise<void> {
 function archiveSelected(): void {
   const routeId = archiveRouteId.value;
   const paths = selectedEntries.value.map((e) => e.path);
-  if (!routeId || paths.length === 0) return;
-  operation.value = "archive";
+  if (paths.length === 0) return;
+  if (supportsTransfer(FileTransferOperation.Archive)) {
+    beginStreamTransfer(FileTransferOperation.Archive);
+    return;
+  }
+  if (!routeId) return;
+  operation.value = FileTransferOperation.Archive;
   mutating.value = true;
   downloadArchive(routeId, paths)
     .then(() => {
@@ -640,6 +639,12 @@ function archiveSelected(): void {
       mutating.value = false;
       operation.value = null;
     });
+}
+
+function onTransferComplete(): void {
+  if (transferOperation.value !== FileTransferOperation.Archive)
+    clearSelection();
+  void loadList(cwd.value);
 }
 
 async function downloadArchive(
@@ -716,7 +721,7 @@ watch(
       :download-href="downloadHref"
       :download-name="selected?.name"
       :multiple-upload="multipleUpload"
-      :max-upload-bytes="fileConfig?.maxUploadBytes"
+      :max-upload-bytes="uploadConfig?.maxBytes"
       :upload-field-name="uploadFieldName"
       :mutating="mutating"
       :loading="loadingList"
@@ -910,74 +915,6 @@ watch(
       </div>
     </Dialog>
 
-    <Dialog v-model:visible="moveOpen" modal header="Move selection">
-      <form
-        class="flex w-80 flex-col gap-4"
-        @submit.prevent="bulkTransfer('move')"
-      >
-        <p class="text-sm text-surface-600 dark:text-surface-300">
-          Move {{ selectionCount }}
-          {{ selectionCount === 1 ? "item" : "items" }} to:
-        </p>
-        <InputText
-          v-model="destPath"
-          autofocus
-          placeholder="/destination/folder"
-          aria-label="Destination folder"
-        />
-        <div class="flex justify-end gap-2">
-          <Button
-            type="button"
-            label="Cancel"
-            severity="secondary"
-            outlined
-            :disabled="mutating"
-            @click="moveOpen = false"
-          />
-          <Button
-            type="submit"
-            label="Move"
-            :loading="operation === 'move'"
-            :disabled="!validDest || mutating"
-          />
-        </div>
-      </form>
-    </Dialog>
-
-    <Dialog v-model:visible="copyOpen" modal header="Copy selection">
-      <form
-        class="flex w-80 flex-col gap-4"
-        @submit.prevent="bulkTransfer('copy')"
-      >
-        <p class="text-sm text-surface-600 dark:text-surface-300">
-          Copy {{ selectionCount }}
-          {{ selectionCount === 1 ? "item" : "items" }} to:
-        </p>
-        <InputText
-          v-model="destPath"
-          autofocus
-          placeholder="/destination/folder"
-          aria-label="Destination folder"
-        />
-        <div class="flex justify-end gap-2">
-          <Button
-            type="button"
-            label="Cancel"
-            severity="secondary"
-            outlined
-            :disabled="mutating"
-            @click="copyOpen = false"
-          />
-          <Button
-            type="submit"
-            label="Copy"
-            :loading="operation === 'copy'"
-            :disabled="!validDest || mutating"
-          />
-        </div>
-      </form>
-    </Dialog>
-
     <Dialog v-model:visible="chmodOpen" modal header="Change permissions">
       <form class="flex w-80 flex-col gap-4" @submit.prevent="bulkChmod">
         <p class="text-sm text-surface-600 dark:text-surface-300">
@@ -1040,5 +977,17 @@ watch(
         />
       </div>
     </Dialog>
+
+    <FileTransferDialog
+      v-if="transferConfig?.source && transferOpen"
+      v-model:visible="transferOpen"
+      :connection-id="props.connectionId"
+      :ctx="operationCtx"
+      :config="transferConfig"
+      :operation="transferOperation"
+      :paths="selectedEntries.map((entry) => entry.path)"
+      :default-destination="destPath"
+      @complete="onTransferComplete"
+    />
   </div>
 </template>

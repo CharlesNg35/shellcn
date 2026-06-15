@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -81,17 +82,13 @@ func TestSFTPPluginIntegration(t *testing.T) {
 
 	// Move c.txt into a fresh subdirectory.
 	callIT(ctx, t, routes["sftp.sftp.mkdir"], sess, map[string]string{"path": base}, mustJSONIT(t, map[string]any{"name": "moved"}))
-	callIT(ctx, t, routes["sftp.sftp.move"], sess, nil, mustJSONIT(t, map[string]any{
-		"paths": []string{base + "/c.txt"}, "dest": base + "/moved",
-	}))
+	transferIT(ctx, t, routes["sftp.sftp.transfer"], sess, plugin.FileTransferMove, []string{base + "/c.txt"}, base+"/moved")
 	if got := listNamesIT(ctx, t, routes["sftp.sftp.list"], sess, base+"/moved"); !containsAll(got, "c.txt") {
 		t.Fatalf("move did not place c.txt under moved/: %v", got)
 	}
 
 	// Copy d.txt; the original must remain.
-	callIT(ctx, t, routes["sftp.sftp.copy"], sess, nil, mustJSONIT(t, map[string]any{
-		"paths": []string{base + "/d.txt"}, "dest": base + "/moved",
-	}))
+	transferIT(ctx, t, routes["sftp.sftp.transfer"], sess, plugin.FileTransferCopy, []string{base + "/d.txt"}, base+"/moved")
 	if got := listNamesIT(ctx, t, routes["sftp.sftp.list"], sess, base); !containsAll(got, "d.txt") {
 		t.Fatalf("copy removed the source d.txt: %v", got)
 	}
@@ -189,6 +186,84 @@ func callIT(ctx context.Context, t *testing.T, route plugin.Route, sess plugin.S
 		t.Fatalf("%s: %v", route.ID, err)
 	}
 	return out
+}
+
+type streamClientIT struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+	in     *bytes.Reader
+	mu     sync.Mutex
+	out    bytes.Buffer
+}
+
+func newStreamClientIT(ctx context.Context, payload []byte) *streamClientIT {
+	streamCtx, cancel := context.WithCancel(ctx)
+	return &streamClientIT{ctx: streamCtx, cancel: cancel, in: bytes.NewReader(append(payload, '\n'))}
+}
+
+func (s *streamClientIT) Read(p []byte) (int, error) {
+	n, err := s.in.Read(p)
+	if err == io.EOF {
+		<-s.ctx.Done()
+		return n, io.EOF
+	}
+	return n, err
+}
+
+func (s *streamClientIT) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.out.Write(p)
+}
+
+func (s *streamClientIT) Close() error {
+	s.cancel()
+	return nil
+}
+
+func (s *streamClientIT) Context() context.Context { return s.ctx }
+
+func (s *streamClientIT) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.out.String()
+}
+
+func transferIT(ctx context.Context, t *testing.T, route plugin.Route, sess plugin.Session, op plugin.FileTransferOperation, paths []string, dest string) {
+	t.Helper()
+	payload := mustJSONIT(t, plugin.FileTransferRequest{
+		Type:        plugin.FileTransferRequestStart,
+		TransferID:  "transfer-it",
+		Operation:   string(op),
+		Paths:       paths,
+		Destination: dest,
+	})
+	client := newStreamClientIT(ctx, payload)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- route.Stream(plugin.NewRequestContext(ctx, plugin.User{}, sess, nil, nil, nil), client)
+	}()
+	deadline := time.After(30 * time.Second)
+	tick := time.NewTicker(20 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case <-deadline:
+			_ = client.Close()
+			t.Fatalf("%s timed out waiting for %s completion; frames: %s", route.ID, op, client.String())
+		case <-tick.C:
+			out := client.String()
+			if strings.Contains(out, `"type":"error"`) {
+				_ = client.Close()
+				t.Fatalf("%s failed %s: %s", route.ID, op, out)
+			}
+			if strings.Contains(out, `"type":"complete"`) {
+				_ = client.Close()
+				<-errCh
+				return
+			}
+		}
+	}
 }
 
 func uploadFile(ctx context.Context, t *testing.T, route plugin.Route, sess plugin.Session, dir, name, content string) {

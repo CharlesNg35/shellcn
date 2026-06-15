@@ -133,14 +133,18 @@
       },
       "config": {
         "pathParam": "path",
-        "readRouteId": "sample.files.read",
-        "downloadRouteId": "sample.files.download",
-        "uploadRouteId": "sample.files.upload",
-        "mkdirRouteId": "sample.files.mkdir",
-        "renameRouteId": "sample.files.rename",
-        "deleteRouteId": "sample.files.delete",
-        "writable": true,
-        "multipleUpload": true
+        "routes": {
+          "read": "sample.files.read",
+          "download": "sample.files.download",
+          "mkdir": "sample.files.mkdir",
+          "rename": "sample.files.rename",
+          "delete": "sample.files.delete"
+        },
+        "upload": {
+          "routeId": "sample.files.upload",
+          "multiple": true
+        },
+        "writable": true
       }
     }
   ],
@@ -608,53 +612,108 @@
     "file_browser": {
       "type": "object",
       "properties": {
-        "archiveRouteId": {
-          "type": "string"
-        },
-        "chmodRouteId": {
-          "type": "string"
-        },
-        "copyRouteId": {
-          "type": "string"
-        },
-        "deleteRouteId": {
-          "type": "string"
-        },
-        "downloadRouteId": {
-          "type": "string"
-        },
-        "maxUploadBytes": {
-          "type": "number"
-        },
-        "mkdirRouteId": {
-          "type": "string"
-        },
-        "moveRouteId": {
-          "type": "string"
-        },
-        "multipleUpload": {
-          "type": "boolean"
-        },
         "pathParam": {
           "type": "string"
         },
-        "readRouteId": {
-          "type": "string"
+        "routes": {
+          "type": "object",
+          "properties": {
+            "archive": {
+              "type": "string"
+            },
+            "chmod": {
+              "type": "string"
+            },
+            "delete": {
+              "type": "string"
+            },
+            "download": {
+              "type": "string"
+            },
+            "mkdir": {
+              "type": "string"
+            },
+            "read": {
+              "type": "string"
+            },
+            "rename": {
+              "type": "string"
+            },
+            "write": {
+              "type": "string"
+            }
+          }
         },
-        "renameRouteId": {
-          "type": "string"
+        "transfer": {
+          "type": "object",
+          "properties": {
+            "emptyText": {
+              "type": "string"
+            },
+            "operations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "move",
+                  "copy",
+                  "archive",
+                  "extract",
+                  "sync"
+                ]
+              }
+            },
+            "source": {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "GET",
+                    "POST",
+                    "PUT",
+                    "PATCH",
+                    "DELETE",
+                    "WS"
+                  ]
+                },
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "*": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "routeId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "routeId"
+              ]
+            }
+          }
         },
-        "uploadFieldName": {
-          "type": "string"
-        },
-        "uploadRouteId": {
-          "type": "string"
+        "upload": {
+          "type": "object",
+          "properties": {
+            "fieldName": {
+              "type": "string"
+            },
+            "maxBytes": {
+              "type": "number"
+            },
+            "multiple": {
+              "type": "boolean"
+            },
+            "routeId": {
+              "type": "string"
+            }
+          }
         },
         "writable": {
           "type": "boolean"
-        },
-        "writeRouteId": {
-          "type": "string"
         }
       }
     },

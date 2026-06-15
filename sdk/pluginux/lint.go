@@ -198,6 +198,10 @@ func (l *linter) panels(path string, panels []plugin.Panel) {
 func (l *linter) panel(path string, p plugin.Panel) {
 	l.streamMatch(path, p)
 	switch c := p.Config.(type) {
+	case plugin.FileBrowserConfig:
+		if c.Transfer != nil {
+			l.streamSourceMatch(path+" transfer.source", c.Transfer.Source, plugin.StreamFileTransfer)
+		}
 	case plugin.TableConfig:
 		if len(c.Columns) == 0 && c.ColumnsSource == nil {
 			l.add(Warning, path, "table should declare columns or columnsSource")
@@ -264,6 +268,20 @@ func (l *linter) streamMatch(path string, p plugin.Panel) {
 	}
 	if stream.Kind != expected {
 		l.add(Error, path, "stream route %q is %q but panel %q requires %q", p.Source.RouteID, stream.Kind, p.Type, expected)
+	}
+}
+
+func (l *linter) streamSourceMatch(path string, source *plugin.DataSource, expected plugin.StreamKind) {
+	if source == nil {
+		return
+	}
+	stream, ok := l.streams[source.RouteID]
+	if !ok {
+		l.add(Error, path, "stream route %q is not declared in manifest streams", source.RouteID)
+		return
+	}
+	if stream.Kind != expected {
+		l.add(Error, path, "stream route %q is %q but requires %q", source.RouteID, stream.Kind, expected)
 	}
 }
 

@@ -70,14 +70,14 @@ func (WasmConfig) panelConfig()          {}
 type StreamKind string
 
 const (
-	StreamTerminal StreamKind = "terminal"
-	StreamLogs     StreamKind = "logs"
-	StreamQuery    StreamKind = "query"
-	StreamDesktop  StreamKind = "desktop"
-	StreamMetrics  StreamKind = "metrics"
-	StreamFile     StreamKind = "file"
-	StreamTask     StreamKind = "task"
-	StreamCanvas   StreamKind = "canvas"
+	StreamTerminal     StreamKind = "terminal"
+	StreamLogs         StreamKind = "logs"
+	StreamQuery        StreamKind = "query"
+	StreamDesktop      StreamKind = "desktop"
+	StreamMetrics      StreamKind = "metrics"
+	StreamFileTransfer StreamKind = "file_transfer"
+	StreamTask         StreamKind = "task"
+	StreamCanvas       StreamKind = "canvas"
 )
 
 // DataSource binds a panel to a route by id; params interpolate from the active
@@ -172,24 +172,56 @@ type TableConfig struct {
 	RowClick RowClickAction `json:"rowClick,omitempty"`
 }
 
+// FileBrowserConfig wires the generic file browser to plugin routes. Keep
+// request/response routes, upload settings, and stream transfers separate so
+// manifests stay readable as file capabilities grow.
 type FileBrowserConfig struct {
-	PathParam       string `json:"pathParam,omitempty"`
-	ReadRouteID     string `json:"readRouteId,omitempty"`
-	DownloadRouteID string `json:"downloadRouteId,omitempty"`
-	WriteRouteID    string `json:"writeRouteId,omitempty"`
-	UploadRouteID   string `json:"uploadRouteId,omitempty"`
-	MkdirRouteID    string `json:"mkdirRouteId,omitempty"`
-	RenameRouteID   string `json:"renameRouteId,omitempty"`
-	DeleteRouteID   string `json:"deleteRouteId,omitempty"`
-	// Bulk-operation slots over a multi-selection; each slot is optional.
-	MoveRouteID     string `json:"moveRouteId,omitempty"`
-	CopyRouteID     string `json:"copyRouteId,omitempty"`
-	ChmodRouteID    string `json:"chmodRouteId,omitempty"`
-	ArchiveRouteID  string `json:"archiveRouteId,omitempty"`
-	Writable        bool   `json:"writable,omitempty"`
-	MultipleUpload  bool   `json:"multipleUpload,omitempty"`
-	MaxUploadBytes  int64  `json:"maxUploadBytes,omitempty"`
-	UploadFieldName string `json:"uploadFieldName,omitempty"`
+	PathParam string              `json:"pathParam,omitempty"`
+	Routes    FileBrowserRoutes   `json:"routes,omitempty"`
+	Upload    FileUploadConfig    `json:"upload,omitempty"`
+	Writable  bool                `json:"writable,omitempty"`
+	Transfer  *FileTransferConfig `json:"transfer,omitempty"`
+}
+
+// FileBrowserRoutes groups request/response file operations. Long-running
+// transfer jobs belong in FileTransferConfig instead.
+type FileBrowserRoutes struct {
+	Read     string `json:"read,omitempty"`
+	Download string `json:"download,omitempty"`
+	Write    string `json:"write,omitempty"`
+	Mkdir    string `json:"mkdir,omitempty"`
+	Rename   string `json:"rename,omitempty"`
+	Delete   string `json:"delete,omitempty"`
+	Chmod    string `json:"chmod,omitempty"`
+	Archive  string `json:"archive,omitempty"`
+}
+
+// FileUploadConfig configures browser-to-backend uploads for a file browser.
+type FileUploadConfig struct {
+	RouteID   string `json:"routeId,omitempty"`
+	FieldName string `json:"fieldName,omitempty"`
+	Multiple  bool   `json:"multiple,omitempty"`
+	MaxBytes  int64  `json:"maxBytes,omitempty"`
+}
+
+// FileTransferOperation names a long-running filesystem operation driven by a
+// file browser transfer stream.
+type FileTransferOperation string
+
+const (
+	FileTransferMove    FileTransferOperation = "move"
+	FileTransferCopy    FileTransferOperation = "copy"
+	FileTransferArchive FileTransferOperation = "archive"
+	FileTransferExtract FileTransferOperation = "extract"
+	FileTransferSync    FileTransferOperation = "sync"
+)
+
+// FileTransferConfig enables progress-aware file operations inside a
+// FileBrowser panel. Source must point at a StreamFileTransfer route.
+type FileTransferConfig struct {
+	Source     *DataSource             `json:"source,omitempty"`
+	Operations []FileTransferOperation `json:"operations,omitempty"`
+	EmptyText  string                  `json:"emptyText,omitempty"`
 }
 
 type FormPanelConfig struct {

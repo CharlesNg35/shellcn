@@ -77,12 +77,22 @@ func TestNestedPanelConfigSchemasCoverSDKTypes(t *testing.T) {
 	assertArrayItemSchemaMatchesStruct(t, "metrics.series", plugin.MetricSeries{}, schemas[plugin.PanelMetrics].Properties["series"])
 	assertArrayItemSchemaMatchesStruct(t, "http_client.defaultHeaders", plugin.HeaderDefault{}, schemas[plugin.PanelHTTPClient].Properties["defaultHeaders"])
 	assertArrayItemSchemaMatchesStruct(t, "dashboard.cells", plugin.Panel{}, schemas[plugin.PanelDashboard].Properties["cells"])
+	assertObjectSchemaMatchesStruct(t, "file_browser.routes", plugin.FileBrowserRoutes{}, schemas[plugin.PanelFileBrowser].Properties["routes"])
+	assertObjectSchemaMatchesStruct(t, "file_browser.upload", plugin.FileUploadConfig{}, schemas[plugin.PanelFileBrowser].Properties["upload"])
 	assertArrayItemSchemaMatchesStruct(t, "split.panels", plugin.SplitPanel{}, schemas[plugin.PanelSplit].Properties["panels"])
 	assertArrayItemSchemaMatchesStruct(t, "object_detail.sections", plugin.ObjectDetailSection{}, schemas[plugin.PanelObjectDetail].Properties["sections"])
 	assertArrayItemSchemaMatchesStruct(t, "object_detail.sections.fields", plugin.ObjectDetailField{}, schemas[plugin.PanelObjectDetail].Properties["sections"].Items.Properties["fields"])
 	assertArrayItemSchemaMatchesStruct(t, "wasm.assets", plugin.WasmAsset{}, schemas[plugin.PanelWasm].Properties["assets"])
 	assertArrayItemSchemaMatchesStruct(t, "wasm.bridge.routes", plugin.WasmBridgeRoute{}, schemas[plugin.PanelWasm].Properties["bridge"].Properties["routes"])
 	assertArrayItemSchemaMatchesStruct(t, "wasm.bridge.streams", plugin.WasmBridgeStream{}, schemas[plugin.PanelWasm].Properties["bridge"].Properties["streams"])
+}
+
+func assertObjectSchemaMatchesStruct(t *testing.T, path string, sample any, schema plugin.PanelConfigProperty) {
+	t.Helper()
+	if schema.Type != "object" || len(schema.Properties) == 0 {
+		t.Fatalf("%s schema = %#v, want object schema", path, schema)
+	}
+	assertSchemaMatchesStruct(t, path, reflect.TypeOf(sample), schema.Properties)
 }
 
 func assertArrayItemSchemaMatchesStruct(t *testing.T, path string, sample any, schema plugin.PanelConfigProperty) {

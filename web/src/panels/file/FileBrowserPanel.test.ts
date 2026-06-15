@@ -3,6 +3,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "@/test/fetchMock";
+import { FileTransferOperation } from "@/types/projection";
 import FileBrowserPanel from "./FileBrowserPanel.vue";
 
 const codeMirrorEditors = vi.hoisted(
@@ -102,13 +103,19 @@ afterEach(() => {
 function writableConfig() {
   return {
     pathParam: "path",
-    readRouteId: "ssh.sftp.read",
-    downloadRouteId: "ssh.sftp.download",
-    writeRouteId: "ssh.sftp.write",
-    uploadRouteId: "ssh.sftp.upload",
-    mkdirRouteId: "ssh.sftp.mkdir",
-    renameRouteId: "ssh.sftp.rename",
-    deleteRouteId: "ssh.sftp.delete",
+    routes: {
+      read: "ssh.sftp.read",
+      download: "ssh.sftp.download",
+      write: "ssh.sftp.write",
+      mkdir: "ssh.sftp.mkdir",
+      rename: "ssh.sftp.rename",
+      delete: "ssh.sftp.delete",
+    },
+    upload: {
+      routeId: "ssh.sftp.upload",
+      fieldName: "files",
+      multiple: true,
+    },
     writable: true,
   };
 }
@@ -116,10 +123,15 @@ function writableConfig() {
 function bulkConfig() {
   return {
     ...writableConfig(),
-    moveRouteId: "ssh.sftp.move",
-    copyRouteId: "ssh.sftp.copy",
-    chmodRouteId: "ssh.sftp.chmod",
-    archiveRouteId: "ssh.sftp.archive",
+    routes: {
+      ...writableConfig().routes,
+      chmod: "ssh.sftp.chmod",
+      archive: "ssh.sftp.archive",
+    },
+    transfer: {
+      source: { routeId: "ssh.sftp.transfer", method: "WS" },
+      operations: [FileTransferOperation.Move, FileTransferOperation.Copy],
+    },
   };
 }
 
@@ -152,7 +164,7 @@ describe("FileBrowserPanel", () => {
       props: {
         connectionId: "c1",
         source: { routeId: "ssh.sftp.list", params: { path: "/" } },
-        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+        config: { pathParam: "path", routes: { read: "ssh.sftp.read" } },
       },
     });
     await flushPromises();
@@ -174,7 +186,7 @@ describe("FileBrowserPanel", () => {
       props: {
         connectionId: "c1",
         source: { routeId: "ssh.sftp.list", params: { path: "/" } },
-        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+        config: { pathParam: "path", routes: { read: "ssh.sftp.read" } },
       },
     });
     await flushPromises();
@@ -307,7 +319,7 @@ describe("FileBrowserPanel", () => {
       props: {
         connectionId: "c1",
         source: { routeId: "ssh.sftp.list", params: { path: "/" } },
-        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+        config: { pathParam: "path", routes: { read: "ssh.sftp.read" } },
       },
     });
     await flushPromises();
@@ -332,7 +344,7 @@ describe("FileBrowserPanel", () => {
       props: {
         connectionId: "c1",
         source: { routeId: "ssh.sftp.list", params: { path: "/" } },
-        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+        config: { pathParam: "path", routes: { read: "ssh.sftp.read" } },
       },
     });
     await flushPromises();
@@ -367,7 +379,7 @@ describe("FileBrowserPanel", () => {
       props: {
         connectionId: "c1",
         source: { routeId: "ssh.sftp.list", params: { path: "." } },
-        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+        config: { pathParam: "path", routes: { read: "ssh.sftp.read" } },
       },
     });
     await flushPromises();
@@ -384,7 +396,7 @@ describe("FileBrowserPanel", () => {
       props: {
         connectionId: "c1",
         source: { routeId: "ssh.sftp.list", params: { path: "/" } },
-        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+        config: { pathParam: "path", routes: { read: "ssh.sftp.read" } },
       },
     });
     await flushPromises();
@@ -567,7 +579,7 @@ describe("FileBrowserPanel", () => {
 
   it("hides a bulk button when its route id is absent", async () => {
     const config = bulkConfig();
-    delete (config as { moveRouteId?: string }).moveRouteId;
+    config.transfer.operations = [FileTransferOperation.Copy];
     const w = mount(FileBrowserPanel, {
       props: {
         connectionId: "c1",
@@ -637,11 +649,9 @@ describe("FileBrowserPanel", () => {
     expect(bodies.sort()).toEqual(["/README.md", "/etc"]);
   });
 
-  it("sends a bulk move with the selection and destination", async () => {
-    const calls: { url: string; init?: RequestInit }[] = [];
+  it("opens a move transfer dialog with the current folder as destination", async () => {
     vi.unstubAllGlobals();
     installFetch((url, init) => {
-      calls.push({ url, init });
       if (init?.method && init.method !== "GET") return { body: { ok: true } };
       return { body: { items: rootEntries, nextCursor: "" } };
     });
@@ -664,15 +674,12 @@ describe("FileBrowserPanel", () => {
       .findAll("button")
       .find((b) => b.text().includes("Move"))!
       .trigger("click");
-    await setBodyInput("/destination/folder", "/archive");
-    bodyButton("Move")!.click();
     await flushPromises();
 
-    const move = calls.find((c) => c.url.includes("ssh.sftp.move"))!;
-    expect(move.init?.method).toBe("POST");
-    expect(JSON.parse(String(move.init?.body))).toEqual({
-      paths: ["/README.md"],
-      dest: "/archive",
-    });
+    expect(document.body.textContent).toContain("Move 1 item");
+    const input = document.body.querySelector(
+      'input[aria-label="Transfer destination"]',
+    ) as HTMLInputElement;
+    expect(input.value).toBe("/");
   });
 });

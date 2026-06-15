@@ -377,7 +377,7 @@ type TerminalInputEffect struct {
     AppendNewline bool
 }
 
-type StreamKind string // terminal, logs, query, desktop, metrics, file, task
+type StreamKind string // terminal, logs, query, desktop, metrics, file_transfer, task, canvas
 type Stream struct {
     ID      string // "docker.container.logs"
     Kind    StreamKind
@@ -1393,18 +1393,35 @@ It binds to routes via panel `Config`:
 
 ```go
 type FileBrowserConfig struct {
-    PathParam       string // route param carrying the directory/file path
-    ReadRouteID     string // GET inline preview content
-    DownloadRouteID string // GET original bytes
-    WriteRouteID    string // PUT text content for the selected path
-    UploadRouteID   string // POST multipart/form-data into current dir
-    MkdirRouteID    string // POST JSON {name} in current dir
-    RenameRouteID   string // PATCH JSON {name} for selected path
-    DeleteRouteID   string // DELETE selected path
-    Writable        bool   // gates mutation affordances
-    MultipleUpload  bool
-    MaxUploadBytes  int64
-    UploadFieldName string // optional; defaults to "files"
+    PathParam string
+    Routes    FileBrowserRoutes
+    Upload    FileUploadConfig
+    Writable  bool
+    Transfer  *FileTransferConfig
+}
+
+type FileBrowserRoutes struct {
+    Read     string // GET inline preview content
+    Download string // GET original bytes
+    Write    string // PUT text content for the selected path
+    Mkdir    string // POST JSON {name} in current dir
+    Rename   string // PATCH JSON {name} for selected path
+    Delete   string // DELETE selected path
+    Chmod    string // POST JSON {paths,mode}
+    Archive  string // POST archive download for selected paths
+}
+
+type FileUploadConfig struct {
+    RouteID   string // POST multipart/form-data into current dir
+    FieldName string // optional; defaults to "files"
+    Multiple  bool
+    MaxBytes  int64
+}
+
+type FileTransferConfig struct {
+    Source     *DataSource              // must resolve to a StreamFileTransfer route
+    Operations []FileTransferOperation  // move, copy, archive, extract, sync
+    EmptyText  string
 }
 ```
 
@@ -1433,9 +1450,9 @@ type FileBrowserConfig struct {
   ```
 
 - **Preview, popular types by default.** Selecting a file renders it with a
-  viewer chosen by MIME/extension. Text/code is fetched inline via `readRouteId`
+  viewer chosen by MIME/extension. Text/code is fetched inline via `routes.read`
   (size-capped utf8); binary viewers (image/pdf/audio/video) **stream the bytes
-  from `downloadRouteId`** (served inline) rather than an inline base64 payload —
+  from `routes.download`** (served inline) rather than an inline base64 payload —
   so arbitrarily large media works and never buffers in memory. The default,
   built-in viewer set (no plugin code):
   - **text / code / config** (`.txt .log .md .json .yaml .toml .sh .py .go .ts
@@ -1458,11 +1475,28 @@ type FileBrowserConfig struct {
   `pathParam` under the standard `p.` query prefix (§7.1). JSON mutations carry
   small validated request bodies (`{name}` for mkdir/rename, delete body optional
   because the path param is authoritative). Upload uses `multipart/form-data`,
-  appending selected browser `File` objects under `uploadFieldName` and leaving
+  appending selected browser `File` objects under `upload.fieldName` and leaving
   the browser to set the content boundary. Files can be added via the upload
   button **or dropped onto the panel** (a drop overlay appears while dragging
   when uploads are enabled); rename/mkdir submit is disabled until the value is
   non-empty and actually changed, so a no-op can't be triggered.
+
+- **Long-running transfers.** Move/copy and other folder-scale transfers use
+  `FileBrowserConfig.Transfer` with a `Source` pointing at a
+  `StreamFileTransfer` websocket route (`Kind: "file_transfer"`). The same file
+  browser then opens an inline transfer dialog for declared operations (`move`,
+  `copy`, `archive`, `extract`, `sync`) and sends typed control frames:
+
+  ```json
+  {"type":"start","transferId":"...","operation":"copy","paths":["/a"],"destination":"/b"}
+  {"type":"cancel","transferId":"..."}
+  ```
+
+  The plugin emits `FileTransferFrame` JSON with `type` values `status`,
+  `progress`, `log`, `complete`, or `error`, including optional byte/file
+  counts, percent, current path, message, and `downloadUrl`. This is intentionally
+  an optional capability of `file_browser`, not a separate panel: plugins with
+  only normal list/read/upload/download behavior never declare `StreamFileTransfer`.
 
 - **Selected-file pane.** Selecting a file opens a pane with a header (name,
   size, modified time, permissions, symlink target, download) above the

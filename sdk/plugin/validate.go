@@ -718,17 +718,25 @@ func checkPanelConfigRoutes(
 		checkActionIDs(ctx+" actionIds", c.ActionIDs)
 		checkActionIDs(ctx+" rowActionIds", c.RowActionIDs)
 	case FileBrowserConfig:
-		checkRouteID(ctx+" readRouteId", c.ReadRouteID)
-		checkRouteID(ctx+" downloadRouteId", c.DownloadRouteID)
-		checkWriteRouteID(ctx+" writeRouteId", c.WriteRouteID)
-		checkMultipartRouteID(ctx+" uploadRouteId", c.UploadRouteID)
-		checkWriteRouteID(ctx+" mkdirRouteId", c.MkdirRouteID)
-		checkWriteRouteID(ctx+" renameRouteId", c.RenameRouteID)
-		checkWriteRouteID(ctx+" deleteRouteId", c.DeleteRouteID)
-		checkWriteRouteID(ctx+" moveRouteId", c.MoveRouteID)
-		checkWriteRouteID(ctx+" copyRouteId", c.CopyRouteID)
-		checkWriteRouteID(ctx+" chmodRouteId", c.ChmodRouteID)
-		checkRouteID(ctx+" archiveRouteId", c.ArchiveRouteID)
+		checkRouteID(ctx+" routes.read", c.Routes.Read)
+		checkRouteID(ctx+" routes.download", c.Routes.Download)
+		checkWriteRouteID(ctx+" routes.write", c.Routes.Write)
+		checkMultipartRouteID(ctx+" upload.routeId", c.Upload.RouteID)
+		checkWriteRouteID(ctx+" routes.mkdir", c.Routes.Mkdir)
+		checkWriteRouteID(ctx+" routes.rename", c.Routes.Rename)
+		checkWriteRouteID(ctx+" routes.delete", c.Routes.Delete)
+		checkWriteRouteID(ctx+" routes.chmod", c.Routes.Chmod)
+		checkRouteID(ctx+" routes.archive", c.Routes.Archive)
+		if c.Transfer != nil {
+			checkStreamSource(ctx+" transfer.source", c.Transfer.Source)
+			for i, op := range c.Transfer.Operations {
+				switch op {
+				case FileTransferMove, FileTransferCopy, FileTransferArchive, FileTransferExtract, FileTransferSync:
+				default:
+					add("%s transfer.operations[%d] has unsupported operation %q", ctx, i, op)
+				}
+			}
+		}
 	case FormPanelConfig:
 		checkWriteRouteID(ctx+" submitRouteId", c.SubmitRouteID)
 		validateWriteConfigMethod(ctx+" submitMethod", c.SubmitMethod, add)

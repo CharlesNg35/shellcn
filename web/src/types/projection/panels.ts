@@ -40,7 +40,7 @@ export const StreamKind = {
   Query: "query",
   Desktop: "desktop",
   Metrics: "metrics",
-  File: "file",
+  FileTransfer: "file_transfer",
   Task: "task",
   Canvas: "canvas",
 } as const;
@@ -113,21 +113,45 @@ export interface TablePanelConfig {
 
 export interface FileBrowserConfig {
   pathParam?: string;
-  readRouteId?: string;
-  downloadRouteId?: string;
-  writeRouteId?: string;
-  uploadRouteId?: string;
-  mkdirRouteId?: string;
-  renameRouteId?: string;
-  deleteRouteId?: string;
-  moveRouteId?: string;
-  copyRouteId?: string;
-  chmodRouteId?: string;
-  archiveRouteId?: string;
+  routes?: FileBrowserRoutes;
+  upload?: FileUploadConfig;
   writable?: boolean;
-  multipleUpload?: boolean;
-  maxUploadBytes?: number;
-  uploadFieldName?: string;
+  transfer?: FileTransferConfig;
+}
+
+export interface FileBrowserRoutes {
+  read?: string;
+  download?: string;
+  write?: string;
+  mkdir?: string;
+  rename?: string;
+  delete?: string;
+  chmod?: string;
+  archive?: string;
+}
+
+export interface FileUploadConfig {
+  routeId?: string;
+  fieldName?: string;
+  multiple?: boolean;
+  maxBytes?: number;
+}
+
+export const FileTransferOperation = {
+  Move: "move",
+  Copy: "copy",
+  Archive: "archive",
+  Extract: "extract",
+  Sync: "sync",
+} as const;
+
+export type FileTransferOperation =
+  (typeof FileTransferOperation)[keyof typeof FileTransferOperation];
+
+export interface FileTransferConfig {
+  source?: DataSource;
+  operations?: FileTransferOperation[];
+  emptyText?: string;
 }
 
 export interface FormPanelConfig {

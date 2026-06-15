@@ -26,6 +26,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities:        []plugin.Capability{"filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutSingle,
+		Streams:             []plugin.Stream{{ID: "sftp.sftp.transfer", Kind: plugin.StreamFileTransfer, RouteID: "sftp.sftp.transfer"}},
 		Tabs:                []plugin.Panel{filesTab()},
 	}
 }
@@ -77,22 +78,28 @@ func filesTab() plugin.Panel {
 		Type:   plugin.PanelFileBrowser,
 		Source: &plugin.DataSource{RouteID: "sftp.sftp.list", Params: map[string]string{"path": "."}},
 		Config: plugin.FileBrowserConfig{
-			PathParam:       "path",
-			ReadRouteID:     "sftp.sftp.read",
-			DownloadRouteID: "sftp.sftp.download",
-			WriteRouteID:    "sftp.sftp.write",
-			UploadRouteID:   "sftp.sftp.upload",
-			MkdirRouteID:    "sftp.sftp.mkdir",
-			RenameRouteID:   "sftp.sftp.rename",
-			DeleteRouteID:   "sftp.sftp.delete",
-			MoveRouteID:     "sftp.sftp.move",
-			CopyRouteID:     "sftp.sftp.copy",
-			ChmodRouteID:    "sftp.sftp.chmod",
-			ArchiveRouteID:  "sftp.sftp.archive",
-			Writable:        true,
-			MultipleUpload:  true,
-			MaxUploadBytes:  52428800,
-			UploadFieldName: "files",
+			PathParam: "path",
+			Routes: plugin.FileBrowserRoutes{
+				Read:     "sftp.sftp.read",
+				Download: "sftp.sftp.download",
+				Write:    "sftp.sftp.write",
+				Mkdir:    "sftp.sftp.mkdir",
+				Rename:   "sftp.sftp.rename",
+				Delete:   "sftp.sftp.delete",
+				Chmod:    "sftp.sftp.chmod",
+				Archive:  "sftp.sftp.archive",
+			},
+			Upload: plugin.FileUploadConfig{
+				RouteID:   "sftp.sftp.upload",
+				FieldName: "files",
+				Multiple:  true,
+				MaxBytes:  52428800,
+			},
+			Writable: true,
+			Transfer: &plugin.FileTransferConfig{
+				Source:     &plugin.DataSource{RouteID: "sftp.sftp.transfer", Method: plugin.MethodWS},
+				Operations: []plugin.FileTransferOperation{plugin.FileTransferMove, plugin.FileTransferCopy},
+			},
 		},
 	}
 }

@@ -19,8 +19,8 @@ func TestManifestExposesStorageAffordances(t *testing.T) {
 		t.Fatalf("tabs = %d, want files and buckets", len(m.Tabs))
 	}
 	files, ok := m.Tabs[0].Config.(plugin.FileBrowserConfig)
-	if !ok || files.MoveRouteID == "" || files.CopyRouteID == "" || files.ArchiveRouteID == "" {
-		t.Fatalf("s3 file browser missing object operation routes: %#v", m.Tabs[0].Config)
+	if !ok || files.Transfer == nil || len(files.Transfer.Operations) != 2 || files.Routes.Archive == "" {
+		t.Fatalf("s3 file browser missing object operation affordances: %#v", m.Tabs[0].Config)
 	}
 	buckets, ok := m.Tabs[1].Config.(plugin.TableConfig)
 	if !ok || buckets.EmptyText == "" || buckets.RowClick != plugin.RowClickDetail {

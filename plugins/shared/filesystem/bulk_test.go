@@ -68,18 +68,30 @@ func TestBulkMoveCopyChmodOnCapableBackend(t *testing.T) {
 	c.dirs["/dest"] = true
 	routes := bulkRoutes(t)
 
-	if _, err := handle(t, routes["test.files.move"], c, mustJSON(t, map[string]any{
-		"paths": []string{"/a.txt"}, "dest": "/dest",
-	})); err != nil {
+	if err := runFileTransfer(context.Background(), c, plugin.FileTransferRequest{
+		Type:        plugin.FileTransferRequestStart,
+		TransferID:  "move-1",
+		Operation:   string(plugin.FileTransferMove),
+		Paths:       []string{"/a.txt"},
+		Destination: "/dest",
+	}, func(plugin.FileTransferFrame) error { return nil }); err != nil {
 		t.Fatalf("move: %v", err)
 	}
 	if _, ok := c.files["/dest/a.txt"]; !ok {
 		t.Fatal("move did not relocate /a.txt to /dest/a.txt")
 	}
 
-	if _, err := handle(t, routes["test.files.copy"], c, mustJSON(t, map[string]any{
-		"paths": []string{"/b.txt"}, "dest": "/dest",
-	})); err != nil {
+	var copyFrames []plugin.FileTransferFrame
+	if err := runFileTransfer(context.Background(), c, plugin.FileTransferRequest{
+		Type:        plugin.FileTransferRequestStart,
+		TransferID:  "copy-1",
+		Operation:   string(plugin.FileTransferCopy),
+		Paths:       []string{"/b.txt"},
+		Destination: "/dest",
+	}, func(frame plugin.FileTransferFrame) error {
+		copyFrames = append(copyFrames, frame)
+		return nil
+	}); err != nil {
 		t.Fatalf("copy: %v", err)
 	}
 	if _, ok := c.files["/b.txt"]; !ok {
@@ -87,6 +99,9 @@ func TestBulkMoveCopyChmodOnCapableBackend(t *testing.T) {
 	}
 	if !bytes.Equal(c.files["/dest/b.txt"], []byte("beta")) {
 		t.Fatal("copy did not duplicate the content")
+	}
+	if len(copyFrames) < 2 || copyFrames[len(copyFrames)-1].Type != plugin.FileTransferFrameComplete {
+		t.Fatalf("copy frames missing completion: %+v", copyFrames)
 	}
 
 	if _, err := handle(t, routes["test.files.chmod"], c, mustJSON(t, map[string]any{
@@ -101,16 +116,15 @@ func TestBulkMoveCopyChmodOnCapableBackend(t *testing.T) {
 
 func TestBulkRoutesDeclareActionableInputSchemas(t *testing.T) {
 	routes := bulkRoutes(t)
-	for _, id := range []string{"test.files.move", "test.files.copy", "test.files.chmod", "test.files.archive"} {
+	for _, id := range []string{"test.files.chmod", "test.files.archive"} {
 		if routes[id].Input == nil {
 			t.Fatalf("%s missing input schema", id)
 		}
 	}
-
-	moveDest := requireBulkField(t, routes["test.files.move"].Input, "dest")
-	if moveDest.Type != plugin.FieldAutocomplete || !moveDest.Required || moveDest.Placeholder == "" {
-		t.Fatalf("move dest should be required autocomplete path field: %+v", moveDest)
+	if routes["test.files.transfer"].Method != plugin.MethodWS || routes["test.files.transfer"].Stream == nil {
+		t.Fatalf("transfer route should be websocket-backed: %+v", routes["test.files.transfer"])
 	}
+
 	chmodMode := requireBulkField(t, routes["test.files.chmod"].Input, "mode")
 	if chmodMode.Type != plugin.FieldAutocomplete || len(chmodMode.Options) < 2 || len(chmodMode.Validators) == 0 {
 		t.Fatalf("chmod mode should suggest common octal modes and validate input: %+v", chmodMode)
@@ -125,10 +139,16 @@ func TestBulkUnsupportedReturnsCleanError(t *testing.T) {
 	m := newMemFS() // no Move/Copy/Chmod capabilities
 	routes := bulkRoutes(t)
 
-	for _, id := range []string{"test.files.move", "test.files.copy"} {
-		_, err := handle(t, routes[id], m, mustJSON(t, map[string]any{"paths": []string{"/x"}, "dest": "/d"}))
+	for _, op := range []plugin.FileTransferOperation{plugin.FileTransferMove, plugin.FileTransferCopy} {
+		err := runFileTransfer(context.Background(), m, plugin.FileTransferRequest{
+			Type:        plugin.FileTransferRequestStart,
+			TransferID:  "transfer-1",
+			Operation:   string(op),
+			Paths:       []string{"/x"},
+			Destination: "/d",
+		}, func(plugin.FileTransferFrame) error { return nil })
 		if !errors.Is(err, plugin.ErrInvalidInput) {
-			t.Fatalf("%s: expected ErrInvalidInput for unsupported backend, got %v", id, err)
+			t.Fatalf("%s: expected ErrInvalidInput for unsupported backend, got %v", op, err)
 		}
 	}
 	_, err := handle(t, routes["test.files.chmod"], m, mustJSON(t, map[string]any{"paths": []string{"/x"}, "mode": "0644"}))
@@ -139,13 +159,24 @@ func TestBulkUnsupportedReturnsCleanError(t *testing.T) {
 
 func TestBulkRejectsEmptyAndRootPaths(t *testing.T) {
 	c := newCapFS()
-	routes := bulkRoutes(t)
 
-	_, err := handle(t, routes["test.files.move"], c, mustJSON(t, map[string]any{"paths": []string{}, "dest": "/d"}))
+	err := runFileTransfer(context.Background(), c, plugin.FileTransferRequest{
+		Type:        plugin.FileTransferRequestStart,
+		TransferID:  "transfer-1",
+		Operation:   string(plugin.FileTransferMove),
+		Paths:       []string{},
+		Destination: "/d",
+	}, func(plugin.FileTransferFrame) error { return nil })
 	if !errors.Is(err, plugin.ErrInvalidInput) {
 		t.Fatalf("empty paths: expected ErrInvalidInput, got %v", err)
 	}
-	_, err = handle(t, routes["test.files.move"], c, mustJSON(t, map[string]any{"paths": []string{"/"}, "dest": "/d"}))
+	err = runFileTransfer(context.Background(), c, plugin.FileTransferRequest{
+		Type:        plugin.FileTransferRequestStart,
+		TransferID:  "transfer-1",
+		Operation:   string(plugin.FileTransferMove),
+		Paths:       []string{"/"},
+		Destination: "/d",
+	}, func(plugin.FileTransferFrame) error { return nil })
 	if !errors.Is(err, plugin.ErrInvalidInput) {
 		t.Fatalf("root path: expected ErrInvalidInput, got %v", err)
 	}

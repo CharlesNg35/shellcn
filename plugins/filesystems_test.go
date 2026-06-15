@@ -22,8 +22,8 @@ func TestFilesystemPluginsValidateAndRegister(t *testing.T) {
 			t.Fatalf("%s should lead with a file browser tab: %+v", name, proj.Tabs)
 		}
 		fb, ok := proj.Tabs[0].Config.(plugin.FileBrowserConfig)
-		if !ok || fb.ReadRouteID == "" || fb.DownloadRouteID == "" || fb.UploadRouteID == "" ||
-			fb.MkdirRouteID == "" || fb.RenameRouteID == "" || fb.DeleteRouteID == "" {
+		if !ok || fb.Routes.Read == "" || fb.Routes.Download == "" || fb.Upload.RouteID == "" ||
+			fb.Routes.Mkdir == "" || fb.Routes.Rename == "" || fb.Routes.Delete == "" {
 			t.Fatalf("%s files config missing route ids: %#v", name, proj.Tabs[0].Config)
 		}
 	}

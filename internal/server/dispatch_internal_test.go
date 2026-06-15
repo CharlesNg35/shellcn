@@ -20,7 +20,7 @@ func TestStreamKindHasContinuousClientReader(t *testing.T) {
 		{name: "logs", kind: plugin.StreamLogs, want: false},
 		{name: "query", kind: plugin.StreamQuery, want: false},
 		{name: "metrics", kind: plugin.StreamMetrics, want: false},
-		{name: "file", kind: plugin.StreamFile, want: false},
+		{name: "file_transfer", kind: plugin.StreamFileTransfer, want: false},
 		{name: "unknown", kind: plugin.StreamKind("custom"), want: false},
 	}
 	for _, tt := range tests {
@@ -45,7 +45,7 @@ func TestStreamKindKeepAlivePolicy(t *testing.T) {
 		{name: "logs", kind: plugin.StreamLogs, enabled: true, controlReader: true},
 		{name: "query", kind: plugin.StreamQuery, enabled: true},
 		{name: "metrics", kind: plugin.StreamMetrics},
-		{name: "file", kind: plugin.StreamFile},
+		{name: "file_transfer", kind: plugin.StreamFileTransfer, enabled: true},
 		{name: "unknown", kind: plugin.StreamKind("custom")},
 	}
 	for _, tt := range tests {

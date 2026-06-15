@@ -3,6 +3,7 @@ package sshsftp
 import (
 	"archive/zip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -10,6 +11,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/pkg/sftp"
 
@@ -25,11 +27,6 @@ type pathsRequest struct {
 	Paths []string `json:"paths"`
 }
 
-type destRequest struct {
-	Paths []string `json:"paths"`
-	Dest  string   `json:"dest"`
-}
-
 type chmodRequest struct {
 	Paths []string `json:"paths"`
 	Mode  string   `json:"mode"`
@@ -41,21 +38,6 @@ func pathsSchema(groupName string) *plugin.Schema {
 			Key: "paths", Label: "Selection", Type: plugin.FieldArray, Required: true,
 			ItemLabel: "Path", AddLabel: "Add path", MinItems: 1,
 			Item: &plugin.Field{Type: plugin.FieldText, Required: true, Placeholder: "/path/to/item"},
-		},
-	}}}}
-}
-
-func destinationSchema(groupName, help string) *plugin.Schema {
-	return &plugin.Schema{Groups: []plugin.Group{{Name: groupName, Fields: []plugin.Field{
-		{
-			Key: "paths", Label: "Selection", Type: plugin.FieldArray, Required: true,
-			ItemLabel: "Path", AddLabel: "Add path", MinItems: 1,
-			Item: &plugin.Field{Type: plugin.FieldText, Required: true, Placeholder: "/path/to/item"},
-		},
-		{
-			Key: "dest", Label: "Destination folder", Type: plugin.FieldAutocomplete, Required: true,
-			Placeholder: "/destination/folder", Help: help,
-			Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^(/|~|\.)?[^\x00]*$`, Message: "Use a valid remote folder path."}},
 		},
 	}}}}
 }
@@ -111,38 +93,164 @@ func parseMode(raw string) (os.FileMode, error) {
 	return fs.FileMode(v), nil
 }
 
-func move(rc *plugin.RequestContext) (any, error) {
+func fileTransfer(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	fsc, err := fsSession(rc)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	srcs, dest, err := bindDest(rc)
-	if err != nil {
-		return nil, err
+	dec := json.NewDecoder(client)
+	enc := json.NewEncoder(client)
+	var mu sync.Mutex
+	var cancel context.CancelFunc
+	active := false
+
+	writeFrame := func(frame plugin.FileTransferFrame) error {
+		mu.Lock()
+		defer mu.Unlock()
+		return enc.Encode(frame)
 	}
-	for _, src := range srcs {
-		if err := fsc.Rename(src, joinRemote(dest, path.Base(src))); err != nil {
-			return nil, mapFileError(err)
+
+	for {
+		var req plugin.FileTransferRequest
+		if err := dec.Decode(&req); err != nil {
+			if cancel != nil {
+				cancel()
+			}
+			return err
+		}
+		switch req.Type {
+		case plugin.FileTransferRequestCancel:
+			if cancel != nil {
+				cancel()
+			}
+		case plugin.FileTransferRequestStart:
+			mu.Lock()
+			if active {
+				mu.Unlock()
+				_ = writeFrame(plugin.FileTransferFrame{
+					Type:       plugin.FileTransferFrameError,
+					TransferID: req.TransferID,
+					Error:      "Another file transfer is already running.",
+				})
+				continue
+			}
+			var ctx context.Context
+			ctx, cancel = context.WithCancel(client.Context())
+			active = true
+			mu.Unlock()
+			go func(req plugin.FileTransferRequest) {
+				defer func() {
+					mu.Lock()
+					active = false
+					cancel = nil
+					mu.Unlock()
+				}()
+				if err := runFileTransfer(ctx, fsc, req, writeFrame); err != nil {
+					_ = writeFrame(plugin.FileTransferFrame{
+						Type:       plugin.FileTransferFrameError,
+						TransferID: req.TransferID,
+						Operation:  req.Operation,
+						Error:      err.Error(),
+					})
+				}
+			}(req)
 		}
 	}
-	return map[string]bool{"ok": true}, nil
 }
 
-func copyFiles(rc *plugin.RequestContext) (any, error) {
-	fsc, err := fsSession(rc)
+func runFileTransfer(ctx context.Context, fsc *sftp.Client, req plugin.FileTransferRequest, writeFrame func(plugin.FileTransferFrame) error) error {
+	paths, err := resolveBulkPaths(req.Paths)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	srcs, dest, err := bindDest(rc)
+	dest, err := cleanRemotePath(req.Destination)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	for _, src := range srcs {
-		if err := copyTree(rc.Ctx, fsc, src, joinRemote(dest, path.Base(src))); err != nil {
-			return nil, err
+	switch plugin.FileTransferOperation(req.Operation) {
+	case plugin.FileTransferMove:
+		return transferEach(ctx, req, paths, dest, writeFrame, func(ctx context.Context, src, dst string) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			return mapFileError(fsc.Rename(src, dst))
+		})
+	case plugin.FileTransferCopy:
+		return transferEach(ctx, req, paths, dest, writeFrame, func(ctx context.Context, src, dst string) error {
+			return copyTree(ctx, fsc, src, dst)
+		})
+	default:
+		return fmt.Errorf("%w: %s is not supported by this backend", plugin.ErrInvalidInput, req.Operation)
+	}
+}
+
+func transferEach(
+	ctx context.Context,
+	req plugin.FileTransferRequest,
+	paths []string,
+	dest string,
+	writeFrame func(plugin.FileTransferFrame) error,
+	run func(context.Context, string, string) error,
+) error {
+	total := len(paths)
+	if err := writeFrame(plugin.FileTransferFrame{
+		Type:       plugin.FileTransferFrameStatus,
+		TransferID: req.TransferID,
+		Operation:  req.Operation,
+		Status:     "Starting",
+		FilesTotal: total,
+	}); err != nil {
+		return err
+	}
+	for i, src := range paths {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		dst := joinRemote(dest, path.Base(src))
+		pct := float64(i) / float64(total) * 100
+		label := transferOperationLabel(req.Operation)
+		if err := writeFrame(plugin.FileTransferFrame{
+			Type:       plugin.FileTransferFrameProgress,
+			TransferID: req.TransferID,
+			Operation:  req.Operation,
+			Status:     label,
+			Path:       src,
+			Percent:    &pct,
+			FilesDone:  i,
+			FilesTotal: total,
+			Message:    fmt.Sprintf("%s %s", label, src),
+		}); err != nil {
+			return err
+		}
+		if err := run(ctx, src, dst); err != nil {
+			return err
 		}
 	}
-	return map[string]bool{"ok": true}, nil
+	done := 100.0
+	return writeFrame(plugin.FileTransferFrame{
+		Type:       plugin.FileTransferFrameComplete,
+		TransferID: req.TransferID,
+		Operation:  req.Operation,
+		Status:     "Complete",
+		Percent:    &done,
+		FilesDone:  total,
+		FilesTotal: total,
+		Message:    "Transfer complete.",
+	})
+}
+
+func transferOperationLabel(operation string) string {
+	switch plugin.FileTransferOperation(operation) {
+	case plugin.FileTransferMove:
+		return "Move"
+	case plugin.FileTransferCopy:
+		return "Copy"
+	default:
+		if operation == "" {
+			return "Transfer"
+		}
+		return operation
+	}
 }
 
 func copyTree(ctx context.Context, fsc *sftp.Client, src, dst string) error {
@@ -211,22 +319,6 @@ func chmod(rc *plugin.RequestContext) (any, error) {
 		}
 	}
 	return map[string]bool{"ok": true}, nil
-}
-
-func bindDest(rc *plugin.RequestContext) (paths []string, dest string, err error) {
-	var req destRequest
-	if err = rc.Bind(&req); err != nil {
-		return nil, "", err
-	}
-	dest, err = cleanRemotePath(req.Dest)
-	if err != nil {
-		return nil, "", err
-	}
-	paths, err = resolveBulkPaths(req.Paths)
-	if err != nil {
-		return nil, "", err
-	}
-	return paths, dest, nil
 }
 
 func archive(rc *plugin.RequestContext) (any, error) {

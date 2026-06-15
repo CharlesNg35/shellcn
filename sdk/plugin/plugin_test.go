@@ -191,12 +191,26 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 				Key: "logs", Label: "Logs", Type: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "x.list"},
 			}}}}}
 		}},
-		{"file browser config references unknown route", "uploadRouteId references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Panel{{Key: "files", Label: "Files", Type: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{UploadRouteID: "ghost"}}}
+		{"file browser config references unknown route", "upload.routeId references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Panel{{Key: "files", Label: "Files", Type: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{Upload: plugin.FileUploadConfig{RouteID: "ghost"}}}}
 		}},
 		{"file browser upload route requires file input", "without a file input schema", func(m *plugin.Manifest, r *[]plugin.Route) {
 			*r = append(*r, plugin.Route{ID: "x.upload", Method: plugin.MethodPost, Permission: "x.write", Risk: plugin.RiskWrite, Handle: noop})
-			m.Tabs = []plugin.Panel{{Key: "files", Label: "Files", Type: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{UploadRouteID: "x.upload"}}}
+			m.Tabs = []plugin.Panel{{Key: "files", Label: "Files", Type: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{Upload: plugin.FileUploadConfig{RouteID: "x.upload"}}}}
+		}},
+		{"file browser transfer source must be stream", "invalid stream method", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Panel{{Key: "files", Label: "Files", Type: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{
+				Transfer: &plugin.FileTransferConfig{Source: &plugin.DataSource{RouteID: "x.list"}},
+			}}}
+		}},
+		{"file browser transfer operation must be known", "unsupported operation", func(m *plugin.Manifest, r *[]plugin.Route) {
+			*r = append(*r, plugin.Route{ID: "x.transfer", Method: plugin.MethodWS, Permission: "x.write", Risk: plugin.RiskWrite, Stream: func(*plugin.RequestContext, plugin.ClientStream) error { return nil }})
+			m.Tabs = []plugin.Panel{{Key: "files", Label: "Files", Type: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{
+				Transfer: &plugin.FileTransferConfig{
+					Source:     &plugin.DataSource{RouteID: "x.transfer"},
+					Operations: []plugin.FileTransferOperation{"compress"},
+				},
+			}}}
 		}},
 		{"form submit route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Tabs = []plugin.Panel{{Key: "form", Label: "Form", Type: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FormPanelConfig{SubmitRouteID: "x.list"}}}
@@ -662,7 +676,9 @@ func TestValidateRejectsBadWasmPanel(t *testing.T) {
 // and zero-value fields are omitted.
 func TestPanelConfigWireFormat(t *testing.T) {
 	files := plugin.FileBrowserConfig{
-		ReadRouteID: "sftp.read", Writable: true, UploadFieldName: "files",
+		Routes:   plugin.FileBrowserRoutes{Read: "sftp.read"},
+		Writable: true,
+		Upload:   plugin.FileUploadConfig{RouteID: "sftp.upload", FieldName: "files"},
 	}
 	b, err := json.Marshal(files)
 	if err != nil {
@@ -672,10 +688,12 @@ func TestPanelConfigWireFormat(t *testing.T) {
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["readRouteId"] != "sftp.read" || got["writable"] != true || got["uploadFieldName"] != "files" {
+	routes := got["routes"].(map[string]any)
+	upload := got["upload"].(map[string]any)
+	if routes["read"] != "sftp.read" || got["writable"] != true || upload["routeId"] != "sftp.upload" || upload["fieldName"] != "files" {
 		t.Fatalf("file browser wire format unexpected: %s", b)
 	}
-	if _, ok := got["downloadRouteId"]; ok {
+	if _, ok := routes["download"]; ok {
 		t.Fatalf("zero-value fields should be omitted: %s", b)
 	}
 
