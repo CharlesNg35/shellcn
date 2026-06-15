@@ -36,9 +36,10 @@ func TestManifestExposesTerminalAndFiles(t *testing.T) {
 		t.Fatalf("files tab panel: got %q", files.Type)
 	}
 	fb, ok := files.Config.(plugin.FileBrowserConfig)
-	if !ok || fb.ReadRouteID == "" || fb.DownloadRouteID == "" || fb.UploadRouteID == "" ||
-		fb.MkdirRouteID == "" || fb.RenameRouteID == "" || fb.DeleteRouteID == "" ||
-		fb.MoveRouteID == "" || fb.CopyRouteID == "" || fb.ChmodRouteID == "" || fb.ArchiveRouteID == "" {
+	if !ok || fb.Routes.Read == "" || fb.Routes.Download == "" || fb.Upload.RouteID == "" ||
+		fb.Routes.Mkdir == "" || fb.Routes.Rename == "" || fb.Routes.Delete == "" ||
+		fb.Routes.Move == "" || fb.Routes.Copy == "" ||
+		fb.Routes.Chmod == "" || fb.Routes.Archive == "" {
 		t.Fatalf("files config missing route ids: %#v", files.Config)
 	}
 	if len(m.Recording) != 1 || m.Recording[0].Class != plugin.RecordingTerminal {

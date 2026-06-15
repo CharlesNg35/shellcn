@@ -43,21 +43,9 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 			Type: "object",
 			Properties: props(
 				prop("pathParam", stringProp()),
-				prop("readRouteId", stringProp()),
-				prop("downloadRouteId", stringProp()),
-				prop("writeRouteId", stringProp()),
-				prop("uploadRouteId", stringProp()),
-				prop("mkdirRouteId", stringProp()),
-				prop("renameRouteId", stringProp()),
-				prop("deleteRouteId", stringProp()),
-				prop("moveRouteId", stringProp()),
-				prop("copyRouteId", stringProp()),
-				prop("chmodRouteId", stringProp()),
-				prop("archiveRouteId", stringProp()),
+				prop("routes", fileBrowserRoutes()),
+				prop("upload", fileUpload()),
 				prop("writable", boolProp()),
-				prop("multipleUpload", boolProp()),
-				prop("maxUploadBytes", number()),
-				prop("uploadFieldName", stringProp()),
 			),
 		},
 		PanelLogStream: {Type: "object", Properties: props()},
@@ -276,6 +264,36 @@ func stringProp() PanelConfigProperty { return PanelConfigProperty{Type: "string
 func boolProp() PanelConfigProperty   { return PanelConfigProperty{Type: "boolean"} }
 func number() PanelConfigProperty     { return PanelConfigProperty{Type: "number"} }
 func object() PanelConfigProperty     { return PanelConfigProperty{Type: "object"} }
+
+func fileBrowserRoutes() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("read", stringProp()),
+			prop("download", stringProp()),
+			prop("write", stringProp()),
+			prop("mkdir", stringProp()),
+			prop("rename", stringProp()),
+			prop("delete", stringProp()),
+			prop("move", stringProp()),
+			prop("copy", stringProp()),
+			prop("chmod", stringProp()),
+			prop("archive", stringProp()),
+		),
+	}
+}
+
+func fileUpload() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("routeId", stringProp()),
+			prop("fieldName", stringProp()),
+			prop("multiple", boolProp()),
+			prop("maxBytes", number()),
+		),
+	}
+}
 
 func conditionObject() PanelConfigProperty {
 	return PanelConfigProperty{

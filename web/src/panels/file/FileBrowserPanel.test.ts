@@ -3,7 +3,9 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "@/test/fetchMock";
+import type { FileBrowserConfig } from "@/types/projection";
 import FileBrowserPanel from "./FileBrowserPanel.vue";
+import FileToolbar from "./FileToolbar.vue";
 
 const codeMirrorEditors = vi.hoisted(
   () =>
@@ -99,28 +101,39 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function writableConfig() {
+type TestFileBrowserConfig = FileBrowserConfig & Record<string, unknown>;
+
+function writableConfig(): TestFileBrowserConfig {
   return {
     pathParam: "path",
-    readRouteId: "ssh.sftp.read",
-    downloadRouteId: "ssh.sftp.download",
-    writeRouteId: "ssh.sftp.write",
-    uploadRouteId: "ssh.sftp.upload",
-    mkdirRouteId: "ssh.sftp.mkdir",
-    renameRouteId: "ssh.sftp.rename",
-    deleteRouteId: "ssh.sftp.delete",
+    routes: {
+      read: "ssh.sftp.read",
+      download: "ssh.sftp.download",
+      write: "ssh.sftp.write",
+      mkdir: "ssh.sftp.mkdir",
+      rename: "ssh.sftp.rename",
+      delete: "ssh.sftp.delete",
+    },
+    upload: {
+      routeId: "ssh.sftp.upload",
+      fieldName: "files",
+      multiple: true,
+    },
     writable: true,
-  };
+  } as TestFileBrowserConfig;
 }
 
-function bulkConfig() {
+function bulkConfig(): TestFileBrowserConfig {
   return {
     ...writableConfig(),
-    moveRouteId: "ssh.sftp.move",
-    copyRouteId: "ssh.sftp.copy",
-    chmodRouteId: "ssh.sftp.chmod",
-    archiveRouteId: "ssh.sftp.archive",
-  };
+    routes: {
+      ...writableConfig().routes,
+      move: "ssh.sftp.move",
+      copy: "ssh.sftp.copy",
+      chmod: "ssh.sftp.chmod",
+      archive: "ssh.sftp.archive",
+    },
+  } as TestFileBrowserConfig;
 }
 
 function bodyButton(text: string): HTMLButtonElement | undefined {
@@ -152,7 +165,7 @@ describe("FileBrowserPanel", () => {
       props: {
         connectionId: "c1",
         source: { routeId: "ssh.sftp.list", params: { path: "/" } },
-        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+        config: { pathParam: "path", routes: { read: "ssh.sftp.read" } },
       },
     });
     await flushPromises();
@@ -174,7 +187,7 @@ describe("FileBrowserPanel", () => {
       props: {
         connectionId: "c1",
         source: { routeId: "ssh.sftp.list", params: { path: "/" } },
-        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+        config: { pathParam: "path", routes: { read: "ssh.sftp.read" } },
       },
     });
     await flushPromises();
@@ -307,7 +320,7 @@ describe("FileBrowserPanel", () => {
       props: {
         connectionId: "c1",
         source: { routeId: "ssh.sftp.list", params: { path: "/" } },
-        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+        config: { pathParam: "path", routes: { read: "ssh.sftp.read" } },
       },
     });
     await flushPromises();
@@ -332,7 +345,7 @@ describe("FileBrowserPanel", () => {
       props: {
         connectionId: "c1",
         source: { routeId: "ssh.sftp.list", params: { path: "/" } },
-        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+        config: { pathParam: "path", routes: { read: "ssh.sftp.read" } },
       },
     });
     await flushPromises();
@@ -367,7 +380,7 @@ describe("FileBrowserPanel", () => {
       props: {
         connectionId: "c1",
         source: { routeId: "ssh.sftp.list", params: { path: "." } },
-        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+        config: { pathParam: "path", routes: { read: "ssh.sftp.read" } },
       },
     });
     await flushPromises();
@@ -384,7 +397,7 @@ describe("FileBrowserPanel", () => {
       props: {
         connectionId: "c1",
         source: { routeId: "ssh.sftp.list", params: { path: "/" } },
-        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+        config: { pathParam: "path", routes: { read: "ssh.sftp.read" } },
       },
     });
     await flushPromises();
@@ -500,6 +513,43 @@ describe("FileBrowserPanel", () => {
     expect(JSON.parse(String(del.init?.body))).toEqual({ path: "/README.md" });
   });
 
+  it("blocks oversized uploads in the file browser UI instead of PrimeVue's upload message area", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url, init) => {
+      calls.push({ url, init });
+      return { body: { items: rootEntries, nextCursor: "" } };
+    });
+
+    const config = writableConfig();
+    config.upload = { ...config.upload, maxBytes: 50 };
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config,
+      },
+    });
+    await flushPromises();
+
+    const largeFile = new File(["x".repeat(64)], "UpworkSetup64.exe", {
+      type: "application/octet-stream",
+    });
+    w.findComponent(FileToolbar).vm.$emit("upload", { files: [largeFile] });
+    await flushPromises();
+
+    expect(w.text()).toContain("Upload blocked");
+    expect(w.text()).toContain("UpworkSetup64.exe is 64 B");
+    expect(w.text()).toContain("Maximum upload size is 50 B");
+    expect(calls.some((c) => c.url.includes("ssh.sftp.upload"))).toBe(false);
+
+    await w
+      .findComponent({ name: "AppAlert" })
+      .vm.$emit("close", new Event("close"));
+    await nextTick();
+    expect(w.text()).not.toContain("Upload blocked");
+  });
+
   it("shows the selection bar once an entry is selected via its checkbox", async () => {
     const w = mount(FileBrowserPanel, {
       props: {
@@ -567,7 +617,7 @@ describe("FileBrowserPanel", () => {
 
   it("hides a bulk button when its route id is absent", async () => {
     const config = bulkConfig();
-    delete (config as { moveRouteId?: string }).moveRouteId;
+    config.routes!.move = undefined;
     const w = mount(FileBrowserPanel, {
       props: {
         connectionId: "c1",
@@ -583,7 +633,7 @@ describe("FileBrowserPanel", () => {
     await flushPromises();
 
     expect(w.text()).toContain("1 selected");
-    // Move slot removed → no Move button; Copy slot still present.
+    // Move route removed → no Move button; Copy route still present.
     expect(w.findAll("button").some((b) => b.text().includes("Move"))).toBe(
       false,
     );
@@ -637,11 +687,52 @@ describe("FileBrowserPanel", () => {
     expect(bodies.sort()).toEqual(["/README.md", "/etc"]);
   });
 
-  it("sends a bulk move with the selection and destination", async () => {
+  it("offers permission presets before applying chmod", async () => {
     const calls: { url: string; init?: RequestInit }[] = [];
     vi.unstubAllGlobals();
     installFetch((url, init) => {
       calls.push({ url, init });
+      if (init?.method && init.method !== "GET") return { body: { ok: true } };
+      return { body: { items: rootEntries, nextCursor: "" } };
+    });
+
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: bulkConfig(),
+      },
+    });
+    await flushPromises();
+
+    await w
+      .findAll('input[type="checkbox"]')
+      .find((c) => c.attributes("aria-label") === "Select README.md")!
+      .trigger("change");
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((b) => b.text().includes("Permissions"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(document.body.textContent).toContain(
+      "Owner read/write, everyone read",
+    );
+    bodyButton("Apply")!.click();
+    await flushPromises();
+
+    const chmod = calls.find((c) => c.url.includes("ssh.sftp.chmod"))!;
+    expect(JSON.parse(String(chmod.init?.body))).toEqual({
+      paths: ["/README.md"],
+      mode: "0644",
+    });
+  });
+
+  it("opens a move dialog with the current folder as destination", async () => {
+    vi.unstubAllGlobals();
+    installFetch((_url, init) => {
       if (init?.method && init.method !== "GET") return { body: { ok: true } };
       return { body: { items: rootEntries, nextCursor: "" } };
     });
@@ -664,15 +755,12 @@ describe("FileBrowserPanel", () => {
       .findAll("button")
       .find((b) => b.text().includes("Move"))!
       .trigger("click");
-    await setBodyInput("/destination/folder", "/archive");
-    bodyButton("Move")!.click();
     await flushPromises();
 
-    const move = calls.find((c) => c.url.includes("ssh.sftp.move"))!;
-    expect(move.init?.method).toBe("POST");
-    expect(JSON.parse(String(move.init?.body))).toEqual({
-      paths: ["/README.md"],
-      dest: "/archive",
-    });
+    expect(document.body.textContent).toContain("Move 1 item");
+    const input = document.body.querySelector(
+      'input[aria-label="Operation destination"]',
+    ) as HTMLInputElement;
+    expect(input.value).toBe("/");
   });
 });

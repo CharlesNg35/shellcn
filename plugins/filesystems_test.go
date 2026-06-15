@@ -13,7 +13,7 @@ func TestFilesystemPluginsValidateAndRegister(t *testing.T) {
 		if proj.Category.Key != plugin.CategoryFiles {
 			t.Fatalf("%s category: got %q want %q", name, proj.Category.Key, plugin.CategoryFiles)
 		}
-		// Every filesystem plugin leads with a file browser. Pure transfer
+		// Every filesystem plugin leads with a file browser. Pure file job
 		// protocols expose exactly that; object stores add bucket
 		// management tabs alongside it.
 		objectStore := name == "s3"
@@ -22,8 +22,9 @@ func TestFilesystemPluginsValidateAndRegister(t *testing.T) {
 			t.Fatalf("%s should lead with a file browser tab: %+v", name, proj.Tabs)
 		}
 		fb, ok := proj.Tabs[0].Config.(plugin.FileBrowserConfig)
-		if !ok || fb.ReadRouteID == "" || fb.DownloadRouteID == "" || fb.UploadRouteID == "" ||
-			fb.MkdirRouteID == "" || fb.RenameRouteID == "" || fb.DeleteRouteID == "" {
+		if !ok || fb.Routes.Read == "" || fb.Routes.Download == "" || fb.Upload.RouteID == "" ||
+			fb.Routes.Mkdir == "" || fb.Routes.Rename == "" || fb.Routes.Delete == "" ||
+			fb.Routes.Move == "" || fb.Routes.Copy == "" {
 			t.Fatalf("%s files config missing route ids: %#v", name, proj.Tabs[0].Config)
 		}
 	}

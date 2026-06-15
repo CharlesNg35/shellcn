@@ -109,6 +109,7 @@ describe("primeVuePassthrough", () => {
     expect(wrapper.get('[data-pc-section="tablist"]').classes()).toContain(
       "flex-nowrap",
     );
+    wrapper.unmount();
   });
 
   it("keeps modal chrome bounded and scrollable", () => {

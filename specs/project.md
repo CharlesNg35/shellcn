@@ -377,7 +377,7 @@ type TerminalInputEffect struct {
     AppendNewline bool
 }
 
-type StreamKind string // terminal, logs, query, desktop, metrics, file, task
+type StreamKind string // terminal, logs, query, desktop, metrics, task, canvas
 type Stream struct {
     ID      string // "docker.container.logs"
     Kind    StreamKind
@@ -1393,19 +1393,32 @@ It binds to routes via panel `Config`:
 
 ```go
 type FileBrowserConfig struct {
-    PathParam       string // route param carrying the directory/file path
-    ReadRouteID     string // GET inline preview content
-    DownloadRouteID string // GET original bytes
-    WriteRouteID    string // PUT text content for the selected path
-    UploadRouteID   string // POST multipart/form-data into current dir
-    MkdirRouteID    string // POST JSON {name} in current dir
-    RenameRouteID   string // PATCH JSON {name} for selected path
-    DeleteRouteID   string // DELETE selected path
-    Writable        bool   // gates mutation affordances
-    MultipleUpload  bool
-    MaxUploadBytes  int64
-    UploadFieldName string // optional; defaults to "files"
+    PathParam string
+    Routes    FileBrowserRoutes
+    Upload    FileUploadConfig
+    Writable  bool
 }
+
+type FileBrowserRoutes struct {
+    Read     string // GET inline preview content
+    Download string // GET original bytes
+    Write    string // PUT text content for the selected path
+    Mkdir    string // POST JSON {name} in current dir
+    Rename   string // PATCH JSON {name} for selected path
+    Delete   string // DELETE selected path
+    Move     string // POST JSON {paths,destination}
+    Copy     string // POST JSON {paths,destination}
+    Chmod    string // POST JSON {paths,mode}
+    Archive  string // POST archive download for selected paths
+}
+
+type FileUploadConfig struct {
+    RouteID   string // POST multipart/form-data into current dir
+    FieldName string // optional; defaults to "files"
+    Multiple  bool
+    MaxBytes  int64
+}
+
 ```
 
 - **Listing.** The `Source` returns `Page[FileEntry]` for the current directory.
@@ -1433,9 +1446,9 @@ type FileBrowserConfig struct {
   ```
 
 - **Preview, popular types by default.** Selecting a file renders it with a
-  viewer chosen by MIME/extension. Text/code is fetched inline via `readRouteId`
+  viewer chosen by MIME/extension. Text/code is fetched inline via `routes.read`
   (size-capped utf8); binary viewers (image/pdf/audio/video) **stream the bytes
-  from `downloadRouteId`** (served inline) rather than an inline base64 payload —
+  from `routes.download`** (served inline) rather than an inline base64 payload —
   so arbitrarily large media works and never buffers in memory. The default,
   built-in viewer set (no plugin code):
   - **text / code / config** (`.txt .log .md .json .yaml .toml .sh .py .go .ts
@@ -1451,18 +1464,26 @@ type FileBrowserConfig struct {
   is a one-time core addition, like a new `PanelType`), so it scales across all
   storage plugins without touching any of them.
 
-- **Mutations** (upload / download / mkdir / rename / delete) are ordinary
+- **Mutations** (upload / download / mkdir / rename / delete / move / copy) are ordinary
   routes carrying `risk`/`permission`/`audit` like any action (§5.3); the panel
   shows them only when the manifest declares them and `writable` is set.
   Path-bearing operations send the selected/current path through the configured
   `pathParam` under the standard `p.` query prefix (§7.1). JSON mutations carry
-  small validated request bodies (`{name}` for mkdir/rename, delete body optional
-  because the path param is authoritative). Upload uses `multipart/form-data`,
-  appending selected browser `File` objects under `uploadFieldName` and leaving
+  small validated request bodies (`{name}` for mkdir/rename,
+  `{paths,destination}` for simple move/copy, delete body optional because the
+  path param is authoritative). Upload uses `multipart/form-data`,
+  appending selected browser `File` objects under `upload.fieldName` and leaving
   the browser to set the content boundary. Files can be added via the upload
   button **or dropped onto the panel** (a drop overlay appears while dragging
   when uploads are enabled); rename/mkdir submit is disabled until the value is
   non-empty and actually changed, so a no-op can't be triggered.
+
+- **Destination operations.** Move/copy use ordinary request/response routes
+  with `{paths,destination}`. The renderer shows a lazy folder picker backed by
+  the same list route; typing a path is only a fallback. The gateway does not
+  define a file-specific stream protocol for these operations. If future
+  progress/cancel UX is needed, it should use the generic task/progress model
+  rather than a file-browser-only websocket shape.
 
 - **Selected-file pane.** Selecting a file opens a pane with a header (name,
   size, modified time, permissions, symlink target, download) above the

@@ -83,6 +83,12 @@ const statusText = computed(() => {
     props.uploadProgress.loaded,
   )} / ${formatBytes(props.uploadProgress.total)}`;
 });
+
+const uploadTitle = computed(() =>
+  props.maxUploadBytes
+    ? `Upload files up to ${formatBytes(props.maxUploadBytes)} each`
+    : "Upload files",
+);
 </script>
 
 <template>
@@ -94,11 +100,10 @@ const statusText = computed(() => {
         class="[&_button]:h-9"
         :name="uploadFieldName"
         :multiple="multipleUpload"
-        :max-file-size="maxUploadBytes"
         custom-upload
         auto
         choose-label="Upload"
-        title="Upload files"
+        :title="uploadTitle"
         :disabled="mutating"
         @uploader="emit('upload', $event)"
       >

@@ -5,6 +5,7 @@ import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
 import InputText from "primevue/inputtext";
+import Select from "primevue/select";
 import { useToast } from "primevue/usetoast";
 import {
   fetchDoc,
@@ -15,13 +16,15 @@ import {
 } from "@/api/dataSource";
 import type { UploadProgress } from "@/api/dataSource";
 import { apiFetch } from "@/api/client";
-import type {
-  FileBrowserConfig,
-  FileContent,
-  FileEntry,
-  Page,
+import {
+  FileOperation,
+  type FileBrowserConfig,
+  type FileContent,
+  type FileEntry,
+  type Page,
 } from "@/types/projection";
 import type { PanelProps } from "../core/types";
+import AppAlert from "@/components/AppAlert.vue";
 import AppIcon from "@/components/AppIcon.vue";
 import FileCrumbs from "./FileCrumbs.vue";
 import FileEntryGrid from "./FileEntryGrid.vue";
@@ -29,6 +32,7 @@ import FileEntryList from "./FileEntryList.vue";
 import FilePane from "./FilePane.vue";
 import FileSelectionBar from "./FileSelectionBar.vue";
 import FileToolbar from "./FileToolbar.vue";
+import FileOperationDialog from "./FileOperationDialog.vue";
 import {
   formatBytes,
   languageFor,
@@ -45,21 +49,23 @@ const fileConfig = computed(
   () => props.config as FileBrowserConfig | undefined,
 );
 const pathParam = computed(() => fileConfig.value?.pathParam ?? "path");
-const readRouteId = computed(() => fileConfig.value?.readRouteId);
-const downloadRouteId = computed(() => fileConfig.value?.downloadRouteId);
-const writeRouteId = computed(() => fileConfig.value?.writeRouteId);
-const uploadRouteId = computed(() => fileConfig.value?.uploadRouteId);
-const mkdirRouteId = computed(() => fileConfig.value?.mkdirRouteId);
-const renameRouteId = computed(() => fileConfig.value?.renameRouteId);
-const deleteRouteId = computed(() => fileConfig.value?.deleteRouteId);
-const moveRouteId = computed(() => fileConfig.value?.moveRouteId);
-const copyRouteId = computed(() => fileConfig.value?.copyRouteId);
-const chmodRouteId = computed(() => fileConfig.value?.chmodRouteId);
-const archiveRouteId = computed(() => fileConfig.value?.archiveRouteId);
+const routes = computed(() => fileConfig.value?.routes);
+const uploadConfig = computed(() => fileConfig.value?.upload);
+const readRouteId = computed(() => routes.value?.read);
+const downloadRouteId = computed(() => routes.value?.download);
+const writeRouteId = computed(() => routes.value?.write);
+const uploadRouteId = computed(() => uploadConfig.value?.routeId);
+const mkdirRouteId = computed(() => routes.value?.mkdir);
+const renameRouteId = computed(() => routes.value?.rename);
+const deleteRouteId = computed(() => routes.value?.delete);
+const moveRouteId = computed(() => routes.value?.move);
+const copyRouteId = computed(() => routes.value?.copy);
+const chmodRouteId = computed(() => routes.value?.chmod);
+const archiveRouteId = computed(() => routes.value?.archive);
 const writable = computed(() => Boolean(fileConfig.value?.writable));
-const multipleUpload = computed(() => fileConfig.value?.multipleUpload ?? true);
+const multipleUpload = computed(() => uploadConfig.value?.multiple ?? true);
 const uploadFieldName = computed(
-  () => fileConfig.value?.uploadFieldName ?? "files",
+  () => uploadConfig.value?.fieldName ?? "files",
 );
 
 const startPath = computed(
@@ -76,28 +82,39 @@ const editContent = ref("");
 const loadingContent = ref(false);
 const contentError = ref<string | null>(null);
 const mutating = ref(false);
-const operation = ref<
+type FilePanelOperation =
   | "upload"
   | "save"
   | "mkdir"
   | "rename"
   | "delete"
+  | "chmod"
   | "move"
   | "copy"
-  | "chmod"
   | "archive"
-  | null
->(null);
+  | null;
+const operation = ref<FilePanelOperation>(null);
 
 const selectedPaths = ref<Set<string>>(new Set());
-const moveOpen = ref(false);
-const copyOpen = ref(false);
 const chmodOpen = ref(false);
 const bulkDeleteOpen = ref(false);
+const operationOpen = ref(false);
+const fileOperation = ref<FileOperation>(FileOperation.Copy);
+const fileOperationRouteId = ref("");
 const destPath = ref("");
 const chmodMode = ref("");
+const chmodPresets = [
+  { label: "Owner read/write, everyone read", value: "0644" },
+  { label: "Owner read/write/execute, everyone read/execute", value: "0755" },
+  { label: "Owner only", value: "0600" },
+  { label: "Owner full access only", value: "0700" },
+  { label: "Team writable", value: "0664" },
+  { label: "Team writable executable", value: "0775" },
+  { label: "Read-only for everyone", value: "0444" },
+];
 const uploadProgress = ref<UploadProgress | null>(null);
 const uploadLabel = ref("");
+const uploadWarning = ref("");
 const mkdirOpen = ref(false);
 const renameOpen = ref(false);
 const deleteOpen = ref(false);
@@ -179,7 +196,6 @@ const selectable = computed(
     canArchive.value,
 );
 const validMode = computed(() => /^[0-7]{3,4}$/.test(chmodMode.value.trim()));
-const validDest = computed(() => Boolean(destPath.value.trim()));
 const dirty = computed(
   () =>
     Boolean(canEdit.value) &&
@@ -235,7 +251,7 @@ const statusLabel = computed(() => {
   if (operation.value === "mkdir") return "Creating folder";
   if (operation.value === "rename") return "Renaming item";
   if (operation.value === "delete") return "Deleting item";
-  if (loadingList.value) return "Loading folder";
+  if (loadingList.value) return "";
   return "";
 });
 
@@ -260,6 +276,7 @@ async function loadList(path: string): Promise<void> {
   if (!props.source) return;
   loadingList.value = true;
   listError.value = null;
+  uploadWarning.value = "";
   selected.value = null;
   selectedPaths.value = new Set();
   content.value = null;
@@ -369,6 +386,32 @@ function notifyError(e: unknown): void {
   });
 }
 
+function notifyUploadWarning(detail: string): void {
+  uploadWarning.value = detail;
+}
+
+function uploadSizeWarning(files: File[], maxBytes: number): string {
+  const names = files
+    .slice(0, 3)
+    .map((file) => file.name)
+    .join(", ");
+  const suffix = files.length > 3 ? ` and ${files.length - 3} more` : "";
+  if (files.length === 1) {
+    const file = files[0]!;
+    return `${file.name} is ${formatBytes(file.size)}. Maximum upload size is ${formatBytes(maxBytes)}.`;
+  }
+  return `${files.length} files exceed the ${formatBytes(maxBytes)} upload limit: ${names}${suffix}.`;
+}
+
+function validUploadFiles(files: File[]): File[] | null {
+  const maxBytes = uploadConfig.value?.maxBytes ?? 0;
+  if (maxBytes <= 0) return files;
+  const oversized = files.filter((file) => file.size > maxBytes);
+  if (!oversized.length) return files;
+  notifyUploadWarning(uploadSizeWarning(oversized, maxBytes));
+  return null;
+}
+
 function upload(event: FileUploadUploaderEvent): void {
   const files = Array.isArray(event.files) ? event.files : [event.files];
   void uploadFileList(files);
@@ -377,11 +420,14 @@ function upload(event: FileUploadUploaderEvent): void {
 async function uploadFileList(files: File[]): Promise<void> {
   const routeId = uploadRouteId.value;
   if (!routeId || files.length === 0) return;
+  const validFiles = validUploadFiles(files);
+  if (!validFiles) return;
+  uploadWarning.value = "";
   const total = files.reduce((sum, file) => sum + file.size, 0);
   uploadLabel.value =
-    files.length === 1
-      ? (files[0]?.name ?? "file")
-      : `${files.length} files (${formatBytes(total)})`;
+    validFiles.length === 1
+      ? (validFiles[0]?.name ?? "file")
+      : `${validFiles.length} files (${formatBytes(total)})`;
   uploadProgress.value = {
     loaded: 0,
     total,
@@ -395,7 +441,7 @@ async function uploadFileList(files: File[]): Promise<void> {
       props.connectionId,
       routeId,
       operationCtx.value,
-      files,
+      validFiles,
       operationParams(cwd.value),
       uploadFieldName.value,
       {
@@ -405,9 +451,9 @@ async function uploadFileList(files: File[]): Promise<void> {
       },
     );
     notifySuccess(
-      files.length === 1
+      validFiles.length === 1
         ? "Uploaded 1 file."
-        : `Uploaded ${files.length} files.`,
+        : `Uploaded ${validFiles.length} files.`,
     );
     await loadList(cwd.value);
   } catch (e) {
@@ -524,14 +570,24 @@ function clearSelection(): void {
   selectedPaths.value = new Set();
 }
 
+function beginFileOperation(
+  kind: FileOperation,
+  routeId: string | undefined,
+): void {
+  if (!routeId) return;
+  fileOperation.value = kind;
+  fileOperationRouteId.value = routeId;
+  operationOpen.value = true;
+}
+
 function beginMove(): void {
   destPath.value = cwd.value;
-  moveOpen.value = true;
+  beginFileOperation(FileOperation.Move, moveRouteId.value);
 }
 
 function beginCopy(): void {
   destPath.value = cwd.value;
-  copyOpen.value = true;
+  beginFileOperation(FileOperation.Copy, copyRouteId.value);
 }
 
 function beginChmod(): void {
@@ -561,34 +617,6 @@ async function bulkDelete(): Promise<void> {
     notifySuccess(
       paths.length === 1 ? "Deleted." : `Deleted ${paths.length} items.`,
     );
-    await loadList(cwd.value);
-  } catch (e) {
-    notifyError(e);
-  } finally {
-    mutating.value = false;
-    operation.value = null;
-  }
-}
-
-async function bulkTransfer(kind: "move" | "copy"): Promise<void> {
-  const routeId = kind === "move" ? moveRouteId.value : copyRouteId.value;
-  const dest = destPath.value.trim();
-  const paths = selectedEntries.value.map((e) => e.path);
-  if (!routeId || !dest || paths.length === 0) return;
-  mutating.value = true;
-  operation.value = kind;
-  try {
-    await runAction(
-      props.connectionId,
-      routeId,
-      operationCtx.value,
-      { paths, dest },
-      props.source?.params,
-    );
-    moveOpen.value = false;
-    copyOpen.value = false;
-    clearSelection();
-    notifySuccess(kind === "move" ? "Moved." : "Copied.");
     await loadList(cwd.value);
   } catch (e) {
     notifyError(e);
@@ -628,7 +656,8 @@ async function bulkChmod(): Promise<void> {
 function archiveSelected(): void {
   const routeId = archiveRouteId.value;
   const paths = selectedEntries.value.map((e) => e.path);
-  if (!routeId || paths.length === 0) return;
+  if (paths.length === 0) return;
+  if (!routeId) return;
   operation.value = "archive";
   mutating.value = true;
   downloadArchive(routeId, paths)
@@ -640,6 +669,11 @@ function archiveSelected(): void {
       mutating.value = false;
       operation.value = null;
     });
+}
+
+function onFileOperationComplete(): void {
+  clearSelection();
+  void loadList(cwd.value);
 }
 
 async function downloadArchive(
@@ -716,7 +750,7 @@ watch(
       :download-href="downloadHref"
       :download-name="selected?.name"
       :multiple-upload="multipleUpload"
-      :max-upload-bytes="fileConfig?.maxUploadBytes"
+      :max-upload-bytes="uploadConfig?.maxBytes"
       :upload-field-name="uploadFieldName"
       :mutating="mutating"
       :loading="loadingList"
@@ -728,6 +762,20 @@ watch(
       @delete="deleteOpen = true"
       @refresh="loadList(cwd)"
     />
+
+    <div
+      v-if="uploadWarning"
+      class="border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+    >
+      <AppAlert
+        tone="warning"
+        title="Upload blocked"
+        closable
+        @close="uploadWarning = ''"
+      >
+        {{ uploadWarning }}
+      </AppAlert>
+    </div>
 
     <FileSelectionBar
       v-if="selectable && hasSelection"
@@ -910,87 +958,51 @@ watch(
       </div>
     </Dialog>
 
-    <Dialog v-model:visible="moveOpen" modal header="Move selection">
-      <form
-        class="flex w-80 flex-col gap-4"
-        @submit.prevent="bulkTransfer('move')"
-      >
-        <p class="text-sm text-surface-600 dark:text-surface-300">
-          Move {{ selectionCount }}
-          {{ selectionCount === 1 ? "item" : "items" }} to:
-        </p>
-        <InputText
-          v-model="destPath"
-          autofocus
-          placeholder="/destination/folder"
-          aria-label="Destination folder"
-        />
-        <div class="flex justify-end gap-2">
-          <Button
-            type="button"
-            label="Cancel"
-            severity="secondary"
-            outlined
-            :disabled="mutating"
-            @click="moveOpen = false"
-          />
-          <Button
-            type="submit"
-            label="Move"
-            :loading="operation === 'move'"
-            :disabled="!validDest || mutating"
-          />
-        </div>
-      </form>
-    </Dialog>
-
-    <Dialog v-model:visible="copyOpen" modal header="Copy selection">
-      <form
-        class="flex w-80 flex-col gap-4"
-        @submit.prevent="bulkTransfer('copy')"
-      >
-        <p class="text-sm text-surface-600 dark:text-surface-300">
-          Copy {{ selectionCount }}
-          {{ selectionCount === 1 ? "item" : "items" }} to:
-        </p>
-        <InputText
-          v-model="destPath"
-          autofocus
-          placeholder="/destination/folder"
-          aria-label="Destination folder"
-        />
-        <div class="flex justify-end gap-2">
-          <Button
-            type="button"
-            label="Cancel"
-            severity="secondary"
-            outlined
-            :disabled="mutating"
-            @click="copyOpen = false"
-          />
-          <Button
-            type="submit"
-            label="Copy"
-            :loading="operation === 'copy'"
-            :disabled="!validDest || mutating"
-          />
-        </div>
-      </form>
-    </Dialog>
-
     <Dialog v-model:visible="chmodOpen" modal header="Change permissions">
-      <form class="flex w-80 flex-col gap-4" @submit.prevent="bulkChmod">
-        <p class="text-sm text-surface-600 dark:text-surface-300">
-          Set octal mode for {{ selectionCount }}
-          {{ selectionCount === 1 ? "item" : "items" }}:
-        </p>
-        <InputText
-          v-model="chmodMode"
-          autofocus
-          placeholder="0644"
-          aria-label="Octal permission mode"
-          :invalid="Boolean(chmodMode.trim()) && !validMode"
-        />
+      <form
+        class="flex w-96 max-w-full flex-col gap-4"
+        @submit.prevent="bulkChmod"
+      >
+        <div class="space-y-1">
+          <p class="text-sm font-medium text-surface-900 dark:text-surface-50">
+            {{ selectionCount }} {{ selectionCount === 1 ? "item" : "items" }}
+          </p>
+          <p class="text-sm text-surface-600 dark:text-surface-300">
+            Choose a common permission set or enter an octal mode.
+          </p>
+        </div>
+        <label class="space-y-1">
+          <span
+            class="text-xs font-medium text-surface-500 uppercase dark:text-surface-400"
+          >
+            Preset
+          </span>
+          <Select
+            v-model="chmodMode"
+            :options="chmodPresets"
+            option-label="label"
+            option-value="value"
+            placeholder="Choose permissions"
+            fluid
+            :disabled="mutating"
+          />
+        </label>
+        <label class="space-y-1">
+          <span
+            class="text-xs font-medium text-surface-500 uppercase dark:text-surface-400"
+          >
+            Octal mode
+          </span>
+          <InputText
+            v-model="chmodMode"
+            autofocus
+            placeholder="0644"
+            aria-label="Octal permission mode"
+            class="font-mono"
+            :invalid="Boolean(chmodMode.trim()) && !validMode"
+            :disabled="mutating"
+          />
+        </label>
         <small
           v-if="Boolean(chmodMode.trim()) && !validMode"
           class="text-danger-500"
@@ -1040,5 +1052,19 @@ watch(
         />
       </div>
     </Dialog>
+
+    <FileOperationDialog
+      v-if="operationOpen && fileOperationRouteId"
+      v-model:visible="operationOpen"
+      :connection-id="props.connectionId"
+      :ctx="operationCtx"
+      :route-id="fileOperationRouteId"
+      :operation="fileOperation"
+      :paths="selectedEntries.map((entry) => entry.path)"
+      :default-destination="destPath"
+      :folder-source="props.source"
+      :path-param="pathParam"
+      @complete="onFileOperationComplete"
+    />
   </div>
 </template>

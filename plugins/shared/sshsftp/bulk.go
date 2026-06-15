@@ -25,9 +25,9 @@ type pathsRequest struct {
 	Paths []string `json:"paths"`
 }
 
-type destRequest struct {
-	Paths []string `json:"paths"`
-	Dest  string   `json:"dest"`
+type fileOperationRequest struct {
+	Paths       []string `json:"paths"`
+	Destination string   `json:"destination"`
 }
 
 type chmodRequest struct {
@@ -45,18 +45,14 @@ func pathsSchema(groupName string) *plugin.Schema {
 	}}}}
 }
 
-func destinationSchema(groupName, help string) *plugin.Schema {
+func fileOperationSchema(groupName string) *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: groupName, Fields: []plugin.Field{
 		{
 			Key: "paths", Label: "Selection", Type: plugin.FieldArray, Required: true,
 			ItemLabel: "Path", AddLabel: "Add path", MinItems: 1,
 			Item: &plugin.Field{Type: plugin.FieldText, Required: true, Placeholder: "/path/to/item"},
 		},
-		{
-			Key: "dest", Label: "Destination folder", Type: plugin.FieldAutocomplete, Required: true,
-			Placeholder: "/destination/folder", Help: help,
-			Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^(/|~|\.)?[^\x00]*$`, Message: "Use a valid remote folder path."}},
-		},
+		{Key: "destination", Label: "Destination folder", Type: plugin.FieldText, Required: true, Placeholder: "/target/folder"},
 	}}}}
 }
 
@@ -111,16 +107,20 @@ func parseMode(raw string) (os.FileMode, error) {
 	return fs.FileMode(v), nil
 }
 
-func move(rc *plugin.RequestContext) (any, error) {
+func moveEntries(rc *plugin.RequestContext) (any, error) {
 	fsc, err := fsSession(rc)
 	if err != nil {
 		return nil, err
 	}
-	srcs, dest, err := bindDest(rc)
+	var req fileOperationRequest
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	paths, dest, err := resolveFileOperation(req)
 	if err != nil {
 		return nil, err
 	}
-	for _, src := range srcs {
+	for _, src := range paths {
 		if err := fsc.Rename(src, joinRemote(dest, path.Base(src))); err != nil {
 			return nil, mapFileError(err)
 		}
@@ -128,21 +128,37 @@ func move(rc *plugin.RequestContext) (any, error) {
 	return map[string]bool{"ok": true}, nil
 }
 
-func copyFiles(rc *plugin.RequestContext) (any, error) {
+func copyEntries(rc *plugin.RequestContext) (any, error) {
 	fsc, err := fsSession(rc)
 	if err != nil {
 		return nil, err
 	}
-	srcs, dest, err := bindDest(rc)
+	var req fileOperationRequest
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	paths, dest, err := resolveFileOperation(req)
 	if err != nil {
 		return nil, err
 	}
-	for _, src := range srcs {
+	for _, src := range paths {
 		if err := copyTree(rc.Ctx, fsc, src, joinRemote(dest, path.Base(src))); err != nil {
 			return nil, err
 		}
 	}
 	return map[string]bool{"ok": true}, nil
+}
+
+func resolveFileOperation(req fileOperationRequest) ([]string, string, error) {
+	paths, err := resolveBulkPaths(req.Paths)
+	if err != nil {
+		return nil, "", err
+	}
+	dest, err := cleanRemotePath(req.Destination)
+	if err != nil {
+		return nil, "", err
+	}
+	return paths, dest, nil
 }
 
 func copyTree(ctx context.Context, fsc *sftp.Client, src, dst string) error {
@@ -211,22 +227,6 @@ func chmod(rc *plugin.RequestContext) (any, error) {
 		}
 	}
 	return map[string]bool{"ok": true}, nil
-}
-
-func bindDest(rc *plugin.RequestContext) (paths []string, dest string, err error) {
-	var req destRequest
-	if err = rc.Bind(&req); err != nil {
-		return nil, "", err
-	}
-	dest, err = cleanRemotePath(req.Dest)
-	if err != nil {
-		return nil, "", err
-	}
-	paths, err = resolveBulkPaths(req.Paths)
-	if err != nil {
-		return nil, "", err
-	}
-	return paths, dest, nil
 }
 
 func archive(rc *plugin.RequestContext) (any, error) {

@@ -28,6 +28,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities:        []plugin.Capability{"filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutSingle,
+		Streams:             filesystem.Streams(protocolName),
 		Tabs: []plugin.Panel{filesystem.FilesTab(
 			protocolName,
 			filesystem.WithMove(protocolName),

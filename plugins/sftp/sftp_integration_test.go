@@ -82,7 +82,7 @@ func TestSFTPPluginIntegration(t *testing.T) {
 	// Move c.txt into a fresh subdirectory.
 	callIT(ctx, t, routes["sftp.sftp.mkdir"], sess, map[string]string{"path": base}, mustJSONIT(t, map[string]any{"name": "moved"}))
 	callIT(ctx, t, routes["sftp.sftp.move"], sess, nil, mustJSONIT(t, map[string]any{
-		"paths": []string{base + "/c.txt"}, "dest": base + "/moved",
+		"paths": []string{base + "/c.txt"}, "destination": base + "/moved",
 	}))
 	if got := listNamesIT(ctx, t, routes["sftp.sftp.list"], sess, base+"/moved"); !containsAll(got, "c.txt") {
 		t.Fatalf("move did not place c.txt under moved/: %v", got)
@@ -90,7 +90,7 @@ func TestSFTPPluginIntegration(t *testing.T) {
 
 	// Copy d.txt; the original must remain.
 	callIT(ctx, t, routes["sftp.sftp.copy"], sess, nil, mustJSONIT(t, map[string]any{
-		"paths": []string{base + "/d.txt"}, "dest": base + "/moved",
+		"paths": []string{base + "/d.txt"}, "destination": base + "/moved",
 	}))
 	if got := listNamesIT(ctx, t, routes["sftp.sftp.list"], sess, base); !containsAll(got, "d.txt") {
 		t.Fatalf("copy removed the source d.txt: %v", got)

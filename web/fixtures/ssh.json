@@ -193,16 +193,24 @@
       "source": { "routeId": "ssh.sftp.list", "params": { "path": "." } },
       "config": {
         "pathParam": "path",
-        "readRouteId": "ssh.sftp.read",
-        "downloadRouteId": "ssh.sftp.download",
-        "writeRouteId": "ssh.sftp.write",
-        "uploadRouteId": "ssh.sftp.upload",
-        "mkdirRouteId": "ssh.sftp.mkdir",
-        "renameRouteId": "ssh.sftp.rename",
-        "deleteRouteId": "ssh.sftp.delete",
+        "routes": {
+          "read": "ssh.sftp.read",
+          "download": "ssh.sftp.download",
+          "write": "ssh.sftp.write",
+          "mkdir": "ssh.sftp.mkdir",
+          "rename": "ssh.sftp.rename",
+          "delete": "ssh.sftp.delete"
+        },
+        "upload": {
+          "routeId": "ssh.sftp.upload",
+          "fieldName": "files",
+          "multiple": true
+        },
         "writable": true,
-        "multipleUpload": true,
-        "maxUploadBytes": 52428800
+        "jobs": {
+          "source": { "routeId": "ssh.sftp.jobs", "method": "WS" },
+          "operations": ["move", "copy"]
+        }
       }
     },
     {

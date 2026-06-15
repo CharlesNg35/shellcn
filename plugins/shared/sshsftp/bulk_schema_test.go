@@ -17,9 +17,9 @@ func TestBulkRoutesDeclareActionableInputSchemas(t *testing.T) {
 		}
 	}
 
-	moveDest := requireBulkField(t, routes["test.sftp.move"].Input, "dest")
-	if moveDest.Type != plugin.FieldAutocomplete || !moveDest.Required || moveDest.Placeholder == "" {
-		t.Fatalf("move dest should be required autocomplete path field: %+v", moveDest)
+	moveDest := requireBulkField(t, routes["test.sftp.move"].Input, "destination")
+	if moveDest.Type != plugin.FieldText || !moveDest.Required {
+		t.Fatalf("move destination should be a required text field: %+v", moveDest)
 	}
 	chmodMode := requireBulkField(t, routes["test.sftp.chmod"].Input, "mode")
 	if chmodMode.Type != plugin.FieldAutocomplete || len(chmodMode.Options) < 2 || len(chmodMode.Validators) == 0 {

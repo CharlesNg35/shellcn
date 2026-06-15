@@ -40,7 +40,6 @@ export const StreamKind = {
   Query: "query",
   Desktop: "desktop",
   Metrics: "metrics",
-  File: "file",
   Task: "task",
   Canvas: "canvas",
 } as const;
@@ -113,22 +112,37 @@ export interface TablePanelConfig {
 
 export interface FileBrowserConfig {
   pathParam?: string;
-  readRouteId?: string;
-  downloadRouteId?: string;
-  writeRouteId?: string;
-  uploadRouteId?: string;
-  mkdirRouteId?: string;
-  renameRouteId?: string;
-  deleteRouteId?: string;
-  moveRouteId?: string;
-  copyRouteId?: string;
-  chmodRouteId?: string;
-  archiveRouteId?: string;
+  routes?: FileBrowserRoutes;
+  upload?: FileUploadConfig;
   writable?: boolean;
-  multipleUpload?: boolean;
-  maxUploadBytes?: number;
-  uploadFieldName?: string;
 }
+
+export interface FileBrowserRoutes {
+  read?: string;
+  download?: string;
+  write?: string;
+  mkdir?: string;
+  rename?: string;
+  delete?: string;
+  move?: string;
+  copy?: string;
+  chmod?: string;
+  archive?: string;
+}
+
+export interface FileUploadConfig {
+  routeId?: string;
+  fieldName?: string;
+  multiple?: boolean;
+  maxBytes?: number;
+}
+
+export const FileOperation = {
+  Move: "move",
+  Copy: "copy",
+} as const;
+
+export type FileOperation = (typeof FileOperation)[keyof typeof FileOperation];
 
 export interface FormPanelConfig {
   submitRouteId?: string;
