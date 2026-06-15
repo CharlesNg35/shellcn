@@ -30,7 +30,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Resources:           resources(),
 		Actions:             actions(),
 		Streams: []plugin.Stream{
-			{ID: "mongodb.command", Kind: plugin.StreamLogs, RouteID: "mongodb.command"},
+			{ID: "mongodb.command", Kind: plugin.StreamQuery, RouteID: "mongodb.command"},
 		},
 	}
 }

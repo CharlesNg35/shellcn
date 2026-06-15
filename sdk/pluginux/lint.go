@@ -273,6 +273,8 @@ func expectedStreamKind(panel plugin.PanelType) (plugin.StreamKind, bool) {
 		return plugin.StreamTerminal, true
 	case plugin.PanelLogStream:
 		return plugin.StreamLogs, true
+	case plugin.PanelQueryEditor:
+		return plugin.StreamQuery, true
 	case plugin.PanelRemoteDesktop:
 		return plugin.StreamDesktop, true
 	case plugin.PanelMetrics:

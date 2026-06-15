@@ -37,6 +37,7 @@ export type PanelType = KnownPanelType | (string & {});
 export const StreamKind = {
   Terminal: "terminal",
   Logs: "logs",
+  Query: "query",
   Desktop: "desktop",
   Metrics: "metrics",
   File: "file",

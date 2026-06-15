@@ -377,7 +377,7 @@ type TerminalInputEffect struct {
     AppendNewline bool
 }
 
-type StreamKind string // terminal, logs, desktop, metrics, file, task
+type StreamKind string // terminal, logs, query, desktop, metrics, file, task
 type Stream struct {
     ID      string // "docker.container.logs"
     Kind    StreamKind
@@ -1221,11 +1221,14 @@ strings or structured JSON; structured values are pretty-printed before display.
 Do not use `PanelDiff` for current-state inspection; use `PanelObjectDetail` for
 structured objects and `PanelDocument` for rendered documents.
 
-`PanelQueryEditor` sends statements over its declared stream route. It may also
-declare a best-effort cancel route. It is an executable editor/results panel,
-not a plain editor; plugins that need editing without an execute affordance use
-`PanelCodeEditor` instead. Labels and language are plugin-declared so the panel
-stays protocol-neutral.
+`PanelQueryEditor` sends statements over its declared bidirectional `query`
+stream route and receives result frames on the same channel. It must not be
+declared as a `logs` stream: log streams are server-push and may have their
+client frames discarded by the core, while query streams require the handler to
+read client JSON requests. It may also declare a best-effort cancel route. It is
+an executable editor/results panel, not a plain editor; plugins that need
+editing without an execute affordance use `PanelCodeEditor` instead. Labels and
+language are plugin-declared so the panel stays protocol-neutral.
 
 ```go
 type QueryEditorConfig struct {

@@ -30,7 +30,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Resources:           resources(),
 		Actions:             actions(),
 		Streams: []plugin.Stream{
-			{ID: "postgresql.query", Kind: plugin.StreamLogs, RouteID: "postgresql.query"},
+			{ID: "postgresql.query", Kind: plugin.StreamQuery, RouteID: "postgresql.query"},
 		},
 	}
 }

@@ -97,6 +97,34 @@ func TestLintRequiresStreamDeclarationAndMatchingKind(t *testing.T) {
 	}
 }
 
+func TestLintRequiresQueryEditorQueryStream(t *testing.T) {
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "x",
+		Title:      "X",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		Tabs: []plugin.Panel{{
+			Key:    "query",
+			Label:  "Query",
+			Type:   plugin.PanelQueryEditor,
+			Source: &plugin.DataSource{RouteID: "x.query", Method: plugin.MethodWS},
+		}},
+		Streams: []plugin.Stream{{ID: "x.query", Kind: plugin.StreamLogs, RouteID: "x.query"}},
+	}
+	routes := []plugin.Route{{
+		ID: "x.query", Method: plugin.MethodWS, Permission: "x.query",
+		Risk: plugin.RiskPrivileged, Stream: stream,
+	}}
+	if !hasError(pluginux.Lint(m, routes), `stream route "x.query" is "logs" but panel "query_editor" requires "query"`) {
+		t.Fatalf("expected query stream kind mismatch error")
+	}
+	m.Streams[0].Kind = plugin.StreamQuery
+	if findings := pluginux.Errors(pluginux.Lint(m, routes)); len(findings) != 0 {
+		t.Fatalf("unexpected UX errors: %#v", findings)
+	}
+}
+
 func TestLintAcceptsTaskProgressTaskStream(t *testing.T) {
 	m := plugin.Manifest{
 		APIVersion: plugin.CurrentAPIVersion,

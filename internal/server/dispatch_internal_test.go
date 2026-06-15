@@ -18,9 +18,10 @@ func TestStreamKindHasContinuousClientReader(t *testing.T) {
 		{name: "desktop", kind: plugin.StreamDesktop, want: true},
 		{name: "canvas", kind: plugin.StreamCanvas, want: true},
 		{name: "logs", kind: plugin.StreamLogs, want: false},
+		{name: "query", kind: plugin.StreamQuery, want: false},
 		{name: "metrics", kind: plugin.StreamMetrics, want: false},
 		{name: "file", kind: plugin.StreamFile, want: false},
-		{name: "unknown", kind: plugin.StreamKind("query"), want: false},
+		{name: "unknown", kind: plugin.StreamKind("custom"), want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -42,9 +43,10 @@ func TestStreamKindKeepAlivePolicy(t *testing.T) {
 		{name: "desktop", kind: plugin.StreamDesktop, enabled: true},
 		{name: "canvas", kind: plugin.StreamCanvas, enabled: true},
 		{name: "logs", kind: plugin.StreamLogs, enabled: true, controlReader: true},
+		{name: "query", kind: plugin.StreamQuery, enabled: true},
 		{name: "metrics", kind: plugin.StreamMetrics},
 		{name: "file", kind: plugin.StreamFile},
-		{name: "unknown", kind: plugin.StreamKind("query")},
+		{name: "unknown", kind: plugin.StreamKind("custom")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
