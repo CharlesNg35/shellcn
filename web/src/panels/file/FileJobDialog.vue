@@ -474,8 +474,8 @@ watch(
 
         <div v-if="canBrowseFolders" class="space-y-2">
           <Tree
-            v-model:expandedKeys="expandedKeys"
-            v-model:selectionKeys="selectedFolderKeys"
+            v-model:expanded-keys="expandedKeys"
+            v-model:selection-keys="selectedFolderKeys"
             :value="folderNodes"
             selection-mode="single"
             :meta-key-selection="false"
