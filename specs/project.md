@@ -377,7 +377,7 @@ type TerminalInputEffect struct {
     AppendNewline bool
 }
 
-type StreamKind string // terminal, logs, query, desktop, metrics, file_job, task, canvas
+type StreamKind string // terminal, logs, query, desktop, metrics, task, canvas
 type Stream struct {
     ID      string // "docker.container.logs"
     Kind    StreamKind
@@ -1397,7 +1397,6 @@ type FileBrowserConfig struct {
     Routes    FileBrowserRoutes
     Upload    FileUploadConfig
     Writable  bool
-    Jobs     *FileJobConfig
 }
 
 type FileBrowserRoutes struct {
@@ -1407,6 +1406,8 @@ type FileBrowserRoutes struct {
     Mkdir    string // POST JSON {name} in current dir
     Rename   string // PATCH JSON {name} for selected path
     Delete   string // DELETE selected path
+    Move     string // POST JSON {paths,destination}
+    Copy     string // POST JSON {paths,destination}
     Chmod    string // POST JSON {paths,mode}
     Archive  string // POST archive download for selected paths
 }
@@ -1418,11 +1419,6 @@ type FileUploadConfig struct {
     MaxBytes  int64
 }
 
-type FileJobConfig struct {
-    Source     *DataSource              // must resolve to a StreamFileJob route
-    Operations []FileJobOperation // move, copy, archive, extract, sync
-    EmptyText  string
-}
 ```
 
 - **Listing.** The `Source` returns `Page[FileEntry]` for the current directory.
@@ -1468,37 +1464,26 @@ type FileJobConfig struct {
   is a one-time core addition, like a new `PanelType`), so it scales across all
   storage plugins without touching any of them.
 
-- **Mutations** (upload / download / mkdir / rename / delete) are ordinary
+- **Mutations** (upload / download / mkdir / rename / delete / move / copy) are ordinary
   routes carrying `risk`/`permission`/`audit` like any action (§5.3); the panel
   shows them only when the manifest declares them and `writable` is set.
   Path-bearing operations send the selected/current path through the configured
   `pathParam` under the standard `p.` query prefix (§7.1). JSON mutations carry
-  small validated request bodies (`{name}` for mkdir/rename, delete body optional
-  because the path param is authoritative). Upload uses `multipart/form-data`,
+  small validated request bodies (`{name}` for mkdir/rename,
+  `{paths,destination}` for simple move/copy, delete body optional because the
+  path param is authoritative). Upload uses `multipart/form-data`,
   appending selected browser `File` objects under `upload.fieldName` and leaving
   the browser to set the content boundary. Files can be added via the upload
   button **or dropped onto the panel** (a drop overlay appears while dragging
   when uploads are enabled); rename/mkdir submit is disabled until the value is
   non-empty and actually changed, so a no-op can't be triggered.
 
-- **Long-running file jobs.** Move/copy and other folder-scale operations use
-  `FileBrowserConfig.Jobs` with a `Source` pointing at a
-  `StreamFileJob` websocket route (`Kind: "file_job"`). The same file
-  browser then opens an inline job dialog for declared operations (`move`,
-  `copy`, `archive`, `extract`, `sync`). Destination-based operations must use
-  the file browser's list route to render a lazy folder picker; typing a path is
-  only a fallback. The renderer sends typed control frames:
-
-  ```json
-  {"type":"start","jobId":"...","operation":"copy","paths":["/a"],"destination":"/b"}
-  {"type":"cancel","jobId":"..."}
-  ```
-
-  The plugin emits `FileJobFrame` JSON with `type` values `status`,
-  `progress`, `log`, `complete`, or `error`, including optional byte/file
-  counts, percent, current path, message, and `downloadUrl`. This is intentionally
-  an optional capability of `file_browser`, not a separate panel: plugins with
-  only normal list/read/upload/download behavior never declare `StreamFileJob`.
+- **Destination operations.** Move/copy use ordinary request/response routes
+  with `{paths,destination}`. The renderer shows a lazy folder picker backed by
+  the same list route; typing a path is only a fallback. The gateway does not
+  define a file-specific stream protocol for these operations. If future
+  progress/cancel UX is needed, it should use the generic task/progress model
+  rather than a file-browser-only websocket shape.
 
 - **Selected-file pane.** Selecting a file opens a pane with a header (name,
   size, modified time, permissions, symlink target, download) above the

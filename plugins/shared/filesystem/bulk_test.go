@@ -14,7 +14,7 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-// capFS extends memFS with the optional Move/Copy/Chmod capabilities.
+// capFS extends memFS with optional Copy/Chmod capabilities.
 type capFS struct {
 	*memFS
 	modes map[string]fs.FileMode
@@ -25,10 +25,6 @@ func newCapFS() *capFS {
 }
 
 func (c *capFS) Filesystem() (Client, error) { return c, nil }
-
-func (c *capFS) Move(_ context.Context, src, dst string) error {
-	return c.Rename(context.Background(), src, dst)
-}
 
 func (c *capFS) Copy(_ context.Context, src, dst string) error {
 	data, ok := c.files[src]
@@ -68,30 +64,18 @@ func TestBulkMoveCopyChmodOnCapableBackend(t *testing.T) {
 	c.dirs["/dest"] = true
 	routes := bulkRoutes(t)
 
-	if err := runFileJob(context.Background(), c, plugin.FileJobRequest{
-		Type:        plugin.FileJobRequestStart,
-		JobID:       "move-1",
-		Operation:   string(plugin.FileJobMove),
-		Paths:       []string{"/a.txt"},
-		Destination: "/dest",
-	}, func(plugin.FileJobFrame) error { return nil }); err != nil {
+	if _, err := handle(t, routes["test.files.move"], c, mustJSON(t, map[string]any{
+		"paths": []string{"/a.txt"}, "destination": "/dest",
+	})); err != nil {
 		t.Fatalf("move: %v", err)
 	}
 	if _, ok := c.files["/dest/a.txt"]; !ok {
 		t.Fatal("move did not relocate /a.txt to /dest/a.txt")
 	}
 
-	var copyFrames []plugin.FileJobFrame
-	if err := runFileJob(context.Background(), c, plugin.FileJobRequest{
-		Type:        plugin.FileJobRequestStart,
-		JobID:       "copy-1",
-		Operation:   string(plugin.FileJobCopy),
-		Paths:       []string{"/b.txt"},
-		Destination: "/dest",
-	}, func(frame plugin.FileJobFrame) error {
-		copyFrames = append(copyFrames, frame)
-		return nil
-	}); err != nil {
+	if _, err := handle(t, routes["test.files.copy"], c, mustJSON(t, map[string]any{
+		"paths": []string{"/b.txt"}, "destination": "/dest",
+	})); err != nil {
 		t.Fatalf("copy: %v", err)
 	}
 	if _, ok := c.files["/b.txt"]; !ok {
@@ -100,10 +84,6 @@ func TestBulkMoveCopyChmodOnCapableBackend(t *testing.T) {
 	if !bytes.Equal(c.files["/dest/b.txt"], []byte("beta")) {
 		t.Fatal("copy did not duplicate the content")
 	}
-	if len(copyFrames) < 2 || copyFrames[len(copyFrames)-1].Type != plugin.FileJobFrameComplete {
-		t.Fatalf("copy frames missing completion: %+v", copyFrames)
-	}
-
 	if _, err := handle(t, routes["test.files.chmod"], c, mustJSON(t, map[string]any{
 		"paths": []string{"/dest/b.txt"}, "mode": "0600",
 	})); err != nil {
@@ -116,15 +96,16 @@ func TestBulkMoveCopyChmodOnCapableBackend(t *testing.T) {
 
 func TestBulkRoutesDeclareActionableInputSchemas(t *testing.T) {
 	routes := bulkRoutes(t)
-	for _, id := range []string{"test.files.chmod", "test.files.archive"} {
+	for _, id := range []string{"test.files.move", "test.files.copy", "test.files.chmod", "test.files.archive"} {
 		if routes[id].Input == nil {
 			t.Fatalf("%s missing input schema", id)
 		}
 	}
-	if routes["test.files.jobs"].Method != plugin.MethodWS || routes["test.files.jobs"].Stream == nil {
-		t.Fatalf("file job route should be websocket-backed: %+v", routes["test.files.jobs"])
-	}
 
+	moveDest := requireBulkField(t, routes["test.files.move"].Input, "destination")
+	if moveDest.Type != plugin.FieldText || !moveDest.Required {
+		t.Fatalf("move destination should be a required text field: %+v", moveDest)
+	}
 	chmodMode := requireBulkField(t, routes["test.files.chmod"].Input, "mode")
 	if chmodMode.Type != plugin.FieldAutocomplete || len(chmodMode.Options) < 2 || len(chmodMode.Validators) == 0 {
 		t.Fatalf("chmod mode should suggest common octal modes and validate input: %+v", chmodMode)
@@ -136,22 +117,16 @@ func TestBulkRoutesDeclareActionableInputSchemas(t *testing.T) {
 }
 
 func TestBulkUnsupportedReturnsCleanError(t *testing.T) {
-	m := newMemFS() // no Move/Copy/Chmod capabilities
+	m := newMemFS() // no Copy/Chmod capabilities
 	routes := bulkRoutes(t)
 
-	for _, op := range []plugin.FileJobOperation{plugin.FileJobMove, plugin.FileJobCopy} {
-		err := runFileJob(context.Background(), m, plugin.FileJobRequest{
-			Type:        plugin.FileJobRequestStart,
-			JobID:       "file-job-1",
-			Operation:   string(op),
-			Paths:       []string{"/x"},
-			Destination: "/d",
-		}, func(plugin.FileJobFrame) error { return nil })
-		if !errors.Is(err, plugin.ErrInvalidInput) {
-			t.Fatalf("%s: expected ErrInvalidInput for unsupported backend, got %v", op, err)
-		}
+	_, err := handle(t, routes["test.files.copy"], m, mustJSON(t, map[string]any{
+		"paths": []string{"/x"}, "destination": "/d",
+	}))
+	if !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("copy: expected ErrInvalidInput for unsupported backend, got %v", err)
 	}
-	_, err := handle(t, routes["test.files.chmod"], m, mustJSON(t, map[string]any{"paths": []string{"/x"}, "mode": "0644"}))
+	_, err = handle(t, routes["test.files.chmod"], m, mustJSON(t, map[string]any{"paths": []string{"/x"}, "mode": "0644"}))
 	if !errors.Is(err, plugin.ErrInvalidInput) {
 		t.Fatalf("chmod: expected ErrInvalidInput, got %v", err)
 	}
@@ -159,24 +134,17 @@ func TestBulkUnsupportedReturnsCleanError(t *testing.T) {
 
 func TestBulkRejectsEmptyAndRootPaths(t *testing.T) {
 	c := newCapFS()
+	routes := bulkRoutes(t)
 
-	err := runFileJob(context.Background(), c, plugin.FileJobRequest{
-		Type:        plugin.FileJobRequestStart,
-		JobID:       "file-job-1",
-		Operation:   string(plugin.FileJobMove),
-		Paths:       []string{},
-		Destination: "/d",
-	}, func(plugin.FileJobFrame) error { return nil })
+	_, err := handle(t, routes["test.files.move"], c, mustJSON(t, map[string]any{
+		"paths": []string{}, "destination": "/d",
+	}))
 	if !errors.Is(err, plugin.ErrInvalidInput) {
 		t.Fatalf("empty paths: expected ErrInvalidInput, got %v", err)
 	}
-	err = runFileJob(context.Background(), c, plugin.FileJobRequest{
-		Type:        plugin.FileJobRequestStart,
-		JobID:       "file-job-1",
-		Operation:   string(plugin.FileJobMove),
-		Paths:       []string{"/"},
-		Destination: "/d",
-	}, func(plugin.FileJobFrame) error { return nil })
+	_, err = handle(t, routes["test.files.move"], c, mustJSON(t, map[string]any{
+		"paths": []string{"/"}, "destination": "/d",
+	}))
 	if !errors.Is(err, plugin.ErrInvalidInput) {
 		t.Fatalf("root path: expected ErrInvalidInput, got %v", err)
 	}

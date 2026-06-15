@@ -725,18 +725,10 @@ func checkPanelConfigRoutes(
 		checkWriteRouteID(ctx+" routes.mkdir", c.Routes.Mkdir)
 		checkWriteRouteID(ctx+" routes.rename", c.Routes.Rename)
 		checkWriteRouteID(ctx+" routes.delete", c.Routes.Delete)
+		checkWriteRouteID(ctx+" routes.move", c.Routes.Move)
+		checkWriteRouteID(ctx+" routes.copy", c.Routes.Copy)
 		checkWriteRouteID(ctx+" routes.chmod", c.Routes.Chmod)
 		checkRouteID(ctx+" routes.archive", c.Routes.Archive)
-		if c.Jobs != nil {
-			checkStreamSource(ctx+" jobs.source", c.Jobs.Source)
-			for i, op := range c.Jobs.Operations {
-				switch op {
-				case FileJobMove, FileJobCopy, FileJobArchive, FileJobExtract, FileJobSync:
-				default:
-					add("%s jobs.operations[%d] has unsupported operation %q", ctx, i, op)
-				}
-			}
-		}
 	case FormPanelConfig:
 		checkWriteRouteID(ctx+" submitRouteId", c.SubmitRouteID)
 		validateWriteConfigMethod(ctx+" submitMethod", c.SubmitMethod, add)

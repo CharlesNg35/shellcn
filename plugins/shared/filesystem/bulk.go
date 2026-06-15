@@ -3,14 +3,12 @@ package filesystem
 import (
 	"archive/zip"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
 	"path"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
@@ -18,11 +16,6 @@ import (
 // Optional Client capabilities. The base Client interface stays minimal so every
 // backend keeps working; handlers type-assert these and report a clean
 // unsupported error when a backend doesn't implement one.
-
-// Mover relocates a path within the backend.
-type Mover interface {
-	Move(ctx context.Context, src, dst string) error
-}
 
 // Copier duplicates a path within the backend.
 type Copier interface {
@@ -49,6 +42,11 @@ type pathsRequest struct {
 	Paths []string `json:"paths"`
 }
 
+type fileOperationRequest struct {
+	Paths       []string `json:"paths"`
+	Destination string   `json:"destination"`
+}
+
 type chmodRequest struct {
 	Paths []string `json:"paths"`
 	Mode  string   `json:"mode"`
@@ -61,6 +59,17 @@ func pathsSchema(groupName string) *plugin.Schema {
 			ItemLabel: "Path", AddLabel: "Add path", MinItems: 1,
 			Item: &plugin.Field{Type: plugin.FieldText, Required: true, Placeholder: "/path/to/item"},
 		},
+	}}}}
+}
+
+func fileOperationSchema(groupName string) *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: groupName, Fields: []plugin.Field{
+		{
+			Key: "paths", Label: "Selection", Type: plugin.FieldArray, Required: true,
+			ItemLabel: "Path", AddLabel: "Add path", MinItems: 1,
+			Item: &plugin.Field{Type: plugin.FieldText, Required: true, Placeholder: "/path/to/item"},
+		},
+		{Key: "destination", Label: "Destination folder", Type: plugin.FieldText, Required: true, Placeholder: "/target/folder"},
 	}}}}
 }
 
@@ -118,165 +127,62 @@ func parseMode(raw string) (fs.FileMode, error) {
 	return fs.FileMode(v), nil
 }
 
-func fileJob(rc *plugin.RequestContext, client plugin.ClientStream) error {
+func moveEntries(rc *plugin.RequestContext) (any, error) {
 	c, err := fsSession(rc)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	dec := json.NewDecoder(client)
-	enc := json.NewEncoder(client)
-	var mu sync.Mutex
-	var cancel context.CancelFunc
-	active := false
-
-	writeFrame := func(frame plugin.FileJobFrame) error {
-		mu.Lock()
-		defer mu.Unlock()
-		return enc.Encode(frame)
+	var req fileOperationRequest
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
 	}
-
-	for {
-		var req plugin.FileJobRequest
-		if err := dec.Decode(&req); err != nil {
-			if cancel != nil {
-				cancel()
-			}
-			return err
-		}
-		switch req.Type {
-		case plugin.FileJobRequestCancel:
-			if cancel != nil {
-				cancel()
-			}
-		case plugin.FileJobRequestStart:
-			mu.Lock()
-			if active {
-				mu.Unlock()
-				_ = writeFrame(plugin.FileJobFrame{
-					Type:  plugin.FileJobFrameError,
-					JobID: req.JobID,
-					Error: "Another file job is already running.",
-				})
-				continue
-			}
-			var ctx context.Context
-			ctx, cancel = context.WithCancel(client.Context())
-			active = true
-			mu.Unlock()
-			go func(req plugin.FileJobRequest) {
-				defer func() {
-					mu.Lock()
-					active = false
-					cancel = nil
-					mu.Unlock()
-				}()
-				if err := runFileJob(ctx, c, req, writeFrame); err != nil {
-					_ = writeFrame(plugin.FileJobFrame{
-						Type:      plugin.FileJobFrameError,
-						JobID:     req.JobID,
-						Operation: req.Operation,
-						Error:     err.Error(),
-					})
-				}
-			}(req)
+	paths, dest, err := resolveFileOperation(req)
+	if err != nil {
+		return nil, err
+	}
+	for _, src := range paths {
+		if err := c.Rename(rc.Ctx, src, joinRemote(dest, path.Base(src))); err != nil {
+			return nil, mapClientError(c, err)
 		}
 	}
+	return map[string]bool{"ok": true}, nil
 }
 
-func runFileJob(ctx context.Context, c Client, req plugin.FileJobRequest, writeFrame func(plugin.FileJobFrame) error) error {
+func copyEntries(rc *plugin.RequestContext) (any, error) {
+	c, err := fsSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	copier, ok := c.(Copier)
+	if !ok {
+		return nil, errUnsupported("copy")
+	}
+	var req fileOperationRequest
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	paths, dest, err := resolveFileOperation(req)
+	if err != nil {
+		return nil, err
+	}
+	for _, src := range paths {
+		if err := copier.Copy(rc.Ctx, src, joinRemote(dest, path.Base(src))); err != nil {
+			return nil, mapClientError(c, err)
+		}
+	}
+	return map[string]bool{"ok": true}, nil
+}
+
+func resolveFileOperation(req fileOperationRequest) ([]string, string, error) {
 	paths, err := resolvePaths(req.Paths)
 	if err != nil {
-		return err
+		return nil, "", err
 	}
 	dest, err := cleanRemotePath(req.Destination)
 	if err != nil {
-		return err
+		return nil, "", err
 	}
-	switch plugin.FileJobOperation(req.Operation) {
-	case plugin.FileJobMove:
-		mover, ok := c.(Mover)
-		if !ok {
-			return errUnsupported("move")
-		}
-		return jobEach(ctx, c, mover.Move, req, paths, dest, writeFrame)
-	case plugin.FileJobCopy:
-		copier, ok := c.(Copier)
-		if !ok {
-			return errUnsupported("copy")
-		}
-		return jobEach(ctx, c, copier.Copy, req, paths, dest, writeFrame)
-	default:
-		return errUnsupported(req.Operation)
-	}
-}
-
-func jobEach(
-	ctx context.Context,
-	c Client,
-	run func(context.Context, string, string) error,
-	req plugin.FileJobRequest,
-	paths []string,
-	dest string,
-	writeFrame func(plugin.FileJobFrame) error,
-) error {
-	total := len(paths)
-	if err := writeFrame(plugin.FileJobFrame{
-		Type:       plugin.FileJobFrameStatus,
-		JobID:      req.JobID,
-		Operation:  req.Operation,
-		Status:     "Starting",
-		FilesTotal: total,
-	}); err != nil {
-		return err
-	}
-	for i, src := range paths {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		dst := joinRemote(dest, path.Base(src))
-		pct := float64(i) / float64(total) * 100
-		if err := writeFrame(plugin.FileJobFrame{
-			Type:       plugin.FileJobFrameProgress,
-			JobID:      req.JobID,
-			Operation:  req.Operation,
-			Status:     jobOperationLabel(req.Operation),
-			Path:       src,
-			Percent:    &pct,
-			FilesDone:  i,
-			FilesTotal: total,
-			Message:    fmt.Sprintf("%s %s", jobOperationLabel(req.Operation), src),
-		}); err != nil {
-			return err
-		}
-		if err := run(ctx, src, dst); err != nil {
-			return mapClientError(c, err)
-		}
-	}
-	done := 100.0
-	return writeFrame(plugin.FileJobFrame{
-		Type:       plugin.FileJobFrameComplete,
-		JobID:      req.JobID,
-		Operation:  req.Operation,
-		Status:     "Complete",
-		Percent:    &done,
-		FilesDone:  total,
-		FilesTotal: total,
-		Message:    "Job complete.",
-	})
-}
-
-func jobOperationLabel(operation string) string {
-	switch plugin.FileJobOperation(operation) {
-	case plugin.FileJobMove:
-		return "Move"
-	case plugin.FileJobCopy:
-		return "Copy"
-	default:
-		if operation == "" {
-			return "File operation"
-		}
-		return operation
-	}
+	return paths, dest, nil
 }
 
 func chmod(rc *plugin.RequestContext) (any, error) {

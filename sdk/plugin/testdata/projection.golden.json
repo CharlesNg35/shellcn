@@ -612,57 +612,6 @@
     "file_browser": {
       "type": "object",
       "properties": {
-        "jobs": {
-          "type": "object",
-          "properties": {
-            "emptyText": {
-              "type": "string"
-            },
-            "operations": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "move",
-                  "copy",
-                  "archive",
-                  "extract",
-                  "sync"
-                ]
-              }
-            },
-            "source": {
-              "type": "object",
-              "properties": {
-                "method": {
-                  "type": "string",
-                  "enum": [
-                    "GET",
-                    "POST",
-                    "PUT",
-                    "PATCH",
-                    "DELETE",
-                    "WS"
-                  ]
-                },
-                "params": {
-                  "type": "object",
-                  "properties": {
-                    "*": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "routeId": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "routeId"
-              ]
-            }
-          }
-        },
         "pathParam": {
           "type": "string"
         },
@@ -675,6 +624,9 @@
             "chmod": {
               "type": "string"
             },
+            "copy": {
+              "type": "string"
+            },
             "delete": {
               "type": "string"
             },
@@ -682,6 +634,9 @@
               "type": "string"
             },
             "mkdir": {
+              "type": "string"
+            },
+            "move": {
               "type": "string"
             },
             "read": {

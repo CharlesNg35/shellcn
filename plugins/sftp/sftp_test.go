@@ -21,11 +21,12 @@ func TestManifestIsFileOnly(t *testing.T) {
 		t.Fatalf("sftp should expose only file_browser tab: %+v", m.Tabs)
 	}
 	cfg, ok := m.Tabs[0].Config.(plugin.FileBrowserConfig)
-	if !ok || cfg.Jobs == nil || len(cfg.Jobs.Operations) != 2 || cfg.Routes.Chmod == "" || cfg.Routes.Archive == "" {
+	if !ok || cfg.Routes.Move == "" || cfg.Routes.Copy == "" ||
+		cfg.Routes.Chmod == "" || cfg.Routes.Archive == "" {
 		t.Fatalf("sftp file browser missing bulk affordances: %#v", m.Tabs[0].Config)
 	}
-	if len(m.Streams) != 1 || m.Streams[0].Kind != plugin.StreamFileJob || len(m.Recording) != 0 {
-		t.Fatalf("sftp must expose only file job streams/recording: streams=%+v recording=%+v", m.Streams, m.Recording)
+	if len(m.Streams) != 0 || len(m.Recording) != 0 {
+		t.Fatalf("sftp must not expose streams/recording: streams=%+v recording=%+v", m.Streams, m.Recording)
 	}
 	for _, route := range sftp.New().Routes() {
 		if route.ID == "sftp.shell" {

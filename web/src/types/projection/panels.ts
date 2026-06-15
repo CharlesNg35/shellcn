@@ -40,7 +40,6 @@ export const StreamKind = {
   Query: "query",
   Desktop: "desktop",
   Metrics: "metrics",
-  FileJob: "file_job",
   Task: "task",
   Canvas: "canvas",
 } as const;
@@ -116,7 +115,6 @@ export interface FileBrowserConfig {
   routes?: FileBrowserRoutes;
   upload?: FileUploadConfig;
   writable?: boolean;
-  jobs?: FileJobConfig;
 }
 
 export interface FileBrowserRoutes {
@@ -126,6 +124,8 @@ export interface FileBrowserRoutes {
   mkdir?: string;
   rename?: string;
   delete?: string;
+  move?: string;
+  copy?: string;
   chmod?: string;
   archive?: string;
 }
@@ -137,22 +137,12 @@ export interface FileUploadConfig {
   maxBytes?: number;
 }
 
-export const FileJobOperation = {
+export const FileOperation = {
   Move: "move",
   Copy: "copy",
-  Archive: "archive",
-  Extract: "extract",
-  Sync: "sync",
 } as const;
 
-export type FileJobOperation =
-  (typeof FileJobOperation)[keyof typeof FileJobOperation];
-
-export interface FileJobConfig {
-  source?: DataSource;
-  operations?: FileJobOperation[];
-  emptyText?: string;
-}
+export type FileOperation = (typeof FileOperation)[keyof typeof FileOperation];
 
 export interface FormPanelConfig {
   submitRouteId?: string;

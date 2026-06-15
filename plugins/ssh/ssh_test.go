@@ -38,8 +38,8 @@ func TestManifestExposesTerminalAndFiles(t *testing.T) {
 	fb, ok := files.Config.(plugin.FileBrowserConfig)
 	if !ok || fb.Routes.Read == "" || fb.Routes.Download == "" || fb.Upload.RouteID == "" ||
 		fb.Routes.Mkdir == "" || fb.Routes.Rename == "" || fb.Routes.Delete == "" ||
-		fb.Routes.Chmod == "" || fb.Routes.Archive == "" || fb.Jobs == nil ||
-		len(fb.Jobs.Operations) != 2 {
+		fb.Routes.Move == "" || fb.Routes.Copy == "" ||
+		fb.Routes.Chmod == "" || fb.Routes.Archive == "" {
 		t.Fatalf("files config missing route ids: %#v", files.Config)
 	}
 	if len(m.Recording) != 1 || m.Recording[0].Class != plugin.RecordingTerminal {

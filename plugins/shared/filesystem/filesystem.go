@@ -90,25 +90,26 @@ func Routes(prefix, protocol string) []plugin.Route {
 		{ID: prefix + ".files.mkdir", Method: plugin.MethodPost, Path: "/files/mkdir/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.mkdir", Input: nameSchema("Folder"), Handle: mkdir},
 		{ID: prefix + ".files.rename", Method: plugin.MethodPatch, Path: "/files/rename/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.rename", Input: nameSchema("Name"), Handle: renameEntry},
 		{ID: prefix + ".files.delete", Method: plugin.MethodDelete, Path: "/files/delete/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskDestructive, AuditEvent: protocol + ".files.delete", Handle: deleteEntry},
+		{ID: prefix + ".files.move", Method: plugin.MethodPost, Path: "/files/move", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.move", Input: fileOperationSchema("Move"), Handle: moveEntries},
+		{ID: prefix + ".files.copy", Method: plugin.MethodPost, Path: "/files/copy", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.copy", Input: fileOperationSchema("Copy"), Handle: copyEntries},
 		{ID: prefix + ".files.chmod", Method: plugin.MethodPost, Path: "/files/chmod", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.chmod", Input: chmodSchema(), Handle: chmod},
 		{ID: prefix + ".files.archive", Method: plugin.MethodPost, Path: "/files/archive", Permission: protocol + ".files.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".files.archive", Input: pathsSchema("Archive"), Handle: archive},
-		{ID: prefix + ".files.jobs", Method: plugin.MethodWS, Path: "/files/jobs", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.jobs", Stream: fileJob},
 	}
 }
 
 func Streams(prefix string) []plugin.Stream {
-	return []plugin.Stream{{ID: prefix + ".files.jobs", Kind: plugin.StreamFileJob, RouteID: prefix + ".files.jobs"}}
+	return nil
 }
 
 // FilesOption opts a FilesTab into optional filesystem operations a backend supports.
 type FilesOption func(*plugin.FileBrowserConfig)
 
 func WithMove(prefix string) FilesOption {
-	return func(c *plugin.FileBrowserConfig) { addJobOperation(c, prefix, plugin.FileJobMove) }
+	return func(c *plugin.FileBrowserConfig) { c.Routes.Move = prefix + ".files.move" }
 }
 
 func WithCopy(prefix string) FilesOption {
-	return func(c *plugin.FileBrowserConfig) { addJobOperation(c, prefix, plugin.FileJobCopy) }
+	return func(c *plugin.FileBrowserConfig) { c.Routes.Copy = prefix + ".files.copy" }
 }
 
 func WithChmod(prefix string) FilesOption {
@@ -117,20 +118,6 @@ func WithChmod(prefix string) FilesOption {
 
 func WithArchive(prefix string) FilesOption {
 	return func(c *plugin.FileBrowserConfig) { c.Routes.Archive = prefix + ".files.archive" }
-}
-
-func addJobOperation(c *plugin.FileBrowserConfig, prefix string, op plugin.FileJobOperation) {
-	if c.Jobs == nil {
-		c.Jobs = &plugin.FileJobConfig{
-			Source: &plugin.DataSource{RouteID: prefix + ".files.jobs", Method: plugin.MethodWS},
-		}
-	}
-	for _, existing := range c.Jobs.Operations {
-		if existing == op {
-			return
-		}
-	}
-	c.Jobs.Operations = append(c.Jobs.Operations, op)
 }
 
 func FilesTab(prefix string, opts ...FilesOption) plugin.Panel {

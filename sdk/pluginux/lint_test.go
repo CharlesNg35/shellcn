@@ -149,40 +149,6 @@ func TestLintAcceptsTaskProgressTaskStream(t *testing.T) {
 	}
 }
 
-func TestLintRequiresFileBrowserTransferFileStream(t *testing.T) {
-	m := plugin.Manifest{
-		APIVersion: plugin.CurrentAPIVersion,
-		Name:       "x",
-		Title:      "X",
-		Category:   plugin.CategoryOther,
-		Layout:     plugin.LayoutTabs,
-		Tabs: []plugin.Panel{{
-			Key:    "files",
-			Label:  "Files",
-			Type:   plugin.PanelFileBrowser,
-			Source: &plugin.DataSource{RouteID: "x.list"},
-			Config: plugin.FileBrowserConfig{
-				Jobs: &plugin.FileJobConfig{
-					Source:     &plugin.DataSource{RouteID: "x.transfer", Method: plugin.MethodWS},
-					Operations: []plugin.FileJobOperation{plugin.FileJobCopy},
-				},
-			},
-		}},
-		Streams: []plugin.Stream{{ID: "x.transfer", Kind: plugin.StreamLogs, RouteID: "x.transfer"}},
-	}
-	routes := []plugin.Route{
-		{ID: "x.list", Method: plugin.MethodGet, Permission: "x.files", Risk: plugin.RiskSafe, Handle: noop},
-		{ID: "x.transfer", Method: plugin.MethodWS, Permission: "x.write", Risk: plugin.RiskWrite, Stream: stream},
-	}
-	if !hasError(pluginux.Lint(m, routes), `stream route "x.transfer" is "logs" but requires "file_job"`) {
-		t.Fatalf("expected file job stream kind mismatch error")
-	}
-	m.Streams[0].Kind = plugin.StreamFileJob
-	if findings := pluginux.Errors(pluginux.Lint(m, routes)); len(findings) != 0 {
-		t.Fatalf("unexpected UX errors: %#v", findings)
-	}
-}
-
 func TestLintAcceptsCanvasStream(t *testing.T) {
 	m := plugin.Manifest{
 		APIVersion: plugin.CurrentAPIVersion,

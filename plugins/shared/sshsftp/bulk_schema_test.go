@@ -11,15 +11,16 @@ func TestBulkRoutesDeclareActionableInputSchemas(t *testing.T) {
 	for _, route := range Routes("test", "test", false) {
 		routes[route.ID] = route
 	}
-	for _, id := range []string{"test.sftp.chmod", "test.sftp.archive"} {
+	for _, id := range []string{"test.sftp.move", "test.sftp.copy", "test.sftp.chmod", "test.sftp.archive"} {
 		if routes[id].Input == nil {
 			t.Fatalf("%s missing input schema", id)
 		}
 	}
-	if routes["test.sftp.jobs"].Method != plugin.MethodWS || routes["test.sftp.jobs"].Stream == nil {
-		t.Fatalf("file job route should be websocket-backed: %+v", routes["test.sftp.jobs"])
-	}
 
+	moveDest := requireBulkField(t, routes["test.sftp.move"].Input, "destination")
+	if moveDest.Type != plugin.FieldText || !moveDest.Required {
+		t.Fatalf("move destination should be a required text field: %+v", moveDest)
+	}
 	chmodMode := requireBulkField(t, routes["test.sftp.chmod"].Input, "mode")
 	if chmodMode.Type != plugin.FieldAutocomplete || len(chmodMode.Options) < 2 || len(chmodMode.Validators) == 0 {
 		t.Fatalf("chmod mode should suggest common octal modes and validate input: %+v", chmodMode)

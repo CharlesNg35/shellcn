@@ -3,7 +3,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "@/test/fetchMock";
-import { FileJobOperation, type FileBrowserConfig } from "@/types/projection";
+import type { FileBrowserConfig } from "@/types/projection";
 import FileBrowserPanel from "./FileBrowserPanel.vue";
 import FileToolbar from "./FileToolbar.vue";
 
@@ -123,19 +123,17 @@ function writableConfig(): TestFileBrowserConfig {
   } as TestFileBrowserConfig;
 }
 
-function bulkConfig() {
+function bulkConfig(): TestFileBrowserConfig {
   return {
     ...writableConfig(),
     routes: {
       ...writableConfig().routes,
+      move: "ssh.sftp.move",
+      copy: "ssh.sftp.copy",
       chmod: "ssh.sftp.chmod",
       archive: "ssh.sftp.archive",
     },
-    jobs: {
-      source: { routeId: "ssh.sftp.jobs", method: "WS" },
-      operations: [FileJobOperation.Move, FileJobOperation.Copy],
-    },
-  };
+  } as TestFileBrowserConfig;
 }
 
 function bodyButton(text: string): HTMLButtonElement | undefined {
@@ -619,7 +617,7 @@ describe("FileBrowserPanel", () => {
 
   it("hides a bulk button when its route id is absent", async () => {
     const config = bulkConfig();
-    config.jobs.operations = [FileJobOperation.Copy];
+    config.routes!.move = undefined;
     const w = mount(FileBrowserPanel, {
       props: {
         connectionId: "c1",
@@ -635,7 +633,7 @@ describe("FileBrowserPanel", () => {
     await flushPromises();
 
     expect(w.text()).toContain("1 selected");
-    // Move slot removed → no Move button; Copy slot still present.
+    // Move route removed → no Move button; Copy route still present.
     expect(w.findAll("button").some((b) => b.text().includes("Move"))).toBe(
       false,
     );
@@ -732,7 +730,7 @@ describe("FileBrowserPanel", () => {
     });
   });
 
-  it("opens a move job dialog with the current folder as destination", async () => {
+  it("opens a move dialog with the current folder as destination", async () => {
     vi.unstubAllGlobals();
     installFetch((_url, init) => {
       if (init?.method && init.method !== "GET") return { body: { ok: true } };
@@ -761,7 +759,7 @@ describe("FileBrowserPanel", () => {
 
     expect(document.body.textContent).toContain("Move 1 item");
     const input = document.body.querySelector(
-      'input[aria-label="Job destination"]',
+      'input[aria-label="Operation destination"]',
     ) as HTMLInputElement;
     expect(input.value).toBe("/");
   });

@@ -321,6 +321,17 @@ func (c *Client) Rename(ctx context.Context, from, to string) error {
 	return err
 }
 
+func (c *Client) Copy(ctx context.Context, from, to string) error {
+	info, err := c.Stat(ctx, from)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return c.copyPrefix(ctx, strings.TrimSuffix(c.key(from), "/")+"/", strings.TrimSuffix(c.key(to), "/")+"/")
+	}
+	return c.copyObject(ctx, c.key(from), c.key(to))
+}
+
 func (c *Client) Remove(ctx context.Context, p string, isDir bool) error {
 	if isDir {
 		return c.deletePrefix(ctx, strings.TrimSuffix(c.key(p), "/")+"/")
@@ -350,16 +361,34 @@ func (c *Client) renamePrefix(ctx context.Context, fromPrefix, toPrefix string) 
 	}
 	for _, key := range keys {
 		dst := toPrefix + strings.TrimPrefix(key, fromPrefix)
-		_, err := c.s3.CopyObject(ctx, &awss3.CopyObjectInput{
-			Bucket:     aws.String(c.bucket),
-			Key:        aws.String(dst),
-			CopySource: aws.String(url.PathEscape(c.bucket + "/" + key)),
-		})
-		if err != nil {
+		if err := c.copyObject(ctx, key, dst); err != nil {
 			return err
 		}
 	}
 	return c.deleteKeys(ctx, keys)
+}
+
+func (c *Client) copyPrefix(ctx context.Context, fromPrefix, toPrefix string) error {
+	keys, err := c.listKeys(ctx, fromPrefix)
+	if err != nil {
+		return err
+	}
+	for _, key := range keys {
+		dst := toPrefix + strings.TrimPrefix(key, fromPrefix)
+		if err := c.copyObject(ctx, key, dst); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) copyObject(ctx context.Context, fromKey, toKey string) error {
+	_, err := c.s3.CopyObject(ctx, &awss3.CopyObjectInput{
+		Bucket:     aws.String(c.bucket),
+		Key:        aws.String(toKey),
+		CopySource: aws.String(url.PathEscape(c.bucket + "/" + fromKey)),
+	})
+	return err
 }
 
 func (c *Client) deletePrefix(ctx context.Context, prefix string) error {

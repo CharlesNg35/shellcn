@@ -23,7 +23,8 @@ func TestFilesystemPluginsValidateAndRegister(t *testing.T) {
 		}
 		fb, ok := proj.Tabs[0].Config.(plugin.FileBrowserConfig)
 		if !ok || fb.Routes.Read == "" || fb.Routes.Download == "" || fb.Upload.RouteID == "" ||
-			fb.Routes.Mkdir == "" || fb.Routes.Rename == "" || fb.Routes.Delete == "" {
+			fb.Routes.Mkdir == "" || fb.Routes.Rename == "" || fb.Routes.Delete == "" ||
+			fb.Routes.Move == "" || fb.Routes.Copy == "" {
 			t.Fatalf("%s files config missing route ids: %#v", name, proj.Tabs[0].Config)
 		}
 	}

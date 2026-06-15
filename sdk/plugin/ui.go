@@ -75,7 +75,6 @@ const (
 	StreamQuery    StreamKind = "query"
 	StreamDesktop  StreamKind = "desktop"
 	StreamMetrics  StreamKind = "metrics"
-	StreamFileJob  StreamKind = "file_job"
 	StreamTask     StreamKind = "task"
 	StreamCanvas   StreamKind = "canvas"
 )
@@ -172,19 +171,15 @@ type TableConfig struct {
 	RowClick RowClickAction `json:"rowClick,omitempty"`
 }
 
-// FileBrowserConfig wires the generic file browser to plugin routes. Keep
-// request/response routes, upload settings, and stream-backed jobs separate so
-// manifests stay readable as file capabilities grow.
+// FileBrowserConfig wires the generic file browser to plugin routes.
 type FileBrowserConfig struct {
 	PathParam string            `json:"pathParam,omitempty"`
 	Routes    FileBrowserRoutes `json:"routes,omitempty"`
 	Upload    FileUploadConfig  `json:"upload,omitempty"`
 	Writable  bool              `json:"writable,omitempty"`
-	Jobs      *FileJobConfig    `json:"jobs,omitempty"`
 }
 
-// FileBrowserRoutes groups request/response file operations. Long-running
-// file jobs belong in FileJobConfig instead.
+// FileBrowserRoutes groups request/response file operations.
 type FileBrowserRoutes struct {
 	Read     string `json:"read,omitempty"`
 	Download string `json:"download,omitempty"`
@@ -192,6 +187,8 @@ type FileBrowserRoutes struct {
 	Mkdir    string `json:"mkdir,omitempty"`
 	Rename   string `json:"rename,omitempty"`
 	Delete   string `json:"delete,omitempty"`
+	Move     string `json:"move,omitempty"`
+	Copy     string `json:"copy,omitempty"`
 	Chmod    string `json:"chmod,omitempty"`
 	Archive  string `json:"archive,omitempty"`
 }
@@ -202,26 +199,6 @@ type FileUploadConfig struct {
 	FieldName string `json:"fieldName,omitempty"`
 	Multiple  bool   `json:"multiple,omitempty"`
 	MaxBytes  int64  `json:"maxBytes,omitempty"`
-}
-
-// FileJobOperation names a long-running filesystem operation driven by a
-// file browser job stream.
-type FileJobOperation string
-
-const (
-	FileJobMove    FileJobOperation = "move"
-	FileJobCopy    FileJobOperation = "copy"
-	FileJobArchive FileJobOperation = "archive"
-	FileJobExtract FileJobOperation = "extract"
-	FileJobSync    FileJobOperation = "sync"
-)
-
-// FileJobConfig enables progress-aware file operations inside a
-// FileBrowser panel. Source must point at a StreamFileJob route.
-type FileJobConfig struct {
-	Source     *DataSource        `json:"source,omitempty"`
-	Operations []FileJobOperation `json:"operations,omitempty"`
-	EmptyText  string             `json:"emptyText,omitempty"`
 }
 
 type FormPanelConfig struct {

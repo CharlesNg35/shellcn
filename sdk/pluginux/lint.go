@@ -198,10 +198,6 @@ func (l *linter) panels(path string, panels []plugin.Panel) {
 func (l *linter) panel(path string, p plugin.Panel) {
 	l.streamMatch(path, p)
 	switch c := p.Config.(type) {
-	case plugin.FileBrowserConfig:
-		if c.Jobs != nil {
-			l.streamSourceMatch(path+" jobs.source", c.Jobs.Source, plugin.StreamFileJob)
-		}
 	case plugin.TableConfig:
 		if len(c.Columns) == 0 && c.ColumnsSource == nil {
 			l.add(Warning, path, "table should declare columns or columnsSource")

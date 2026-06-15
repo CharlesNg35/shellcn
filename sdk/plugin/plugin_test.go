@@ -198,20 +198,6 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 			*r = append(*r, plugin.Route{ID: "x.upload", Method: plugin.MethodPost, Permission: "x.write", Risk: plugin.RiskWrite, Handle: noop})
 			m.Tabs = []plugin.Panel{{Key: "files", Label: "Files", Type: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{Upload: plugin.FileUploadConfig{RouteID: "x.upload"}}}}
 		}},
-		{"file browser job source must be stream", "invalid stream method", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Panel{{Key: "files", Label: "Files", Type: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{
-				Jobs: &plugin.FileJobConfig{Source: &plugin.DataSource{RouteID: "x.list"}},
-			}}}
-		}},
-		{"file browser job operation must be known", "unsupported operation", func(m *plugin.Manifest, r *[]plugin.Route) {
-			*r = append(*r, plugin.Route{ID: "x.transfer", Method: plugin.MethodWS, Permission: "x.write", Risk: plugin.RiskWrite, Stream: func(*plugin.RequestContext, plugin.ClientStream) error { return nil }})
-			m.Tabs = []plugin.Panel{{Key: "files", Label: "Files", Type: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{
-				Jobs: &plugin.FileJobConfig{
-					Source:     &plugin.DataSource{RouteID: "x.transfer"},
-					Operations: []plugin.FileJobOperation{"compress"},
-				},
-			}}}
-		}},
 		{"form submit route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Tabs = []plugin.Panel{{Key: "form", Label: "Form", Type: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FormPanelConfig{SubmitRouteID: "x.list"}}}
 		}},
