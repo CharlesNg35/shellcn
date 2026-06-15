@@ -116,6 +116,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		Streams: []plugin.Stream{
 			{ID: "sample.shell", Kind: plugin.StreamTerminal, RouteID: "sample.shell"},
 			{ID: "sample.logs", Kind: plugin.StreamLogs, RouteID: "sample.logs"},
+			{ID: "sample.query", Kind: plugin.StreamQuery, RouteID: "sample.query"},
 		},
 		Recording: []plugin.RecordingCapability{{
 			Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2},

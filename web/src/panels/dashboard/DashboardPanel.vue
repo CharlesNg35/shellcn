@@ -31,6 +31,8 @@ const variantData = computed<Record<string, unknown>>(() =>
     :cells="cells"
     :actions="props.actions ?? []"
     :variant-data="variantData"
+    :resource="props.resource"
+    :record="props.record"
     @action-done="(action, result) => emit('actionDone', action, result)"
     @select="(row) => emit('select', row)"
   />

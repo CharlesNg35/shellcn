@@ -317,6 +317,11 @@
       "id": "sample.logs",
       "kind": "logs",
       "routeId": "sample.logs"
+    },
+    {
+      "id": "sample.query",
+      "kind": "query",
+      "routeId": "sample.query"
     }
   ],
   "recording": [

@@ -72,6 +72,7 @@ type StreamKind string
 const (
 	StreamTerminal StreamKind = "terminal"
 	StreamLogs     StreamKind = "logs"
+	StreamQuery    StreamKind = "query"
 	StreamDesktop  StreamKind = "desktop"
 	StreamMetrics  StreamKind = "metrics"
 	StreamFile     StreamKind = "file"

@@ -2,7 +2,13 @@
 import AppIcon from "@/components/AppIcon.vue";
 import PanelHost from "../core/PanelHost.vue";
 import { resolvedPanelConfig, resolvedPanelType } from "../core/variants";
-import type { Action, DashboardCell, PanelType, Row } from "@/types/projection";
+import type {
+  Action,
+  DashboardCell,
+  PanelType,
+  ResourceIdentity,
+  Row,
+} from "@/types/projection";
 
 // Presentational, layout-only: a responsive grid of panel cards rendered at once.
 // Shared by the connection-level `dashboard` layout and the `dashboard` panel
@@ -17,6 +23,8 @@ const props = withDefaults(
     resolveConfig?: (cell: DashboardCell) => Record<string, unknown>;
     resolvePanel?: (cell: DashboardCell) => PanelType;
     variantData?: Record<string, unknown> | null;
+    resource?: ResourceIdentity | null;
+    record?: Row | null;
     emptyText?: string;
   }>(),
   {
@@ -24,6 +32,8 @@ const props = withDefaults(
     resolveConfig: undefined,
     resolvePanel: undefined,
     variantData: null,
+    resource: null,
+    record: null,
     emptyText: "No panels.",
   },
 );
@@ -78,6 +88,8 @@ function onCardAction(action: Action, result?: Record<string, unknown>): void {
             :connection-id="props.connectionId"
             :source="cell.source"
             :config="cellConfig(cell)"
+            :resource="props.resource"
+            :record="props.record"
             :actions="props.actions"
             @action-done="onCardAction"
             @select="(row) => emit('select', row)"

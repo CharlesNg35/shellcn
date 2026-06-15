@@ -377,7 +377,7 @@ type TerminalInputEffect struct {
     AppendNewline bool
 }
 
-type StreamKind string // terminal, logs, desktop, metrics, file, task
+type StreamKind string // terminal, logs, query, desktop, metrics, file, task
 type Stream struct {
     ID      string // "docker.container.logs"
     Kind    StreamKind
@@ -883,6 +883,18 @@ WASM bridge calls, and detail panels reached from a tree/table row. Nested paths
 such as `${record.metadata.name}` are valid. Use `${record.*}` for table rows
 that are not resources; do not fake a `ref` just to pass action params.
 
+**Renderer context invariant.** Every generic panel host receives the same
+context tuple: `connectionId`, `source`, `config`, optional `resource`, optional
+`record`, and available actions. Any renderer-owned container that mounts child
+panels — detail views, dashboards, split panels, dock/dialog panels, tree
+workspaces, and future composite panels — must pass `resource` and `record`
+through unchanged unless it is deliberately creating a new row/resource context.
+This is not cosmetic prop plumbing: it is the contract that makes
+`${resource.*}` and `${record.*}` interpolation work without plugin-specific
+frontend code. Dropping either context silently omits single-token params; if the
+route path contains the omitted value, the core correctly rejects the request as
+missing a mandatory route param.
+
 ```go
 // Panel is one renderable panel — a detail/connection tab OR a dashboard cell
 // (they are the same shape, so there is one type). Config holds a typed config
@@ -1209,11 +1221,14 @@ strings or structured JSON; structured values are pretty-printed before display.
 Do not use `PanelDiff` for current-state inspection; use `PanelObjectDetail` for
 structured objects and `PanelDocument` for rendered documents.
 
-`PanelQueryEditor` sends statements over its declared stream route. It may also
-declare a best-effort cancel route. It is an executable editor/results panel,
-not a plain editor; plugins that need editing without an execute affordance use
-`PanelCodeEditor` instead. Labels and language are plugin-declared so the panel
-stays protocol-neutral.
+`PanelQueryEditor` sends statements over its declared bidirectional `query`
+stream route and receives result frames on the same channel. It must not be
+declared as a `logs` stream: log streams are server-push and may have their
+client frames discarded by the core, while query streams require the handler to
+read client JSON requests. It may also declare a best-effort cancel route. It is
+an executable editor/results panel, not a plain editor; plugins that need
+editing without an execute affordance use `PanelCodeEditor` instead. Labels and
+language are plugin-declared so the panel stays protocol-neutral.
 
 ```go
 type QueryEditorConfig struct {
