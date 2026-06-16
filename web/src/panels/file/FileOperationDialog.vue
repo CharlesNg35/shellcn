@@ -330,7 +330,7 @@ watch(
             :meta-key-selection="false"
             loading-mode="icon"
             aria-label="Destination folders"
-            :pt="{ wrapper: 'max-h-56 overflow-auto p-1' }"
+            :pt="{ wrapper: 'max-h-56 overflow-auto' }"
             @node-select="onFolderSelect"
             @node-expand="onFolderExpand"
           >

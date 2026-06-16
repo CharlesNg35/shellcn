@@ -109,6 +109,7 @@ describe("FileOperationDialog", () => {
       '[data-pc-section="wrapper"]',
     );
     expect(treeWrapper?.classList.contains("max-h-56")).toBe(true);
+    expect(treeWrapper?.classList.contains("p-2")).toBe(false);
 
     treeNode("etc").click();
     await nextTick();
