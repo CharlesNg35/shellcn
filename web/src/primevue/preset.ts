@@ -183,7 +183,7 @@ const overlayTransition = {
 };
 
 const dialogMask =
-  "pointer-events-auto fixed inset-0 flex items-center justify-center bg-surface-950/50 p-4 opacity-100 backdrop-blur-sm transition-opacity duration-200 ease-out";
+  "pointer-events-auto fixed inset-0 flex items-center justify-center bg-surface-950/50 p-4 backdrop-blur-sm";
 const dialogHeader =
   "flex shrink-0 items-center justify-between border-b border-surface-200 px-5 py-3.5 dark:border-surface-800";
 const dialogTitle =
@@ -193,36 +193,24 @@ const dialogFooter =
 const dialogTransition = {
   onBeforeEnter(el: Element) {
     const mask = el.parentElement;
-    mask?.classList.remove("opacity-100");
-    mask?.classList.add("opacity-0");
+    mask?.classList.remove("shell-dialog-mask-leave-active");
+    mask?.classList.add("shell-dialog-mask-enter-active");
   },
-  onEnter(el: Element) {
+  onAfterEnter(el: Element) {
     const mask = el.parentElement;
-    requestAnimationFrame(() => {
-      mask?.classList.remove("opacity-0");
-      mask?.classList.add("opacity-100");
-    });
+    mask?.classList.remove("shell-dialog-mask-enter-active");
   },
   onBeforeLeave(el: Element) {
     const mask = el.parentElement;
-    mask?.classList.remove("opacity-0");
-    mask?.classList.add("opacity-100");
+    mask?.classList.remove("shell-dialog-mask-enter-active");
+    mask?.classList.add("shell-dialog-mask-leave-active");
   },
-  onLeave(el: Element) {
+  onAfterLeave(el: Element) {
     const mask = el.parentElement;
-    requestAnimationFrame(() => {
-      mask?.classList.remove("opacity-100");
-      mask?.classList.add("opacity-0");
-    });
+    mask?.classList.remove("shell-dialog-mask-leave-active");
   },
-  enterFromClass: "opacity-0 translate-y-1.5 scale-[0.985]",
-  enterActiveClass:
-    "motion-safe:transition-[opacity,transform] motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
-  enterToClass: "opacity-100 translate-y-0 scale-100",
-  leaveFromClass: "opacity-100 translate-y-0 scale-100",
-  leaveActiveClass:
-    "motion-safe:transition-[opacity,transform] motion-safe:duration-150 motion-safe:ease-[cubic-bezier(0.4,0,1,1)] motion-reduce:transition-none",
-  leaveToClass: "opacity-0 translate-y-1 scale-[0.985]",
+  enterActiveClass: "shell-dialog-enter-active",
+  leaveActiveClass: "shell-dialog-leave-active",
 };
 
 const checkbox = {

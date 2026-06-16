@@ -163,7 +163,6 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.dialog.mask).toContain("pointer-events-auto");
     expect(primeVuePassthrough.dialog.mask).toContain("fixed");
     expect(primeVuePassthrough.dialog.mask).toContain("z-50");
-    expect(primeVuePassthrough.dialog.mask).toContain("transition-opacity");
     expect(primeVuePassthrough.confirmdialog.mask).toContain(
       "pointer-events-auto",
     );
@@ -192,21 +191,36 @@ describe("primeVuePassthrough", () => {
     mask.append(root);
 
     primeVuePassthrough.dialog.transition.onBeforeEnter(root);
-    expect(mask.classList.contains("opacity-0")).toBe(true);
-    expect(mask.classList.contains("opacity-100")).toBe(false);
+    expect(mask.classList.contains("shell-dialog-mask-enter-active")).toBe(
+      true,
+    );
+    expect(mask.classList.contains("shell-dialog-mask-leave-active")).toBe(
+      false,
+    );
+
+    primeVuePassthrough.dialog.transition.onAfterEnter(root);
+    expect(mask.classList.contains("shell-dialog-mask-enter-active")).toBe(
+      false,
+    );
 
     primeVuePassthrough.dialog.transition.onBeforeLeave(root);
-    expect(mask.classList.contains("opacity-100")).toBe(true);
-    expect(mask.classList.contains("opacity-0")).toBe(false);
+    expect(mask.classList.contains("shell-dialog-mask-leave-active")).toBe(
+      true,
+    );
+    expect(mask.classList.contains("shell-dialog-mask-enter-active")).toBe(
+      false,
+    );
 
-    expect(primeVuePassthrough.dialog.transition.enterActiveClass).toContain(
-      "transition-[opacity,transform]",
+    primeVuePassthrough.dialog.transition.onAfterLeave(root);
+    expect(mask.classList.contains("shell-dialog-mask-leave-active")).toBe(
+      false,
     );
-    expect(primeVuePassthrough.dialog.transition.leaveActiveClass).toContain(
-      "transition-[opacity,transform]",
+
+    expect(primeVuePassthrough.dialog.transition.enterActiveClass).toBe(
+      "shell-dialog-enter-active",
     );
-    expect(primeVuePassthrough.dialog.transition.enterFromClass).toContain(
-      "scale-[0.985]",
+    expect(primeVuePassthrough.dialog.transition.leaveActiveClass).toBe(
+      "shell-dialog-leave-active",
     );
   });
 
