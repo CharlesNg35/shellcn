@@ -50,6 +50,7 @@ func (s *memLiveStateLeaseStore) Claim(_ context.Context, lease *models.LiveStat
 	next := *lease
 	if ok {
 		next.CreatedAt = cur.CreatedAt
+		next.InternalURL = preferredInternalURLForClaim(cur, next)
 	} else {
 		next.CreatedAt = now
 	}

@@ -832,7 +832,7 @@ func (s *gormLiveStateLeaseStore) Claim(ctx context.Context, lease *models.LiveS
 			return models.ErrConflict
 		}
 		cur.InstanceID = lease.InstanceID
-		cur.InternalURL = lease.InternalURL
+		cur.InternalURL = preferredInternalURLForClaim(cur, *lease)
 		cur.InternalURLs = lease.InternalURLs
 		cur.LeaseID = lease.LeaseID
 		cur.ExpiresAt = lease.ExpiresAt

@@ -108,7 +108,7 @@ func TestStoreLeaseRegistryStoresAndPromotesInternalURLs(t *testing.T) {
 	}
 }
 
-func TestStoreLeaseRegistryReplaceClaimResetsPreferredInternalURL(t *testing.T) {
+func TestStoreLeaseRegistryReplaceClaimPreservesReachablePreferredInternalURL(t *testing.T) {
 	st := store.NewMemory()
 	reg := NewStoreLeaseRegistry(st.LiveStateLeases)
 	ctx := context.Background()
@@ -125,7 +125,7 @@ func TestStoreLeaseRegistryReplaceClaimResetsPreferredInternalURL(t *testing.T) 
 		t.Fatalf("prefer old url: %v", err)
 	}
 
-	second, err := reg.Claim(ctx, "agent:c", NewInstanceRef("a", "http://new1", "http://new2"), ClaimOptions{Mode: ClaimReplace, TTL: time.Minute})
+	second, err := reg.Claim(ctx, "agent:c", NewInstanceRef("a", "http://new1", "http://old2"), ClaimOptions{Mode: ClaimReplace, TTL: time.Minute})
 	if err != nil {
 		t.Fatalf("claim replacement lease: %v", err)
 	}
@@ -136,20 +136,51 @@ func TestStoreLeaseRegistryReplaceClaimResetsPreferredInternalURL(t *testing.T) 
 	if ref.LeaseID != second.Ref().LeaseID {
 		t.Fatalf("lease id = %q, want %q", ref.LeaseID, second.Ref().LeaseID)
 	}
-	if ref.Instance.PreferredInternalURL() != "http://new1" {
+	if ref.Instance.PreferredInternalURL() != "http://old2" {
 		t.Fatalf("preferred URL after replacement = %q", ref.Instance.PreferredInternalURL())
 	}
-	if got := ref.InternalURLCandidates(); len(got) != 2 || got[0] != "http://new1" || got[1] != "http://new2" {
+	if got := ref.InternalURLCandidates(); len(got) != 2 || got[0] != "http://old2" || got[1] != "http://new1" {
 		t.Fatalf("replacement candidates = %#v", got)
 	}
-	if err := reg.PreferInternalURL(ctx, first.Ref(), "http://old2"); err != nil {
+	if err := reg.PreferInternalURL(ctx, first.Ref(), "http://new1"); err != nil {
 		t.Fatalf("stale prefer after replacement: %v", err)
 	}
 	ref, ok, err = reg.Get(ctx, "agent:c")
 	if err != nil || !ok {
 		t.Fatalf("get after stale prefer: ok=%v err=%v", ok, err)
 	}
-	if ref.Instance.PreferredInternalURL() != "http://new1" {
+	if ref.Instance.PreferredInternalURL() != "http://old2" {
 		t.Fatalf("stale lease changed preferred URL to %q", ref.Instance.PreferredInternalURL())
+	}
+}
+
+func TestStoreLeaseRegistryReplaceClaimResetsMissingPreferredInternalURL(t *testing.T) {
+	st := store.NewMemory()
+	reg := NewStoreLeaseRegistry(st.LiveStateLeases)
+	ctx := context.Background()
+
+	if _, err := reg.Claim(ctx, "agent:c", NewInstanceRef("a", "http://old1", "http://old2"), ClaimOptions{Mode: ClaimReplace, TTL: time.Minute}); err != nil {
+		t.Fatalf("claim first lease: %v", err)
+	}
+	ref, ok, err := reg.Get(ctx, "agent:c")
+	if err != nil || !ok {
+		t.Fatalf("get first lease: ok=%v err=%v", ok, err)
+	}
+	if err := reg.PreferInternalURL(ctx, ref, "http://old2"); err != nil {
+		t.Fatalf("prefer old url: %v", err)
+	}
+
+	if _, err := reg.Claim(ctx, "agent:c", NewInstanceRef("a", "http://new1", "http://new2"), ClaimOptions{Mode: ClaimReplace, TTL: time.Minute}); err != nil {
+		t.Fatalf("claim replacement lease: %v", err)
+	}
+	ref, ok, err = reg.Get(ctx, "agent:c")
+	if err != nil || !ok {
+		t.Fatalf("get replacement lease: ok=%v err=%v", ok, err)
+	}
+	if ref.Instance.PreferredInternalURL() != "http://new1" {
+		t.Fatalf("preferred URL after missing old URL = %q", ref.Instance.PreferredInternalURL())
+	}
+	if got := ref.InternalURLCandidates(); len(got) != 2 || got[0] != "http://new1" || got[1] != "http://new2" {
+		t.Fatalf("replacement candidates = %#v", got)
 	}
 }
