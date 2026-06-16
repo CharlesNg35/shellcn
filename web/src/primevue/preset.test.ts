@@ -6,6 +6,7 @@ import PrimeVue from "primevue/config";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
+import Tree from "primevue/tree";
 import { primeVuePassthrough } from "./preset";
 
 describe("primeVuePassthrough", () => {
@@ -82,6 +83,52 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.tablist.nextButton).toContain("right-0");
   });
 
+  it("does not globally cap tree height", () => {
+    expect(primeVuePassthrough.tree.root).toContain("p-2");
+    expect(primeVuePassthrough.tree).not.toHaveProperty("wrapper");
+  });
+
+  it("keeps tree spacing aligned with the compact navigation tree", () => {
+    expect(primeVuePassthrough.tree).not.toHaveProperty("rootChildren");
+    expect(primeVuePassthrough.tree.nodeContent).toContain("gap-1.5");
+    expect(primeVuePassthrough.tree.nodeContent).toContain("px-2");
+    expect(primeVuePassthrough.tree.nodeContent).toContain("py-1.5");
+    expect(primeVuePassthrough.tree.nodeToggleButton).toContain("h-5");
+    expect(primeVuePassthrough.tree.nodeToggleButton).toContain("w-5");
+    expect(primeVuePassthrough.tree.nodeChildren).toBe("pl-3");
+    expect(primeVuePassthrough.tree.nodeChildren).not.toContain("ml-4");
+    expect(primeVuePassthrough.tree.nodeChildren).not.toContain("border-l");
+    expect(primeVuePassthrough.tree).not.toHaveProperty("nodeToggleIcon");
+  });
+
+  it("keeps tree leaf toggles hidden without adding fallback icon spacing", () => {
+    expect(primeVuePassthrough.tree.nodeToggleButton).toContain(
+      "data-[p-leaf=true]:invisible",
+    );
+    expect(primeVuePassthrough.tree).not.toHaveProperty("nodeIcon");
+
+    const wrapper = mount(Tree, {
+      props: {
+        value: [
+          { key: "branch", label: "Branch", leaf: false },
+          { key: "leaf", label: "Leaf", leaf: true },
+        ],
+      },
+      global: {
+        plugins: [[PrimeVue, { unstyled: true, pt: primeVuePassthrough }]],
+      },
+    });
+
+    const toggles = wrapper.findAll('[data-pc-section="nodetogglebutton"]');
+    expect(toggles[0].attributes("data-p-leaf")).toBe("false");
+    expect(toggles[1].attributes("data-p-leaf")).toBe("true");
+
+    const fallbackIcon = wrapper.get('[data-pc-section="nodeicon"]');
+    expect(fallbackIcon.classes()).toEqual([]);
+
+    wrapper.unmount();
+  });
+
   it("applies tablist pass-through classes to PrimeVue scroll navigators", () => {
     const wrapper = mount(
       {
@@ -135,6 +182,45 @@ describe("primeVuePassthrough", () => {
     );
     expect(primeVuePassthrough.confirmdialog.content).toContain(
       "overflow-auto",
+    );
+  });
+
+  it("animates modal masks in unstyled mode", () => {
+    const mask = document.createElement("div");
+    const root = document.createElement("div");
+    mask.append(root);
+
+    primeVuePassthrough.dialog.transition.onBeforeEnter(root);
+    expect(mask.classList.contains("shell-dialog-mask-enter-active")).toBe(
+      true,
+    );
+    expect(mask.classList.contains("shell-dialog-mask-leave-active")).toBe(
+      false,
+    );
+
+    primeVuePassthrough.dialog.transition.onAfterEnter(root);
+    expect(mask.classList.contains("shell-dialog-mask-enter-active")).toBe(
+      false,
+    );
+
+    primeVuePassthrough.dialog.transition.onBeforeLeave(root);
+    expect(mask.classList.contains("shell-dialog-mask-leave-active")).toBe(
+      true,
+    );
+    expect(mask.classList.contains("shell-dialog-mask-enter-active")).toBe(
+      false,
+    );
+
+    primeVuePassthrough.dialog.transition.onAfterLeave(root);
+    expect(mask.classList.contains("shell-dialog-mask-leave-active")).toBe(
+      false,
+    );
+
+    expect(primeVuePassthrough.dialog.transition.enterActiveClass).toBe(
+      "shell-dialog-enter-active",
+    );
+    expect(primeVuePassthrough.dialog.transition.leaveActiveClass).toBe(
+      "shell-dialog-leave-active",
     );
   });
 

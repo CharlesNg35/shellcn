@@ -191,12 +191,26 @@ const dialogTitle =
 const dialogFooter =
   "flex shrink-0 items-center justify-end gap-2 border-t border-surface-200 px-5 py-3.5 dark:border-surface-800";
 const dialogTransition = {
-  enterFromClass: "opacity-0 translate-y-2 scale-[0.97]",
-  enterActiveClass: "transition duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
-  enterToClass: "opacity-100 translate-y-0 scale-100",
-  leaveFromClass: "opacity-100 translate-y-0 scale-100",
-  leaveActiveClass: "transition duration-150 ease-in",
-  leaveToClass: "opacity-0 translate-y-1 scale-[0.98]",
+  onBeforeEnter(el: Element) {
+    const mask = el.parentElement;
+    mask?.classList.remove("shell-dialog-mask-leave-active");
+    mask?.classList.add("shell-dialog-mask-enter-active");
+  },
+  onAfterEnter(el: Element) {
+    const mask = el.parentElement;
+    mask?.classList.remove("shell-dialog-mask-enter-active");
+  },
+  onBeforeLeave(el: Element) {
+    const mask = el.parentElement;
+    mask?.classList.remove("shell-dialog-mask-enter-active");
+    mask?.classList.add("shell-dialog-mask-leave-active");
+  },
+  onAfterLeave(el: Element) {
+    const mask = el.parentElement;
+    mask?.classList.remove("shell-dialog-mask-leave-active");
+  },
+  enterActiveClass: "shell-dialog-enter-active",
+  leaveActiveClass: "shell-dialog-leave-active",
 };
 
 const checkbox = {
@@ -401,22 +415,14 @@ export const primeVuePassthrough = {
   },
 
   tree: {
-    root: cn(
-      "rounded-md border border-surface-200 bg-surface-0 text-sm text-surface-800 dark:border-surface-800 dark:bg-surface-950 dark:text-surface-100",
-    ),
-    wrapper: "max-h-56 overflow-auto p-1",
-    rootChildren: "space-y-0.5",
+    root: "overflow-y-auto p-2 text-sm",
+    node: "",
     nodeContent:
-      "flex min-w-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-sm text-surface-700 transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/15 dark:data-[p-selected=true]:text-primary-300",
+      "flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:text-primary-700 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/10 dark:data-[p-selected=true]:text-primary-200",
     nodeToggleButton:
-      "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-surface-400 transition-colors hover:bg-surface-200 hover:text-surface-700 focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:hover:bg-surface-700 dark:hover:text-surface-100",
-    nodeToggleIcon: "h-3.5 w-3.5",
-    nodeIcon: "h-4 w-4 shrink-0 text-surface-400",
-    nodeLabel: "min-w-0 truncate",
-    nodeChildren:
-      "ml-4 space-y-0.5 border-l border-surface-200 pl-2 dark:border-surface-800",
-    loadingIcon: "h-4 w-4 animate-spin text-primary-500",
-    emptyMessage: "px-3 py-2 text-sm text-surface-400",
+      "flex h-5 w-5 shrink-0 items-center justify-center rounded text-surface-400 transition-colors hover:bg-surface-200 hover:text-surface-700 data-[p-leaf=true]:invisible dark:hover:bg-surface-700 dark:hover:text-surface-100",
+    nodeLabel: "flex-1 truncate text-surface-700 dark:text-surface-200",
+    nodeChildren: "pl-3",
   },
 
   timeline: {

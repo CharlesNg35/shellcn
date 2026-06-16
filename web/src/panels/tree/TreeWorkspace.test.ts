@@ -98,6 +98,14 @@ describe("TreeWorkspace", () => {
     expect(tab.get("span").classes()).toContain("min-w-0");
   });
 
+  it("lets the resource tree fill the available sidebar height", () => {
+    const wrapper = mountWorkspace();
+    const root = wrapper.get(".flex.h-full.min-h-0");
+    const sidebar = root.get(".h-full.min-h-0.w-64");
+
+    expect(sidebar.classes()).toContain("overflow-hidden");
+  });
+
   it("keeps a resource's actionIds out of row actions (rows are selectable only when RowActionIDs is declared)", async () => {
     let captured: Record<string, unknown> | null = null;
     const wrapper = mount(TreeWorkspace, {
