@@ -17,9 +17,9 @@ import (
 	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
-	"github.com/charlesng35/shellcn/internal/cluster"
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/extplugin"
+	"github.com/charlesng35/shellcn/internal/livelease"
 	"github.com/charlesng35/shellcn/internal/pluginmarket"
 	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/internal/policy"
@@ -58,8 +58,8 @@ type Deps struct {
 	TwoFactor         *service.TwoFactorService
 	Invitations       *service.InvitationService
 	Tunnels           *transport.Registry
-	Owners            cluster.OwnerRegistry
-	Instance          cluster.InstanceRef
+	Leases            livelease.LeaseRegistry
+	Instance          livelease.InstanceRef
 	Recordings        *service.RecordingService
 	Recording         *recording.Engine
 	RecordingMaxChunk int64

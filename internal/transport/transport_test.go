@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesng35/shellcn/internal/cluster"
+	"github.com/charlesng35/shellcn/internal/livelease"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/store"
 	"github.com/charlesng35/shellcn/internal/transport"
@@ -181,10 +181,10 @@ func TestRegistryRegisterResolveRemove(t *testing.T) {
 	}
 }
 
-func TestRegistryRegisterReplacesClusterOwner(t *testing.T) {
-	owners := cluster.NewStoreOwnerRegistry(store.NewMemory().ClusterOwners)
-	a := transport.NewRegistry(transport.WithOwnerRegistry(owners, cluster.NewInstanceRef("a", "http://a")))
-	b := transport.NewRegistry(transport.WithOwnerRegistry(owners, cluster.NewInstanceRef("b", "http://b")))
+func TestRegistryRegisterReplacesLiveStateLease(t *testing.T) {
+	leases := livelease.NewStoreLeaseRegistry(store.NewMemory().LiveStateLeases)
+	a := transport.NewRegistry(transport.WithLeaseRegistry(leases, livelease.NewInstanceRef("a", "http://a")))
+	b := transport.NewRegistry(transport.WithLeaseRegistry(leases, livelease.NewInstanceRef("b", "http://b")))
 
 	registrationA, err := a.Register(context.Background(), "c1", func(context.Context, string, string) (net.Conn, error) {
 		return nil, errors.New("a")
@@ -199,18 +199,18 @@ func TestRegistryRegisterReplacesClusterOwner(t *testing.T) {
 		t.Fatalf("register b: %v", err)
 	}
 
-	owner, ok, err := owners.Get(context.Background(), cluster.AgentOwnerKey("c1"))
+	ref, ok, err := leases.Get(context.Background(), livelease.AgentLeaseKey("c1"))
 	if err != nil || !ok {
-		t.Fatalf("owner lookup: ok=%v err=%v", ok, err)
+		t.Fatalf("lease lookup: ok=%v err=%v", ok, err)
 	}
-	if owner.Instance.ID != "b" {
-		t.Fatalf("owner = %q, want b", owner.Instance.ID)
+	if ref.Instance.ID != "b" {
+		t.Fatalf("lease holder = %q, want b", ref.Instance.ID)
 	}
 	if registrationA.Release().WasActive {
-		t.Fatal("old release must not remove newer owner")
+		t.Fatal("old release must not remove newer lease")
 	}
 	if !registrationB.Release().WasActive {
-		t.Fatal("current release should remove active owner")
+		t.Fatal("current release should remove active lease")
 	}
 }
 

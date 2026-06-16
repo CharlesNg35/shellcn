@@ -810,16 +810,16 @@ func (s *gormAIMessageStore) DeleteByConversation(ctx context.Context, conversat
 	return s.db.WithContext(ctx).Delete(&models.AIMessage{}, "conversation_id = ?", conversationID).Error
 }
 
-type gormClusterOwnerStore struct{ db *gorm.DB }
+type gormLiveStateLeaseStore struct{ db *gorm.DB }
 
-func (s *gormClusterOwnerStore) Claim(ctx context.Context, owner *models.ClusterOwner, replace bool, now time.Time) (models.ClusterOwner, error) {
-	var out models.ClusterOwner
+func (s *gormLiveStateLeaseStore) Claim(ctx context.Context, lease *models.LiveStateLease, replace bool, now time.Time) (models.LiveStateLease, error) {
+	var out models.LiveStateLease
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var cur models.ClusterOwner
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&cur, "owner_key = ?", owner.Key).Error
+		var cur models.LiveStateLease
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&cur, "lease_key = ?", lease.Key).Error
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
-			out = *owner
+			out = *lease
 			out.CreatedAt = now
 			out.UpdatedAt = now
 			return tx.Create(&out).Error
@@ -831,11 +831,11 @@ func (s *gormClusterOwnerStore) Claim(ctx context.Context, owner *models.Cluster
 			out = cur
 			return models.ErrConflict
 		}
-		cur.InstanceID = owner.InstanceID
-		cur.InternalURL = owner.InternalURL
-		cur.InternalURLs = owner.InternalURLs
-		cur.LeaseID = owner.LeaseID
-		cur.ExpiresAt = owner.ExpiresAt
+		cur.InstanceID = lease.InstanceID
+		cur.InternalURL = preferredInternalURLForClaim(cur, *lease)
+		cur.InternalURLs = lease.InternalURLs
+		cur.LeaseID = lease.LeaseID
+		cur.ExpiresAt = lease.ExpiresAt
 		cur.UpdatedAt = now
 		out = cur
 		return tx.Save(&cur).Error
@@ -843,21 +843,21 @@ func (s *gormClusterOwnerStore) Claim(ctx context.Context, owner *models.Cluster
 	return out, err
 }
 
-func (s *gormClusterOwnerStore) Get(ctx context.Context, key string, now time.Time) (models.ClusterOwner, error) {
-	var owner models.ClusterOwner
-	if err := s.db.WithContext(ctx).First(&owner, "owner_key = ?", key).Error; err != nil {
-		return models.ClusterOwner{}, normNotFound(err)
+func (s *gormLiveStateLeaseStore) Get(ctx context.Context, key string, now time.Time) (models.LiveStateLease, error) {
+	var lease models.LiveStateLease
+	if err := s.db.WithContext(ctx).First(&lease, "lease_key = ?", key).Error; err != nil {
+		return models.LiveStateLease{}, normNotFound(err)
 	}
-	if !now.Before(owner.ExpiresAt) {
-		_ = s.db.WithContext(ctx).Delete(&models.ClusterOwner{}, "owner_key = ?", key).Error
-		return models.ClusterOwner{}, ErrNotFound
+	if !now.Before(lease.ExpiresAt) {
+		_ = s.db.WithContext(ctx).Delete(&models.LiveStateLease{}, "lease_key = ?", key).Error
+		return models.LiveStateLease{}, ErrNotFound
 	}
-	return owner, nil
+	return lease, nil
 }
 
-func (s *gormClusterOwnerStore) Renew(ctx context.Context, key, leaseID string, expiresAt, now time.Time) (bool, error) {
-	res := s.db.WithContext(ctx).Model(&models.ClusterOwner{}).
-		Where("owner_key = ? AND lease_id = ? AND expires_at > ?", key, leaseID, now).
+func (s *gormLiveStateLeaseStore) Renew(ctx context.Context, key, leaseID string, expiresAt, now time.Time) (bool, error) {
+	res := s.db.WithContext(ctx).Model(&models.LiveStateLease{}).
+		Where("lease_key = ? AND lease_id = ? AND expires_at > ?", key, leaseID, now).
 		Updates(map[string]any{"expires_at": expiresAt, "updated_at": now})
 	if res.Error != nil {
 		return false, res.Error
@@ -865,9 +865,9 @@ func (s *gormClusterOwnerStore) Renew(ctx context.Context, key, leaseID string, 
 	return res.RowsAffected == 1, nil
 }
 
-func (s *gormClusterOwnerStore) PreferInternalURL(ctx context.Context, key, leaseID, internalURL string, now time.Time) (bool, error) {
-	res := s.db.WithContext(ctx).Model(&models.ClusterOwner{}).
-		Where("owner_key = ? AND lease_id = ? AND expires_at > ?", key, leaseID, now).
+func (s *gormLiveStateLeaseStore) PreferInternalURL(ctx context.Context, key, leaseID, internalURL string, now time.Time) (bool, error) {
+	res := s.db.WithContext(ctx).Model(&models.LiveStateLease{}).
+		Where("lease_key = ? AND lease_id = ? AND expires_at > ?", key, leaseID, now).
 		Updates(map[string]any{"internal_url": internalURL, "updated_at": now})
 	if res.Error != nil {
 		return false, res.Error
@@ -875,12 +875,12 @@ func (s *gormClusterOwnerStore) PreferInternalURL(ctx context.Context, key, leas
 	return res.RowsAffected == 1, nil
 }
 
-func (s *gormClusterOwnerStore) Release(ctx context.Context, key, leaseID string) error {
-	return s.db.WithContext(ctx).Delete(&models.ClusterOwner{}, "owner_key = ? AND lease_id = ?", key, leaseID).Error
+func (s *gormLiveStateLeaseStore) Release(ctx context.Context, key, leaseID string) error {
+	return s.db.WithContext(ctx).Delete(&models.LiveStateLease{}, "lease_key = ? AND lease_id = ?", key, leaseID).Error
 }
 
-func (s *gormClusterOwnerStore) DeleteExpired(ctx context.Context, now time.Time) (int64, error) {
-	res := s.db.WithContext(ctx).Delete(&models.ClusterOwner{}, "expires_at <= ?", now)
+func (s *gormLiveStateLeaseStore) DeleteExpired(ctx context.Context, now time.Time) (int64, error) {
+	res := s.db.WithContext(ctx).Delete(&models.LiveStateLease{}, "expires_at <= ?", now)
 	return res.RowsAffected, res.Error
 }
 

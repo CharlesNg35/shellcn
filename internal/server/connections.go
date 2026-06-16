@@ -9,7 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/charlesng35/shellcn/internal/audit"
-	"github.com/charlesng35/shellcn/internal/cluster"
+	"github.com/charlesng35/shellcn/internal/livelease"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/internal/session"
@@ -97,10 +97,10 @@ func (s *Server) agentReachable(ctx context.Context, connID string) bool {
 	if s.tunnelRegistered(connID) {
 		return true
 	}
-	if s.deps.Owners == nil {
+	if s.deps.Leases == nil {
 		return false
 	}
-	_, ok, err := s.deps.Owners.Get(ctx, cluster.AgentOwnerKey(connID))
+	_, ok, err := s.deps.Leases.Get(ctx, livelease.AgentLeaseKey(connID))
 	return err == nil && ok
 }
 
@@ -234,7 +234,7 @@ func (s *Server) handleConnectionSessionStatus(w http.ResponseWriter, r *http.Re
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
 	}
-	if s.proxyIfRemoteOwner(w, r, conn, user.ID) {
+	if s.proxyIfRemoteLeaseHolder(w, r, conn, user.ID) {
 		return
 	}
 	key := session.Key{ConnectionID: conn.ID, ActorScope: user.ID}
@@ -263,7 +263,7 @@ func (s *Server) handleKeepaliveConnectionSession(w http.ResponseWriter, r *http
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if s.proxyIfRemoteOwner(w, r, conn, user.ID) {
+	if s.proxyIfRemoteLeaseHolder(w, r, conn, user.ID) {
 		return
 	}
 	handle, err := s.acquireSession(ctx, res)
@@ -309,7 +309,7 @@ func (s *Server) handleDisconnectConnectionSession(w http.ResponseWriter, r *htt
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
 	}
-	if s.proxyIfRemoteOwner(w, r, conn, user.ID) {
+	if s.proxyIfRemoteLeaseHolder(w, r, conn, user.ID) {
 		return
 	}
 	s.deps.Sessions.Close(session.Key{ConnectionID: conn.ID, ActorScope: user.ID})

@@ -35,8 +35,8 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Audit.CleanupEvery().String() != "1h0m0s" {
 		t.Errorf("audit cleanup interval default: got %s", cfg.Audit.CleanupEvery())
 	}
-	if cfg.Cluster.LeaseTTLDuration().String() != "15s" || cfg.Cluster.RenewIntervalDuration().String() != "5s" {
-		t.Errorf("cluster defaults: ttl=%s renew=%s", cfg.Cluster.LeaseTTLDuration(), cfg.Cluster.RenewIntervalDuration())
+	if cfg.LiveState.LeaseTTLDuration().String() != "15s" || cfg.LiveState.RenewIntervalDuration().String() != "5s" {
+		t.Errorf("live_state defaults: ttl=%s renew=%s", cfg.LiveState.LeaseTTLDuration(), cfg.LiveState.RenewIntervalDuration())
 	}
 }
 
@@ -53,8 +53,8 @@ func TestEnvOverride(t *testing.T) {
 	t.Setenv("SHELLCN_AUDIT_ENABLED", "false")
 	t.Setenv("SHELLCN_AUDIT_RETENTION_DAYS", "30")
 	t.Setenv("SHELLCN_AUDIT_CLEANUP_INTERVAL", "2h")
-	t.Setenv("SHELLCN_CLUSTER_LEASE_TTL", "20s")
-	t.Setenv("SHELLCN_CLUSTER_RENEW_INTERVAL", "4s")
+	t.Setenv("SHELLCN_LIVE_STATE_LEASE_TTL", "20s")
+	t.Setenv("SHELLCN_LIVE_STATE_RENEW_INTERVAL", "4s")
 
 	cfg, err := config.Load(t.TempDir())
 	if err != nil {
@@ -81,8 +81,8 @@ func TestEnvOverride(t *testing.T) {
 	if cfg.Audit.Enabled || cfg.Audit.RetentionDays != 30 || cfg.Audit.CleanupEvery().String() != "2h0m0s" {
 		t.Errorf("audit env override: got %+v", cfg.Audit)
 	}
-	if cfg.Cluster.LeaseTTLDuration().String() != "20s" || cfg.Cluster.RenewIntervalDuration().String() != "4s" {
-		t.Errorf("cluster env override: ttl=%s renew=%s", cfg.Cluster.LeaseTTLDuration(), cfg.Cluster.RenewIntervalDuration())
+	if cfg.LiveState.LeaseTTLDuration().String() != "20s" || cfg.LiveState.RenewIntervalDuration().String() != "4s" {
+		t.Errorf("live_state env override: ttl=%s renew=%s", cfg.LiveState.LeaseTTLDuration(), cfg.LiveState.RenewIntervalDuration())
 	}
 }
 

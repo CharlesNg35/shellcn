@@ -11,7 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/charlesng35/shellcn/internal/app"
-	"github.com/charlesng35/shellcn/internal/cluster"
+	"github.com/charlesng35/shellcn/internal/livelease"
 )
 
 // DefaultTicketTTL is the short lifetime of a WS ticket.
@@ -45,8 +45,8 @@ type ticketClaims struct {
 type TicketStoreOptions struct {
 	TTL        time.Duration
 	SigningKey []byte
-	Owners     cluster.OwnerRegistry
-	Instance   cluster.InstanceRef
+	Leases     livelease.LeaseRegistry
+	Instance   livelease.InstanceRef
 }
 
 // TicketStore mints and redeems short-lived WS tickets. Browsers can't set
@@ -54,8 +54,8 @@ type TicketStoreOptions struct {
 type TicketStore struct {
 	ttl      time.Duration
 	key      []byte
-	owners   cluster.OwnerRegistry
-	instance cluster.InstanceRef
+	leases   livelease.LeaseRegistry
+	instance livelease.InstanceRef
 }
 
 func NewTicketStore(opts TicketStoreOptions) *TicketStore {
@@ -65,13 +65,13 @@ func NewTicketStore(opts TicketStoreOptions) *TicketStore {
 	if len(opts.SigningKey) < 32 {
 		panic("auth: ticket signing key must be at least 32 bytes")
 	}
-	if opts.Owners == nil {
-		panic("auth: ticket owner registry is required")
+	if opts.Leases == nil {
+		panic("auth: ticket lease registry is required")
 	}
 	return &TicketStore{
 		ttl:      opts.TTL,
 		key:      append([]byte(nil), opts.SigningKey...),
-		owners:   opts.Owners,
+		leases:   opts.Leases,
 		instance: opts.Instance,
 	}
 }
@@ -124,7 +124,7 @@ func (s *TicketStore) Redeem(tokenString string, want TicketScope) error {
 	if ttl <= 0 {
 		return ErrTicketInvalid
 	}
-	lease, err := s.owners.Claim(context.Background(), "ticket:"+claims.ID, s.instance, cluster.ClaimOptions{Mode: cluster.ClaimExclusive, TTL: ttl})
+	lease, err := s.leases.Claim(context.Background(), "ticket:"+claims.ID, s.instance, livelease.ClaimOptions{Mode: livelease.ClaimExclusive, TTL: ttl})
 	if err != nil {
 		return ErrTicketInvalid
 	}

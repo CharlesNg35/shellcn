@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/auth"
-	"github.com/charlesng35/shellcn/internal/cluster"
+	"github.com/charlesng35/shellcn/internal/livelease"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/store"
 )
@@ -85,8 +85,8 @@ func newTicketStore(t *testing.T, ttl time.Duration) *auth.TicketStore {
 	return auth.NewTicketStore(auth.TicketStoreOptions{
 		TTL:        ttl,
 		SigningKey: []byte("0123456789abcdef0123456789abcdef"),
-		Owners:     cluster.NewStoreOwnerRegistry(store.NewMemory().ClusterOwners),
-		Instance:   cluster.NewInstanceRef("test", "http://test"),
+		Leases:     livelease.NewStoreLeaseRegistry(store.NewMemory().LiveStateLeases),
+		Instance:   livelease.NewInstanceRef("test", "http://test"),
 	})
 }
 
@@ -144,9 +144,9 @@ func TestTicketRouteMismatchRejected(t *testing.T) {
 
 func TestTicketRedeemsAcrossInstancesOnce(t *testing.T) {
 	key := []byte("0123456789abcdef0123456789abcdef")
-	owners := cluster.NewStoreOwnerRegistry(store.NewMemory().ClusterOwners)
-	a := auth.NewTicketStore(auth.TicketStoreOptions{TTL: time.Minute, SigningKey: key, Owners: owners, Instance: cluster.NewInstanceRef("a", "http://a")})
-	b := auth.NewTicketStore(auth.TicketStoreOptions{TTL: time.Minute, SigningKey: key, Owners: owners, Instance: cluster.NewInstanceRef("b", "http://b")})
+	leases := livelease.NewStoreLeaseRegistry(store.NewMemory().LiveStateLeases)
+	a := auth.NewTicketStore(auth.TicketStoreOptions{TTL: time.Minute, SigningKey: key, Leases: leases, Instance: livelease.NewInstanceRef("a", "http://a")})
+	b := auth.NewTicketStore(auth.TicketStoreOptions{TTL: time.Minute, SigningKey: key, Leases: leases, Instance: livelease.NewInstanceRef("b", "http://b")})
 
 	tok, exp := a.Mint(scope())
 	if !exp.After(time.Now()) {

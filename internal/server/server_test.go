@@ -23,9 +23,9 @@ import (
 	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
-	"github.com/charlesng35/shellcn/internal/cluster"
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/email"
+	"github.com/charlesng35/shellcn/internal/livelease"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/pluginregistry"
 	"github.com/charlesng35/shellcn/internal/policy"
@@ -272,11 +272,11 @@ func newHarness(t *testing.T, opts ...func(*server.Deps)) *harness {
 	if err != nil {
 		t.Fatalf("policy: %v", err)
 	}
-	instance := cluster.NewInstanceRef("test-instance", "http://test-instance")
-	owners := cluster.NewStoreOwnerRegistry(st.ClusterOwners)
-	sessMgr := session.New(session.Options{OwnerRegistry: owners, Instance: instance})
+	instance := livelease.NewInstanceRef("test-instance", "http://test-instance")
+	leases := livelease.NewStoreLeaseRegistry(st.LiveStateLeases)
+	sessMgr := session.New(session.Options{LeaseRegistry: leases, Instance: instance})
 	t.Cleanup(sessMgr.Shutdown)
-	tunnels := transport.NewRegistry(transport.WithOwnerRegistry(owners, instance))
+	tunnels := transport.NewRegistry(transport.WithLeaseRegistry(leases, instance))
 	connector := service.NewConnector(reg, creds, vault, tunnels)
 	connections := service.NewConnectionService(st.Connections, reg, creds, vault)
 	recBlobs, err := recording.NewLocalBlobStore(t.TempDir())
@@ -299,12 +299,12 @@ func newHarness(t *testing.T, opts ...func(*server.Deps)) *harness {
 		Tickets: auth.NewTicketStore(auth.TicketStoreOptions{
 			TTL:        time.Minute,
 			SigningKey: ticketKey,
-			Owners:     owners,
+			Leases:     leases,
 			Instance:   instance,
 		}),
 		Policy:    pol,
 		Connector: connector, Connections: connections, Credentials: creds, Audit: audit.NewWriter(st.Audit),
-		Enrollments: enrollments, Tunnels: tunnels, Owners: owners, Instance: instance, Protocols: service.NewProtocolService(st.ProtocolSettings),
+		Enrollments: enrollments, Tunnels: tunnels, Leases: leases, Instance: instance, Protocols: service.NewProtocolService(st.ProtocolSettings),
 		Users: users, TwoFactor: twoFactor, Invitations: invitations,
 		Recording: recEngine, Recordings: recordings,
 		AI: aiconfig.New(st.AIProviders, vault, config.AIConfig{
@@ -384,27 +384,27 @@ func (h *harness) doReq(t *testing.T, req *http.Request, userID string) apiResp 
 	return apiResp{Status: resp.StatusCode, Body: b}
 }
 
-func TestClusterProxyForwardsRemoteOwner(t *testing.T) {
+func TestLeaseProxyForwardsRemoteOwner(t *testing.T) {
 	h := newHarness(t)
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/healthz" {
 			_, _ = w.Write([]byte("ok"))
 			return
 		}
-		if got := r.Header.Get("X-ShellCN-Cluster-Proxy"); got != "test-instance" {
-			t.Fatalf("cluster proxy header = %q, want test-instance", got)
+		if got := r.Header.Get("X-ShellCN-Lease-Proxy"); got != "test-instance" {
+			t.Fatalf("lease proxy header = %q, want test-instance", got)
 		}
 		_, _ = w.Write([]byte(r.URL.Path))
 	}))
 	t.Cleanup(target.Close)
 
-	owners := cluster.NewStoreOwnerRegistry(h.store.ClusterOwners)
-	lease, err := owners.Claim(context.Background(), cluster.SessionOwnerKey("c-op", "op"), cluster.NewInstanceRef("remote-instance", target.URL), cluster.ClaimOptions{
-		Mode: cluster.ClaimExclusive,
+	leases := livelease.NewStoreLeaseRegistry(h.store.LiveStateLeases)
+	lease, err := leases.Claim(context.Background(), livelease.SessionLeaseKey("c-op", "op"), livelease.NewInstanceRef("remote-instance", target.URL), livelease.ClaimOptions{
+		Mode: livelease.ClaimExclusive,
 		TTL:  time.Minute,
 	})
 	if err != nil {
-		t.Fatalf("claim remote session owner: %v", err)
+		t.Fatalf("claim remote session lease: %v", err)
 	}
 	t.Cleanup(func() { _ = lease.Release(context.Background()) })
 
@@ -417,7 +417,7 @@ func TestClusterProxyForwardsRemoteOwner(t *testing.T) {
 	}
 }
 
-func TestClusterProxyFallsBackAndPromotesReachableOwnerURL(t *testing.T) {
+func TestLeaseProxyFallsBackAndPromotesReachableOwnerURL(t *testing.T) {
 	h := newHarness(t)
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/healthz" {
@@ -428,13 +428,13 @@ func TestClusterProxyFallsBackAndPromotesReachableOwnerURL(t *testing.T) {
 	}))
 	t.Cleanup(target.Close)
 
-	owners := cluster.NewStoreOwnerRegistry(h.store.ClusterOwners)
-	lease, err := owners.Claim(context.Background(), cluster.SessionOwnerKey("c-op", "op"), cluster.NewInstanceRef("remote-instance", "http://127.0.0.1:1", target.URL), cluster.ClaimOptions{
-		Mode: cluster.ClaimExclusive,
+	leases := livelease.NewStoreLeaseRegistry(h.store.LiveStateLeases)
+	lease, err := leases.Claim(context.Background(), livelease.SessionLeaseKey("c-op", "op"), livelease.NewInstanceRef("remote-instance", "http://127.0.0.1:1", target.URL), livelease.ClaimOptions{
+		Mode: livelease.ClaimExclusive,
 		TTL:  time.Minute,
 	})
 	if err != nil {
-		t.Fatalf("claim remote session owner: %v", err)
+		t.Fatalf("claim remote session lease: %v", err)
 	}
 	t.Cleanup(func() { _ = lease.Release(context.Background()) })
 
@@ -442,24 +442,24 @@ func TestClusterProxyFallsBackAndPromotesReachableOwnerURL(t *testing.T) {
 	if resp.Status != http.StatusOK {
 		t.Fatalf("session status via fallback proxy: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
-	owner, ok, err := owners.Get(context.Background(), cluster.SessionOwnerKey("c-op", "op"))
+	ref, ok, err := leases.Get(context.Background(), livelease.SessionLeaseKey("c-op", "op"))
 	if err != nil || !ok {
-		t.Fatalf("get owner: ok=%v err=%v", ok, err)
+		t.Fatalf("get ref: ok=%v err=%v", ok, err)
 	}
-	if owner.Instance.PreferredInternalURL() != target.URL {
-		t.Fatalf("preferred URL = %q, want %q", owner.Instance.PreferredInternalURL(), target.URL)
+	if ref.Instance.PreferredInternalURL() != target.URL {
+		t.Fatalf("preferred URL = %q, want %q", ref.Instance.PreferredInternalURL(), target.URL)
 	}
 }
 
-func TestClusterProxyLoopGuard(t *testing.T) {
+func TestLeaseProxyLoopGuard(t *testing.T) {
 	h := newHarness(t)
-	owners := cluster.NewStoreOwnerRegistry(h.store.ClusterOwners)
-	lease, err := owners.Claim(context.Background(), cluster.SessionOwnerKey("c-op", "op"), cluster.NewInstanceRef("remote-instance", h.ts.URL), cluster.ClaimOptions{
-		Mode: cluster.ClaimExclusive,
+	leases := livelease.NewStoreLeaseRegistry(h.store.LiveStateLeases)
+	lease, err := leases.Claim(context.Background(), livelease.SessionLeaseKey("c-op", "op"), livelease.NewInstanceRef("remote-instance", h.ts.URL), livelease.ClaimOptions{
+		Mode: livelease.ClaimExclusive,
 		TTL:  time.Minute,
 	})
 	if err != nil {
-		t.Fatalf("claim remote session owner: %v", err)
+		t.Fatalf("claim remote session lease: %v", err)
 	}
 	t.Cleanup(func() { _ = lease.Release(context.Background()) })
 
@@ -871,13 +871,13 @@ func TestAgentStateKeepsRemoteOwnerOnline(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed enrollment: %v", err)
 	}
-	owners := cluster.NewStoreOwnerRegistry(h.store.ClusterOwners)
-	lease, err := owners.Claim(context.Background(), cluster.AgentOwnerKey("c-op"), cluster.NewInstanceRef("remote-instance", "http://remote"), cluster.ClaimOptions{
-		Mode: cluster.ClaimReplace,
+	leases := livelease.NewStoreLeaseRegistry(h.store.LiveStateLeases)
+	lease, err := leases.Claim(context.Background(), livelease.AgentLeaseKey("c-op"), livelease.NewInstanceRef("remote-instance", "http://remote"), livelease.ClaimOptions{
+		Mode: livelease.ClaimReplace,
 		TTL:  time.Minute,
 	})
 	if err != nil {
-		t.Fatalf("claim remote owner: %v", err)
+		t.Fatalf("claim remote lease: %v", err)
 	}
 	defer func() { _ = lease.Release(context.Background()) }()
 
@@ -886,7 +886,7 @@ func TestAgentStateKeepsRemoteOwnerOnline(t *testing.T) {
 		t.Fatalf("state: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
 	if !strings.Contains(string(resp.Body), `"status":"online"`) {
-		t.Fatalf("remote owner should keep agent online: %s", resp.Body)
+		t.Fatalf("remote lease should keep agent online: %s", resp.Body)
 	}
 	enr, err := h.store.Enrollments.Get(context.Background(), "remote-online")
 	if err != nil {
@@ -908,7 +908,7 @@ func TestAdminCannotAccessOthersConnection(t *testing.T) {
 
 func TestStrangerDeniedConnection(t *testing.T) {
 	h := newHarness(t)
-	// viewer is not owner/grantee of c-op → forbidden even for a safe route.
+	// viewer is not ref/grantee of c-op → forbidden even for a safe route.
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "viewer", nil); resp.Status != http.StatusForbidden {
 		t.Errorf("stranger on a connection: want 403, got %d", resp.Status)
 	}

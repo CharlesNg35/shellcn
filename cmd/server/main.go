@@ -25,10 +25,10 @@ import (
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
-	"github.com/charlesng35/shellcn/internal/cluster"
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/email"
 	"github.com/charlesng35/shellcn/internal/extplugin"
+	"github.com/charlesng35/shellcn/internal/livelease"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/pluginmarket"
 	"github.com/charlesng35/shellcn/internal/pluginregistry"
@@ -141,18 +141,18 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		return fmt.Errorf("load policies: %w", err)
 	}
 
-	// Live-state ownership and transports.
-	internalURLs := cluster.DiscoverInternalURLs(cluster.PortFromListenAddress(cfg.Server.Addr), false)
-	instance := cluster.NewLocalInstanceRef(internalURLs...)
-	owners := cluster.NewStoreOwnerRegistry(st.ClusterOwners)
-	leaseTTL := cfg.Cluster.LeaseTTLDuration()
-	renewInterval := cfg.Cluster.RenewIntervalDuration()
-	sessions := session.New(session.Options{OwnerRegistry: owners, Instance: instance, LeaseTTL: leaseTTL, RenewInterval: renewInterval})
+	// Live-state leasing and transports.
+	internalURLs := livelease.DiscoverInternalURLs(livelease.PortFromListenAddress(cfg.Server.Addr), false)
+	instance := livelease.NewLocalInstanceRef(internalURLs...)
+	leases := livelease.NewStoreLeaseRegistry(st.LiveStateLeases)
+	leaseTTL := cfg.LiveState.LeaseTTLDuration()
+	renewInterval := cfg.LiveState.RenewIntervalDuration()
+	sessions := session.New(session.Options{LeaseRegistry: leases, Instance: instance, LeaseTTL: leaseTTL, RenewInterval: renewInterval})
 	defer sessions.Shutdown()
 
 	metrics := telemetry.NewMetrics()
 	tunnels := transport.NewRegistry(
-		transport.WithOwnerRegistry(owners, instance),
+		transport.WithLeaseRegistry(leases, instance),
 		transport.WithLeaseTTL(leaseTTL),
 		transport.WithRenewInterval(renewInterval),
 	)
@@ -237,8 +237,8 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		return err
 	})
 
-	stopOwnerCleanup := startClusterOwnerCleanup(logger, st.ClusterOwners, clusterOwnerCleanupEvery(leaseTTL))
-	defer stopOwnerCleanup()
+	stopLeaseCleanup := startLiveStateLeaseCleanup(logger, st.LiveStateLeases, liveStateLeaseCleanupEvery(leaseTTL))
+	defer stopLeaseCleanup()
 
 	// Background maintenance: always reap abandoned chunked (browser-capture)
 	// recordings so partial blobs from vanished sessions don't leak; additionally
@@ -329,13 +329,13 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		SessionMgr: auth.NewSessionManagerWithKey(cfg.Auth.SessionTTLDuration(), authKey),
 		Tickets: auth.NewTicketStore(auth.TicketStoreOptions{
 			SigningKey: authKey,
-			Owners:     owners,
+			Leases:     leases,
 			Instance:   instance,
 		}),
 		ArtifactTickets: auth.NewTicketStore(auth.TicketStoreOptions{
 			TTL:        service.DefaultEnrollmentTTL,
 			SigningKey: authKey,
-			Owners:     owners,
+			Leases:     leases,
 			Instance:   instance,
 		}),
 		Policy:            pol,
@@ -351,7 +351,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		TwoFactor:         twoFactor,
 		Invitations:       invitations,
 		Tunnels:           tunnels,
-		Owners:            owners,
+		Leases:            leases,
 		Instance:          instance,
 		Recording:         recEngine,
 		Recordings:        recordings,
@@ -395,20 +395,20 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	return httpServer.Shutdown(ctx)
 }
 
-func clusterOwnerCleanupEvery(leaseTTL time.Duration) time.Duration {
+func liveStateLeaseCleanupEvery(leaseTTL time.Duration) time.Duration {
 	if leaseTTL < time.Minute {
 		return time.Minute
 	}
 	return leaseTTL
 }
 
-func startClusterOwnerCleanup(logger *slog.Logger, owners store.ClusterOwnerStore, every time.Duration) func() {
+func startLiveStateLeaseCleanup(logger *slog.Logger, leases store.LiveStateLeaseStore, every time.Duration) func() {
 	stop := make(chan struct{})
 	cleanup := func() {
-		if n, err := owners.DeleteExpired(context.Background(), time.Now().UTC()); err != nil {
-			logger.Warn("cluster owner cleanup failed", "err", err)
+		if n, err := leases.DeleteExpired(context.Background(), time.Now().UTC()); err != nil {
+			logger.Warn("live-state lease cleanup failed", "err", err)
 		} else if n > 0 {
-			logger.Info("cluster owner cleanup removed expired owners", "count", n)
+			logger.Info("live-state lease cleanup removed expired leases", "count", n)
 		}
 	}
 	cleanup()
