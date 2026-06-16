@@ -193,9 +193,11 @@ describe("primeVuePassthrough", () => {
 
     primeVuePassthrough.dialog.transition.onBeforeEnter(root);
     expect(mask.classList.contains("opacity-0")).toBe(true);
+    expect(mask.classList.contains("opacity-100")).toBe(false);
 
     primeVuePassthrough.dialog.transition.onBeforeLeave(root);
     expect(mask.classList.contains("opacity-100")).toBe(true);
+    expect(mask.classList.contains("opacity-0")).toBe(false);
 
     expect(primeVuePassthrough.dialog.transition.enterActiveClass).toContain(
       "transition-[opacity,transform]",

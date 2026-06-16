@@ -193,6 +193,7 @@ const dialogFooter =
 const dialogTransition = {
   onBeforeEnter(el: Element) {
     const mask = el.parentElement;
+    mask?.classList.remove("opacity-100");
     mask?.classList.add("opacity-0");
   },
   onEnter(el: Element) {
@@ -204,6 +205,7 @@ const dialogTransition = {
   },
   onBeforeLeave(el: Element) {
     const mask = el.parentElement;
+    mask?.classList.remove("opacity-0");
     mask?.classList.add("opacity-100");
   },
   onLeave(el: Element) {
