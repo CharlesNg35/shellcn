@@ -41,7 +41,7 @@ const emit = defineEmits<{
 
     <dd v-if="field.usage" class="min-w-0">
       <div
-        class="flex min-w-0 flex-col gap-2 sm:grid sm:grid-cols-[minmax(8rem,1fr)_minmax(12rem,1.5fr)] sm:items-center"
+        class="flex min-w-0 flex-col gap-2 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] sm:items-center"
       >
         <span
           class="min-w-0 truncate font-medium text-surface-900 dark:text-surface-100"
@@ -53,7 +53,7 @@ const emit = defineEmits<{
           :show-value="false"
           :aria-label="field.label ?? humanize(field.key)"
           :pt="{ value: usageToneClass(record, field) }"
-          class="h-2"
+          class="h-2 w-full"
         />
       </div>
       <div v-if="usageCaption(record, field)" :class="opsUsageCaption">

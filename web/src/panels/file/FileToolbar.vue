@@ -267,14 +267,14 @@ const uploadTitle = computed(() =>
 
     <div
       v-if="statusText"
-      class="mt-2 flex items-center gap-3 text-xs text-surface-500 dark:text-surface-400"
+      class="mt-2 flex min-w-0 flex-wrap items-center gap-3 text-xs text-surface-500 dark:text-surface-400"
       role="status"
       aria-live="polite"
     >
-      <span class="min-w-0 shrink-0 truncate">{{ statusText }}</span>
+      <span class="min-w-0 flex-1 truncate">{{ statusText }}</span>
       <ProgressBar
         v-if="uploadProgress"
-        class="h-1.5 min-w-32 flex-1"
+        class="h-1.5 min-w-0 flex-[1_1_8rem]"
         :mode="uploadProgress.indeterminate ? 'indeterminate' : 'determinate'"
         :value="uploadProgress.percent"
         :show-value="false"
