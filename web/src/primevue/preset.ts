@@ -402,18 +402,13 @@ export const primeVuePassthrough = {
 
   tree: {
     root: "overflow-y-auto p-2 text-sm",
-    wrapper: "min-h-0 overflow-auto",
-    rootChildren: "space-y-0.5",
     node: "",
     nodeContent:
       "flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:text-primary-700 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/10 dark:data-[p-selected=true]:text-primary-200",
     nodeToggleButton:
       "flex h-5 w-5 shrink-0 items-center justify-center rounded text-surface-400 transition-colors hover:bg-surface-200 hover:text-surface-700 data-[p-leaf=true]:invisible dark:hover:bg-surface-700 dark:hover:text-surface-100",
-    nodeToggleIcon: "h-3.5 w-3.5",
     nodeLabel: "flex-1 truncate text-surface-700 dark:text-surface-200",
     nodeChildren: "pl-3",
-    loadingIcon: "h-4 w-4 animate-spin text-primary-500",
-    emptyMessage: "px-3 py-2 text-sm text-surface-400",
   },
 
   timeline: {

@@ -85,13 +85,11 @@ describe("primeVuePassthrough", () => {
 
   it("does not globally cap tree height", () => {
     expect(primeVuePassthrough.tree.root).toContain("p-2");
-    expect(primeVuePassthrough.tree.wrapper).toContain("min-h-0");
-    expect(primeVuePassthrough.tree.wrapper).toContain("overflow-auto");
-    expect(primeVuePassthrough.tree.wrapper).not.toContain("p-2");
-    expect(primeVuePassthrough.tree.wrapper).not.toContain("max-h-56");
+    expect(primeVuePassthrough.tree).not.toHaveProperty("wrapper");
   });
 
   it("keeps tree spacing aligned with the compact navigation tree", () => {
+    expect(primeVuePassthrough.tree).not.toHaveProperty("rootChildren");
     expect(primeVuePassthrough.tree.nodeContent).toContain("gap-1.5");
     expect(primeVuePassthrough.tree.nodeContent).toContain("px-2");
     expect(primeVuePassthrough.tree.nodeContent).toContain("py-1.5");
@@ -100,6 +98,7 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.tree.nodeChildren).toBe("pl-3");
     expect(primeVuePassthrough.tree.nodeChildren).not.toContain("ml-4");
     expect(primeVuePassthrough.tree.nodeChildren).not.toContain("border-l");
+    expect(primeVuePassthrough.tree).not.toHaveProperty("nodeToggleIcon");
   });
 
   it("keeps tree leaf toggles hidden without adding fallback icon spacing", () => {
