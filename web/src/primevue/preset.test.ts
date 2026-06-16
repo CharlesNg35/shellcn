@@ -163,6 +163,7 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.dialog.mask).toContain("pointer-events-auto");
     expect(primeVuePassthrough.dialog.mask).toContain("fixed");
     expect(primeVuePassthrough.dialog.mask).toContain("z-50");
+    expect(primeVuePassthrough.dialog.mask).toContain("transition-opacity");
     expect(primeVuePassthrough.confirmdialog.mask).toContain(
       "pointer-events-auto",
     );
@@ -182,6 +183,28 @@ describe("primeVuePassthrough", () => {
     );
     expect(primeVuePassthrough.confirmdialog.content).toContain(
       "overflow-auto",
+    );
+  });
+
+  it("animates modal masks in unstyled mode", () => {
+    const mask = document.createElement("div");
+    const root = document.createElement("div");
+    mask.append(root);
+
+    primeVuePassthrough.dialog.transition.onBeforeEnter(root);
+    expect(mask.classList.contains("opacity-0")).toBe(true);
+
+    primeVuePassthrough.dialog.transition.onBeforeLeave(root);
+    expect(mask.classList.contains("opacity-100")).toBe(true);
+
+    expect(primeVuePassthrough.dialog.transition.enterActiveClass).toContain(
+      "transition-[opacity,transform]",
+    );
+    expect(primeVuePassthrough.dialog.transition.leaveActiveClass).toContain(
+      "transition-[opacity,transform]",
+    );
+    expect(primeVuePassthrough.dialog.transition.enterFromClass).toContain(
+      "scale-[0.985]",
     );
   });
 
