@@ -43,7 +43,7 @@ audit:
   retention_days: 0
   cleanup_interval: 1h
 
-cluster:
+live_state:
   lease_ttl: 15s
   renew_interval: 5s
 

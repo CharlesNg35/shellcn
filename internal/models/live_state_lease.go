@@ -2,8 +2,8 @@ package models
 
 import "time"
 
-type ClusterOwner struct {
-	Key          string `gorm:"primaryKey;column:owner_key"`
+type LiveStateLease struct {
+	Key          string `gorm:"primaryKey;column:lease_key"`
 	InstanceID   string `gorm:"index;not null"`
 	InternalURL  string
 	InternalURLs string
@@ -13,4 +13,4 @@ type ClusterOwner struct {
 	UpdatedAt    time.Time
 }
 
-func (ClusterOwner) TableName() string { return "cluster_owners" }
+func (LiveStateLease) TableName() string { return "live_state_leases" }

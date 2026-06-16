@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/app"
-	"github.com/charlesng35/shellcn/internal/cluster"
+	"github.com/charlesng35/shellcn/internal/livelease"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
@@ -261,8 +261,8 @@ type Registry struct {
 	mu            sync.RWMutex
 	seq           uint64
 	dialers       map[string]registration
-	ownerRegistry cluster.OwnerRegistry
-	instance      cluster.InstanceRef
+	leaseRegistry livelease.LeaseRegistry
+	instance      livelease.InstanceRef
 	leaseTTL      time.Duration
 	renewInterval time.Duration
 }
@@ -272,15 +272,15 @@ type Registry struct {
 type registration struct {
 	id    uint64
 	dial  DialFunc
-	lease cluster.Lease
+	lease livelease.Lease
 	stop  context.CancelFunc
 }
 
 type RegistryOption func(*Registry)
 
-func WithOwnerRegistry(reg cluster.OwnerRegistry, instance cluster.InstanceRef) RegistryOption {
+func WithLeaseRegistry(reg livelease.LeaseRegistry, instance livelease.InstanceRef) RegistryOption {
 	return func(r *Registry) {
-		r.ownerRegistry = reg
+		r.leaseRegistry = reg
 		r.instance = instance
 	}
 }
@@ -314,25 +314,25 @@ type TunnelRegistration struct {
 	registry     *Registry
 	connectionID string
 	id           uint64
-	lease        cluster.Lease
+	lease        livelease.Lease
 	stopRenewal  context.CancelFunc
 }
 
 // TunnelRelease reports what happened when a tunnel registration ended.
 type TunnelRelease struct {
-	// WasActive is true when this registration was still the active cluster owner.
+	// WasActive is true when this registration was still the active live-state lease.
 	// False means a newer tunnel had already replaced it.
 	WasActive bool
 }
 
 // Register binds an agent dialer for the lifetime of one tunnel.
 func (r *Registry) Register(ctx context.Context, connectionID string, dial DialFunc) (*TunnelRegistration, error) {
-	var lease cluster.Lease
+	var lease livelease.Lease
 	var stop context.CancelFunc
-	if r.ownerRegistry != nil {
+	if r.leaseRegistry != nil {
 		var err error
-		lease, err = r.ownerRegistry.Claim(ctx, cluster.AgentOwnerKey(connectionID), r.instance, cluster.ClaimOptions{
-			Mode: cluster.ClaimReplace,
+		lease, err = r.leaseRegistry.Claim(ctx, livelease.AgentLeaseKey(connectionID), r.instance, livelease.ClaimOptions{
+			Mode: livelease.ClaimReplace,
 			TTL:  r.leaseTTL,
 		})
 		if err != nil {
@@ -350,7 +350,7 @@ func (r *Registry) Register(ctx context.Context, connectionID string, dial DialF
 	return &TunnelRegistration{registry: r, connectionID: connectionID, id: id, lease: lease, stopRenewal: stop}, nil
 }
 
-// Release removes this tunnel registration and releases its ownership lease.
+// Release removes this tunnel registration and releases its live-state lease.
 func (r *TunnelRegistration) Release() TunnelRelease {
 	reg := r.registry
 	lease := r.lease
@@ -370,11 +370,11 @@ func (r *TunnelRegistration) Release() TunnelRelease {
 		stop()
 	}
 	wasActive := removedLocal
-	if lease != nil && reg.ownerRegistry != nil {
+	if lease != nil && reg.leaseRegistry != nil {
 		wasActive = false
-		key := cluster.AgentOwnerKey(r.connectionID)
-		if owner, ok, err := reg.ownerRegistry.Get(context.Background(), key); err == nil && ok {
-			wasActive = owner.LeaseID == lease.Owner().LeaseID
+		key := livelease.AgentLeaseKey(r.connectionID)
+		if ref, ok, err := reg.leaseRegistry.Get(context.Background(), key); err == nil && ok {
+			wasActive = ref.LeaseID == lease.Ref().LeaseID
 		}
 	}
 	if lease != nil {
@@ -383,7 +383,7 @@ func (r *TunnelRegistration) Release() TunnelRelease {
 	return TunnelRelease{WasActive: wasActive}
 }
 
-func renewLease(ctx context.Context, interval time.Duration, lease cluster.Lease) {
+func renewLease(ctx context.Context, interval time.Duration, lease livelease.Lease) {
 	if interval <= 0 {
 		interval = 5 * time.Second
 	}

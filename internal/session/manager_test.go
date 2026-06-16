@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/cluster"
+	"github.com/charlesng35/shellcn/internal/livelease"
 	"github.com/charlesng35/shellcn/internal/session"
 	"github.com/charlesng35/shellcn/internal/store"
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -445,24 +445,24 @@ func TestCloseConnectionClosesAllActorScopes(t *testing.T) {
 	}
 }
 
-func TestAcquireClaimsExclusiveOwner(t *testing.T) {
-	owners := cluster.NewStoreOwnerRegistry(store.NewMemory().ClusterOwners)
+func TestAcquireClaimsExclusiveLease(t *testing.T) {
+	leases := livelease.NewStoreLeaseRegistry(store.NewMemory().LiveStateLeases)
 	key := session.Key{ConnectionID: "c1", ActorScope: "u1"}
 	first := session.New(session.Options{
-		OwnerRegistry: owners,
-		Instance:      cluster.NewInstanceRef("a", "http://a"),
+		LeaseRegistry: leases,
+		Instance:      livelease.NewInstanceRef("a", "http://a"),
 	})
 	defer first.Shutdown()
 	second := session.New(session.Options{
-		OwnerRegistry: owners,
-		Instance:      cluster.NewInstanceRef("b", "http://b"),
+		LeaseRegistry: leases,
+		Instance:      livelease.NewInstanceRef("b", "http://b"),
 	})
 	defer second.Shutdown()
 
 	if _, err := first.Acquire(context.Background(), key, "u1", connector(&fakeSession{}, nil)); err != nil {
 		t.Fatalf("first acquire: %v", err)
 	}
-	if _, err := second.Acquire(context.Background(), key, "u1", connector(&fakeSession{}, nil)); !errors.Is(err, cluster.ErrOwnedElsewhere) {
-		t.Fatalf("second acquire: want ErrOwnedElsewhere, got %v", err)
+	if _, err := second.Acquire(context.Background(), key, "u1", connector(&fakeSession{}, nil)); !errors.Is(err, livelease.ErrLeaseHeld) {
+		t.Fatalf("second acquire: want ErrLeaseHeld, got %v", err)
 	}
 }

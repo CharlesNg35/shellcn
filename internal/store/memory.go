@@ -31,88 +31,88 @@ func NewMemory() *Store {
 		AIProviders:          &memAIProviderStore{m: map[string]models.AIProviderConfig{}},
 		AIConversations:      &memAIConversationStore{m: map[string]models.AIConversation{}},
 		AIMessages:           &memAIMessageStore{m: map[string][]models.AIMessage{}},
-		ClusterOwners:        &memClusterOwnerStore{m: map[string]models.ClusterOwner{}},
+		LiveStateLeases:      &memLiveStateLeaseStore{m: map[string]models.LiveStateLease{}},
 	}
 }
 
-type memClusterOwnerStore struct {
+type memLiveStateLeaseStore struct {
 	mu sync.Mutex
-	m  map[string]models.ClusterOwner
+	m  map[string]models.LiveStateLease
 }
 
-func (s *memClusterOwnerStore) Claim(_ context.Context, owner *models.ClusterOwner, replace bool, now time.Time) (models.ClusterOwner, error) {
+func (s *memLiveStateLeaseStore) Claim(_ context.Context, lease *models.LiveStateLease, replace bool, now time.Time) (models.LiveStateLease, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	cur, ok := s.m[owner.Key]
+	cur, ok := s.m[lease.Key]
 	if ok && now.Before(cur.ExpiresAt) && !replace {
 		return cur, models.ErrConflict
 	}
-	next := *owner
+	next := *lease
 	if ok {
 		next.CreatedAt = cur.CreatedAt
 	} else {
 		next.CreatedAt = now
 	}
 	next.UpdatedAt = now
-	s.m[owner.Key] = next
+	s.m[lease.Key] = next
 	return next, nil
 }
 
-func (s *memClusterOwnerStore) Get(_ context.Context, key string, now time.Time) (models.ClusterOwner, error) {
+func (s *memLiveStateLeaseStore) Get(_ context.Context, key string, now time.Time) (models.LiveStateLease, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	owner, ok := s.m[key]
+	lease, ok := s.m[key]
 	if !ok {
-		return models.ClusterOwner{}, ErrNotFound
+		return models.LiveStateLease{}, ErrNotFound
 	}
-	if !now.Before(owner.ExpiresAt) {
+	if !now.Before(lease.ExpiresAt) {
 		delete(s.m, key)
-		return models.ClusterOwner{}, ErrNotFound
+		return models.LiveStateLease{}, ErrNotFound
 	}
-	return owner, nil
+	return lease, nil
 }
 
-func (s *memClusterOwnerStore) Renew(_ context.Context, key, leaseID string, expiresAt, now time.Time) (bool, error) {
+func (s *memLiveStateLeaseStore) Renew(_ context.Context, key, leaseID string, expiresAt, now time.Time) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	owner, ok := s.m[key]
-	if !ok || owner.LeaseID != leaseID || !now.Before(owner.ExpiresAt) {
+	lease, ok := s.m[key]
+	if !ok || lease.LeaseID != leaseID || !now.Before(lease.ExpiresAt) {
 		return false, nil
 	}
-	owner.ExpiresAt = expiresAt
-	owner.UpdatedAt = now
-	s.m[key] = owner
+	lease.ExpiresAt = expiresAt
+	lease.UpdatedAt = now
+	s.m[key] = lease
 	return true, nil
 }
 
-func (s *memClusterOwnerStore) PreferInternalURL(_ context.Context, key, leaseID, internalURL string, now time.Time) (bool, error) {
+func (s *memLiveStateLeaseStore) PreferInternalURL(_ context.Context, key, leaseID, internalURL string, now time.Time) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	owner, ok := s.m[key]
-	if !ok || owner.LeaseID != leaseID || !now.Before(owner.ExpiresAt) {
+	lease, ok := s.m[key]
+	if !ok || lease.LeaseID != leaseID || !now.Before(lease.ExpiresAt) {
 		return false, nil
 	}
-	owner.InternalURL = internalURL
-	owner.UpdatedAt = now
-	s.m[key] = owner
+	lease.InternalURL = internalURL
+	lease.UpdatedAt = now
+	s.m[key] = lease
 	return true, nil
 }
 
-func (s *memClusterOwnerStore) Release(_ context.Context, key, leaseID string) error {
+func (s *memLiveStateLeaseStore) Release(_ context.Context, key, leaseID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if owner, ok := s.m[key]; ok && owner.LeaseID == leaseID {
+	if lease, ok := s.m[key]; ok && lease.LeaseID == leaseID {
 		delete(s.m, key)
 	}
 	return nil
 }
 
-func (s *memClusterOwnerStore) DeleteExpired(_ context.Context, now time.Time) (int64, error) {
+func (s *memLiveStateLeaseStore) DeleteExpired(_ context.Context, now time.Time) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var deleted int64
-	for key, owner := range s.m {
-		if !now.Before(owner.ExpiresAt) {
+	for key, lease := range s.m {
+		if !now.Before(lease.ExpiresAt) {
 			delete(s.m, key)
 			deleted++
 		}

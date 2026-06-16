@@ -21,12 +21,12 @@ func TestGormLoggerSuppressesRecordNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&models.ClusterOwner{}); err != nil {
+	if err := db.AutoMigrate(&models.LiveStateLease{}); err != nil {
 		t.Fatalf("auto-migrate: %v", err)
 	}
 
-	var owner models.ClusterOwner
-	err = db.First(&owner, "owner_key = ?", "missing").Error
+	var lease models.LiveStateLease
+	err = db.First(&lease, "lease_key = ?", "missing").Error
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("first err = %v, want ErrRecordNotFound", err)
 	}

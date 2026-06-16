@@ -1,6 +1,6 @@
-// Package cluster defines platform-neutral ownership primitives for live
+// Package livelease defines platform-neutral lease primitives for live
 // gateway state that must remain in process memory.
-package cluster
+package livelease
 
 import (
 	"context"
@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	ErrOwnedElsewhere = errors.New("cluster: owner is another instance")
-	ErrLeaseExpired   = errors.New("cluster: lease expired")
+	ErrLeaseHeld    = errors.New("livelease: lease is held by another instance")
+	ErrLeaseExpired = errors.New("livelease: lease expired")
 )
 
 type ClaimMode string
@@ -36,7 +36,7 @@ type InstanceRef struct {
 func NewInstanceRef(id string, internalURLs ...string) InstanceRef {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		panic("cluster: instance ID is required")
+		panic("livelease: instance ID is required")
 	}
 	return newInstanceRef(id, internalURLs...)
 }
@@ -73,18 +73,18 @@ func defaultInstanceID() string {
 	return fmt.Sprintf("%s-%d", host, os.Getpid())
 }
 
-type OwnerRef struct {
+type LeaseRef struct {
 	Instance  InstanceRef
 	Key       string
 	LeaseID   string
 	ExpiresAt time.Time
 }
 
-func (o OwnerRef) IsLocal(instance InstanceRef) bool {
+func (o LeaseRef) IsLocal(instance InstanceRef) bool {
 	return o.Instance.ID != "" && o.Instance.ID == instance.ID
 }
 
-func (o OwnerRef) InternalURLCandidates() []string {
+func (o LeaseRef) InternalURLCandidates() []string {
 	return o.Instance.InternalURLCandidates()
 }
 
@@ -104,23 +104,23 @@ func (o ClaimOptions) withDefaults() ClaimOptions {
 }
 
 type Lease interface {
-	Owner() OwnerRef
+	Ref() LeaseRef
 	Renew(ctx context.Context) error
 	Release(ctx context.Context) error
 }
 
-type OwnerRegistry interface {
+type LeaseRegistry interface {
 	Claim(ctx context.Context, key string, instance InstanceRef, opts ClaimOptions) (Lease, error)
-	Get(ctx context.Context, key string) (OwnerRef, bool, error)
-	PreferInternalURL(ctx context.Context, owner OwnerRef, internalURL string) error
+	Get(ctx context.Context, key string) (LeaseRef, bool, error)
+	PreferInternalURL(ctx context.Context, ref LeaseRef, internalURL string) error
 }
 
-func AgentOwnerKey(connectionID string) string {
+func AgentLeaseKey(connectionID string) string {
 	return "agent:" + connectionID
 }
 
-func SessionOwnerKey(connectionID, ownerScope string) string {
-	return "session:" + connectionID + ":" + ownerScope
+func SessionLeaseKey(connectionID, actorScope string) string {
+	return "session:" + connectionID + ":" + actorScope
 }
 
 func DiscoverInternalURL(port string, tlsEnabled bool) string {

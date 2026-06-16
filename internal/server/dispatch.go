@@ -164,7 +164,7 @@ func (s *Server) handleConnectionProxy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if s.proxyIfRemoteOwner(w, r, conn, user.ID) {
+	if s.proxyIfRemoteLeaseHolder(w, r, conn, user.ID) {
 		return
 	}
 	handle, err := s.acquireSession(ctx, res)
@@ -253,7 +253,7 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.proxyIfRemoteOwner(w, r, res.conn, res.user.ID) {
+	if s.proxyIfRemoteLeaseHolder(w, r, res.conn, res.user.ID) {
 		return
 	}
 

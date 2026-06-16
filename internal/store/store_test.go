@@ -69,7 +69,7 @@ func TestStoreSuite(t *testing.T) {
 			t.Run("policies", func(t *testing.T) { testPolicies(t, f.open(t)) })
 			t.Run("recordings", func(t *testing.T) { testRecordings(t, f.open(t)) })
 			t.Run("pluginStorage", func(t *testing.T) { testPluginStorage(t, f.open(t)) })
-			t.Run("clusterOwners", func(t *testing.T) { testClusterOwners(t, f.open(t)) })
+			t.Run("liveStateLeases", func(t *testing.T) { testLiveStateLeases(t, f.open(t)) })
 		})
 	}
 }
@@ -158,10 +158,10 @@ func testUsers(t *testing.T, s *store.Store) {
 	}
 }
 
-func testClusterOwners(t *testing.T, s *store.Store) {
+func testLiveStateLeases(t *testing.T, s *store.Store) {
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)
-	owner := &models.ClusterOwner{
+	lease := &models.LiveStateLease{
 		Key:          "agent:c1",
 		InstanceID:   "instance-a",
 		InternalURL:  "http://a",
@@ -169,10 +169,10 @@ func testClusterOwners(t *testing.T, s *store.Store) {
 		LeaseID:      "lease-a",
 		ExpiresAt:    now.Add(time.Minute),
 	}
-	if _, err := s.ClusterOwners.Claim(ctx, owner, false, now); err != nil {
+	if _, err := s.LiveStateLeases.Claim(ctx, lease, false, now); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
-	other := &models.ClusterOwner{
+	other := &models.LiveStateLease{
 		Key:          "agent:c1",
 		InstanceID:   "instance-b",
 		InternalURL:  "http://b",
@@ -180,69 +180,69 @@ func testClusterOwners(t *testing.T, s *store.Store) {
 		LeaseID:      "lease-b",
 		ExpiresAt:    now.Add(time.Minute),
 	}
-	if _, err := s.ClusterOwners.Claim(ctx, other, false, now); !errors.Is(err, models.ErrConflict) {
+	if _, err := s.LiveStateLeases.Claim(ctx, other, false, now); !errors.Is(err, models.ErrConflict) {
 		t.Fatalf("exclusive claim conflict: want ErrConflict, got %v", err)
 	}
-	got, err := s.ClusterOwners.Claim(ctx, other, true, now)
+	got, err := s.LiveStateLeases.Claim(ctx, other, true, now)
 	if err != nil {
 		t.Fatalf("replace claim: %v", err)
 	}
 	if got.InstanceID != "instance-b" || got.LeaseID != "lease-b" {
-		t.Fatalf("replace claim owner = %+v", got)
+		t.Fatalf("replace claim lease = %+v", got)
 	}
 	if got.InternalURLs != `["http://b","http://b2"]` {
 		t.Fatalf("replace claim candidates = %q", got.InternalURLs)
 	}
-	ok, err := s.ClusterOwners.PreferInternalURL(ctx, "agent:c1", "lease-a", "http://stale", now)
+	ok, err := s.LiveStateLeases.PreferInternalURL(ctx, "agent:c1", "lease-a", "http://stale", now)
 	if err != nil || ok {
 		t.Fatalf("prefer stale lease should fail: ok=%v err=%v", ok, err)
 	}
-	ok, err = s.ClusterOwners.PreferInternalURL(ctx, "agent:c1", "lease-b", "http://b2", now)
+	ok, err = s.LiveStateLeases.PreferInternalURL(ctx, "agent:c1", "lease-b", "http://b2", now)
 	if err != nil || !ok {
-		t.Fatalf("prefer active owner URL: ok=%v err=%v", ok, err)
+		t.Fatalf("prefer active lease URL: ok=%v err=%v", ok, err)
 	}
-	got, err = s.ClusterOwners.Get(ctx, "agent:c1", now)
+	got, err = s.LiveStateLeases.Get(ctx, "agent:c1", now)
 	if err != nil {
 		t.Fatalf("get after prefer: %v", err)
 	}
 	if got.InternalURL != "http://b2" || got.InternalURLs != `["http://b","http://b2"]` {
-		t.Fatalf("preferred owner URL = %+v", got)
+		t.Fatalf("preferred lease URL = %+v", got)
 	}
-	expired := &models.ClusterOwner{
+	expired := &models.LiveStateLease{
 		Key:         "agent:expired",
 		InstanceID:  "instance-old",
 		InternalURL: "http://old",
 		LeaseID:     "lease-old",
 		ExpiresAt:   now.Add(-time.Second),
 	}
-	if _, err := s.ClusterOwners.Claim(ctx, expired, false, now.Add(-time.Minute)); err != nil {
-		t.Fatalf("claim expired owner: %v", err)
+	if _, err := s.LiveStateLeases.Claim(ctx, expired, false, now.Add(-time.Minute)); err != nil {
+		t.Fatalf("claim expired lease: %v", err)
 	}
-	deleted, err := s.ClusterOwners.DeleteExpired(ctx, now)
+	deleted, err := s.LiveStateLeases.DeleteExpired(ctx, now)
 	if err != nil {
-		t.Fatalf("delete expired owners: %v", err)
+		t.Fatalf("delete expired leases: %v", err)
 	}
 	if deleted != 1 {
-		t.Fatalf("delete expired owners count = %d, want 1", deleted)
+		t.Fatalf("delete expired leases count = %d, want 1", deleted)
 	}
-	if _, err := s.ClusterOwners.Get(ctx, "agent:expired", now); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("expired owner should be gone: %v", err)
+	if _, err := s.LiveStateLeases.Get(ctx, "agent:expired", now); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expired lease should be gone: %v", err)
 	}
-	if _, err := s.ClusterOwners.Get(ctx, "agent:c1", now); err != nil {
-		t.Fatalf("active owner should remain: %v", err)
+	if _, err := s.LiveStateLeases.Get(ctx, "agent:c1", now); err != nil {
+		t.Fatalf("active lease should remain: %v", err)
 	}
-	ok, err = s.ClusterOwners.Renew(ctx, "agent:c1", "lease-b", now.Add(2*time.Minute), now)
+	ok, err = s.LiveStateLeases.Renew(ctx, "agent:c1", "lease-b", now.Add(2*time.Minute), now)
 	if err != nil || !ok {
 		t.Fatalf("renew active lease: ok=%v err=%v", ok, err)
 	}
-	if ok, err := s.ClusterOwners.Renew(ctx, "agent:c1", "lease-a", now.Add(2*time.Minute), now); err != nil || ok {
+	if ok, err := s.LiveStateLeases.Renew(ctx, "agent:c1", "lease-a", now.Add(2*time.Minute), now); err != nil || ok {
 		t.Fatalf("renew old lease should fail: ok=%v err=%v", ok, err)
 	}
-	if err := s.ClusterOwners.Release(ctx, "agent:c1", "lease-b"); err != nil {
+	if err := s.LiveStateLeases.Release(ctx, "agent:c1", "lease-b"); err != nil {
 		t.Fatalf("release: %v", err)
 	}
-	if _, err := s.ClusterOwners.Get(ctx, "agent:c1", now); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("released owner: want ErrNotFound, got %v", err)
+	if _, err := s.LiveStateLeases.Get(ctx, "agent:c1", now); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("released lease: want ErrNotFound, got %v", err)
 	}
 }
 

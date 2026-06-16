@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/cluster"
+	"github.com/charlesng35/shellcn/internal/livelease"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
@@ -59,8 +59,8 @@ type Options struct {
 	MaxChannelsPerSession int
 	HealthInterval        time.Duration
 	FailureRetention      time.Duration
-	OwnerRegistry         cluster.OwnerRegistry
-	Instance              cluster.InstanceRef
+	LeaseRegistry         livelease.LeaseRegistry
+	Instance              livelease.InstanceRef
 	LeaseTTL              time.Duration
 	RenewInterval         time.Duration
 }
@@ -102,7 +102,7 @@ type entry struct {
 	lastHealthCheck time.Time
 	reason          string
 	closed          bool
-	lease           cluster.Lease
+	lease           livelease.Lease
 }
 
 type failure struct {
@@ -145,11 +145,11 @@ func (m *Manager) Acquire(ctx context.Context, key Key, userID string, connect C
 			return nil, ErrSessionLimit
 		}
 		now := m.now()
-		var lease cluster.Lease
-		if m.opts.OwnerRegistry != nil {
+		var lease livelease.Lease
+		if m.opts.LeaseRegistry != nil {
 			var err error
-			lease, err = m.opts.OwnerRegistry.Claim(ctx, cluster.SessionOwnerKey(key.ConnectionID, key.ActorScope), m.opts.Instance, cluster.ClaimOptions{
-				Mode: cluster.ClaimExclusive,
+			lease, err = m.opts.LeaseRegistry.Claim(ctx, livelease.SessionLeaseKey(key.ConnectionID, key.ActorScope), m.opts.Instance, livelease.ClaimOptions{
+				Mode: livelease.ClaimExclusive,
 				TTL:  m.opts.LeaseTTL,
 			})
 			if err != nil {

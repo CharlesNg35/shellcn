@@ -25,7 +25,7 @@ func allModels() []any {
 		&models.AuditEntry{}, &models.PluginStorageItem{}, &models.Preference{},
 		&models.AgentEnrollment{}, &models.PolicyRule{}, &models.Invitation{},
 		&models.Recording{}, &models.ProtocolSetting{}, &models.AIProviderConfig{},
-		&models.AIConversation{}, &models.AIMessage{}, &models.ClusterOwner{},
+		&models.AIConversation{}, &models.AIMessage{}, &models.LiveStateLease{},
 	}
 }
 
@@ -125,7 +125,7 @@ func newGormStore(db *gorm.DB) *Store {
 		AIProviders:          &gormAIProviderStore{db: db},
 		AIConversations:      &gormAIConversationStore{db: db},
 		AIMessages:           &gormAIMessageStore{db: db},
-		ClusterOwners:        &gormClusterOwnerStore{db: db},
+		LiveStateLeases:      &gormLiveStateLeaseStore{db: db},
 		close: func() error {
 			sqlDB, err := db.DB()
 			if err != nil {
