@@ -7,7 +7,7 @@ import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import Tree from "primevue/tree";
-import { primeVuePassthrough } from "./preset";
+import { opsUsageCaption, opsUsageRow, primeVuePassthrough } from "./preset";
 
 describe("primeVuePassthrough", () => {
   it("styles checked toggles using the state emitted on the slider", () => {
@@ -60,6 +60,19 @@ describe("primeVuePassthrough", () => {
       expect(primeVuePassthrough).toHaveProperty(key);
     }
     expect(primeVuePassthrough.directives).toHaveProperty("tooltip");
+  });
+
+  it("keeps progress bars shrinkable inside narrow panel layouts", () => {
+    expect(primeVuePassthrough.progressbar.root).toContain("block");
+    expect(primeVuePassthrough.progressbar.root).toContain("min-w-0");
+    expect(primeVuePassthrough.progressbar.root).toContain("max-w-full");
+    expect(primeVuePassthrough.progressbar.value).toContain("min-w-0");
+    expect(primeVuePassthrough.progressbar.value).toContain("max-w-full");
+    expect(opsUsageRow).toContain("grid-cols-1");
+    expect(opsUsageRow).toContain("minmax(0,1fr)");
+    expect(opsUsageRow).not.toContain("minmax(10rem");
+    expect(opsUsageRow).not.toContain("minmax(12rem");
+    expect(opsUsageCaption).toContain("flex-wrap");
   });
 
   it("keeps tab navigation visible while tab panels scroll", () => {

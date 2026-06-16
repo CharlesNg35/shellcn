@@ -46,14 +46,14 @@ export const btnPrimaryBlock =
 export const opsDetailRow =
   "grid min-w-0 grid-cols-[minmax(8rem,14rem)_1fr_auto] items-start gap-3 px-4 py-2.5 text-sm";
 export const opsUsageRow =
-  "grid min-w-0 grid-cols-[minmax(8rem,14rem)_minmax(10rem,1fr)] gap-3 px-4 py-3 text-sm sm:grid-cols-[minmax(8rem,14rem)_minmax(12rem,1fr)_auto]";
+  "grid min-w-0 grid-cols-1 gap-2 px-4 py-3 text-sm sm:grid-cols-[minmax(8rem,14rem)_minmax(0,1fr)] sm:gap-3";
 export const opsDetailLabel = "text-surface-500 dark:text-surface-400";
 export const opsDetailValue =
   "min-w-0 wrap-break-word whitespace-pre-wrap text-surface-900 dark:text-surface-100";
 export const opsUsageValue =
   "text-right text-xs font-medium text-surface-600 tabular-nums dark:text-surface-300";
 export const opsUsageCaption =
-  "mt-1 flex min-w-0 items-center justify-between gap-3 text-xs text-surface-500 dark:text-surface-400";
+  "mt-1 flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-surface-500 dark:text-surface-400";
 export const opsStatGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3";
 export const opsStatTile =
@@ -409,8 +409,9 @@ export const primeVuePassthrough = {
   },
 
   progressbar: {
-    root: "relative overflow-hidden rounded-full bg-surface-200 dark:bg-surface-800",
-    value: "h-full rounded-full bg-primary-500 transition-[width] duration-150",
+    root: "relative block min-w-0 max-w-full overflow-hidden rounded-full bg-surface-200 dark:bg-surface-800",
+    value:
+      "h-full min-w-0 max-w-full rounded-full bg-primary-500 transition-[width] duration-150",
     label: "hidden",
   },
 
