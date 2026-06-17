@@ -12,6 +12,7 @@ import type { CodeMirrorEditor } from "@/codemirror";
 import AppIcon from "@/components/AppIcon.vue";
 import CodeDiffView from "../shared/CodeDiffView.vue";
 import { dialogRoot } from "@/primevue/preset";
+import { useDirtyGuard } from "../shared/useDirtyGuard";
 
 const props = defineProps<PanelProps>();
 
@@ -36,6 +37,11 @@ const language = computed(() => editorConfig.value?.language ?? "plaintext");
 const saveRouteId = computed(() => editorConfig.value?.saveRouteId);
 const editable = computed(() => Boolean(saveRouteId.value));
 const changed = computed(() => text.value !== originalText.value);
+const { confirmBeforeDiscard } = useDirtyGuard({
+  isDirty: () => editable.value && changed.value,
+  header: "Discard unsaved editor changes?",
+  message: "This editor has unsaved changes. Discard them and reload?",
+});
 const diffDialogStyle = { width: "88vw" };
 const diffDialogBreakpoints = { "1199px": "94vw", "575px": "100vw" };
 const diffDialogPt = {
@@ -80,6 +86,10 @@ async function load(): Promise<void> {
     return;
   }
   await mountEditor();
+}
+
+async function guardedLoad(): Promise<void> {
+  await confirmBeforeDiscard(load);
 }
 
 async function mountEditor(): Promise<void> {
@@ -152,7 +162,17 @@ async function save(): Promise<void> {
 }
 
 onMounted(load);
-watch(() => [props.connectionId, props.resource?.uid], load);
+watch(
+  () => [
+    props.connectionId,
+    props.resource?.uid,
+    props.source?.routeId,
+    JSON.stringify(props.source?.params ?? {}),
+    JSON.stringify(props.record ?? {}),
+    editorConfig.value?.initialContent,
+  ],
+  guardedLoad,
+);
 watch(language, (next) => {
   codeMirror?.setEditorLanguage(editor, next);
 });
@@ -211,7 +231,12 @@ onUnmounted(() => {
       </div>
     </div>
     <SkeletonList v-if="loading" />
-    <PanelError v-else-if="error" :message="error" retryable @retry="load" />
+    <PanelError
+      v-else-if="error"
+      :message="error"
+      retryable
+      @retry="guardedLoad"
+    />
     <textarea
       v-else-if="useFallback && editable"
       v-model="text"

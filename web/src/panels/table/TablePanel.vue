@@ -79,6 +79,7 @@ import { badgeClassFor } from "../shared/severity";
 import PanelError from "../shared/PanelError.vue";
 import FormField from "../form/FormField.vue";
 import AppIcon from "@/components/AppIcon.vue";
+import { useDirtyGuard } from "../shared/useDirtyGuard";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{
@@ -297,6 +298,11 @@ const pendingCount = computed(() => {
   for (const id of insertedRows) ids.add(id);
   for (const id of deletedRows) ids.add(id);
   return ids.size;
+});
+const { confirmBeforeDiscard } = useDirtyGuard({
+  isDirty: () => pendingCount.value > 0,
+  header: "Discard table changes?",
+  message: "This table has unsaved changes. Discard them and continue?",
 });
 
 function isInserted(row: Row): boolean {
@@ -852,6 +858,15 @@ function blockPendingRowReplacement(): boolean {
   return true;
 }
 
+async function confirmRowReplacement(
+  action: () => void | Promise<void>,
+): Promise<boolean> {
+  return confirmBeforeDiscard(async () => {
+    discardStaged();
+    await action();
+  });
+}
+
 async function load(targetFirst = first.value): Promise<void> {
   if (!props.source) return;
   if (blockPendingRowReplacement()) return;
@@ -886,23 +901,29 @@ async function load(targetFirst = first.value): Promise<void> {
   }
 }
 
+async function guardedLoad(targetFirst = first.value): Promise<void> {
+  await confirmRowReplacement(() => load(targetFirst));
+}
+
 function onSort(e: DataTableSortEvent): void {
-  if (blockPendingRowReplacement()) return;
-  sortField.value = (e.sortField as string) ?? undefined;
-  sortOrder.value = e.sortOrder ?? undefined;
-  first.value = 0;
-  resetCursors();
-  saveTableState();
-  void load(0);
+  void confirmRowReplacement(async () => {
+    sortField.value = (e.sortField as string) ?? undefined;
+    sortOrder.value = e.sortOrder ?? undefined;
+    first.value = 0;
+    resetCursors();
+    saveTableState();
+    await load(0);
+  });
 }
 
 function onPage(e: DataTablePageEvent): void {
-  if (blockPendingRowReplacement()) return;
-  if (e.rows !== pageSize.value) resetCursors();
-  first.value = e.first;
-  pageSize.value = e.rows;
-  saveTableState();
-  void load(e.first);
+  void confirmRowReplacement(async () => {
+    if (e.rows !== pageSize.value) resetCursors();
+    first.value = e.first;
+    pageSize.value = e.rows;
+    saveTableState();
+    await load(e.first);
+  });
 }
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
@@ -1047,7 +1068,7 @@ async function onActionDone(
       truncated: result.truncated === true,
     };
   }
-  await load(first.value);
+  await guardedLoad(first.value);
   emit("actionDone", action, result);
 }
 
@@ -1253,11 +1274,12 @@ let debounce: ReturnType<typeof setTimeout> | undefined;
 function onFilter(): void {
   if (debounce) clearTimeout(debounce);
   debounce = setTimeout(() => {
-    if (blockPendingRowReplacement()) return;
-    first.value = 0;
-    resetCursors();
-    saveTableState();
-    load(0);
+    void confirmRowReplacement(async () => {
+      first.value = 0;
+      resetCursors();
+      saveTableState();
+      await load(0);
+    });
   }, 250);
 }
 
@@ -1343,7 +1365,7 @@ onUnmounted(() => {
           type="button"
           :disabled="loading"
           severity="secondary"
-          @click="load(first)"
+          @click="guardedLoad(first)"
         >
           <AppIcon
             :icon="{ type: 'lucide', value: 'refresh-cw' }"
@@ -1390,7 +1412,7 @@ onUnmounted(() => {
         v-if="error && !rows.length"
         :message="error"
         retryable
-        @retry="load(first)"
+        @retry="guardedLoad(first)"
       />
       <SkeletonList v-else-if="loading && !rows.length" :rows="8" />
       <PanelError
@@ -1398,7 +1420,7 @@ onUnmounted(() => {
         class="border-b border-surface-200 dark:border-surface-800"
         :message="error"
         retryable
-        @retry="load(first)"
+        @retry="guardedLoad(first)"
       />
       <DataTable
         v-if="rows.length || (!loading && !error)"

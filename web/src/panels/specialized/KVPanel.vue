@@ -15,6 +15,7 @@ import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "@/components/SkeletonList.vue";
 import AppIcon from "@/components/AppIcon.vue";
 import { dialogRoot } from "@/primevue/preset";
+import { useDirtyGuard } from "../shared/useDirtyGuard";
 
 interface KVEntry {
   key: string;
@@ -60,6 +61,20 @@ const editorLanguage = computed(() =>
     ? "json"
     : "plaintext",
 );
+const dirty = computed(() => {
+  if (!writable.value || !detail.value) {
+    return false;
+  }
+  const currentType = detail.value.type ?? selected.value?.type ?? "string";
+  return (
+    editor.value !== stringify(detail.value.value) || type.value !== currentType
+  );
+});
+const { confirmBeforeDiscard } = useDirtyGuard({
+  isDirty: () => dirty.value,
+  header: "Discard unsaved key changes?",
+  message: "This key has unsaved changes. Discard them and continue?",
+});
 
 const visibleEntries = computed(() => {
   const q = filterText.value.trim().toLowerCase();
@@ -145,6 +160,14 @@ async function loadDetail(entry: KVEntry): Promise<void> {
   } finally {
     if (request === detailRequest) loadingDetail.value = false;
   }
+}
+
+async function guardedLoad(): Promise<void> {
+  await confirmBeforeDiscard(load);
+}
+
+async function guardedLoadDetail(entry: KVEntry): Promise<void> {
+  await confirmBeforeDiscard(() => loadDetail(entry));
 }
 
 async function save(): Promise<void> {
@@ -257,7 +280,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           type="button"
           severity="secondary"
           :disabled="loading"
-          @click="load"
+          @click="guardedLoad"
         >
           <AppIcon
             :icon="{ type: 'lucide', value: 'refresh-cw' }"
@@ -278,7 +301,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         v-if="error && !entries.length"
         :message="error"
         retryable
-        @retry="load"
+        @retry="guardedLoad"
       />
       <SkeletonList v-else-if="loading && !entries.length" :rows="8" />
       <PanelError
@@ -286,7 +309,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         class="border-b border-surface-200 dark:border-surface-800"
         :message="error"
         retryable
-        @retry="load"
+        @retry="guardedLoad"
       />
       <DataTable
         v-if="entries.length || (!loading && !error)"
@@ -295,7 +318,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         scrollable
         scroll-height="flex"
         selection-mode="single"
-        @row-click="loadDetail($event.data as KVEntry)"
+        @row-click="guardedLoadDetail($event.data as KVEntry)"
       >
         <Column field="key" header="Key" />
         <Column field="type" header="Type" style="width: 6rem" />

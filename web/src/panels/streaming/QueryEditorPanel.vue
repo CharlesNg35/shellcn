@@ -12,6 +12,7 @@ import SkeletonList from "@/components/SkeletonList.vue";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import { useTheme } from "@/composables/useTheme";
 import type { CodeMirrorCompletion, CodeMirrorEditor } from "@/codemirror";
+import { useDirtyGuard } from "../shared/useDirtyGuard";
 
 const props = defineProps<PanelProps>();
 const queryConfig = computed(
@@ -65,6 +66,21 @@ const emptyText = computed(
   () => queryConfig.value?.emptyText ?? "Execute to see results.",
 );
 const canExport = computed(() => queryConfig.value?.exportable === true);
+const baselineQuery = ref(query.value);
+
+function syncQueryFromEditor(): void {
+  if (editor) query.value = codeMirror?.editorValue(editor) ?? query.value;
+}
+
+function queryDirty(): boolean {
+  return query.value !== baselineQuery.value;
+}
+
+const { confirmBeforeDiscard } = useDirtyGuard({
+  isDirty: queryDirty,
+  header: "Discard unsaved query changes?",
+  message: "The current query has unsaved changes. Discard them and continue?",
+});
 
 // Export the current result set — only when the plugin opts in via the manifest.
 const exportMenu = ref<{ toggle: (event: Event) => void } | null>(null);
@@ -129,9 +145,10 @@ function run(confirm = false): void {
     error.value = "The query stream is not connected yet.";
     return;
   }
-  if (editor) query.value = codeMirror?.editorValue(editor) ?? query.value;
+  syncQueryFromEditor();
   const text = query.value.trim();
   if (!text) return;
+  baselineQuery.value = query.value;
   history.value = [text, ...history.value.filter((q) => q !== text)].slice(
     0,
     8,
@@ -181,9 +198,14 @@ async function loadCompletions(): Promise<CodeMirrorCompletion[]> {
   }
 }
 
-function recall(text: string): void {
+function applyQuery(text: string): void {
   query.value = text;
+  baselineQuery.value = text;
   codeMirror?.setEditorValue(editor, text);
+}
+
+async function recall(text: string): Promise<void> {
+  await confirmBeforeDiscard(() => applyQuery(text));
 }
 
 function confirmExecution(): void {
@@ -233,14 +255,15 @@ watch(
       initialQuery: queryConfig.value?.initialQuery,
     }),
   async () => {
-    query.value = initialQuery();
-    results.value = null;
-    running.value = false;
-    error.value = null;
-    pendingConfirmation.value = false;
-    confirmationMessage.value = "";
-    codeMirror?.setEditorValue(editor, query.value);
-    completionItems.value = await loadCompletions();
+    await confirmBeforeDiscard(async () => {
+      applyQuery(initialQuery());
+      results.value = null;
+      running.value = false;
+      error.value = null;
+      pendingConfirmation.value = false;
+      confirmationMessage.value = "";
+      completionItems.value = await loadCompletions();
+    });
   },
 );
 

@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { defineComponent, h, KeepAlive } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
+import ConfirmDialog from "primevue/confirmdialog";
 import { installFetch } from "@/test/fetchMock";
 import TablePanel from "./TablePanel.vue";
 import { RiskLevel, type Action, type Column } from "@/types/projection";
@@ -42,6 +43,7 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
+  document.body.innerHTML = "";
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -660,6 +662,50 @@ describe("TablePanel staged edits", () => {
     return { w, calls };
   }
 
+  function mountStagedWithConfirm() {
+    const calls: Call[] = [];
+    let listCalls = 0;
+    vi.unstubAllGlobals();
+    installFetch((url, init) => {
+      if (init?.method === "POST") {
+        calls.push({
+          url,
+          method: "POST",
+          body: init.body ? JSON.parse(init.body as string) : undefined,
+        });
+        return { body: { ok: true } };
+      }
+      listCalls += 1;
+      return {
+        body: {
+          items:
+            listCalls === 1
+              ? [row("a", "alpha"), row("b", "beta")]
+              : [row("c", "gamma")],
+          nextCursor: "",
+          total: listCalls === 1 ? 2 : 1,
+        },
+      };
+    });
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const w = mount(
+      {
+        render: () =>
+          h("div", [
+            h(TablePanel, {
+              connectionId: "c1",
+              source: { routeId: "db.table.rows" },
+              config: stagedConfig,
+            }),
+            h(ConfirmDialog),
+          ]),
+      },
+      { attachTo: host },
+    );
+    return { w, calls };
+  }
+
   function editCell(
     w: ReturnType<typeof mount>,
     index: number,
@@ -735,6 +781,45 @@ describe("TablePanel staged edits", () => {
     await flushPromises();
     const del = calls.find((c) => c.url.includes("db.row.delete"));
     expect(del?.body).toEqual({ key: { name: "alpha" } });
+    w.unmount();
+  });
+
+  it("keeps staged edits when pagination is canceled", async () => {
+    const { w } = mountStagedWithConfirm();
+    await flushPromises();
+
+    editCell(w, 0, "state", "stopped");
+    await flushPromises();
+    w.findComponent({ name: "DataTable" }).vm.$emit("page", {
+      first: 50,
+      rows: 50,
+    });
+    await flushPromises();
+    bodyButton("Keep editing")!.click();
+    await flushPromises();
+
+    expect(w.text()).toContain("1 unsaved change");
+    expect(w.text()).toContain("alpha");
+    expect(w.text()).not.toContain("gamma");
+    w.unmount();
+  });
+
+  it("discards staged edits before pagination", async () => {
+    const { w } = mountStagedWithConfirm();
+    await flushPromises();
+
+    editCell(w, 0, "state", "stopped");
+    await flushPromises();
+    w.findComponent({ name: "DataTable" }).vm.$emit("page", {
+      first: 50,
+      rows: 50,
+    });
+    await flushPromises();
+    bodyButton("Discard changes")!.click();
+    await flushPromises();
+
+    expect(w.text()).not.toContain("unsaved");
+    expect(w.text()).toContain("gamma");
     w.unmount();
   });
 

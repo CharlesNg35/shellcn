@@ -1,8 +1,9 @@
 /* eslint-disable vue/one-component-per-file, vue/require-prop-types */
-import { defineComponent } from "vue";
+import { defineComponent, h } from "vue";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import Button from "primevue/button";
+import ConfirmDialog from "primevue/confirmdialog";
 import ToastService from "primevue/toastservice";
 import { installFetch } from "@/test/fetchMock";
 import { toPng } from "html-to-image";
@@ -41,8 +42,17 @@ vi.mock("@vue-flow/controls", () => ({
 vi.mock("@vue-flow/minimap", () => ({
   MiniMap: defineComponent({ template: "<div />" }),
 }));
+const mockCodeMirror = vi.hoisted(() => ({
+  onChange: null as ((value: string) => void) | null,
+}));
 vi.mock("../../codemirror", () => ({
-  createCodeMirrorEditor: () => ({ view: { destroy() {} } }),
+  createCodeMirrorEditor: (
+    _parent: HTMLElement,
+    options: { onChange?: (value: string) => void },
+  ) => {
+    mockCodeMirror.onChange = options.onChange ?? null;
+    return { view: { destroy() {} } };
+  },
   createCodeMirrorDiffView: () => ({ destroy() {}, syncTheme() {} }),
   editorValue: () => "",
   setEditorValue: () => {},
@@ -141,6 +151,23 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+
+function bodyButton(text: string): HTMLButtonElement | undefined {
+  return [...document.body.querySelectorAll("button")].find(
+    (button) => button.textContent?.trim() === text,
+  ) as HTMLButtonElement | undefined;
+}
+
+function mountKVWithConfirm(props: InstanceType<typeof KVPanel>["$props"]) {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  return mount(
+    {
+      render: () => h("div", [h(KVPanel, props), h(ConfirmDialog)]),
+    },
+    { attachTo: host },
+  );
+}
 
 describe("specialized panels", () => {
   it("renders a configured diff payload", async () => {
@@ -361,6 +388,102 @@ describe("specialized panels", () => {
 
     expect(w.text()).toContain("session:1");
     expect(w.find(".shellcn-codemirror-host").exists()).toBe(true);
+  });
+
+  it("keeps editing when KV key selection is canceled with unsaved changes", async () => {
+    const reads: string[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.includes("kv.list")) {
+        return {
+          body: {
+            items: [
+              { key: "session:1", type: "json" },
+              { key: "session:2", type: "json" },
+            ],
+            nextCursor: "",
+          },
+        };
+      }
+      if (url.includes("kv.read")) {
+        reads.push(url);
+        const key = new URL(url, "http://h").searchParams.get("p.key");
+        return {
+          body: {
+            key,
+            type: "json",
+            value: { user: key === "session:2" ? "grace" : "ada" },
+          },
+        };
+      }
+      return { body: {} };
+    });
+    const w = mountKVWithConfirm({
+      connectionId: "c1",
+      source: { routeId: "kv.list" },
+      config: { readRouteId: "kv.read", writable: true },
+    });
+    await flushPromises();
+
+    mockCodeMirror.onChange?.('{"user":"edited"}');
+    await flushPromises();
+    w.findComponent({ name: "DataTable" }).vm.$emit("row-click", {
+      data: { key: "session:2", type: "json" },
+    });
+    await flushPromises();
+    bodyButton("Keep editing")!.click();
+    await flushPromises();
+
+    expect(reads.filter((url) => url.includes("session%3A2"))).toHaveLength(0);
+    w.unmount();
+  });
+
+  it("discards unsaved KV edits before selecting another key", async () => {
+    const reads: string[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.includes("kv.list")) {
+        return {
+          body: {
+            items: [
+              { key: "session:1", type: "json" },
+              { key: "session:2", type: "json" },
+            ],
+            nextCursor: "",
+          },
+        };
+      }
+      if (url.includes("kv.read")) {
+        reads.push(url);
+        const key = new URL(url, "http://h").searchParams.get("p.key");
+        return {
+          body: {
+            key,
+            type: "json",
+            value: { user: key === "session:2" ? "grace" : "ada" },
+          },
+        };
+      }
+      return { body: {} };
+    });
+    const w = mountKVWithConfirm({
+      connectionId: "c1",
+      source: { routeId: "kv.list" },
+      config: { readRouteId: "kv.read", writable: true },
+    });
+    await flushPromises();
+
+    mockCodeMirror.onChange?.('{"user":"edited"}');
+    await flushPromises();
+    w.findComponent({ name: "DataTable" }).vm.$emit("row-click", {
+      data: { key: "session:2", type: "json" },
+    });
+    await flushPromises();
+    bodyButton("Discard changes")!.click();
+    await flushPromises();
+
+    expect(reads.some((url) => url.includes("session%3A2"))).toBe(true);
+    w.unmount();
   });
 
   it("keeps KV refresh loading state on the refresh button", async () => {
