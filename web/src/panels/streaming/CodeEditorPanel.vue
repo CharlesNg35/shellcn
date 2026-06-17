@@ -28,6 +28,7 @@ const originalText = ref("");
 const showDiff = ref(false);
 let editor: CodeMirrorEditor | null = null;
 let codeMirror: typeof import("@/codemirror") | null = null;
+let loadRequest = 0;
 const editorConfig = computed(
   () => props.config as CodeEditorConfig | undefined,
 );
@@ -58,18 +59,19 @@ const diffDialogMaximizeButtonProps = {
 };
 
 async function load(): Promise<void> {
+  const request = ++loadRequest;
   loading.value = true;
   const initial = editorConfig.value?.initialContent;
   if (initial !== undefined) {
     text.value = initial;
     originalText.value = initial;
     error.value = null;
-    await mountEditor();
+    await mountEditor(request);
     return;
   }
   if (!props.source) {
     error.value = null;
-    await mountEditor();
+    await mountEditor(request);
     return;
   }
   error.value = null;
@@ -78,22 +80,25 @@ async function load(): Promise<void> {
       resource: props.resource,
       record: props.record,
     });
+    if (request !== loadRequest) return;
     text.value = typeof doc === "string" ? doc : JSON.stringify(doc, null, 2);
     originalText.value = text.value;
   } catch (e) {
+    if (request !== loadRequest) return;
     error.value = (e as Error).message;
     loading.value = false;
     return;
   }
-  await mountEditor();
+  await mountEditor(request);
 }
 
 async function guardedLoad(): Promise<void> {
   await confirmBeforeDiscard(load);
 }
 
-async function mountEditor(): Promise<void> {
+async function mountEditor(request = loadRequest): Promise<void> {
   await nextTick();
+  if (request !== loadRequest) return;
   if (!container.value) {
     useFallback.value = true;
     loading.value = false;
@@ -101,6 +106,7 @@ async function mountEditor(): Promise<void> {
   }
   try {
     const helpers = await import("@/codemirror");
+    if (request !== loadRequest) return;
     codeMirror = helpers;
     editor?.view.destroy();
     editor = helpers.createCodeMirrorEditor(container.value, {
@@ -114,9 +120,10 @@ async function mountEditor(): Promise<void> {
       },
     });
   } catch {
+    if (request !== loadRequest) return;
     useFallback.value = true;
   } finally {
-    loading.value = false;
+    if (request === loadRequest) loading.value = false;
   }
 }
 

@@ -53,6 +53,7 @@ const confirmationMessage = ref("");
 const completionItems = ref<CodeMirrorCompletion[]>([]);
 let editor: CodeMirrorEditor | null = null;
 let codeMirror: typeof import("@/codemirror") | null = null;
+let completionRequest = 0;
 const { isDark } = useTheme();
 const editorLanguage = computed(
   () => queryConfig.value?.language ?? "plaintext",
@@ -198,6 +199,14 @@ async function loadCompletions(): Promise<CodeMirrorCompletion[]> {
   }
 }
 
+async function refreshCompletions(): Promise<void> {
+  const request = ++completionRequest;
+  const items = await loadCompletions();
+  if (request !== completionRequest) return;
+  completionItems.value = items;
+  codeMirror?.setEditorCompletions(editor, items, editorLanguage.value);
+}
+
 function applyQuery(text: string): void {
   query.value = text;
   baselineQuery.value = text;
@@ -224,7 +233,7 @@ onMounted(async () => {
   try {
     const helpers = await import("@/codemirror");
     codeMirror = helpers;
-    completionItems.value = await loadCompletions();
+    await refreshCompletions();
     editor = helpers.createCodeMirrorEditor(container.value, {
       value: query.value,
       language: editorLanguage.value,
@@ -253,16 +262,20 @@ watch(
       params: props.source?.params,
       resource: props.resource?.uid,
       initialQuery: queryConfig.value?.initialQuery,
+      language: queryConfig.value?.language,
+      completionRouteId: queryConfig.value?.completionRouteId,
+      completionParams: queryConfig.value?.completionParams,
     }),
   async () => {
     await confirmBeforeDiscard(async () => {
       applyQuery(initialQuery());
+      codeMirror?.setEditorLanguage(editor, editorLanguage.value);
       results.value = null;
       running.value = false;
       error.value = null;
       pendingConfirmation.value = false;
       confirmationMessage.value = "";
-      completionItems.value = await loadCompletions();
+      await refreshCompletions();
     });
   },
 );

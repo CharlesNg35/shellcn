@@ -52,6 +52,9 @@ const mockCodeMirror = vi.hoisted(() => ({
   value: "",
   onChange: null as ((value: string) => void) | null,
   diffOptions: null as unknown,
+  createdValues: [] as string[],
+  completionSets: [] as Array<{ labels: string[]; language?: string }>,
+  languageSets: [] as string[],
 }));
 const mockNoVnc = vi.hoisted(() => ({
   instances: [] as Array<{ disconnectCalls: number }>,
@@ -59,8 +62,9 @@ const mockNoVnc = vi.hoisted(() => ({
 vi.mock("../../codemirror", () => ({
   createCodeMirrorEditor: (
     _parent: HTMLElement,
-    options: { onChange?: (value: string) => void },
+    options: { value?: string; onChange?: (value: string) => void },
   ) => {
+    mockCodeMirror.createdValues.push(options.value ?? "");
     mockCodeMirror.onChange = options.onChange ?? null;
     return { view: { destroy() {} } };
   },
@@ -70,8 +74,19 @@ vi.mock("../../codemirror", () => ({
   },
   editorValue: () => mockCodeMirror.value,
   setEditorValue: () => {},
-  setEditorCompletions: () => {},
-  setEditorLanguage: () => {},
+  setEditorCompletions: (
+    _editor: unknown,
+    completions: Array<{ label: string }>,
+    language?: string,
+  ) => {
+    mockCodeMirror.completionSets.push({
+      labels: completions.map((item) => item.label),
+      language,
+    });
+  },
+  setEditorLanguage: (_editor: unknown, language: string) => {
+    mockCodeMirror.languageSets.push(language);
+  },
   setEditorReadOnly: () => {},
   syncCodeMirrorTheme: () => {},
 }));
@@ -174,6 +189,9 @@ beforeEach(() => {
   mockCodeMirror.value = "";
   mockCodeMirror.onChange = null;
   mockCodeMirror.diffOptions = null;
+  mockCodeMirror.createdValues = [];
+  mockCodeMirror.completionSets = [];
+  mockCodeMirror.languageSets = [];
   canvasOps = [];
   const gradient = {
     addColorStop: (offset: number, color: string) =>
@@ -1805,6 +1823,57 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
+  it("ignores stale code editor document loads after the source changes", async () => {
+    let resolveFirst: () => void = () => {};
+    let resolveSecond: () => void = () => {};
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (url: string) =>
+          new Promise<Response>((resolve) => {
+            const respond = (content: string) =>
+              resolve(
+                new Response(JSON.stringify(content), {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                }),
+              );
+            if (url.includes("kubernetes.resource.first")) {
+              resolveFirst = () => respond("first document");
+              return;
+            }
+            resolveSecond = () => respond("second document");
+          }),
+      ),
+    );
+
+    const w = mount(CodeEditorPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "kubernetes.resource.first" },
+        config: { language: "yaml" },
+      },
+    });
+    await flushPromises();
+
+    await w.setProps({
+      source: { routeId: "kubernetes.resource.second" },
+    });
+    await flushPromises();
+
+    resolveSecond();
+    await flushPromises();
+    await flushPromises();
+    expect(mockCodeMirror.createdValues).toEqual(["second document"]);
+
+    resolveFirst();
+    await flushPromises();
+    await flushPromises();
+    expect(mockCodeMirror.createdValues).toEqual(["second document"]);
+    w.unmount();
+  });
+
   it("saves initial code editor content under a configured JSON body key", async () => {
     const calls: { url: string; method?: string; body: unknown }[] = [];
     vi.unstubAllGlobals();
@@ -1956,6 +2025,55 @@ describe("streaming stub panels", () => {
     expect(w.get('[data-test="query-export-button"]').classes()).not.toContain(
       "ml-auto",
     );
+    w.unmount();
+  });
+
+  it("refreshes query editor completions when source context changes", async () => {
+    installFetch((url) => {
+      if (url.includes("/tickets")) {
+        return { status: 201, body: { ticket: "t1" } };
+      }
+      if (url.includes("sql.complete")) {
+        const schema = new URL(url, "http://h").searchParams.get("p.schema");
+        return {
+          body: [{ label: schema === "audit" ? "audit_log" : "public_user" }],
+        };
+      }
+      return { body: { columns: [], rows: [] } };
+    });
+
+    const w = mount(QueryEditorPanel, {
+      props: {
+        ...props,
+        source: {
+          routeId: "postgres.query",
+          method: "WS",
+          params: { schema: "public" },
+        },
+        config: { completionRouteId: "sql.complete", language: "sql" },
+      },
+    });
+    await flushPromises();
+
+    expect(mockCodeMirror.completionSets.at(-1)).toMatchObject({
+      labels: ["public_user"],
+      language: "sql",
+    });
+
+    await w.setProps({
+      source: {
+        routeId: "postgres.query",
+        method: "WS",
+        params: { schema: "audit" },
+      },
+    });
+    await flushPromises();
+
+    expect(mockCodeMirror.languageSets.at(-1)).toBe("sql");
+    expect(mockCodeMirror.completionSets.at(-1)).toMatchObject({
+      labels: ["audit_log"],
+      language: "sql",
+    });
     w.unmount();
   });
 
