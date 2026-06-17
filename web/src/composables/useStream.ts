@@ -118,8 +118,8 @@ export function useStream(
         : "connecting",
   );
 
-  function send(data: string): void {
-    if (key.value) store.send(key.value, data);
+  function send(data: string): boolean {
+    return key.value ? store.send(key.value, data) : false;
   }
 
   function reconnect(): Promise<void> {

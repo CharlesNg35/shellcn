@@ -28,7 +28,7 @@ describe("MetricsPanel", () => {
     expect(w.text()).toContain("No metrics configured.");
   });
 
-  it("renders usage rows instead of duplicate gauges for the same metric", () => {
+  it("renders usage rows instead of duplicate gauges for the same metric", async () => {
     const w = mountPanel({
       stats: [{ key: "conns", label: "Connections" }],
       gauges: [
@@ -46,14 +46,22 @@ describe("MetricsPanel", () => {
       ],
       series: [{ key: "cpu", label: "CPU" }],
     });
+    const vm = w.vm as unknown as { onFrame: (raw: string) => void };
+    vm.onFrame('{"conns":12,"cpu":42,"memPct":64,"disk":81}');
+    await w.vm.$nextTick();
+
     expect(w.findAll(".stat")).toHaveLength(1);
     expect(w.findAll(".gauge")).toHaveLength(2);
     expect(w.text()).toContain("Memory usage");
     expect(w.findAll(".series")).toHaveLength(1);
   });
 
-  it("renders only the declared section when a single kind is set", () => {
+  it("renders only the declared section when a single kind is set", async () => {
     const w = mountPanel({ usage: [{ key: "cpu", label: "CPU" }] });
+    const vm = w.vm as unknown as { onFrame: (raw: string) => void };
+    vm.onFrame('{"cpu":42}');
+    await w.vm.$nextTick();
+
     expect(w.findAll(".stat")).toHaveLength(0);
     expect(w.findAll(".gauge")).toHaveLength(0);
     expect(w.findAll(".series")).toHaveLength(0);

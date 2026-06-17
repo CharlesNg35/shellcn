@@ -89,7 +89,13 @@ onDeactivated(() => {
 });
 
 vueWatch(
-  () => [props.connectionId, props.resource?.uid, props.source?.routeId],
+  () => [
+    props.connectionId,
+    props.resource?.uid,
+    props.source?.routeId,
+    JSON.stringify(props.source?.params ?? {}),
+    JSON.stringify(props.record ?? {}),
+  ],
   () => {
     rows.value = [];
     loadedOnce.value = false;

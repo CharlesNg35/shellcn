@@ -327,7 +327,9 @@ async function mountTerminal(): Promise<void> {
     applyFit();
     pending.forEach((d) => term!.write(d));
     pending.length = 0;
-    term.onData((d: string) => send(d));
+    term.onData((d: string) => {
+      if (status.value === "open") send(d);
+    });
     term.focus();
 
     resizeObserver = new ResizeObserver(scheduleFit);

@@ -83,7 +83,10 @@ const rows = computed<SpanRow[]>(() => {
     });
     for (const child of byParent.get(span.id) ?? []) visit(child, depth + 1);
   };
-  const roots = byParent.get("") ?? spans.filter((span) => !span.parentId);
+  const spanIds = new Set(spans.map((span) => span.id));
+  const roots = spans.filter(
+    (span) => !span.parentId || !spanIds.has(span.parentId),
+  );
   for (const root of roots) visit(root, 0);
   return out;
 });
@@ -148,7 +151,13 @@ async function load(): Promise<void> {
 }
 
 watch(
-  () => [props.connectionId, props.resource?.uid],
+  () => [
+    props.connectionId,
+    props.resource?.uid,
+    props.source?.routeId,
+    JSON.stringify(props.source?.params ?? {}),
+    JSON.stringify(props.record ?? {}),
+  ],
   () => {
     payload.value = {};
     selected.value = null;

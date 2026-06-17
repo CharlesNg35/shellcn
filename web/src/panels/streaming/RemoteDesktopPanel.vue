@@ -248,7 +248,13 @@ onUnmounted(() => {
       can-reconnect
       @reconnect="onReconnect"
     />
-    <div ref="container" class="relative min-h-0 flex-1">
+    <div
+      ref="container"
+      class="relative min-h-0 flex-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-500"
+      role="application"
+      tabindex="0"
+      aria-label="Remote desktop viewport"
+    >
       <PanelLoader
         v-if="!loaded && status === 'connecting'"
         label="Connecting"

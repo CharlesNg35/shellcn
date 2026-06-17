@@ -69,7 +69,13 @@ const display = computed(() => {
     class="flex flex-col items-center rounded-xl border border-surface-200 bg-surface-0 p-4 dark:border-surface-800 dark:bg-surface-900"
   >
     <div class="relative h-28 w-28">
-      <canvas ref="canvasEl" />
+      <canvas
+        ref="canvasEl"
+        role="img"
+        :aria-label="`${label}: ${display.value}${display.unit}`"
+      >
+        {{ label }}: {{ display.value }}{{ display.unit }}
+      </canvas>
       <div class="absolute inset-0 flex flex-col items-center justify-center">
         <span
           class="text-xl font-semibold text-surface-900 dark:text-surface-0"

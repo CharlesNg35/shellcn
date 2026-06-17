@@ -1919,6 +1919,9 @@ describe("streaming stub panels", () => {
     const w = mount(QueryEditorPanel, { props });
     await flushPromises();
 
+    FakeWS.instances[0].emit("open");
+    await flushPromises();
+
     await w
       .findAll("button")
       .find((button) => button.text().includes("Execute"))!

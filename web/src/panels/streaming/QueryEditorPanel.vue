@@ -125,6 +125,10 @@ async function onReconnect(): Promise<void> {
 }
 
 function run(confirm = false): void {
+  if (status.value !== "open") {
+    error.value = "The query stream is not connected yet.";
+    return;
+  }
   if (editor) query.value = codeMirror?.editorValue(editor) ?? query.value;
   const text = query.value.trim();
   if (!text) return;
@@ -135,7 +139,10 @@ function run(confirm = false): void {
   running.value = true;
   error.value = null;
   pendingConfirmation.value = false;
-  send(JSON.stringify({ query: query.value, confirm }));
+  if (!send(JSON.stringify({ query: query.value, confirm }))) {
+    running.value = false;
+    error.value = "The query stream is not ready. Reconnect and try again.";
+  }
 }
 
 async function cancel(): Promise<void> {
@@ -276,7 +283,7 @@ onUnmounted(() => {
           size="small"
           :label="executeLabel"
           :loading="running"
-          :disabled="running"
+          :disabled="running || status !== 'open'"
           @click="run()"
         />
       </div>

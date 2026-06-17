@@ -11,6 +11,7 @@ const props = defineProps<PanelProps>();
 
 const MAX = 1000;
 const lines = ref<string[]>([]);
+const pausedBuffer = ref<string[]>([]);
 const paused = ref(false);
 const follow = ref(true);
 const filterText = ref("");
@@ -31,10 +32,27 @@ function append(frame: string): void {
   } catch {
     /* plain text frame */
   }
-  if (paused.value) return;
+  if (paused.value) {
+    pausedBuffer.value.push(text);
+    if (pausedBuffer.value.length > MAX) {
+      pausedBuffer.value.splice(0, pausedBuffer.value.length - MAX);
+    }
+    return;
+  }
+  appendLine(text);
+}
+
+function appendLine(text: string): void {
   lines.value.push(text);
   if (lines.value.length > MAX) lines.value.splice(0, lines.value.length - MAX);
   void nextTick(scrollToBottom);
+}
+
+function togglePaused(): void {
+  paused.value = !paused.value;
+  if (paused.value) return;
+  for (const line of pausedBuffer.value) appendLine(line);
+  pausedBuffer.value = [];
 }
 
 const { status, error, reconnect } = useStream(
@@ -57,6 +75,15 @@ const visibleLines = computed(() => {
   const q = filterText.value.trim().toLowerCase();
   if (!q) return lines.value;
   return lines.value.filter((line) => line.toLowerCase().includes(q));
+});
+const pauseLabel = computed(() => {
+  if (!paused.value) {
+    return "Pause";
+  }
+  if (pausedBuffer.value.length) {
+    return `Resume (${pausedBuffer.value.length})`;
+  }
+  return "Resume";
 });
 const hasLines = computed(() => lines.value.length > 0);
 const showInitialLoader = computed(
@@ -94,8 +121,9 @@ onActivated(() => void nextTick(scrollToBottom));
       <Button
         type="button"
         severity="secondary"
-        :label="paused ? 'Resume' : 'Pause'"
-        @click="paused = !paused"
+        :label="pauseLabel"
+        :aria-pressed="paused"
+        @click="togglePaused"
       />
       <Button
         type="button"

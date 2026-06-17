@@ -128,6 +128,8 @@ type FileListPage = Page<FileEntry> & { path?: string };
 const fileFilter = ref("");
 const sortKey = ref<FileSortKey>("name");
 const sortDir = ref<"asc" | "desc">("asc");
+let listRequest = 0;
+let contentRequest = 0;
 
 const sorted = computed(() =>
   sortEntries(entries.value, sortKey.value, sortDir.value),
@@ -274,7 +276,10 @@ function resolvedListPath(requested: string, page: FileListPage): string {
 
 async function loadList(path: string): Promise<void> {
   if (!props.source) return;
+  const request = ++listRequest;
+  contentRequest += 1;
   loadingList.value = true;
+  loadingContent.value = false;
   listError.value = null;
   uploadWarning.value = "";
   selected.value = null;
@@ -291,18 +296,22 @@ async function loadList(path: string): Promise<void> {
       },
       operationCtx.value,
     )) as FileListPage;
+    if (request !== listRequest) return;
     entries.value = page.items;
     cwd.value = resolvedListPath(path, page);
   } catch (e) {
+    if (request !== listRequest) return;
     listError.value = (e as Error).message;
   } finally {
-    loadingList.value = false;
+    if (request === listRequest) loadingList.value = false;
   }
 }
 
 async function selectEntry(entry: FileEntry): Promise<void> {
+  const request = ++contentRequest;
   selected.value = entry;
   content.value = null;
+  loadingContent.value = false;
   contentError.value = null;
   editContent.value = "";
   if (entry.isDir) return;
@@ -314,7 +323,7 @@ async function selectEntry(entry: FileEntry): Promise<void> {
   if (!readRouteId.value) return;
   loadingContent.value = true;
   try {
-    content.value = await fetchDoc<FileContent>(
+    const loaded = await fetchDoc<FileContent>(
       props.connectionId,
       {
         routeId: readRouteId.value,
@@ -322,11 +331,18 @@ async function selectEntry(entry: FileEntry): Promise<void> {
       },
       operationCtx.value,
     );
+    if (request !== contentRequest || selected.value?.path !== entry.path) {
+      return;
+    }
+    content.value = loaded;
     editContent.value = content.value.content ?? "";
   } catch (e) {
+    if (request !== contentRequest || selected.value?.path !== entry.path) {
+      return;
+    }
     contentError.value = (e as Error).message;
   } finally {
-    loadingContent.value = false;
+    if (request === contentRequest) loadingContent.value = false;
   }
 }
 

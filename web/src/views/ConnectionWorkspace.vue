@@ -45,6 +45,7 @@ import { Layout } from "../types/projection";
 import type {
   Action,
   PluginProjection,
+  Row,
   Tab as TabDef,
 } from "../types/projection";
 import { dialogRoot } from "../primevue/preset";
@@ -194,12 +195,32 @@ const activeTab = computed(() =>
   visibleTabs.value.find((t) => t.key === view.value.activeTab),
 );
 
+const resourceKinds = computed(
+  () => new Set((projection.value?.resources ?? []).map((r) => r.kind)),
+);
+
 function tabConfig(tab: TabDef): Record<string, unknown> {
   return resolvedPanelConfig(tab, connectionConfig.value);
 }
 
 function tabPanel(tab: TabDef) {
   return resolvedPanelType(tab, connectionConfig.value);
+}
+
+function refSubtitle(ref: Row["ref"]): string {
+  return ref?.namespace ? `${ref.kind} / ${ref.namespace}` : (ref?.kind ?? "");
+}
+
+function openDetail(row: Row): void {
+  if (!row.ref || !resourceKinds.value.has(row.ref.kind)) return;
+  ws.openPreviewView(props.id, {
+    id: "detail:" + row.ref.uid,
+    title: row.ref.name,
+    subtitle: refSubtitle(row.ref),
+    kind: "detail",
+    ref: row.ref,
+    row,
+  });
 }
 
 const actionSuccess = useActionSuccess({
@@ -420,6 +441,7 @@ async function onActionDone(
             :resolve-config="tabConfig"
             :resolve-panel="tabPanel"
             @action-done="onActionDone"
+            @select="openDetail"
           />
 
           <TreeWorkspace

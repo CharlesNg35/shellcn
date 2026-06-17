@@ -45,6 +45,7 @@ const createOpen = ref(false);
 const createKeyName = ref("");
 const createType = ref("string");
 const createValue = ref("");
+let detailRequest = 0;
 const config = computed(() => props.config as KVPanelConfig | undefined);
 const keyParam = computed(() => config.value?.keyParam ?? "key");
 const writable = computed(() => config.value?.writable === true);
@@ -108,7 +109,11 @@ async function load(): Promise<void> {
 }
 
 async function loadDetail(entry: KVEntry): Promise<void> {
+  const request = ++detailRequest;
   selected.value = entry;
+  detail.value = null;
+  editor.value = "";
+  type.value = entry.type ?? "string";
   const routeId = config.value?.readRouteId;
   if (!routeId) {
     detail.value = entry;
@@ -118,14 +123,19 @@ async function loadDetail(entry: KVEntry): Promise<void> {
   }
   loadingDetail.value = true;
   try {
-    detail.value = await fetchDoc<KVDetail>(
+    const loaded = await fetchDoc<KVDetail>(
       props.connectionId,
       { routeId, params: { [keyParam.value]: entry.key } },
       { resource: props.resource, record: props.record },
     );
+    if (request !== detailRequest) return;
+    detail.value = loaded;
     editor.value = stringify(detail.value.value);
     type.value = detail.value.type ?? entry.type ?? "string";
   } catch (e) {
+    if (request !== detailRequest) return;
+    detail.value = null;
+    editor.value = "";
     toast.add({
       severity: "error",
       summary: "Could not load key",
@@ -133,12 +143,12 @@ async function loadDetail(entry: KVEntry): Promise<void> {
       life: 4000,
     });
   } finally {
-    loadingDetail.value = false;
+    if (request === detailRequest) loadingDetail.value = false;
   }
 }
 
 async function save(): Promise<void> {
-  if (!selected.value || !config.value?.writeRouteId) return;
+  if (!selected.value || !detail.value || !config.value?.writeRouteId) return;
   saving.value = true;
   try {
     await runFormAction(
@@ -321,7 +331,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
             type="button"
             label="Save"
             :loading="saving"
-            :disabled="saving"
+            :disabled="saving || loadingDetail || !detail"
             @click="save"
           />
         </div>

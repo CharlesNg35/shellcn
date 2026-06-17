@@ -49,7 +49,21 @@ const sections = computed<ObjectDetailSection[]>(() => {
   return [{ fields }];
 });
 
-const pretty = computed(() => JSON.stringify(doc.value ?? {}, null, 2));
+function redactedRawValue(): unknown {
+  const source = doc.value;
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return source ?? {};
+  }
+  const copy: Row = { ...(source as Row) };
+  for (const section of sections.value) {
+    for (const field of section.fields ?? []) {
+      if (field.redacted && field.key in copy) copy[field.key] = "********";
+    }
+  }
+  return copy;
+}
+
+const pretty = computed(() => JSON.stringify(redactedRawValue(), null, 2));
 const showInitialLoader = computed(() => refreshing.value && !loadedOnce.value);
 const blockingError = computed(() => error.value && !loadedOnce.value);
 
