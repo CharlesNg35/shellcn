@@ -55,8 +55,8 @@ function multiple(f: ScopeFilter): boolean {
   return f.multiple === true;
 }
 
-function searchable(f: ScopeFilter): boolean {
-  return f.searchable !== false;
+function showSearch(f: ScopeFilter): boolean {
+  return f.disableSearch !== true;
 }
 
 function ensureDefault(f: ScopeFilter): void {
@@ -287,7 +287,7 @@ onUnmounted(stopWatches);
           :options="loaded(f)"
           option-label="label"
           option-value="value"
-          :filter="searchable(f)"
+          :filter="showSearch(f)"
           :placeholder="f.allLabel ?? f.label"
           :loading="loading"
           :overlay-style="scopeControlOverlayStyle"
@@ -317,7 +317,7 @@ onUnmounted(stopWatches);
           :options="choices(f)"
           option-label="label"
           option-value="value"
-          :filter="searchable(f)"
+          :filter="showSearch(f)"
           :placeholder="f.allLabel ?? f.label"
           :loading="loading"
           :overlay-style="scopeControlOverlayStyle"

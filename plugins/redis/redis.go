@@ -79,12 +79,12 @@ func infoDetailConfig() plugin.ObjectDetailConfig {
 }
 
 func databaseScope() plugin.ScopeFilter {
-	searchable := false
 	return plugin.ScopeFilter{
 		Param:         databaseScopeParam,
 		Label:         "Database",
 		Icon:          icon("database"),
-		Searchable:    &searchable,
+		Control:       plugin.ScopeSelect,
+		DisableSearch: true,
 		OptionsSource: &plugin.DataSource{RouteID: "redis.databases.list"},
 		ValueField:    "value",
 		LabelField:    "label",

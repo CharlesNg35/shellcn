@@ -179,7 +179,7 @@ describe("ScopeBar", () => {
             param: "database",
             label: "Database",
             control: "select",
-            searchable: false,
+            disableSearch: true,
             options: [
               { value: "0", label: "Database 0" },
               { value: "1", label: "Database 1" },

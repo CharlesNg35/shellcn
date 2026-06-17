@@ -794,7 +794,7 @@ type ScopeFilter struct {
 	Control       ScopeControl   `json:"control,omitempty"`
 	Multiple      bool           `json:"multiple,omitempty"`
 	AllowCustom   bool           `json:"allowCustom,omitempty"`
-	Searchable    *bool          `json:"searchable,omitempty"`
+	DisableSearch bool           `json:"disableSearch,omitempty"`
 	OptionsSource *DataSource    `json:"optionsSource,omitempty"`
 	WatchSource   *DataSource    `json:"watchSource,omitempty"`
 	Options       []FilterOption `json:"options,omitempty"`
