@@ -6,6 +6,7 @@ import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
+import Badge from "primevue/badge";
 import { useToast } from "primevue/usetoast";
 import { fetchDoc, fetchPage, runFormAction } from "@/api/dataSource";
 import type { KVPanelConfig, Page } from "@/types/projection";
@@ -29,11 +30,16 @@ interface KVDetail extends KVEntry {
   encoding?: string;
 }
 
+interface RowSelectEvent {
+  data: KVEntry;
+}
+
 const props = defineProps<PanelProps>();
 const toast = useToast();
 
 const entries = ref<KVEntry[]>([]);
 const selected = ref<KVEntry | null>(null);
+const tableSelection = ref<KVEntry | null>(null);
 const detail = ref<KVDetail | null>(null);
 const editor = ref("");
 const type = ref("string");
@@ -101,6 +107,15 @@ function stringify(value: unknown): string {
     : JSON.stringify(value ?? "", null, 2);
 }
 
+function activateEntry(entry: KVEntry | null): void {
+  selected.value = entry;
+  tableSelection.value = entry;
+}
+
+function isSelectedEntry(entry: KVEntry): boolean {
+  return entry.key === selected.value?.key;
+}
+
 async function load(): Promise<void> {
   if (!props.source) {
     loading.value = false;
@@ -108,13 +123,18 @@ async function load(): Promise<void> {
   }
   loading.value = true;
   error.value = null;
+  const selectedKey = selected.value?.key;
   try {
     const page = await fetchPage<KVEntry>(props.connectionId, props.source, {
       resource: props.resource,
       record: props.record,
     });
     entries.value = normalizeList(page);
-    selected.value = entries.value[0] ?? null;
+    const next =
+      entries.value.find((entry) => entry.key === selectedKey) ??
+      entries.value[0] ??
+      null;
+    activateEntry(next);
     if (selected.value) await loadDetail(selected.value);
   } catch (e) {
     error.value = (e as Error).message;
@@ -125,7 +145,7 @@ async function load(): Promise<void> {
 
 async function loadDetail(entry: KVEntry): Promise<void> {
   const request = ++detailRequest;
-  selected.value = entry;
+  activateEntry(entry);
   detail.value = null;
   editor.value = "";
   type.value = entry.type ?? "string";
@@ -166,8 +186,23 @@ async function guardedLoad(): Promise<void> {
   await confirmBeforeDiscard(load);
 }
 
-async function guardedLoadDetail(entry: KVEntry): Promise<void> {
-  await confirmBeforeDiscard(() => loadDetail(entry));
+async function guardedLoadDetail(entry: KVEntry): Promise<boolean> {
+  return confirmBeforeDiscard(() => loadDetail(entry));
+}
+
+async function selectRow(event: RowSelectEvent): Promise<void> {
+  if (event.data.key === selected.value?.key) {
+    tableSelection.value = selected.value;
+    return;
+  }
+  const selectedChanged = await guardedLoadDetail(event.data);
+  if (!selectedChanged) {
+    tableSelection.value = selected.value;
+  }
+}
+
+function restoreSelection(): void {
+  tableSelection.value = selected.value;
 }
 
 async function save(): Promise<void> {
@@ -243,7 +278,7 @@ async function remove(): Promise<void> {
     );
     toast.add({ severity: "success", summary: "Key deleted", life: 2200 });
     detail.value = null;
-    selected.value = null;
+    activateEntry(null);
     await load();
   } catch (e) {
     toast.add({
@@ -313,14 +348,45 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
       />
       <DataTable
         v-if="entries.length || (!loading && !error)"
+        v-model:selection="tableSelection"
         :value="visibleEntries"
         data-key="key"
         scrollable
         scroll-height="flex"
         selection-mode="single"
-        @row-click="guardedLoadDetail($event.data as KVEntry)"
+        @row-select="selectRow"
+        @row-unselect="restoreSelection"
       >
-        <Column field="key" header="Key" />
+        <Column header="" style="width: 2.75rem">
+          <template #body="{ data }">
+            <div class="flex justify-center">
+              <span
+                v-if="isSelectedEntry(data as KVEntry)"
+                class="flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300"
+                aria-label="Selected key"
+              >
+                <AppIcon
+                  :icon="{ type: 'lucide', value: 'chevron-right' }"
+                  :size="14"
+                />
+              </span>
+              <span v-else class="h-5 w-5" aria-hidden="true" />
+            </div>
+          </template>
+        </Column>
+        <Column field="key" header="Key">
+          <template #body="{ data }">
+            <span
+              class="block truncate"
+              :class="{
+                'font-medium text-surface-950 dark:text-surface-0':
+                  isSelectedEntry(data as KVEntry),
+              }"
+            >
+              {{ (data as KVEntry).key }}
+            </span>
+          </template>
+        </Column>
         <Column field="type" header="Type" style="width: 6rem" />
         <template #empty>No keys.</template>
       </DataTable>
@@ -340,6 +406,12 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           </p>
         </div>
         <div v-if="writable && selected" class="flex items-center gap-2">
+          <Badge
+            v-if="dirty"
+            value="Unsaved"
+            severity="warn"
+            aria-live="polite"
+          />
           <Button
             v-if="config?.deleteRouteId"
             type="button"
@@ -354,7 +426,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
             type="button"
             label="Save"
             :loading="saving"
-            :disabled="saving || loadingDetail || !detail"
+            :disabled="saving || loadingDetail || !detail || !dirty"
             @click="save"
           />
         </div>
