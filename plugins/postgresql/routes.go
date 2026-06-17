@@ -752,9 +752,7 @@ ORDER BY ordinal_position`, []any{schema, table})
 		rows[i]["table"] = table
 		dbType := fmt.Sprint(rows[i]["type"])
 		readOnly := fmt.Sprint(rows[i]["identity"]) != "" && rows[i]["identity"] != nil
-		rows[i]["editor"] = sqldb.TableColumnEditor(dbType)
-		rows[i]["editable"] = !readOnly
-		rows[i]["readOnly"] = readOnly
+		sqldb.AnnotateTableColumn(rows[i], dbType, readOnly)
 	}
 	return pageRows(rc, rows)
 }

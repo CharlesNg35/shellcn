@@ -1023,11 +1023,14 @@ columns that are explicitly editable, and derives each input from
 `Column.Editor`: number inputs for numeric edits, toggles for booleans, selects
 for enumerations, text areas for long strings, and a JSON editor for structured
 values. When columns come from a `ColumnsSource`, the route should return
-`editable`, `editor`, `readOnly`, and `nullable` alongside `name`/`label` and
-display `type`; the renderer uses those generic fields with no per-plugin code.
-If the route omits `editor` for an editable runtime column, the renderer may map
-well-known data-type strings (e.g. `integer`, `boolean`, `jsonb`) to a generic
-editor, but plugin authors should prefer declaring the editor explicitly.
+`editable`, `editor`, `readOnly`, and `nullable` alongside `name`/`label`. If
+the route also needs to display a backend type string in a schema table, keep
+that string in `type` and return the renderer hint in `columnType`; otherwise
+`type` may be the renderer hint directly. The renderer uses those generic fields
+with no per-plugin code. If the route omits `editor` for an editable runtime
+column, the renderer may map well-known data-type strings (e.g. `integer`,
+`boolean`, `jsonb`) to a generic editor, but plugin authors should prefer
+declaring the editor explicitly.
 
 **Structured values never render as stringified objects.** Object and array
 cells render as a compact summary in the grid and expose the full formatted
@@ -1401,10 +1404,11 @@ same way regardless of count.
 Kubernetes CRD's own printer columns, or a SQL view's projected columns. Leave
 `Columns` empty and point `ColumnsSource` at a route returning column definition
 rows (`name`/`label`, display `type`, and when writable also `editable`,
-`editor`, `readOnly`, and `nullable`); the renderer fetches them (scoped by the
-same nav params as the list) and falls back to deriving display-only columns
-from the row data if neither is set. Generic: the core never knows the column
-names; the plugin's route supplies them.
+`editor`, `readOnly`, and `nullable`; use `columnType` when `type` must remain a
+backend type string); the renderer fetches them (scoped by the same nav params
+as the list) and falls back to deriving display-only columns from the row data if
+neither is set. Generic: the core never knows the column names; the plugin's
+route supplies them.
 
 Flat `PanelTable` tabs use the same declarative action model as resources via
 `TableConfig.ActionIDs` and `TableConfig.RowActionIDs`. Utility tables such as

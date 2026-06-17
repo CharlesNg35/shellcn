@@ -99,6 +99,13 @@ func TableColumnEditor(databaseType string) plugin.ColumnEditor {
 	}
 }
 
+func AnnotateTableColumn(row plugin.TableRow, databaseType string, readOnly bool) {
+	row["columnType"] = TableColumnType(databaseType)
+	row["editor"] = TableColumnEditor(databaseType)
+	row["editable"] = !readOnly
+	row["readOnly"] = readOnly
+}
+
 // ColumnsField describes which ColumnSpec attributes a dialect's DDL builder
 // honours, so a plugin only exposes sub-fields its handler actually applies.
 type ColumnsField struct {

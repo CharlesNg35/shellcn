@@ -499,17 +499,17 @@ describe("TablePanel", () => {
             items: [
               {
                 name: "id",
-                type: "integer",
+                type: "bigint unsigned",
+                columnType: "number",
                 nullable: false,
                 editable: true,
-                editor: "number",
               },
               {
                 name: "active",
-                type: "boolean",
+                type: "tinyint(1)",
+                columnType: "bool",
                 nullable: true,
                 editable: true,
-                editor: "toggle",
               },
               {
                 name: "label",

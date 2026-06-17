@@ -642,15 +642,17 @@ function dynamicColumnLabel(row: Row, key: string): string {
 function dynamicColumn(row: Row): ColumnSpec | null {
   const key = dynamicColumnKey(row);
   if (!key || hidden.value.has(key)) return null;
+  const record = row as Record<string, unknown>;
+  const rawType = record.columnType ?? record.type;
   const rawEditor = (row as Record<string, unknown>).editor;
   const editor =
     typeof rawEditor === "string" && rawEditor
       ? (rawEditor as ColumnSpec["editor"])
-      : defaultColumnEditor((row as Record<string, unknown>).type);
+      : defaultColumnEditor(rawType);
   return {
     key,
     label: dynamicColumnLabel(row, key),
-    type: defaultColumnType((row as Record<string, unknown>).type),
+    type: defaultColumnType(rawType),
     editable: row.editable === true,
     editor: row.editable === true ? editor : undefined,
     readOnly: row.readOnly === true,

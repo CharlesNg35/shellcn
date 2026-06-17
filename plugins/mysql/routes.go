@@ -625,9 +625,7 @@ ORDER BY ORDINAL_POSITION`, []any{database, table})
 		dbType := fmt.Sprint(rows[i]["type"])
 		readOnly := strings.Contains(strings.ToLower(fmt.Sprint(rows[i]["extra"])), "auto_increment") ||
 			strings.Contains(strings.ToLower(fmt.Sprint(rows[i]["extra"])), "generated")
-		rows[i]["editor"] = sqldb.TableColumnEditor(dbType)
-		rows[i]["editable"] = !readOnly
-		rows[i]["readOnly"] = readOnly
+		sqldb.AnnotateTableColumn(rows[i], dbType, readOnly)
 	}
 	return pageRows(rc, rows)
 }
