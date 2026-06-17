@@ -8,16 +8,33 @@ import SkeletonList from "@/components/SkeletonList.vue";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import JsonNode from "./JsonNode.vue";
 import AppIcon from "@/components/AppIcon.vue";
+import { useRefreshableSource } from "../shared/useRefreshableSource";
 
 const props = defineProps<PanelProps>();
 
-const doc = ref<unknown>(null);
-const loadedOnce = ref(false);
-const refreshing = ref(false);
-const error = ref<string | null>(null);
 const copied = ref(false);
 const mode = ref<"tree" | "raw">("tree");
 let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function loadDocument(): Promise<unknown> {
+  if (!props.source) return null;
+  return fetchDoc(props.connectionId, props.source, {
+    resource: props.resource,
+    record: props.record,
+  });
+}
+
+const {
+  data: doc,
+  refreshing,
+  error,
+  showInitialLoader,
+  blockingError,
+  load,
+  reset,
+} = useRefreshableSource<unknown>(loadDocument, {
+  initialValue: () => null,
+});
 
 function clearCopiedTimer(): void {
   if (copiedTimer) clearTimeout(copiedTimer);
@@ -31,30 +48,6 @@ const downloadHref = computed(
   () =>
     `data:application/json;charset=utf-8,${encodeURIComponent(pretty.value)}`,
 );
-const showInitialLoader = computed(() => refreshing.value && !loadedOnce.value);
-const blockingError = computed(() => error.value && !loadedOnce.value);
-
-async function load(): Promise<void> {
-  if (!props.source) {
-    loadedOnce.value = true;
-    return;
-  }
-  if (refreshing.value) return;
-  refreshing.value = true;
-  error.value = null;
-  try {
-    doc.value = await fetchDoc(props.connectionId, props.source, {
-      resource: props.resource,
-      record: props.record,
-    });
-    loadedOnce.value = true;
-  } catch (e) {
-    error.value = (e as Error).message;
-  } finally {
-    refreshing.value = false;
-  }
-}
-
 async function copy(): Promise<void> {
   if (!navigator.clipboard) return;
   await navigator.clipboard.writeText(pretty.value);
@@ -66,10 +59,15 @@ async function copy(): Promise<void> {
 }
 
 watch(
-  () => [props.connectionId, props.resource?.uid],
+  () => [
+    props.connectionId,
+    props.resource?.uid,
+    props.source?.routeId,
+    JSON.stringify(props.source?.params ?? {}),
+    JSON.stringify(props.record ?? {}),
+  ],
   () => {
-    doc.value = null;
-    loadedOnce.value = false;
+    reset();
     void load();
   },
   {
