@@ -35,6 +35,9 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	if len(m.Scope) != 1 || m.Scope[0].Param != databaseScopeParam || m.Scope[0].DefaultValue != "0" {
 		t.Fatalf("database scope not declared correctly: %+v", m.Scope)
 	}
+	if m.Scope[0].Searchable == nil || *m.Scope[0].Searchable {
+		t.Fatalf("database scope should disable select search: %+v", m.Scope[0])
+	}
 	var console *plugin.Panel
 	for i := range m.Tabs {
 		if m.Tabs[i].Key == "console" {

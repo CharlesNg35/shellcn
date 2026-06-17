@@ -170,6 +170,31 @@ describe("ScopeBar", () => {
     });
   });
 
+  it("allows a manifest scope select to hide the filter input", async () => {
+    const wrapper = mount(ScopeBar, {
+      props: {
+        connectionId: "c1",
+        scope: [
+          {
+            param: "database",
+            label: "Database",
+            control: "select",
+            searchable: false,
+            options: [
+              { value: "0", label: "Database 0" },
+              { value: "1", label: "Database 1" },
+            ],
+          },
+        ],
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.findComponent({ name: "Select" }).props("filter")).toBe(
+      false,
+    );
+  });
+
   it("keeps multiselect overlays aligned to the compact scope control width", async () => {
     const wrapper = mount(ScopeBar, {
       props: {
