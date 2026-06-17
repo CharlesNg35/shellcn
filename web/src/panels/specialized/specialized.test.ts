@@ -409,6 +409,57 @@ describe("specialized panels", () => {
     expect(w.find(".shellcn-codemirror-host").exists()).toBe(true);
   });
 
+  it("loads KV filter matches from the server", async () => {
+    vi.useFakeTimers();
+    try {
+      const listFilters: string[] = [];
+      vi.unstubAllGlobals();
+      installFetch((url) => {
+        if (url.includes("kv.list")) {
+          listFilters.push(
+            new URL(url, "http://h").searchParams.get("filter") ?? "",
+          );
+          const filtered = url.includes("user%3A1");
+          return {
+            body: {
+              items: filtered ? [{ key: "user:1", type: "string" }] : [],
+              nextCursor: "",
+            },
+          };
+        }
+        if (url.includes("kv.read")) {
+          return {
+            body: {
+              key: "user:1",
+              type: "string",
+              value: "my value",
+            },
+          };
+        }
+        return { body: {} };
+      });
+      const w = mount(KVPanel, {
+        props: {
+          connectionId: "c1",
+          source: { routeId: "kv.list" },
+          config: { readRouteId: "kv.read" },
+        },
+      });
+      await flushPromises();
+
+      await w.get('input[aria-label="Filter keys"]').setValue("user:1");
+      await vi.advanceTimersByTimeAsync(250);
+      await flushPromises();
+
+      expect(listFilters).toContain("user:1");
+      expect(selectedKVKey(w)).toBe("user:1");
+      expect(w.text()).toContain("user:1");
+      w.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps editing when KV key selection is canceled with unsaved changes", async () => {
     const reads: string[] = [];
     vi.unstubAllGlobals();

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Button from "primevue/button";
@@ -53,6 +53,7 @@ const createKeyName = ref("");
 const createType = ref("string");
 const createValue = ref("");
 let detailRequest = 0;
+let filterLoadHandle: ReturnType<typeof setTimeout> | undefined;
 const config = computed(() => props.config as KVPanelConfig | undefined);
 const keyParam = computed(() => config.value?.keyParam ?? "key");
 const writable = computed(() => config.value?.writable === true);
@@ -120,11 +121,19 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = null;
   const selectedKey = selected.value?.key;
+  const search = filterText.value.trim();
   try {
-    const page = await fetchPage<KVEntry>(props.connectionId, props.source, {
-      resource: props.resource,
-      record: props.record,
-    });
+    const page = await fetchPage<KVEntry>(
+      props.connectionId,
+      props.source,
+      {
+        resource: props.resource,
+        record: props.record,
+      },
+      {
+        filter: search ? { q: search } : undefined,
+      },
+    );
     entries.value = normalizeList(page);
     const next =
       entries.value.find((entry) => entry.key === selectedKey) ??
@@ -180,6 +189,14 @@ async function loadDetail(entry: KVEntry): Promise<void> {
 
 async function guardedLoad(): Promise<void> {
   await confirmBeforeDiscard(load);
+}
+
+function queueFilterLoad(): void {
+  if (filterLoadHandle) clearTimeout(filterLoadHandle);
+  filterLoadHandle = setTimeout(() => {
+    filterLoadHandle = undefined;
+    if (!dirty.value) void load();
+  }, 250);
 }
 
 async function guardedLoadDetail(entry: KVEntry): Promise<boolean> {
@@ -290,6 +307,12 @@ async function remove(): Promise<void> {
 
 watch(() => [props.connectionId, props.resource?.uid], load, {
   immediate: true,
+});
+
+watch(filterText, queueFilterLoad);
+
+onUnmounted(() => {
+  if (filterLoadHandle) clearTimeout(filterLoadHandle);
 });
 </script>
 
