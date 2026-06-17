@@ -32,7 +32,12 @@ func fixture() (plugin.Manifest, []plugin.Route) {
 		Tabs: []plugin.Panel{{
 			Key: "data", Label: "Data", Type: plugin.PanelTable,
 			Source: &plugin.DataSource{RouteID: "demo.list"},
-			Config: plugin.TableConfig{Editable: true, RowKey: []string{"id"}},
+			Config: plugin.TableConfig{
+				Columns: []plugin.Column{
+					{Key: "id", Label: "ID"},
+					{Key: "name", Label: "Name"},
+				},
+			},
 		}},
 	}
 	routes := []plugin.Route{{

@@ -103,14 +103,31 @@ const (
 	ColumnIcon         ColumnType = "icon"
 )
 
+// ColumnEditor selects the input used when a table column is explicitly editable.
+type ColumnEditor string
+
+const (
+	ColumnEditorText     ColumnEditor = "text"
+	ColumnEditorTextarea ColumnEditor = "textarea"
+	ColumnEditorNumber   ColumnEditor = "number"
+	ColumnEditorToggle   ColumnEditor = "toggle"
+	ColumnEditorSelect   ColumnEditor = "select"
+	ColumnEditorJSON     ColumnEditor = "json"
+)
+
 type Column struct {
 	Key      string     `json:"key"`
 	Label    string     `json:"label"`
 	Sortable bool       `json:"sortable,omitempty"`
 	Type     ColumnType `json:"type,omitempty"`
 	Width    string     `json:"width,omitempty"`
-	// ReadOnly keeps server-managed values out of the inline editor. Nullable
-	// lets the editor clear a cell to empty/null.
+	// Editable opts this column into table cell editing. Editor declares the
+	// concrete input; table-level Editable only enables mutation routes.
+	Editable bool         `json:"editable,omitempty"`
+	Editor   ColumnEditor `json:"editor,omitempty"`
+	Options  []Option     `json:"options,omitempty"`
+	// ReadOnly marks display-only values. Nullable lets editors clear a cell to
+	// empty/null.
 	ReadOnly bool `json:"readOnly,omitempty"`
 	Nullable bool `json:"nullable,omitempty"`
 	// Precision fixes fraction digits for number/percent cells.

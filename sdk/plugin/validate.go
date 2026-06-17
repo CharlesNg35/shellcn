@@ -700,6 +700,7 @@ func checkPanelConfigRoutes(
 ) {
 	switch c := config.(type) {
 	case TableConfig:
+		validateTableConfig(ctx, c, add)
 		if c.ColumnsSource != nil {
 			checkReadSource(ctx+" columnsSource", *c.ColumnsSource)
 		}
@@ -897,5 +898,43 @@ func checkPanelConfigRoutes(
 				)
 			}
 		}
+	}
+}
+
+func validateTableConfig(ctx string, c TableConfig, add func(string, ...any)) {
+	if c.Editable && c.Insert == nil && c.Update == nil && c.Delete == nil {
+		add("%s editable table must declare insert, update, or delete", ctx)
+	}
+	for _, key := range c.RowKey {
+		if strings.TrimSpace(key) == "" {
+			add("%s rowKey contains an empty field", ctx)
+		}
+	}
+	for _, col := range c.Columns {
+		validateTableColumn(ctx, col, add)
+	}
+}
+
+func validateTableColumn(ctx string, col Column, add func(string, ...any)) {
+	if strings.TrimSpace(col.Key) == "" {
+		add("%s column has an empty key", ctx)
+	}
+	if col.Editable && col.ReadOnly {
+		add("%s column %q cannot be both editable and readOnly", ctx, col.Key)
+	}
+	if !col.Editable && col.Editor != "" {
+		add("%s column %q declares editor without editable", ctx, col.Key)
+	}
+	switch col.Editor {
+	case "":
+		if col.Editable {
+			add("%s editable column %q must declare editor", ctx, col.Key)
+		}
+	case ColumnEditorText, ColumnEditorTextarea, ColumnEditorNumber, ColumnEditorToggle, ColumnEditorSelect, ColumnEditorJSON:
+	default:
+		add("%s column %q has invalid editor %q", ctx, col.Key, col.Editor)
+	}
+	if col.Editor == ColumnEditorSelect && len(col.Options) == 0 {
+		add("%s column %q select editor requires options", ctx, col.Key)
 	}
 }

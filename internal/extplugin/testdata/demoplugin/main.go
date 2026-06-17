@@ -29,7 +29,12 @@ func (demo) Manifest() plugin.Manifest {
 		Tabs: []plugin.Panel{{
 			Key: "data", Label: "Data", Type: plugin.PanelTable,
 			Source: &plugin.DataSource{RouteID: "demo.list"},
-			Config: plugin.TableConfig{Editable: true, RowKey: []string{"id"}},
+			Config: plugin.TableConfig{
+				Columns: []plugin.Column{
+					{Key: "id", Label: "ID"},
+					{Key: "name", Label: "Name"},
+				},
+			},
 		}},
 		Streams: []plugin.Stream{{ID: "demo.stream", Kind: plugin.StreamLogs, RouteID: "demo.stream"}},
 	}

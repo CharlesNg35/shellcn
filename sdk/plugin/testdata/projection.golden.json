@@ -1247,7 +1247,96 @@
         "columns": {
           "type": "array",
           "items": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "editable": {
+                "type": "boolean"
+              },
+              "editor": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "textarea",
+                  "number",
+                  "toggle",
+                  "select",
+                  "json"
+                ]
+              },
+              "key": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "nullable": {
+                "type": "boolean"
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "value"
+                  ]
+                }
+              },
+              "precision": {
+                "type": "number"
+              },
+              "readOnly": {
+                "type": "boolean"
+              },
+              "severities": {
+                "type": "object",
+                "properties": {
+                  "*": {
+                    "type": "string",
+                    "enum": [
+                      "info",
+                      "success",
+                      "warn",
+                      "danger",
+                      "secondary"
+                    ]
+                  }
+                }
+              },
+              "sortable": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "badge",
+                  "bytes",
+                  "datetime",
+                  "relative_time",
+                  "number",
+                  "percent",
+                  "bool",
+                  "json",
+                  "icon"
+                ]
+              },
+              "width": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "label"
+            ]
           }
         },
         "columnsSource": {

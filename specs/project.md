@@ -915,8 +915,35 @@ type Panel struct {
 // object the renderer reads, so there is no hand-written .Map() ceremony.
 type PanelConfig interface{ /* sealed: TableConfig, MetricsConfig, … */ }
 
+type ColumnEditor string
+
+const (
+    ColumnEditorText     ColumnEditor = "text"
+    ColumnEditorTextarea ColumnEditor = "textarea"
+    ColumnEditorNumber   ColumnEditor = "number"
+    ColumnEditorToggle   ColumnEditor = "toggle"
+    ColumnEditorSelect   ColumnEditor = "select"
+    ColumnEditorJSON     ColumnEditor = "json"
+)
+
+type Column struct {
+    Key        string
+    Label      string
+    Sortable   bool
+    Type       ColumnType
+    Width      string
+    Editable   bool         // column-level edit opt-in
+    Editor     ColumnEditor // required when Editable is true
+    Options    []Option     // required for select editors
+    ReadOnly   bool
+    Nullable   bool
+    Precision  *int
+    Severities map[string]Severity
+}
+
 type TableConfig struct {
     Columns      []Column
+    ColumnsSource *DataSource
     Watch        *DataSource
     RefreshIntervalMs int      // live view: re-fetch the current page on this cadence (alternative to Watch)
     DefaultSort       *SortKey // column to sort by on first load
@@ -931,9 +958,9 @@ type TableConfig struct {
     // instead to keep checkboxes but no row bar (a browse table whose actions
     // live in the detail). Inline-editable grids keep their own row controls.
 
-    // Editable data grid — plugin-agnostic; the renderer assumes nothing about
-    // what the data represents.
-    Editable      bool        // master switch for inline cell edit / add-row / delete-row
+    // Editable data grid — plugin-agnostic; mutation routes enable table
+    // operations, while each editable column declares its own editor.
+    Editable      bool        // enables add/update/delete affordances when routes exist
     RowKey        []string    // columns identifying a row (when not carried per-row)
     Insert        *DataSource // POST {"values":{col:val}}
     Update        *DataSource // PATCH {"key":{col:val},"values":{col:val}}
@@ -982,13 +1009,31 @@ the same sanitized icon pipeline as every other manifest icon. This is for visua
 kind/status hints that are still data-driven; the renderer must not infer icons
 from plugin names, resource kinds, or column keys.
 
-**Add-row inputs are typed by column.** The add-row form derives each input
-widget from its column's declared type — a numeric column gets a number input, a
-boolean a toggle, JSON a code area, the rest a text box — rather than a
-one-size-fits-all text field. When columns come from a `ColumnsSource`, the
-renderer maps the column's data-type string (e.g. `integer`, `boolean`,
-`timestamptz`, `jsonb`) onto these generic widgets, so the typing works for any
-plugin whose column route reports a type, with no per-plugin code.
+**Editable columns are explicit.** `TableConfig.Editable` only enables the
+table's mutation mode when a matching Insert/Update/Delete route exists. It
+does not make every cell editable. A plugin opts in per column with
+`Column.Editable = true` and a concrete `Column.Editor` (`text`, `textarea`,
+`number`, `toggle`, `select`, or `json`). `ReadOnly` and `Editable` are mutually
+exclusive. A `select` editor must declare `Options`. This keeps server-managed
+keys, computed fields, JSON payloads, and labels from accidentally becoming
+plain text inputs.
+
+**Add-row inputs are typed by column editor.** The add-row form includes only
+columns that are explicitly editable, and derives each input from
+`Column.Editor`: number inputs for numeric edits, toggles for booleans, selects
+for enumerations, text areas for long strings, and a JSON editor for structured
+values. When columns come from a `ColumnsSource`, the route should return
+`editable`, `editor`, `readOnly`, and `nullable` alongside `name`/`label` and
+display `type`; the renderer uses those generic fields with no per-plugin code.
+If the route omits `editor` for an editable runtime column, the renderer may map
+well-known data-type strings (e.g. `integer`, `boolean`, `jsonb`) to a generic
+editor, but plugin authors should prefer declaring the editor explicitly.
+
+**Structured values never render as stringified objects.** Object and array
+cells render as a compact summary in the grid and expose the full formatted
+value via the cell title/detail view. JSON editing opens an explicit dialog
+rather than using inline text editing, so a user can inspect formatting and
+syntax errors before saving.
 
 The SQL plugins are one consumer: they build mutations through the driver-neutral
 `plugins/shared/sqldb` `Dialect` (parameterized, identifier-validated),
@@ -1354,10 +1399,12 @@ same way regardless of count.
 
 `ColumnsSource` covers lists whose columns are only known at runtime — e.g. a
 Kubernetes CRD's own printer columns, or a SQL view's projected columns. Leave
-`Columns` empty and point `ColumnsSource` at a route returning `{name,label}`
-rows; the renderer fetches them (scoped by the same nav params as the list) and
-falls back to deriving columns from the row data if neither is set. Generic: the
-core never knows the column names; the plugin's route supplies them.
+`Columns` empty and point `ColumnsSource` at a route returning column definition
+rows (`name`/`label`, display `type`, and when writable also `editable`,
+`editor`, `readOnly`, and `nullable`); the renderer fetches them (scoped by the
+same nav params as the list) and falls back to deriving display-only columns
+from the row data if neither is set. Generic: the core never knows the column
+names; the plugin's route supplies them.
 
 Flat `PanelTable` tabs use the same declarative action model as resources via
 `TableConfig.ActionIDs` and `TableConfig.RowActionIDs`. Utility tables such as

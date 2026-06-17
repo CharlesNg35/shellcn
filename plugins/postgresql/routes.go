@@ -750,6 +750,11 @@ ORDER BY ordinal_position`, []any{schema, table})
 	for i := range rows {
 		rows[i]["schema"] = schema
 		rows[i]["table"] = table
+		dbType := fmt.Sprint(rows[i]["type"])
+		readOnly := fmt.Sprint(rows[i]["identity"]) != "" && rows[i]["identity"] != nil
+		rows[i]["editor"] = sqldb.TableColumnEditor(dbType)
+		rows[i]["editable"] = !readOnly
+		rows[i]["readOnly"] = readOnly
 	}
 	return pageRows(rc, rows)
 }

@@ -1,5 +1,5 @@
 import type { DataSource, Icon, Method, RiskLevel, SortKey } from "./core";
-import type { Condition, Schema } from "./schema";
+import type { Condition, Option, Schema } from "./schema";
 
 export const PanelType = {
   Terminal: "terminal",
@@ -59,6 +59,16 @@ export const ColumnType = {
 } as const;
 export type ColumnType = (typeof ColumnType)[keyof typeof ColumnType];
 
+export const ColumnEditor = {
+  Text: "text",
+  Textarea: "textarea",
+  Number: "number",
+  Toggle: "toggle",
+  Select: "select",
+  Json: "json",
+} as const;
+export type ColumnEditor = (typeof ColumnEditor)[keyof typeof ColumnEditor];
+
 export const Severity = {
   Info: "info",
   Success: "success",
@@ -74,6 +84,9 @@ export interface Column {
   sortable?: boolean;
   type?: ColumnType;
   width?: string;
+  editable?: boolean;
+  editor?: ColumnEditor;
+  options?: Option[];
   readOnly?: boolean;
   nullable?: boolean;
   precision?: number;

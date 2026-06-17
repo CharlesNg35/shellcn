@@ -6,10 +6,16 @@ import { setActivePinia, createPinia } from "pinia";
 import { installFetch } from "@/test/fetchMock";
 import TablePanel from "./TablePanel.vue";
 import { RiskLevel, type Action, type Column } from "@/types/projection";
+import CodeTextEditor from "../shared/CodeTextEditor.vue";
 
 const columns: Column[] = [
   { key: "name", label: "Name", sortable: true },
   { key: "state", label: "State" },
+];
+
+const editableColumns: Column[] = [
+  { key: "name", label: "Name", sortable: true, readOnly: true },
+  { key: "state", label: "State", editable: true, editor: "text" },
 ];
 
 function row(id: string, name: string, state = "running") {
@@ -182,6 +188,93 @@ describe("TablePanel", () => {
 
     expect(w.get("thead th").attributes("style")).toContain("width: 3rem");
     expect(w.find('[data-test="table-cell-value"] svg').exists()).toBe(true);
+  });
+
+  it("shows an edit affordance only for explicitly editable cells", async () => {
+    vi.unstubAllGlobals();
+    installFetch(() => ({
+      body: {
+        items: [row("a", "alpha")],
+        nextCursor: "",
+        total: 1,
+      },
+    }));
+
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "db.table.rows" },
+        config: {
+          columns: editableColumns,
+          editable: true,
+          rowKey: ["name"],
+          update: { routeId: "db.row.update", method: "POST" },
+        },
+      },
+    });
+    await flushPromises();
+
+    const cells = w.findAll('[data-test="table-cell-value"]');
+    expect(cells[0].find("svg").exists()).toBe(false);
+    expect(cells[1].find("svg").exists()).toBe(true);
+  });
+
+  it("summarizes structured values and opens JSON editing explicitly", async () => {
+    vi.unstubAllGlobals();
+    installFetch((_url, init) => {
+      if (init?.method === "POST") {
+        return { body: { ok: true } };
+      }
+      return {
+        body: {
+          items: [
+            {
+              _key: { id: 1 },
+              id: 1,
+              metadata: { labels: { app: "web" }, replicas: 2 },
+            },
+          ],
+          nextCursor: "",
+          total: 1,
+        },
+      };
+    });
+
+    const w = mount(TablePanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "db.table.rows" },
+        config: {
+          columns: [
+            { key: "id", label: "ID", type: "number", readOnly: true },
+            {
+              key: "metadata",
+              label: "Metadata",
+              type: "json",
+              editable: true,
+              editor: "json",
+            },
+          ],
+          editable: true,
+          update: { routeId: "db.row.update", method: "POST" },
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain("{2 keys}");
+    expect(w.text()).not.toContain("[object Object]");
+    const edit = [...document.body.querySelectorAll("button")].find(
+      (b) => b.getAttribute("aria-label") === "Edit JSON",
+    ) as HTMLButtonElement;
+    expect(edit).toBeTruthy();
+    edit.click();
+    await flushPromises();
+    expect(w.findComponent(CodeTextEditor).props("value")).toContain(
+      '"replicas": 2',
+    );
+    w.unmount();
   });
 
   it("filters server-side and resets the list", async () => {
@@ -361,8 +454,8 @@ describe("TablePanel", () => {
         return {
           body: {
             items: [
-              { name: "id", nullable: false },
-              { name: "name", nullable: true },
+              { name: "id", nullable: false, editable: true, editor: "text" },
+              { name: "name", nullable: true, editable: true, editor: "text" },
             ],
             nextCursor: "",
             total: 2,
@@ -404,9 +497,27 @@ describe("TablePanel", () => {
         return {
           body: {
             items: [
-              { name: "id", type: "integer", nullable: false },
-              { name: "active", type: "boolean", nullable: true },
-              { name: "label", type: "text", nullable: true },
+              {
+                name: "id",
+                type: "integer",
+                nullable: false,
+                editable: true,
+                editor: "number",
+              },
+              {
+                name: "active",
+                type: "boolean",
+                nullable: true,
+                editable: true,
+                editor: "toggle",
+              },
+              {
+                name: "label",
+                type: "text",
+                nullable: true,
+                editable: true,
+                editor: "text",
+              },
             ],
             nextCursor: "",
             total: 3,
@@ -509,7 +620,7 @@ describe("TablePanel staged edits", () => {
   type Call = { url: string; method: string; body: unknown };
 
   const stagedConfig = {
-    columns,
+    columns: editableColumns,
     editable: true,
     stagedEdits: true,
     rowKey: ["name"],
