@@ -445,7 +445,6 @@ describe("specialized panels", () => {
     await flushPromises();
 
     expect(selectedKVKey(w)).toBe("session:1");
-    expect(w.find('[aria-label="Selected key"]').exists()).toBe(true);
     mockCodeMirror.onChange?.('{"user":"edited"}');
     await flushPromises();
     expect(w.text()).toContain("Unsaved");
@@ -495,7 +494,6 @@ describe("specialized panels", () => {
     await flushPromises();
 
     expect(selectedKVKey(w)).toBe("session:1");
-    expect(w.find('[aria-label="Selected key"]').exists()).toBe(true);
     mockCodeMirror.onChange?.('{"user":"edited"}');
     await flushPromises();
     expect(w.text()).toContain("Unsaved");

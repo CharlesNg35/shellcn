@@ -3,6 +3,8 @@ import { computed } from "vue";
 import Button from "primevue/button";
 import FileUpload from "primevue/fileupload";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
+import IconField from "primevue/iconfield";
+import InputIcon from "primevue/inputicon";
 import InputText from "primevue/inputtext";
 import ProgressBar from "primevue/progressbar";
 import Select from "primevue/select";
@@ -11,7 +13,11 @@ import AppIcon from "@/components/AppIcon.vue";
 import type { UploadProgress } from "@/api/dataSource";
 import type { FileSortKey } from "./fileTypes";
 import { formatBytes } from "./fileTypes";
-import { inputClass } from "@/primevue/preset";
+import {
+  searchFieldClass,
+  searchIconLeftClass,
+  searchInputClass,
+} from "@/primevue/preset";
 import { cn } from "@/utils/cn";
 
 const filter = defineModel<string>("filter", { default: "" });
@@ -24,7 +30,7 @@ const sortOptions = [
   { label: "Modified", value: "modified" },
 ];
 
-const searchClass = cn(inputClass, "h-9 pl-8 pr-8");
+const searchClass = cn(searchInputClass, "pr-8");
 
 function toggleSortDir(): void {
   sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
@@ -168,12 +174,10 @@ const uploadTitle = computed(() =>
       </Button>
 
       <div class="ml-auto flex flex-wrap items-center gap-2">
-        <div class="relative w-44 sm:w-56">
-          <AppIcon
-            :icon="{ type: 'lucide', value: 'search' }"
-            :size="15"
-            class="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-surface-400"
-          />
+        <IconField :class="[searchFieldClass, 'w-44 sm:w-56']">
+          <InputIcon :class="searchIconLeftClass">
+            <AppIcon :icon="{ type: 'lucide', value: 'search' }" :size="15" />
+          </InputIcon>
           <InputText
             v-model="filter"
             type="search"
@@ -197,7 +201,7 @@ const uploadTitle = computed(() =>
           >
             <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="14" />
           </Button>
-        </div>
+        </IconField>
 
         <div class="flex items-center gap-1">
           <div class="w-32">

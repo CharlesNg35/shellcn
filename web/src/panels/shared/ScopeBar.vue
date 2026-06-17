@@ -25,6 +25,10 @@ const store = useScopeStore();
 const options = reactive<Record<string, FilterOption[]>>({});
 const suggestions = reactive<Record<string, FilterOption[]>>({});
 const loading = ref(false);
+const scopeControlOverlayStyle = {
+  width: "13rem",
+  maxWidth: "calc(100vw - 2rem)",
+};
 let stops: (() => void)[] = [];
 let loadVersion = 0;
 
@@ -282,6 +286,7 @@ onUnmounted(stopWatches);
           filter
           :placeholder="f.allLabel ?? f.label"
           :loading="loading"
+          :overlay-style="scopeControlOverlayStyle"
           :aria-label="f.label"
           @update:model-value="setMembers(f, $event)"
         />
@@ -311,6 +316,7 @@ onUnmounted(stopWatches);
           filter
           :placeholder="f.allLabel ?? f.label"
           :loading="loading"
+          :overlay-style="scopeControlOverlayStyle"
           :aria-label="f.label"
           @update:model-value="set(f, $event ?? '')"
         />

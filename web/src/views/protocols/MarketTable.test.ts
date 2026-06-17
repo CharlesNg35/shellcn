@@ -46,9 +46,14 @@ describe("MarketTable", () => {
       },
     });
 
-    await wrapper
-      .get('input[aria-label="Search marketplace plugins"]')
-      .setValue("elastic");
+    const search = wrapper.get(
+      'input[aria-label="Search marketplace plugins"]',
+    );
+    const iconShell = search.element.nextElementSibling as HTMLElement;
+    expect(iconShell.className).toContain("inset-y-0");
+    expect(iconShell.className).toContain("items-center");
+
+    await search.setValue("elastic");
     await flushPromises();
 
     expect(wrapper.text()).toContain("Elasticsearch");

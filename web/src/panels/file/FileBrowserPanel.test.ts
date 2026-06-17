@@ -223,6 +223,9 @@ describe("FileBrowserPanel", () => {
     expect(w.text()).toContain("README.md");
 
     const filter = w.get('input[aria-label="Filter files"]');
+    const iconShell = filter.element.previousElementSibling as HTMLElement;
+    expect(iconShell.className).toContain("inset-y-0");
+    expect(iconShell.className).toContain("items-center");
     await filter.setValue("readme");
     expect(w.text()).toContain("README.md");
     expect(w.text()).not.toContain("etc");

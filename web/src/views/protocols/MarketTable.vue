@@ -5,6 +5,11 @@ import InputIcon from "primevue/inputicon";
 import InputText from "primevue/inputtext";
 import Tag from "primevue/tag";
 import AppIcon from "@/components/AppIcon.vue";
+import {
+  inputClass,
+  searchFieldClass,
+  searchIconRightClass,
+} from "@/primevue/preset";
 import type { MarketEntry } from "@/types/projection";
 import MarketPluginRow from "./MarketPluginRow.vue";
 
@@ -84,16 +89,14 @@ const updateCount = computed(
             severity="warn"
           />
         </div>
-        <IconField class="relative w-full sm:w-72">
+        <IconField :class="[searchFieldClass, 'sm:w-72']">
           <InputText
             v-model="query"
-            class="w-full pr-9"
+            :class="[inputClass, 'h-9 pr-9']"
             placeholder="Search plugins"
             aria-label="Search marketplace plugins"
           />
-          <InputIcon
-            class="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-surface-400"
-          >
+          <InputIcon :class="searchIconRightClass">
             <AppIcon :icon="{ type: 'lucide', value: 'search' }" :size="14" />
           </InputIcon>
         </IconField>

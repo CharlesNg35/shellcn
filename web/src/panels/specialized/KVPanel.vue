@@ -112,10 +112,6 @@ function activateEntry(entry: KVEntry | null): void {
   tableSelection.value = entry;
 }
 
-function isSelectedEntry(entry: KVEntry): boolean {
-  return entry.key === selected.value?.key;
-}
-
 async function load(): Promise<void> {
   if (!props.source) {
     loading.value = false;
@@ -357,36 +353,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         @row-select="selectRow"
         @row-unselect="restoreSelection"
       >
-        <Column header="" style="width: 2.75rem">
-          <template #body="{ data }">
-            <div class="flex justify-center">
-              <span
-                v-if="isSelectedEntry(data as KVEntry)"
-                class="flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300"
-                aria-label="Selected key"
-              >
-                <AppIcon
-                  :icon="{ type: 'lucide', value: 'chevron-right' }"
-                  :size="14"
-                />
-              </span>
-              <span v-else class="h-5 w-5" aria-hidden="true" />
-            </div>
-          </template>
-        </Column>
-        <Column field="key" header="Key">
-          <template #body="{ data }">
-            <span
-              class="block truncate"
-              :class="{
-                'font-medium text-surface-950 dark:text-surface-0':
-                  isSelectedEntry(data as KVEntry),
-              }"
-            >
-              {{ (data as KVEntry).key }}
-            </span>
-          </template>
-        </Column>
+        <Column field="key" header="Key" />
         <Column field="type" header="Type" style="width: 6rem" />
         <template #empty>No keys.</template>
       </DataTable>

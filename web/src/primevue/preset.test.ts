@@ -291,6 +291,33 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.autocomplete.pcChip.label).toContain("truncate");
   });
 
+  it("keeps searchable select filter icons anchored inside the filter field", () => {
+    expect(primeVuePassthrough.select.overlay).toContain("p-0");
+    expect(primeVuePassthrough.select.header).toContain("border-b");
+    expect(primeVuePassthrough.select.pcFilterContainer.root).toContain(
+      "relative",
+    );
+    expect(primeVuePassthrough.select.pcFilterContainer.root).toContain(
+      "items-center",
+    );
+    expect(primeVuePassthrough.select.pcFilter.root).toContain("pl-9");
+    expect(primeVuePassthrough.select.pcFilterIconContainer.root).toContain(
+      "absolute",
+    );
+    expect(primeVuePassthrough.select.pcFilterIconContainer.root).toContain(
+      "inset-y-0",
+    );
+    expect(primeVuePassthrough.select.pcFilterIconContainer.root).toContain(
+      "items-center",
+    );
+    expect(primeVuePassthrough.multiselect.pcFilterContainer.root).toContain(
+      "relative",
+    );
+    expect(primeVuePassthrough.multiselect.pcFilterContainer.root).toContain(
+      "flex-1",
+    );
+  });
+
   it("merges conflicting button classes so size props take effect", () => {
     const small = primeVuePassthrough.button.root({
       props: { size: "small" },

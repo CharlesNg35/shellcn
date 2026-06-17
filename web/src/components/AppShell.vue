@@ -3,6 +3,9 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useDocumentVisibility, useIntervalFn, useStorage } from "@vueuse/core";
 import Button from "primevue/button";
+import IconField from "primevue/iconfield";
+import InputIcon from "primevue/inputicon";
+import InputText from "primevue/inputtext";
 import { useConnectionsStore } from "../stores/connections";
 import { useAuthStore } from "../stores/auth";
 import { useConnectionSessionsStore } from "../stores/connectionSessions";
@@ -12,7 +15,11 @@ import AppLogo from "./AppLogo.vue";
 import ThemeToggle from "./ThemeToggle.vue";
 import ConnectionFormDialog from "./ConnectionFormDialog.vue";
 import ConnectionSidebar from "./ConnectionSidebar.vue";
-import { searchInputClass } from "../primevue/preset";
+import {
+  searchFieldClass,
+  searchIconLeftClass,
+  searchInputClass,
+} from "../primevue/preset";
 
 const conns = useConnectionsStore();
 const auth = useAuthStore();
@@ -96,20 +103,18 @@ async function onConnectionSaved(payload: {
       </div>
 
       <div class="px-3 pb-2">
-        <label class="relative block">
-          <span
-            class="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-surface-400"
-          >
+        <IconField :class="searchFieldClass">
+          <InputIcon :class="searchIconLeftClass">
             <AppIcon :icon="{ type: 'lucide', value: 'search' }" :size="15" />
-          </span>
-          <input
+          </InputIcon>
+          <InputText
             v-model="query"
             type="search"
             placeholder="Search connections"
             aria-label="Search connections"
             :class="searchInputClass"
           />
-        </label>
+        </IconField>
       </div>
 
       <nav class="flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-3">
