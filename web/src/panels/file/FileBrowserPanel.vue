@@ -33,6 +33,7 @@ import FilePane from "./FilePane.vue";
 import FileSelectionBar from "./FileSelectionBar.vue";
 import FileToolbar from "./FileToolbar.vue";
 import FileOperationDialog from "./FileOperationDialog.vue";
+import { useDirtyGuard } from "../shared/useDirtyGuard";
 import {
   formatBytes,
   languageFor,
@@ -203,6 +204,11 @@ const dirty = computed(
     Boolean(canEdit.value) &&
     editContent.value !== (content.value?.content ?? ""),
 );
+const { confirmBeforeDiscard } = useDirtyGuard({
+  isDirty: () => dirty.value,
+  header: "Discard unsaved file changes?",
+  message: "This file has unsaved changes. Discard them and continue?",
+});
 const selectedEditorLanguage = computed(() =>
   languageFor(selected.value?.name ?? ""),
 );
@@ -346,6 +352,14 @@ async function selectEntry(entry: FileEntry): Promise<void> {
   }
 }
 
+async function guardedSelectEntry(entry: FileEntry): Promise<void> {
+  await confirmBeforeDiscard(() => selectEntry(entry));
+}
+
+async function guardedLoadList(path: string): Promise<void> {
+  await confirmBeforeDiscard(() => loadList(path));
+}
+
 async function saveFile(): Promise<void> {
   const routeId = writeRouteId.value;
   const entry = selected.value;
@@ -382,11 +396,14 @@ async function saveFile(): Promise<void> {
 }
 
 async function openEntry(entry: FileEntry): Promise<void> {
-  if (entry.isDir) await loadList(entry.path);
-  else {
+  await confirmBeforeDiscard(async () => {
+    if (entry.isDir) {
+      await loadList(entry.path);
+      return;
+    }
     await selectEntry(entry);
     if (viewMode.value === "grid") previewOpen.value = true;
-  }
+  });
 }
 
 function notifySuccess(detail: string): void {
@@ -727,7 +744,7 @@ function baseName(path: string): string {
 }
 
 async function retryContent(): Promise<void> {
-  if (selected.value) await selectEntry(selected.value);
+  if (selected.value) await guardedSelectEntry(selected.value);
 }
 
 watch(
@@ -748,7 +765,7 @@ watch(
       <p class="text-xs opacity-80">{{ cwd }}</p>
     </div>
 
-    <FileCrumbs :path="cwd" @navigate="loadList" />
+    <FileCrumbs :path="cwd" @navigate="guardedLoadList" />
 
     <FileToolbar
       v-model:view-mode="viewMode"
@@ -776,7 +793,7 @@ watch(
       @mkdir="mkdirOpen = true"
       @rename="beginRename"
       @delete="deleteOpen = true"
-      @refresh="loadList(cwd)"
+      @refresh="guardedLoadList(cwd)"
     />
 
     <div
@@ -825,9 +842,9 @@ watch(
           :empty-text="listEmptyText"
           :selectable="selectable"
           :selected-paths="selectedPaths"
-          @select="selectEntry"
+          @select="guardedSelectEntry"
           @open="openEntry"
-          @retry="loadList(cwd)"
+          @retry="guardedLoadList(cwd)"
           @toggle="toggleSelect"
         />
       </div>
@@ -862,9 +879,9 @@ watch(
       :empty-text="listEmptyText"
       :selectable="selectable"
       :selected-paths="selectedPaths"
-      @select="selectEntry"
+      @select="guardedSelectEntry"
       @open="openEntry"
-      @retry="loadList(cwd)"
+      @retry="guardedLoadList(cwd)"
       @toggle="toggleSelect"
     />
 
