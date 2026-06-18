@@ -126,6 +126,49 @@ describe("ConnectionSidebar", () => {
     });
   });
 
+  it("does not auto-scroll when the active connection changes after mount", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView =
+      scrollIntoView as unknown as typeof Element.prototype.scrollIntoView;
+    installFetch(() => ({ body: { ok: true } }));
+    const conns = useConnectionsStore();
+    conns.loaded = true;
+    conns.connections = connections;
+
+    const wrapper = mount(ConnectionSidebar, {
+      props: { activeId: null, query: "" },
+      global: { plugins: [router()] },
+    });
+    await flushPromises();
+
+    await wrapper.setProps({ activeId: "c-root" });
+    await flushPromises();
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("does not auto-scroll later connection clicks after the initial reveal", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView =
+      scrollIntoView as unknown as typeof Element.prototype.scrollIntoView;
+    installFetch(() => ({ body: { ok: true } }));
+    const conns = useConnectionsStore();
+    conns.loaded = true;
+    conns.connections = connections;
+
+    const wrapper = mount(ConnectionSidebar, {
+      props: { activeId: "c-root", query: "" },
+      global: { plugins: [router()] },
+    });
+    await flushPromises();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+    await wrapper.setProps({ activeId: "c-prod" });
+    await flushPromises();
+
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
   it("renders folders and expands the active connection folder", async () => {
     installFetch(() => ({ body: { ok: true } }));
     const conns = useConnectionsStore();

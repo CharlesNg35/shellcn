@@ -40,6 +40,7 @@ const treeRenderKey = ref(0);
 const scrollEl = ref<HTMLElement | null>(null);
 const listScrolled = ref(false);
 const lastAutoScrolledTarget = ref<string | null>(null);
+const initialAutoScrollId = ref(props.activeId);
 
 const { start: startDropFade, stop: stopDropFade } = useTimeoutFn(
   () => {
@@ -105,7 +106,14 @@ watch(
 
 watch(
   () => props.activeId,
-  (id) => {
+  (id, previousId) => {
+    if (
+      previousId !== undefined &&
+      initialAutoScrollId.value &&
+      id !== initialAutoScrollId.value
+    ) {
+      initialAutoScrollId.value = null;
+    }
     if (!id) return;
     const conn = conns.byId(id);
     if (!conn?.folderId) return;
@@ -124,7 +132,8 @@ watch(
       props.query,
     ] as const,
   () => {
-    void scrollActiveTargetIntoView();
+    if (!initialAutoScrollId.value) return;
+    void scrollInitialActiveTargetIntoView();
   },
   { immediate: true, deep: true, flush: "post" },
 );
@@ -232,14 +241,24 @@ function activeScrollTarget(): { key: string; selector: string } | null {
   };
 }
 
-async function scrollActiveTargetIntoView(): Promise<void> {
-  if (dragging.value) return;
+async function scrollInitialActiveTargetIntoView(): Promise<void> {
+  if (props.activeId !== initialAutoScrollId.value) {
+    initialAutoScrollId.value = null;
+    return;
+  }
+  if (await scrollActiveTargetIntoView()) {
+    initialAutoScrollId.value = null;
+  }
+}
+
+async function scrollActiveTargetIntoView(): Promise<boolean> {
+  if (dragging.value) return false;
   const target = activeScrollTarget();
-  if (!target || target.key === lastAutoScrolledTarget.value) return;
+  if (!target || target.key === lastAutoScrolledTarget.value) return false;
   await nextTick();
   const scroller = scrollEl.value;
   const el = scroller?.querySelector<HTMLElement>(target.selector);
-  if (!el || typeof el.scrollIntoView !== "function") return;
+  if (!el || typeof el.scrollIntoView !== "function") return false;
   el.scrollIntoView({
     block: "center",
     inline: "nearest",
@@ -247,6 +266,7 @@ async function scrollActiveTargetIntoView(): Promise<void> {
   });
   lastAutoScrolledTarget.value = target.key;
   updateScrollShadow();
+  return true;
 }
 
 function cssAttr(value: string): string {
