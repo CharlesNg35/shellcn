@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
+
+	redisclient "github.com/redis/go-redis/v9"
 
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -32,8 +35,11 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	if _, ok := m.Config.Defaults()["database"]; ok {
 		t.Fatal("database should be selected from the workspace scope, not connection config")
 	}
-	if len(m.Scope) != 1 || m.Scope[0].Param != databaseScopeParam || m.Scope[0].DefaultValue != "0" {
+	if len(m.Scope) != 1 || m.Scope[0].Param != databaseScopeParam || m.Scope[0].Control != plugin.ScopeSelect || m.Scope[0].DefaultValue != "0" {
 		t.Fatalf("database scope not declared correctly: %+v", m.Scope)
+	}
+	if !m.Scope[0].DisableSearch {
+		t.Fatalf("database scope should disable select search: %+v", m.Scope[0])
 	}
 	var console *plugin.Panel
 	for i := range m.Tabs {
@@ -47,6 +53,19 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	}
 	if console.Type == plugin.PanelTerminalGrid {
 		t.Fatal("redis console should stay a single terminal panel")
+	}
+	var monitor *plugin.Panel
+	for i := range m.Tabs {
+		if m.Tabs[i].Key == "monitor" {
+			monitor = &m.Tabs[i]
+			break
+		}
+	}
+	if monitor == nil || monitor.Type != plugin.PanelLogStream || monitor.Source == nil || monitor.Source.RouteID != "redis.monitor" || monitor.Source.Method != plugin.MethodWS {
+		t.Fatalf("monitor should be a log stream backed by redis.monitor, got %+v", monitor)
+	}
+	if !hasStream(m.Streams, "redis.monitor", plugin.StreamLogs, "redis.monitor") {
+		t.Fatalf("missing redis.monitor log stream: %+v", m.Streams)
 	}
 	var info *plugin.Panel
 	tabs := map[string]plugin.Panel{}
@@ -95,6 +114,15 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 			t.Fatalf("%s tab table config is not review-ready: %#v", key, cfg)
 		}
 	}
+}
+
+func hasStream(streams []plugin.Stream, id string, kind plugin.StreamKind, routeID string) bool {
+	for _, stream := range streams {
+		if stream.ID == id && stream.Kind == kind && stream.RouteID == routeID {
+			return true
+		}
+	}
+	return false
 }
 
 func TestRedisClientTableShowsOperationalColumns(t *testing.T) {
@@ -221,6 +249,34 @@ func TestSelectedDatabaseDefaultsAndValidates(t *testing.T) {
 	rc = plugin.NewRequestContext(context.Background(), plugin.User{}, nil, map[string]string{databaseScopeParam: "-1"}, nil, nil)
 	if _, err = selectedDatabase(rc, 0); !errors.Is(err, plugin.ErrInvalidInput) {
 		t.Fatalf("negative database should be invalid, got %v", err)
+	}
+}
+
+func TestMonitorUsesDedicatedNoReadTimeoutClient(t *testing.T) {
+	base := redisclient.NewClient(&redisclient.Options{
+		Addr:         "127.0.0.1:6379",
+		DB:           2,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 5 * time.Second,
+		PoolSize:     8,
+	})
+	defer func() { _ = base.Close() }()
+	s := &Session{client: base}
+
+	mc := newMonitorConn(s, 3)
+	defer mc.Close()
+	if mc.conn == nil {
+		t.Fatal("monitor must use a dedicated sticky connection")
+	}
+	opts := mc.client.Options()
+	if opts.DB != 3 {
+		t.Fatalf("monitor DB = %d, want 3", opts.DB)
+	}
+	if opts.PoolSize != 1 {
+		t.Fatalf("monitor pool size = %d, want 1", opts.PoolSize)
+	}
+	if opts.ReadTimeout != 0 {
+		t.Fatalf("monitor read timeout = %s, want no timeout", opts.ReadTimeout)
 	}
 }
 

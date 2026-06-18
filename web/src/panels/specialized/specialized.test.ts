@@ -1,8 +1,9 @@
 /* eslint-disable vue/one-component-per-file, vue/require-prop-types */
-import { defineComponent } from "vue";
+import { defineComponent, h } from "vue";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import Button from "primevue/button";
+import ConfirmDialog from "primevue/confirmdialog";
 import ToastService from "primevue/toastservice";
 import { installFetch } from "@/test/fetchMock";
 import { toPng } from "html-to-image";
@@ -41,8 +42,17 @@ vi.mock("@vue-flow/controls", () => ({
 vi.mock("@vue-flow/minimap", () => ({
   MiniMap: defineComponent({ template: "<div />" }),
 }));
+const mockCodeMirror = vi.hoisted(() => ({
+  onChange: null as ((value: string) => void) | null,
+}));
 vi.mock("../../codemirror", () => ({
-  createCodeMirrorEditor: () => ({ view: { destroy() {} } }),
+  createCodeMirrorEditor: (
+    _parent: HTMLElement,
+    options: { onChange?: (value: string) => void },
+  ) => {
+    mockCodeMirror.onChange = options.onChange ?? null;
+    return { view: { destroy() {} } };
+  },
   createCodeMirrorDiffView: () => ({ destroy() {}, syncTheme() {} }),
   editorValue: () => "",
   setEditorValue: () => {},
@@ -141,6 +151,42 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+
+function bodyButton(text: string): HTMLButtonElement | undefined {
+  return [...document.body.querySelectorAll("button")].find(
+    (button) => button.textContent?.trim() === text,
+  ) as HTMLButtonElement | undefined;
+}
+
+function mountKVWithConfirm(props: InstanceType<typeof KVPanel>["$props"]) {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  return mount(
+    {
+      render: () => h("div", [h(KVPanel, props), h(ConfirmDialog)]),
+    },
+    { attachTo: host },
+  );
+}
+
+function selectedKVKey(w: ReturnType<typeof mount>): string | undefined {
+  return (
+    w.findComponent({ name: "DataTable" }).props("selection") as
+      | { key?: string }
+      | null
+      | undefined
+  )?.key;
+}
+
+async function selectKVRow(
+  w: ReturnType<typeof mount>,
+  entry: { key: string; type?: string },
+): Promise<void> {
+  const table = w.findComponent({ name: "DataTable" });
+  table.vm.$emit("update:selection", entry);
+  table.vm.$emit("row-select", { data: entry });
+  await flushPromises();
+}
 
 describe("specialized panels", () => {
   it("renders a configured diff payload", async () => {
@@ -361,6 +407,211 @@ describe("specialized panels", () => {
 
     expect(w.text()).toContain("session:1");
     expect(w.find(".shellcn-codemirror-host").exists()).toBe(true);
+  });
+
+  it("loads KV filter matches from the server", async () => {
+    vi.useFakeTimers();
+    try {
+      const listFilters: string[] = [];
+      vi.unstubAllGlobals();
+      installFetch((url) => {
+        if (url.includes("kv.list")) {
+          listFilters.push(
+            new URL(url, "http://h").searchParams.get("filter") ?? "",
+          );
+          const filtered = url.includes("user%3A1");
+          return {
+            body: {
+              items: filtered ? [{ key: "user:1", type: "string" }] : [],
+              nextCursor: "",
+            },
+          };
+        }
+        if (url.includes("kv.read")) {
+          return {
+            body: {
+              key: "user:1",
+              type: "string",
+              value: "my value",
+            },
+          };
+        }
+        return { body: {} };
+      });
+      const w = mount(KVPanel, {
+        props: {
+          connectionId: "c1",
+          source: { routeId: "kv.list" },
+          config: { readRouteId: "kv.read" },
+        },
+      });
+      await flushPromises();
+
+      await w.get('input[aria-label="Filter keys"]').setValue("user:1");
+      await vi.advanceTimersByTimeAsync(250);
+      await flushPromises();
+
+      expect(listFilters).toContain("user:1");
+      expect(selectedKVKey(w)).toBe("user:1");
+      expect(w.text()).toContain("user:1");
+      w.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps editing when KV key selection is canceled with unsaved changes", async () => {
+    const reads: string[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.includes("kv.list")) {
+        return {
+          body: {
+            items: [
+              { key: "session:1", type: "json" },
+              { key: "session:2", type: "json" },
+            ],
+            nextCursor: "",
+          },
+        };
+      }
+      if (url.includes("kv.read")) {
+        reads.push(url);
+        const key = new URL(url, "http://h").searchParams.get("p.key");
+        return {
+          body: {
+            key,
+            type: "json",
+            value: { user: key === "session:2" ? "grace" : "ada" },
+          },
+        };
+      }
+      return { body: {} };
+    });
+    const w = mountKVWithConfirm({
+      connectionId: "c1",
+      source: { routeId: "kv.list" },
+      config: { readRouteId: "kv.read", writable: true },
+    });
+    await flushPromises();
+
+    expect(selectedKVKey(w)).toBe("session:1");
+    mockCodeMirror.onChange?.('{"user":"edited"}');
+    await flushPromises();
+    expect(w.text()).toContain("Unsaved");
+    await selectKVRow(w, { key: "session:2", type: "json" });
+    bodyButton("Keep editing")!.click();
+    await flushPromises();
+
+    expect(selectedKVKey(w)).toBe("session:1");
+    expect(w.text()).toContain("Unsaved");
+    expect(reads.filter((url) => url.includes("session%3A2"))).toHaveLength(0);
+    w.unmount();
+  });
+
+  it("discards unsaved KV edits before selecting another key", async () => {
+    const reads: string[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.includes("kv.list")) {
+        return {
+          body: {
+            items: [
+              { key: "session:1", type: "json" },
+              { key: "session:2", type: "json" },
+            ],
+            nextCursor: "",
+          },
+        };
+      }
+      if (url.includes("kv.read")) {
+        reads.push(url);
+        const key = new URL(url, "http://h").searchParams.get("p.key");
+        return {
+          body: {
+            key,
+            type: "json",
+            value: { user: key === "session:2" ? "grace" : "ada" },
+          },
+        };
+      }
+      return { body: {} };
+    });
+    const w = mountKVWithConfirm({
+      connectionId: "c1",
+      source: { routeId: "kv.list" },
+      config: { readRouteId: "kv.read", writable: true },
+    });
+    await flushPromises();
+
+    expect(selectedKVKey(w)).toBe("session:1");
+    mockCodeMirror.onChange?.('{"user":"edited"}');
+    await flushPromises();
+    expect(w.text()).toContain("Unsaved");
+    await selectKVRow(w, { key: "session:2", type: "json" });
+    bodyButton("Discard changes")!.click();
+    await flushPromises();
+
+    expect(selectedKVKey(w)).toBe("session:2");
+    expect(w.text()).not.toContain("Unsaved");
+    expect(reads.some((url) => url.includes("session%3A2"))).toBe(true);
+    w.unmount();
+  });
+
+  it("preserves the active KV key when refreshing the list", async () => {
+    let listCalls = 0;
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.includes("kv.list")) {
+        listCalls += 1;
+        return {
+          body: {
+            items:
+              listCalls === 1
+                ? [
+                    { key: "session:1", type: "json" },
+                    { key: "session:2", type: "json" },
+                  ]
+                : [
+                    { key: "session:2", type: "json" },
+                    { key: "session:3", type: "json" },
+                  ],
+            nextCursor: "",
+          },
+        };
+      }
+      if (url.includes("kv.read")) {
+        const key = new URL(url, "http://h").searchParams.get("p.key");
+        return {
+          body: {
+            key,
+            type: "json",
+            value: { user: key },
+          },
+        };
+      }
+      return { body: {} };
+    });
+    const w = mount(KVPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "kv.list" },
+        config: { readRouteId: "kv.read" },
+      },
+    });
+    await flushPromises();
+
+    await selectKVRow(w, { key: "session:2", type: "json" });
+    expect(selectedKVKey(w)).toBe("session:2");
+    await w
+      .findAllComponents(Button)
+      .find((button) => button.text().includes("Refresh"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(selectedKVKey(w)).toBe("session:2");
+    expect(w.text()).toContain("session:3");
+    w.unmount();
   });
 
   it("keeps KV refresh loading state on the refresh button", async () => {

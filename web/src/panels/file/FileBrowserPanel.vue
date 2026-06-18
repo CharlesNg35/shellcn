@@ -33,6 +33,7 @@ import FilePane from "./FilePane.vue";
 import FileSelectionBar from "./FileSelectionBar.vue";
 import FileToolbar from "./FileToolbar.vue";
 import FileOperationDialog from "./FileOperationDialog.vue";
+import { useDirtyGuard } from "../shared/useDirtyGuard";
 import {
   formatBytes,
   languageFor,
@@ -128,6 +129,8 @@ type FileListPage = Page<FileEntry> & { path?: string };
 const fileFilter = ref("");
 const sortKey = ref<FileSortKey>("name");
 const sortDir = ref<"asc" | "desc">("asc");
+let listRequest = 0;
+let contentRequest = 0;
 
 const sorted = computed(() =>
   sortEntries(entries.value, sortKey.value, sortDir.value),
@@ -201,6 +204,11 @@ const dirty = computed(
     Boolean(canEdit.value) &&
     editContent.value !== (content.value?.content ?? ""),
 );
+const { confirmBeforeDiscard } = useDirtyGuard({
+  isDirty: () => dirty.value,
+  header: "Discard unsaved file changes?",
+  message: "This file has unsaved changes. Discard them and continue?",
+});
 const selectedEditorLanguage = computed(() =>
   languageFor(selected.value?.name ?? ""),
 );
@@ -274,7 +282,10 @@ function resolvedListPath(requested: string, page: FileListPage): string {
 
 async function loadList(path: string): Promise<void> {
   if (!props.source) return;
+  const request = ++listRequest;
+  contentRequest += 1;
   loadingList.value = true;
+  loadingContent.value = false;
   listError.value = null;
   uploadWarning.value = "";
   selected.value = null;
@@ -291,18 +302,22 @@ async function loadList(path: string): Promise<void> {
       },
       operationCtx.value,
     )) as FileListPage;
+    if (request !== listRequest) return;
     entries.value = page.items;
     cwd.value = resolvedListPath(path, page);
   } catch (e) {
+    if (request !== listRequest) return;
     listError.value = (e as Error).message;
   } finally {
-    loadingList.value = false;
+    if (request === listRequest) loadingList.value = false;
   }
 }
 
 async function selectEntry(entry: FileEntry): Promise<void> {
+  const request = ++contentRequest;
   selected.value = entry;
   content.value = null;
+  loadingContent.value = false;
   contentError.value = null;
   editContent.value = "";
   if (entry.isDir) return;
@@ -314,7 +329,7 @@ async function selectEntry(entry: FileEntry): Promise<void> {
   if (!readRouteId.value) return;
   loadingContent.value = true;
   try {
-    content.value = await fetchDoc<FileContent>(
+    const loaded = await fetchDoc<FileContent>(
       props.connectionId,
       {
         routeId: readRouteId.value,
@@ -322,12 +337,27 @@ async function selectEntry(entry: FileEntry): Promise<void> {
       },
       operationCtx.value,
     );
+    if (request !== contentRequest || selected.value?.path !== entry.path) {
+      return;
+    }
+    content.value = loaded;
     editContent.value = content.value.content ?? "";
   } catch (e) {
+    if (request !== contentRequest || selected.value?.path !== entry.path) {
+      return;
+    }
     contentError.value = (e as Error).message;
   } finally {
-    loadingContent.value = false;
+    if (request === contentRequest) loadingContent.value = false;
   }
+}
+
+async function guardedSelectEntry(entry: FileEntry): Promise<void> {
+  await confirmBeforeDiscard(() => selectEntry(entry));
+}
+
+async function guardedLoadList(path: string): Promise<void> {
+  await confirmBeforeDiscard(() => loadList(path));
 }
 
 async function saveFile(): Promise<void> {
@@ -366,11 +396,14 @@ async function saveFile(): Promise<void> {
 }
 
 async function openEntry(entry: FileEntry): Promise<void> {
-  if (entry.isDir) await loadList(entry.path);
-  else {
+  await confirmBeforeDiscard(async () => {
+    if (entry.isDir) {
+      await loadList(entry.path);
+      return;
+    }
     await selectEntry(entry);
     if (viewMode.value === "grid") previewOpen.value = true;
-  }
+  });
 }
 
 function notifySuccess(detail: string): void {
@@ -711,7 +744,7 @@ function baseName(path: string): string {
 }
 
 async function retryContent(): Promise<void> {
-  if (selected.value) await selectEntry(selected.value);
+  if (selected.value) await guardedSelectEntry(selected.value);
 }
 
 watch(
@@ -732,7 +765,7 @@ watch(
       <p class="text-xs opacity-80">{{ cwd }}</p>
     </div>
 
-    <FileCrumbs :path="cwd" @navigate="loadList" />
+    <FileCrumbs :path="cwd" @navigate="guardedLoadList" />
 
     <FileToolbar
       v-model:view-mode="viewMode"
@@ -760,7 +793,7 @@ watch(
       @mkdir="mkdirOpen = true"
       @rename="beginRename"
       @delete="deleteOpen = true"
-      @refresh="loadList(cwd)"
+      @refresh="guardedLoadList(cwd)"
     />
 
     <div
@@ -809,9 +842,9 @@ watch(
           :empty-text="listEmptyText"
           :selectable="selectable"
           :selected-paths="selectedPaths"
-          @select="selectEntry"
+          @select="guardedSelectEntry"
           @open="openEntry"
-          @retry="loadList(cwd)"
+          @retry="guardedLoadList(cwd)"
           @toggle="toggleSelect"
         />
       </div>
@@ -846,9 +879,9 @@ watch(
       :empty-text="listEmptyText"
       :selectable="selectable"
       :selected-paths="selectedPaths"
-      @select="selectEntry"
+      @select="guardedSelectEntry"
       @open="openEntry"
-      @retry="loadList(cwd)"
+      @retry="guardedLoadList(cwd)"
       @toggle="toggleSelect"
     />
 

@@ -21,7 +21,15 @@ func TestEncodeDecodePreservesProjection(t *testing.T) {
 		Tabs: []plugin.Panel{{
 			Key: "data", Type: plugin.PanelTable,
 			Source: &plugin.DataSource{RouteID: "demo.list"},
-			Config: plugin.TableConfig{Editable: true, RowKey: []string{"id"}},
+			Config: plugin.TableConfig{
+				Columns: []plugin.Column{
+					{Key: "id", Label: "ID", ReadOnly: true},
+					{Key: "name", Label: "Name", Editable: true, Editor: plugin.ColumnEditorText},
+				},
+				Editable: true,
+				RowKey:   []string{"id"},
+				Update:   &plugin.DataSource{RouteID: "demo.row.update", Method: plugin.MethodPost},
+			},
 		}},
 		Actions: []plugin.Action{
 			{ID: "edit", RouteID: "demo.edit", Open: plugin.OpenDock, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "sql"}},
@@ -29,6 +37,7 @@ func TestEncodeDecodePreservesProjection(t *testing.T) {
 	}
 	routes := []plugin.Route{
 		{ID: "demo.list", Method: plugin.MethodGet, Path: "/list", Permission: "demo.read", Risk: plugin.RiskSafe, AuditEvent: "demo.list"},
+		{ID: "demo.row.update", Method: plugin.MethodPost, Path: "/row/update", Permission: "demo.write", Risk: plugin.RiskWrite, AuditEvent: "demo.row.update"},
 		{ID: "demo.edit", Method: plugin.MethodWS, Path: "/edit", Permission: "demo.edit", Risk: plugin.RiskPrivileged, AuditEvent: "demo.edit"},
 	}
 

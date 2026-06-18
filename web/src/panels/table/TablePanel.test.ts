@@ -3,13 +3,20 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { defineComponent, h, KeepAlive } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
+import ConfirmDialog from "primevue/confirmdialog";
 import { installFetch } from "@/test/fetchMock";
 import TablePanel from "./TablePanel.vue";
 import { RiskLevel, type Action, type Column } from "@/types/projection";
+import CodeTextEditor from "../shared/CodeTextEditor.vue";
 
 const columns: Column[] = [
   { key: "name", label: "Name", sortable: true },
   { key: "state", label: "State" },
+];
+
+const editableColumns: Column[] = [
+  { key: "name", label: "Name", sortable: true, readOnly: true },
+  { key: "state", label: "State", editable: true, editor: "text" },
 ];
 
 function row(id: string, name: string, state = "running") {
@@ -36,6 +43,7 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
+  document.body.innerHTML = "";
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -182,6 +190,93 @@ describe("TablePanel", () => {
 
     expect(w.get("thead th").attributes("style")).toContain("width: 3rem");
     expect(w.find('[data-test="table-cell-value"] svg').exists()).toBe(true);
+  });
+
+  it("shows an edit affordance only for explicitly editable cells", async () => {
+    vi.unstubAllGlobals();
+    installFetch(() => ({
+      body: {
+        items: [row("a", "alpha")],
+        nextCursor: "",
+        total: 1,
+      },
+    }));
+
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "db.table.rows" },
+        config: {
+          columns: editableColumns,
+          editable: true,
+          rowKey: ["name"],
+          update: { routeId: "db.row.update", method: "POST" },
+        },
+      },
+    });
+    await flushPromises();
+
+    const cells = w.findAll('[data-test="table-cell-value"]');
+    expect(cells[0].find("svg").exists()).toBe(false);
+    expect(cells[1].find("svg").exists()).toBe(true);
+  });
+
+  it("summarizes structured values and opens JSON editing explicitly", async () => {
+    vi.unstubAllGlobals();
+    installFetch((_url, init) => {
+      if (init?.method === "POST") {
+        return { body: { ok: true } };
+      }
+      return {
+        body: {
+          items: [
+            {
+              _key: { id: 1 },
+              id: 1,
+              metadata: { labels: { app: "web" }, replicas: 2 },
+            },
+          ],
+          nextCursor: "",
+          total: 1,
+        },
+      };
+    });
+
+    const w = mount(TablePanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "db.table.rows" },
+        config: {
+          columns: [
+            { key: "id", label: "ID", type: "number", readOnly: true },
+            {
+              key: "metadata",
+              label: "Metadata",
+              type: "json",
+              editable: true,
+              editor: "json",
+            },
+          ],
+          editable: true,
+          update: { routeId: "db.row.update", method: "POST" },
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain("{2 keys}");
+    expect(w.text()).not.toContain("[object Object]");
+    const edit = [...document.body.querySelectorAll("button")].find(
+      (b) => b.getAttribute("aria-label") === "Edit JSON",
+    ) as HTMLButtonElement;
+    expect(edit).toBeTruthy();
+    edit.click();
+    await flushPromises();
+    expect(w.findComponent(CodeTextEditor).props("value")).toContain(
+      '"replicas": 2',
+    );
+    w.unmount();
   });
 
   it("filters server-side and resets the list", async () => {
@@ -361,8 +456,8 @@ describe("TablePanel", () => {
         return {
           body: {
             items: [
-              { name: "id", nullable: false },
-              { name: "name", nullable: true },
+              { name: "id", nullable: false, editable: true, editor: "text" },
+              { name: "name", nullable: true, editable: true, editor: "text" },
             ],
             nextCursor: "",
             total: 2,
@@ -404,9 +499,27 @@ describe("TablePanel", () => {
         return {
           body: {
             items: [
-              { name: "id", type: "integer", nullable: false },
-              { name: "active", type: "boolean", nullable: true },
-              { name: "label", type: "text", nullable: true },
+              {
+                name: "id",
+                type: "bigint unsigned",
+                columnType: "number",
+                nullable: false,
+                editable: true,
+              },
+              {
+                name: "active",
+                type: "tinyint(1)",
+                columnType: "bool",
+                nullable: true,
+                editable: true,
+              },
+              {
+                name: "label",
+                type: "text",
+                nullable: true,
+                editable: true,
+                editor: "text",
+              },
             ],
             nextCursor: "",
             total: 3,
@@ -509,7 +622,7 @@ describe("TablePanel staged edits", () => {
   type Call = { url: string; method: string; body: unknown };
 
   const stagedConfig = {
-    columns,
+    columns: editableColumns,
     editable: true,
     stagedEdits: true,
     rowKey: ["name"],
@@ -546,6 +659,50 @@ describe("TablePanel staged edits", () => {
         config: stagedConfig,
       },
     });
+    return { w, calls };
+  }
+
+  function mountStagedWithConfirm() {
+    const calls: Call[] = [];
+    let listCalls = 0;
+    vi.unstubAllGlobals();
+    installFetch((url, init) => {
+      if (init?.method === "POST") {
+        calls.push({
+          url,
+          method: "POST",
+          body: init.body ? JSON.parse(init.body as string) : undefined,
+        });
+        return { body: { ok: true } };
+      }
+      listCalls += 1;
+      return {
+        body: {
+          items:
+            listCalls === 1
+              ? [row("a", "alpha"), row("b", "beta")]
+              : [row("c", "gamma")],
+          nextCursor: "",
+          total: listCalls === 1 ? 2 : 1,
+        },
+      };
+    });
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const w = mount(
+      {
+        render: () =>
+          h("div", [
+            h(TablePanel, {
+              connectionId: "c1",
+              source: { routeId: "db.table.rows" },
+              config: stagedConfig,
+            }),
+            h(ConfirmDialog),
+          ]),
+      },
+      { attachTo: host },
+    );
     return { w, calls };
   }
 
@@ -624,6 +781,45 @@ describe("TablePanel staged edits", () => {
     await flushPromises();
     const del = calls.find((c) => c.url.includes("db.row.delete"));
     expect(del?.body).toEqual({ key: { name: "alpha" } });
+    w.unmount();
+  });
+
+  it("keeps staged edits when pagination is canceled", async () => {
+    const { w } = mountStagedWithConfirm();
+    await flushPromises();
+
+    editCell(w, 0, "state", "stopped");
+    await flushPromises();
+    w.findComponent({ name: "DataTable" }).vm.$emit("page", {
+      first: 50,
+      rows: 50,
+    });
+    await flushPromises();
+    bodyButton("Keep editing")!.click();
+    await flushPromises();
+
+    expect(w.text()).toContain("1 unsaved change");
+    expect(w.text()).toContain("alpha");
+    expect(w.text()).not.toContain("gamma");
+    w.unmount();
+  });
+
+  it("discards staged edits before pagination", async () => {
+    const { w } = mountStagedWithConfirm();
+    await flushPromises();
+
+    editCell(w, 0, "state", "stopped");
+    await flushPromises();
+    w.findComponent({ name: "DataTable" }).vm.$emit("page", {
+      first: 50,
+      rows: 50,
+    });
+    await flushPromises();
+    bodyButton("Discard changes")!.click();
+    await flushPromises();
+
+    expect(w.text()).not.toContain("unsaved");
+    expect(w.text()).toContain("gamma");
     w.unmount();
   });
 

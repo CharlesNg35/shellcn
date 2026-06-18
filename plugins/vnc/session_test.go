@@ -100,13 +100,16 @@ func TestParseConnectOptionsRequiresPasswordUnlessAuthNone(t *testing.T) {
 	}
 }
 
-func TestManifestEnablesVNCClipboard(t *testing.T) {
+func TestManifestEnablesVNCResize(t *testing.T) {
 	tab := New().Manifest().Tabs[0]
 	cfg, ok := tab.Config.(plugin.RemoteDesktopConfig)
 	if !ok {
 		t.Fatalf("remote desktop config = %T", tab.Config)
 	}
-	if !cfg.Resize || !cfg.Clipboard {
-		t.Fatalf("vnc remote desktop config = %#v, want resize and clipboard enabled", cfg)
+	if !cfg.Resize {
+		t.Fatalf("vnc remote desktop config = %#v, want resize enabled", cfg)
+	}
+	if cfg.Clipboard {
+		t.Fatalf("vnc remote desktop config = %#v, clipboard is not implemented in renderer", cfg)
 	}
 }

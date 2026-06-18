@@ -54,6 +54,7 @@ const body = ref(config.value?.defaultBody ?? "");
 const response = ref<HTTPResponse | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
+let requestSequence = 0;
 
 const responseBody = computed(() => {
   if (!response.value) return "";
@@ -130,16 +131,21 @@ function languageForContentType(contentType: string, value: string): string {
 }
 
 async function send(): Promise<void> {
+  if (loading.value) return;
   const routeId = config.value?.executeRouteId ?? props.source?.routeId;
   if (!routeId) {
     error.value = "No execute route configured.";
     return;
   }
+  if (!url.value.trim()) {
+    error.value = "Enter a request URL.";
+    return;
+  }
+  const requestId = ++requestSequence;
   loading.value = true;
   error.value = null;
-  response.value = null;
   try {
-    response.value = (await runFormAction(
+    const nextResponse = (await runFormAction(
       props.connectionId,
       routeId,
       { resource: props.resource, record: props.record },
@@ -152,7 +158,10 @@ async function send(): Promise<void> {
       props.source?.params ?? {},
       "POST",
     )) as HTTPResponse;
+    if (requestId !== requestSequence) return;
+    response.value = nextResponse;
   } catch (e) {
+    if (requestId !== requestSequence) return;
     error.value = (e as Error).message;
     toast.add({
       severity: "error",
@@ -161,7 +170,7 @@ async function send(): Promise<void> {
       life: 4500,
     });
   } finally {
-    loading.value = false;
+    if (requestId === requestSequence) loading.value = false;
   }
 }
 </script>
@@ -197,7 +206,7 @@ async function send(): Promise<void> {
           placeholder="/api/health or https://example.com"
           aria-label="Request URL"
           :class="inputClass"
-          @keyup.enter="send"
+          @keyup.enter="!loading && send()"
         />
       </label>
       <Button type="button" class="self-end" :disabled="loading" @click="send">

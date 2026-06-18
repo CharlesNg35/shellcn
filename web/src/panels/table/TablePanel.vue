@@ -19,8 +19,11 @@ import Column from "primevue/column";
 import Dialog from "primevue/dialog";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
+import InputNumber from "primevue/inputnumber";
+import Textarea from "primevue/textarea";
 import Select from "primevue/select";
 import Menu from "primevue/menu";
+import ToggleSwitch from "primevue/toggleswitch";
 import { useToast } from "primevue/usetoast";
 import { exportRecords, type ExportFormat } from "../shared/exportData";
 import { fetchPage, runAction, watch as watchResource } from "@/api/dataSource";
@@ -37,7 +40,12 @@ import type {
   Row,
   TablePanelConfig,
 } from "@/types/projection";
-import { ColumnType, FieldType, RowClickAction } from "@/types/projection";
+import {
+  ColumnEditor,
+  ColumnType,
+  FieldType,
+  RowClickAction,
+} from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import { formatBytes } from "../file/fileTypes";
 import { dialogRoot, inputClass } from "@/primevue/preset";
@@ -49,6 +57,20 @@ import {
   type RowMutation,
 } from "./mutation";
 import RowDetailDialog, { type DetailItem } from "./RowDetailDialog.vue";
+import JsonCellDialog from "./JsonCellDialog.vue";
+import {
+  cellValueEquals,
+  coerceCellValue,
+  defaultColumnEditor,
+  defaultColumnType,
+  fullCellText,
+  isCellEditable,
+  isInlineEditor,
+  isJsonEditor,
+  isStructuredValue,
+  structuredSummary,
+  writableColumns,
+} from "./cellEditing";
 import { useNavigableKinds } from "../core/navigable";
 import { useWorkspaceStore } from "@/stores/workspace";
 import SkeletonList from "@/components/SkeletonList.vue";
@@ -57,6 +79,7 @@ import { badgeClassFor } from "../shared/severity";
 import PanelError from "../shared/PanelError.vue";
 import FormField from "../form/FormField.vue";
 import AppIcon from "@/components/AppIcon.vue";
+import { useDirtyGuard } from "../shared/useDirtyGuard";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{
@@ -234,6 +257,15 @@ const editable = computed(
     Boolean(insertSource.value || updateSource.value || deleteSource.value),
 );
 const editableCells = computed(() => editable.value && !!updateSource.value);
+function canEditCell(col: ColumnSpec): boolean {
+  return editableCells.value && isCellEditable(col);
+}
+function canInlineEditCell(col: ColumnSpec): boolean {
+  return editableCells.value && isInlineEditor(col);
+}
+function canJsonEditCell(col: ColumnSpec): boolean {
+  return editableCells.value && isJsonEditor(col);
+}
 const selectable = computed(
   () =>
     (rowActions.value.length > 0 || tableConfig.value?.selectable === true) &&
@@ -267,6 +299,11 @@ const pendingCount = computed(() => {
   for (const id of deletedRows) ids.add(id);
   return ids.size;
 });
+const { confirmBeforeDiscard } = useDirtyGuard({
+  isDirty: () => pendingCount.value > 0,
+  header: "Discard table changes?",
+  message: "This table has unsaved changes. Discard them and continue?",
+});
 
 function isInserted(row: Row): boolean {
   return insertedRows.has(rid(row));
@@ -290,7 +327,7 @@ function stageCellEdit(row: Row, field: string, prev: unknown): void {
   if (!edits.has(id)) edits.set(id, new Map());
   const inner = edits.get(id)!;
   if (!inner.has(field)) inner.set(field, prev);
-  if (row[field] === inner.get(field)) {
+  if (cellValueEquals(row[field], inner.get(field))) {
     inner.delete(field);
     if (inner.size === 0) edits.delete(id);
   }
@@ -322,7 +359,7 @@ function canDelete(row: Row): boolean {
 
 function insertValues(row: Row): Record<string, unknown> {
   const values: Record<string, unknown> = {};
-  for (const col of columns.value) {
+  for (const col of writableColumns(columns.value)) {
     const v = row[col.key];
     if (v !== "" && v !== undefined) values[col.key] = v;
   }
@@ -401,21 +438,6 @@ function keyFor(row: Row): Record<string, unknown> | null {
   return null;
 }
 
-function columnReadOnly(col: ColumnSpec): boolean {
-  return col.readOnly === true;
-}
-
-function coerce(prev: unknown, next: unknown): unknown {
-  if (typeof prev === "number") {
-    if (next === "" || next === null) return null;
-    const n = Number(next);
-    return Number.isNaN(n) ? next : n;
-  }
-  if (typeof prev === "boolean") return next === true || next === "true";
-  if (next === "") return null;
-  return next;
-}
-
 async function mutate(
   src: DataSource,
   body: RowMutation,
@@ -438,37 +460,52 @@ async function onCellEditComplete(
   if (!src) return;
   const data = e.data as Row;
   const field = e.field;
+  const col = columns.value.find((c) => c.key === field);
+  if (!col || !canInlineEditCell(col)) return;
+  const value = coerceCellValue(col, e.value, e.newValue);
+  await commitCellValue(data, col, e.value, value);
+}
+
+async function commitCellValue(
+  data: Row,
+  col: ColumnSpec,
+  prev: unknown,
+  value: unknown,
+): Promise<boolean> {
+  const src = updateSource.value;
+  if (!src) return false;
+  const field = col.key;
   const key = keyFor(data);
   if (!key) {
-    data[field] = e.value;
+    data[field] = prev;
     toast.add({
       severity: "warn",
       summary: "Read-only row",
       detail: "This row has no key, so it cannot be edited.",
       life: 5000,
     });
-    return;
+    return false;
   }
-  const value = coerce(e.value, e.newValue);
-  if (value === e.value) return;
+  if (cellValueEquals(value, prev)) return true;
   data[field] = value;
   if (staged.value) {
-    stageCellEdit(data, field, e.value);
-    return;
+    stageCellEdit(data, field, prev);
+    return true;
   }
   try {
     await mutate(src, updateMutation(key, { [field]: value }), data);
   } catch (err) {
-    data[field] = e.value;
+    data[field] = prev;
     toast.add({
       severity: "error",
       summary: "Update failed",
       detail: (err as Error).message,
       life: 6000,
     });
-    return;
+    return false;
   }
   await load(first.value);
+  return true;
 }
 
 function askDeleteRow(row: Row): void {
@@ -527,17 +564,21 @@ const insertDraft = ref<Record<string, unknown>>({});
 const inserting = ref(false);
 
 const COLUMN_FIELD_TYPE: Partial<
-  Record<NonNullable<ColumnSpec["type"]>, FieldTypeValue>
+  Record<NonNullable<ColumnSpec["editor"]>, FieldTypeValue>
 > = {
-  [ColumnType.Number]: FieldType.Number,
-  [ColumnType.Bool]: FieldType.Toggle,
-  [ColumnType.Json]: FieldType.Json,
+  [ColumnEditor.Text]: FieldType.Text,
+  [ColumnEditor.Textarea]: FieldType.Textarea,
+  [ColumnEditor.Number]: FieldType.Number,
+  [ColumnEditor.Toggle]: FieldType.Toggle,
+  [ColumnEditor.Select]: FieldType.Select,
+  [ColumnEditor.Json]: FieldType.Json,
 };
 const insertFields = computed<Field[]>(() =>
-  columns.value.map((col) => ({
+  writableColumns(columns.value).map((col) => ({
     key: col.key,
     label: col.label,
-    type: COLUMN_FIELD_TYPE[col.type ?? ColumnType.Text] ?? FieldType.Text,
+    type: COLUMN_FIELD_TYPE[col.editor ?? ColumnEditor.Text] ?? FieldType.Text,
+    options: col.options,
     placeholder: col.nullable ? "NULL" : undefined,
   })),
 );
@@ -604,24 +645,23 @@ function dynamicColumnLabel(row: Row, key: string): string {
   return String(row.label ?? row.name ?? row.column_name ?? row.column ?? key);
 }
 
-function mapColumnType(raw: unknown): ColumnSpec["type"] | undefined {
-  const t = String(raw ?? "").toLowerCase();
-  if (!t) return undefined;
-  if (/bool/.test(t)) return ColumnType.Bool;
-  if (/json/.test(t)) return ColumnType.Json;
-  if (/(int|serial|numeric|decimal|real|double|float|money|number)/.test(t))
-    return ColumnType.Number;
-  if (/(date|time|timestamp)/.test(t)) return ColumnType.DateTime;
-  return undefined;
-}
-
 function dynamicColumn(row: Row): ColumnSpec | null {
   const key = dynamicColumnKey(row);
   if (!key || hidden.value.has(key)) return null;
+  const record = row as Record<string, unknown>;
+  const rawType = record.columnType ?? record.type;
+  const rawEditor = (row as Record<string, unknown>).editor;
+  const editor =
+    typeof rawEditor === "string" && rawEditor
+      ? (rawEditor as ColumnSpec["editor"])
+      : defaultColumnEditor(rawType);
   return {
     key,
     label: dynamicColumnLabel(row, key),
-    type: mapColumnType((row as Record<string, unknown>).type),
+    type: defaultColumnType(rawType),
+    editable: row.editable === true,
+    editor: row.editable === true ? editor : undefined,
+    readOnly: row.readOnly === true,
     nullable: row.nullable === true,
   };
 }
@@ -651,6 +691,55 @@ function linkRef(row: Row, col: ColumnSpec): ResourceIdentity | null {
 }
 function openLink(ref: ResourceIdentity): void {
   emit("select", { ref } as Row);
+}
+
+const jsonEdit = ref<{
+  row: Row;
+  col: ColumnSpec;
+  text: string;
+  error: string | null;
+  saving: boolean;
+} | null>(null);
+
+function openJsonEdit(row: Row, col: ColumnSpec): void {
+  jsonEdit.value = {
+    row,
+    col,
+    text: fullCellText(row[col.key] ?? null),
+    error: null,
+    saving: false,
+  };
+}
+
+function closeJsonEdit(): void {
+  if (jsonEdit.value?.saving) return;
+  jsonEdit.value = null;
+}
+
+function updateJsonEditText(value: string): void {
+  if (jsonEdit.value) jsonEdit.value.text = value;
+}
+
+async function saveJsonEdit(): Promise<void> {
+  const edit = jsonEdit.value;
+  if (!edit) return;
+  let value: unknown;
+  const raw = edit.text.trim();
+  if (!raw && edit.col.nullable) value = null;
+  else {
+    try {
+      value = JSON.parse(raw);
+    } catch (err) {
+      edit.error = (err as Error).message;
+      return;
+    }
+  }
+  const prev = edit.row[edit.col.key];
+  edit.saving = true;
+  edit.error = null;
+  const ok = await commitCellValue(edit.row, edit.col, prev, value);
+  edit.saving = false;
+  if (ok) jsonEdit.value = null;
 }
 
 function formatNumber(v: number, col: ColumnSpec): string {
@@ -694,8 +783,14 @@ function display(row: Row, col: ColumnSpec): string {
     return formatRelativeTime(v);
   if (col.type === ColumnType.DateTime && typeof v === "string")
     return new Date(v).toLocaleString();
-  if (typeof v === "object") return JSON.stringify(v);
+  if (isStructuredValue(v)) return structuredSummary(v);
   return String(v);
+}
+
+function displayTitle(row: Row, col: ColumnSpec): string {
+  const v = row[col.key];
+  if (v === undefined || v === null || v === "") return "—";
+  return isStructuredValue(v) ? fullCellText(v) : display(row, col);
 }
 
 function badgeClass(row: Row, col: ColumnSpec): string {
@@ -728,8 +823,9 @@ function columnWidth(col: ColumnSpec): string {
 
 function columnStyle(col: ColumnSpec): Record<string, string> {
   const width = columnWidth(col);
+  const fixedMinimum = Boolean(col.width) || col.type === ColumnType.Icon;
   return {
-    minWidth: col.width || col.type === ColumnType.Icon ? width : "7.5rem",
+    minWidth: fixedMinimum ? width : "7.5rem",
     width,
     maxWidth: width,
   };
@@ -737,18 +833,43 @@ function columnStyle(col: ColumnSpec): Record<string, string> {
 
 function cellClass(row: Row, col: ColumnSpec): string {
   if (col.type === ColumnType.Icon) return "flex min-w-0 justify-center";
-  const base = "block min-w-0 truncate";
+  const base = cn(
+    "group/cell flex min-w-0 items-center gap-1 truncate",
+    canEditCell(col) &&
+      "rounded px-1.5 py-0.5 transition-colors hover:bg-primary-50 focus-within:bg-primary-50 dark:hover:bg-primary-500/10 dark:focus-within:bg-primary-500/10",
+  );
   if (staged.value && isEdited(row, col.key)) {
     return cn(
       base,
-      "rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-100",
+      "bg-amber-100 font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-100",
     );
   }
   return base;
 }
 
+function blockPendingRowReplacement(): boolean {
+  if (pendingCount.value === 0) return false;
+  toast.add({
+    severity: "warn",
+    summary: "Unsaved changes",
+    detail: "Commit or discard table changes before replacing these rows.",
+    life: 5000,
+  });
+  return true;
+}
+
+async function confirmRowReplacement(
+  action: () => void | Promise<void>,
+): Promise<boolean> {
+  return confirmBeforeDiscard(async () => {
+    discardStaged();
+    await action();
+  });
+}
+
 async function load(targetFirst = first.value): Promise<void> {
   if (!props.source) return;
+  if (blockPendingRowReplacement()) return;
   loading.value = true;
   error.value = null;
   selection.value = [];
@@ -780,21 +901,29 @@ async function load(targetFirst = first.value): Promise<void> {
   }
 }
 
+async function guardedLoad(targetFirst = first.value): Promise<void> {
+  await confirmRowReplacement(() => load(targetFirst));
+}
+
 function onSort(e: DataTableSortEvent): void {
-  sortField.value = (e.sortField as string) ?? undefined;
-  sortOrder.value = e.sortOrder ?? undefined;
-  first.value = 0;
-  resetCursors();
-  saveTableState();
-  void load(0);
+  void confirmRowReplacement(async () => {
+    sortField.value = (e.sortField as string) ?? undefined;
+    sortOrder.value = e.sortOrder ?? undefined;
+    first.value = 0;
+    resetCursors();
+    saveTableState();
+    await load(0);
+  });
 }
 
 function onPage(e: DataTablePageEvent): void {
-  if (e.rows !== pageSize.value) resetCursors();
-  first.value = e.first;
-  pageSize.value = e.rows;
-  saveTableState();
-  void load(e.first);
+  void confirmRowReplacement(async () => {
+    if (e.rows !== pageSize.value) resetCursors();
+    first.value = e.first;
+    pageSize.value = e.rows;
+    saveTableState();
+    await load(e.first);
+  });
 }
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
@@ -895,7 +1024,9 @@ const detailItems = computed<DetailItem[]>(() => {
     items.push({
       key: col.key,
       label: col.label,
-      text: display(r, col),
+      text: isStructuredValue(r[col.key])
+        ? fullCellText(r[col.key])
+        : display(r, col),
       badge: col.type === ColumnType.Badge ? badgeClass(r, col) : undefined,
     });
   }
@@ -906,7 +1037,7 @@ const detailItems = computed<DetailItem[]>(() => {
     items.push({
       key,
       label: humanize(key),
-      text: typeof v === "object" ? JSON.stringify(v) : String(v),
+      text: isStructuredValue(v) ? fullCellText(v) : String(v),
     });
   }
   return items;
@@ -937,7 +1068,7 @@ async function onActionDone(
       truncated: result.truncated === true,
     };
   }
-  await load(first.value);
+  await guardedLoad(first.value);
   emit("actionDone", action, result);
 }
 
@@ -1045,7 +1176,13 @@ onDeactivated(() => {
 async function refresh(): Promise<void> {
   if (!props.source || loading.value || committing.value) return;
   if (pendingCount.value > 0) return;
-  if (showInsert.value || deleteTarget.value || actionOutput.value) return;
+  if (
+    showInsert.value ||
+    deleteTarget.value ||
+    actionOutput.value ||
+    jsonEdit.value
+  )
+    return;
   if (detailRow.value) return;
   try {
     const page = await fetchPage<Row>(
@@ -1137,10 +1274,12 @@ let debounce: ReturnType<typeof setTimeout> | undefined;
 function onFilter(): void {
   if (debounce) clearTimeout(debounce);
   debounce = setTimeout(() => {
-    first.value = 0;
-    resetCursors();
-    saveTableState();
-    load(0);
+    void confirmRowReplacement(async () => {
+      first.value = 0;
+      resetCursors();
+      saveTableState();
+      await load(0);
+    });
   }, 250);
 }
 
@@ -1226,7 +1365,7 @@ onUnmounted(() => {
           type="button"
           :disabled="loading"
           severity="secondary"
-          @click="load(first)"
+          @click="guardedLoad(first)"
         >
           <AppIcon
             :icon="{ type: 'lucide', value: 'refresh-cw' }"
@@ -1273,7 +1412,7 @@ onUnmounted(() => {
         v-if="error && !rows.length"
         :message="error"
         retryable
-        @retry="load(first)"
+        @retry="guardedLoad(first)"
       />
       <SkeletonList v-else-if="loading && !rows.length" :rows="8" />
       <PanelError
@@ -1281,7 +1420,7 @@ onUnmounted(() => {
         class="border-b border-surface-200 dark:border-surface-800"
         :message="error"
         retryable
-        @retry="load(first)"
+        @retry="guardedLoad(first)"
       />
       <DataTable
         v-if="rows.length || (!loading && !error)"
@@ -1329,13 +1468,17 @@ onUnmounted(() => {
               data-test="table-cell-value"
               :class="cellClass(data as Row, col)"
               :style="{ maxWidth: columnWidth(col) }"
-              :title="display(data as Row, col)"
+              :title="displayTitle(data as Row, col)"
             >
-              <button
+              <Button
                 v-if="linkRef(data as Row, col)"
                 type="button"
-                class="inline-flex max-w-full items-center gap-1 text-primary-600 hover:underline dark:text-primary-400"
-                :title="display(data as Row, col)"
+                text
+                severity="secondary"
+                :title="displayTitle(data as Row, col)"
+                :pt="{
+                  root: 'inline-flex min-w-0 max-w-full items-center gap-1 p-0 text-primary-600 hover:underline dark:text-primary-400',
+                }"
                 @click.stop="openLink(linkRef(data as Row, col)!)"
               >
                 <span class="truncate">{{ display(data as Row, col) }}</span>
@@ -1343,10 +1486,10 @@ onUnmounted(() => {
                   :icon="{ type: 'lucide', value: 'arrow-up-right' }"
                   :size="12"
                 />
-              </button>
+              </Button>
               <span
                 v-else-if="col.type === 'badge'"
-                class="inline-block max-w-full truncate rounded-full px-2 py-0.5 align-bottom text-xs"
+                class="max-w-full min-w-0 truncate rounded-full px-2 py-0.5 align-bottom text-xs"
                 :class="badgeClass(data as Row, col)"
                 >{{ display(data as Row, col) }}</span
               >
@@ -1355,23 +1498,62 @@ onUnmounted(() => {
                 :icon="iconCell(data as Row, col)"
                 :size="16"
               />
-              <template v-else>{{ display(data as Row, col) }}</template>
+              <span v-else class="min-w-0 truncate">{{
+                display(data as Row, col)
+              }}</span>
+              <Button
+                v-if="canJsonEditCell(col) && !linkRef(data as Row, col)"
+                type="button"
+                text
+                rounded
+                severity="secondary"
+                title="Edit JSON"
+                aria-label="Edit JSON"
+                :pt="{
+                  root: 'ml-auto shrink-0 p-0.5 opacity-0 transition-opacity group-hover/cell:opacity-100 focus:opacity-100',
+                }"
+                @click.stop="openJsonEdit(data as Row, col)"
+              >
+                <AppIcon
+                  :icon="{ type: 'lucide', value: 'pencil' }"
+                  :size="13"
+                />
+              </Button>
+              <AppIcon
+                v-else-if="canInlineEditCell(col) && !linkRef(data as Row, col)"
+                class="ml-auto shrink-0 opacity-0 transition-opacity group-hover/cell:opacity-70"
+                :icon="{ type: 'lucide', value: 'pencil' }"
+                :size="13"
+              />
             </span>
           </template>
-          <template
-            v-if="editableCells && !columnReadOnly(col)"
-            #editor="{ data, field }"
-          >
+          <template v-if="canInlineEditCell(col)" #editor="{ data, field }">
             <Select
-              v-if="typeof data[field] === 'boolean'"
+              v-if="col.editor === ColumnEditor.Select"
               v-model="data[field]"
-              :options="[
-                { label: 'true', value: true },
-                { label: 'false', value: false },
-              ]"
+              :options="col.options ?? []"
               option-label="label"
               option-value="value"
               class="w-full"
+            />
+            <ToggleSwitch
+              v-else-if="col.editor === ColumnEditor.Toggle"
+              v-model="data[field]"
+              class="w-full"
+            />
+            <InputNumber
+              v-else-if="col.editor === ColumnEditor.Number"
+              v-model="data[field]"
+              :use-grouping="false"
+              class="w-full"
+              autofocus
+            />
+            <Textarea
+              v-else-if="col.editor === ColumnEditor.Textarea"
+              v-model="data[field]"
+              rows="3"
+              class="w-full"
+              autofocus
             />
             <InputText
               v-else
@@ -1554,6 +1736,17 @@ onUnmounted(() => {
         />
       </template>
     </Dialog>
+
+    <JsonCellDialog
+      :visible="!!jsonEdit"
+      :title="jsonEdit ? `Edit ${jsonEdit.col.label}` : 'Edit JSON'"
+      :text="jsonEdit?.text ?? ''"
+      :error="jsonEdit?.error"
+      :saving="jsonEdit?.saving"
+      @update:visible="(v) => !v && closeJsonEdit()"
+      @update:text="updateJsonEditText"
+      @save="saveJsonEdit"
+    />
 
     <RowDetailDialog
       :visible="!!detailRow"

@@ -115,12 +115,15 @@ function structureKey(node: TerminalGridLayoutNode): string {
     v-else
     data-terminal-grid-pane
     :data-pane-id="node.id"
+    role="region"
+    :aria-label="`Terminal pane ${node.id}`"
     class="relative h-full min-h-0 min-w-0 overflow-hidden bg-surface-0 ring-inset dark:bg-surface-950"
     :class="
       node.id === activePaneId
         ? 'ring-2 ring-primary-500'
         : 'ring-1 ring-surface-200 dark:ring-surface-800'
     "
+    @focusin="emit('focus', node.id)"
     @pointerdown="emit('focus', node.id)"
   >
     <TerminalPanel

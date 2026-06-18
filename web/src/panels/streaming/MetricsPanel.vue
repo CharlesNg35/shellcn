@@ -11,6 +11,8 @@ import type {
   Row,
 } from "@/types/projection";
 import StreamStatusBar from "./StreamStatusBar.vue";
+import PanelLoader from "@/components/PanelLoader.vue";
+import PanelError from "../shared/PanelError.vue";
 import StatCard from "./metrics/StatCard.vue";
 import GaugeChart from "./metrics/GaugeChart.vue";
 import SeriesChart from "./metrics/SeriesChart.vue";
@@ -53,12 +55,21 @@ const latest = reactive<Record<string, number>>({});
 const histories = reactive<Record<string, number[]>>({});
 const labels = ref<string[]>([]);
 const reconnecting = ref(false);
+const receivedSample = ref(false);
+const availabilityMessage = ref<string | null>(null);
 
 function onFrame(raw: string): void {
   let frame: Record<string, unknown>;
   try {
     frame = JSON.parse(raw);
   } catch {
+    return;
+  }
+  if (frame.metricsAvailable === false || frame.available === false) {
+    availabilityMessage.value =
+      typeof frame.message === "string"
+        ? frame.message
+        : "Metrics source unavailable.";
     return;
   }
   let changed = false;
@@ -69,11 +80,14 @@ function onFrame(raw: string): void {
     }
   }
   if (!changed) return;
+  availabilityMessage.value = null;
+  receivedSample.value = true;
   labels.value.push(new Date().toLocaleTimeString());
   if (labels.value.length > historyLimit.value) labels.value.shift();
   for (const s of series.value) {
     const arr = histories[s.key] ?? (histories[s.key] = []);
-    arr.push(latest[s.key] ?? 0);
+    if (latest[s.key] == null) continue;
+    arr.push(latest[s.key]);
     if (arr.length > historyLimit.value) arr.shift();
   }
 }
@@ -113,7 +127,17 @@ async function onReconnect(): Promise<void> {
       @reconnect="onReconnect"
     />
     <div class="min-h-0 flex-1 space-y-4 overflow-auto p-4">
-      <div v-if="stats.length" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <PanelError
+        v-if="availabilityMessage"
+        :message="availabilityMessage"
+        retryable
+        @retry="onReconnect"
+      />
+      <PanelLoader v-else-if="hasMetrics && !receivedSample" />
+      <div
+        v-if="stats.length && !availabilityMessage && receivedSample"
+        class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      >
         <StatCard
           v-for="s in stats"
           :key="s.key"
@@ -123,7 +147,7 @@ async function onReconnect(): Promise<void> {
         />
       </div>
       <div
-        v-if="visibleGauges.length"
+        v-if="visibleGauges.length && !availabilityMessage && receivedSample"
         class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
       >
         <GaugeChart
@@ -136,8 +160,16 @@ async function onReconnect(): Promise<void> {
           :color-index="i"
         />
       </div>
-      <UsageRows v-if="usage.length" :fields="usage" :values="latestRow" />
-      <SeriesChart v-if="series.length" :labels="labels" :series="seriesData" />
+      <UsageRows
+        v-if="usage.length && !availabilityMessage && receivedSample"
+        :fields="usage"
+        :values="latestRow"
+      />
+      <SeriesChart
+        v-if="series.length && !availabilityMessage && receivedSample"
+        :labels="labels"
+        :series="seriesData"
+      />
       <div
         v-if="!hasMetrics"
         class="flex h-full items-center justify-center text-sm text-surface-400"

@@ -140,6 +140,92 @@ describe("ScopeBar", () => {
     expect(useScopeStore().params("c1")).toEqual({ environment: "ops" });
   });
 
+  it("keeps select overlays aligned to the compact scope control width", async () => {
+    const wrapper = mount(ScopeBar, {
+      props: {
+        connectionId: "c1",
+        scope: [
+          {
+            param: "database",
+            label: "Database",
+            control: "select",
+            options: [
+              { value: "0", label: "0" },
+              {
+                value: "very-long-database-name",
+                label: "very-long-database-name-that-should-truncate",
+              },
+            ],
+          },
+        ],
+      },
+    });
+    await flushPromises();
+
+    expect(
+      wrapper.findComponent({ name: "Select" }).props("overlayStyle"),
+    ).toEqual({
+      width: "13rem",
+      maxWidth: "calc(100vw - 2rem)",
+    });
+  });
+
+  it("allows a manifest scope select to hide the filter input", async () => {
+    const wrapper = mount(ScopeBar, {
+      props: {
+        connectionId: "c1",
+        scope: [
+          {
+            param: "database",
+            label: "Database",
+            control: "select",
+            disableSearch: true,
+            options: [
+              { value: "0", label: "Database 0" },
+              { value: "1", label: "Database 1" },
+            ],
+          },
+        ],
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.findComponent({ name: "Select" }).props("filter")).toBe(
+      false,
+    );
+  });
+
+  it("keeps multiselect overlays aligned to the compact scope control width", async () => {
+    const wrapper = mount(ScopeBar, {
+      props: {
+        connectionId: "c1",
+        scope: [
+          {
+            param: "database",
+            label: "Database",
+            control: "select",
+            multiple: true,
+            options: [
+              { value: "0", label: "0" },
+              {
+                value: "very-long-database-name",
+                label: "very-long-database-name-that-should-truncate",
+              },
+            ],
+          },
+        ],
+      },
+    });
+    await flushPromises();
+
+    expect(
+      wrapper.findComponent({ name: "MultiSelect" }).props("overlayStyle"),
+    ).toEqual({
+      width: "13rem",
+      maxWidth: "calc(100vw - 2rem)",
+    });
+  });
+
   it("supports multiple autocomplete scopes without a separate control name", async () => {
     const wrapper = mount(ScopeBar, {
       props: {

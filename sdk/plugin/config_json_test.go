@@ -13,7 +13,15 @@ func TestManifestConfigRoundTrip(t *testing.T) {
 		APIVersion: plugin.CurrentAPIVersion,
 		Name:       "demo",
 		Tabs: []plugin.Panel{
-			{Key: "data", Type: plugin.PanelTable, Config: plugin.TableConfig{Editable: true, RowKey: []string{"id"}}},
+			{Key: "data", Type: plugin.PanelTable, Config: plugin.TableConfig{
+				Columns: []plugin.Column{
+					{Key: "id", Label: "ID", ReadOnly: true},
+					{Key: "name", Label: "Name", Editable: true, Editor: plugin.ColumnEditorText},
+				},
+				Editable: true,
+				RowKey:   []string{"id"},
+				Update:   &plugin.DataSource{RouteID: "demo.row.update", Method: plugin.MethodPost},
+			}},
 			{Key: "diff", Type: plugin.PanelDiff, Config: plugin.DiffConfig{Language: "yaml", OriginalLabel: "Current", ModifiedLabel: "Edited"}},
 			{Key: "logs", Type: plugin.PanelLogStream},
 		},

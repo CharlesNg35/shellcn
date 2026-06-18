@@ -16,19 +16,36 @@ import AppIcon from "@/components/AppIcon.vue";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import ObjectDetailFieldRow from "./ObjectDetailFieldRow.vue";
 import { formatValue, humanize, valueFor } from "./objectDetailFormat";
+import { useRefreshableSource } from "../shared/useRefreshableSource";
 
 const props = defineProps<PanelProps>();
 
 const cfg = computed(
   () => (props.config as ObjectDetailPanelConfig | undefined) ?? {},
 );
-const doc = ref<unknown>(null);
-const loadedOnce = ref(false);
-const refreshing = ref(false);
-const error = ref<string | null>(null);
 const copiedKey = ref<string | null>(null);
 const mode = ref<"fields" | "raw">("fields");
 let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function loadDetail(): Promise<unknown> {
+  if (!props.source) return props.resource ?? {};
+  return fetchDoc(props.connectionId, props.source, {
+    resource: props.resource,
+    record: props.record,
+  });
+}
+
+const {
+  data: doc,
+  refreshing,
+  error,
+  showInitialLoader,
+  blockingError,
+  load,
+  reset,
+} = useRefreshableSource<unknown>(loadDetail, {
+  initialValue: () => null,
+});
 
 function clearCopiedTimer(): void {
   if (copiedTimer) clearTimeout(copiedTimer);
@@ -49,31 +66,21 @@ const sections = computed<ObjectDetailSection[]>(() => {
   return [{ fields }];
 });
 
-const pretty = computed(() => JSON.stringify(doc.value ?? {}, null, 2));
-const showInitialLoader = computed(() => refreshing.value && !loadedOnce.value);
-const blockingError = computed(() => error.value && !loadedOnce.value);
-
-async function load(): Promise<void> {
-  if (!props.source) {
-    doc.value = props.resource ?? {};
-    loadedOnce.value = true;
-    return;
+function redactedRawValue(): unknown {
+  const source = doc.value;
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return source ?? {};
   }
-  if (refreshing.value) return;
-  refreshing.value = true;
-  error.value = null;
-  try {
-    doc.value = await fetchDoc(props.connectionId, props.source, {
-      resource: props.resource,
-      record: props.record,
-    });
-    loadedOnce.value = true;
-  } catch (e) {
-    error.value = (e as Error).message;
-  } finally {
-    refreshing.value = false;
+  const copy: Row = { ...(source as Row) };
+  for (const section of sections.value) {
+    for (const field of section.fields ?? []) {
+      if (field.redacted && field.key in copy) copy[field.key] = "********";
+    }
   }
+  return copy;
 }
+
+const pretty = computed(() => JSON.stringify(redactedRawValue(), null, 2));
 
 async function copy(field: ObjectDetailField): Promise<void> {
   const value = formatValue(valueFor(record(), field), field.type);
@@ -87,10 +94,15 @@ async function copy(field: ObjectDetailField): Promise<void> {
 }
 
 watch(
-  () => [props.connectionId, props.resource?.uid],
+  () => [
+    props.connectionId,
+    props.resource?.uid,
+    props.source?.routeId,
+    JSON.stringify(props.source?.params ?? {}),
+    JSON.stringify(props.record ?? {}),
+  ],
   () => {
-    doc.value = null;
-    loadedOnce.value = false;
+    reset();
     void load();
   },
   {

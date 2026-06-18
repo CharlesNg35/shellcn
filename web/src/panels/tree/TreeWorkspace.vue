@@ -35,6 +35,16 @@ const view = computed(() => ws.view(props.connectionId));
 const activeView = computed(() => ws.activeView(props.connectionId));
 const tabStrip = ref<HTMLElement | null>(null);
 const scopeKey = computed(() => scope.key(props.connectionId));
+const treeRefreshNonce = ref(0);
+const treeRefreshKey = computed(() => {
+  if (treeRefreshNonce.value === 0) {
+    return scopeKey.value;
+  }
+  if (!scopeKey.value) {
+    return String(treeRefreshNonce.value);
+  }
+  return `${scopeKey.value}:${treeRefreshNonce.value}`;
+});
 
 const resourceByKind = computed(() => {
   const map = new Map<string, ResourceType>();
@@ -150,7 +160,16 @@ watch(
   },
 );
 
+function refreshTree(): void {
+  treeRefreshNonce.value += 1;
+}
+
+function onListActionDone(): void {
+  refreshTree();
+}
+
 function onDetailActionDone(action: Action): void {
+  refreshTree();
   if (action.onSuccess?.navigate !== "list") return;
   const v = activeView.value;
   if (v?.kind !== "detail" || !v.ref) return;
@@ -185,7 +204,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
       class="h-full min-h-0 w-64 shrink-0 overflow-hidden border-r border-surface-200 dark:border-surface-800"
     >
       <ResourceTree
-        :refresh-key="scopeKey"
+        :refresh-key="treeRefreshKey"
         :connection-id="connectionId"
         :groups="tree"
         :selected-group="treeSelectedGroup"
@@ -292,6 +311,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
             }"
             :actions="actions"
             @select="openDetail"
+            @action-done="onListActionDone"
           />
         </KeepAlive>
         <div

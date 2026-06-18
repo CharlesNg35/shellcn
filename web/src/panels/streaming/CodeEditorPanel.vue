@@ -12,6 +12,7 @@ import type { CodeMirrorEditor } from "@/codemirror";
 import AppIcon from "@/components/AppIcon.vue";
 import CodeDiffView from "../shared/CodeDiffView.vue";
 import { dialogRoot } from "@/primevue/preset";
+import { useDirtyGuard } from "../shared/useDirtyGuard";
 
 const props = defineProps<PanelProps>();
 
@@ -27,6 +28,7 @@ const originalText = ref("");
 const showDiff = ref(false);
 let editor: CodeMirrorEditor | null = null;
 let codeMirror: typeof import("@/codemirror") | null = null;
+let loadRequest = 0;
 const editorConfig = computed(
   () => props.config as CodeEditorConfig | undefined,
 );
@@ -36,6 +38,11 @@ const language = computed(() => editorConfig.value?.language ?? "plaintext");
 const saveRouteId = computed(() => editorConfig.value?.saveRouteId);
 const editable = computed(() => Boolean(saveRouteId.value));
 const changed = computed(() => text.value !== originalText.value);
+const { confirmBeforeDiscard } = useDirtyGuard({
+  isDirty: () => editable.value && changed.value,
+  header: "Discard unsaved editor changes?",
+  message: "This editor has unsaved changes. Discard them and reload?",
+});
 const diffDialogStyle = { width: "88vw" };
 const diffDialogBreakpoints = { "1199px": "94vw", "575px": "100vw" };
 const diffDialogPt = {
@@ -52,18 +59,19 @@ const diffDialogMaximizeButtonProps = {
 };
 
 async function load(): Promise<void> {
+  const request = ++loadRequest;
   loading.value = true;
   const initial = editorConfig.value?.initialContent;
   if (initial !== undefined) {
     text.value = initial;
     originalText.value = initial;
     error.value = null;
-    await mountEditor();
+    await mountEditor(request);
     return;
   }
   if (!props.source) {
     error.value = null;
-    await mountEditor();
+    await mountEditor(request);
     return;
   }
   error.value = null;
@@ -72,18 +80,25 @@ async function load(): Promise<void> {
       resource: props.resource,
       record: props.record,
     });
+    if (request !== loadRequest) return;
     text.value = typeof doc === "string" ? doc : JSON.stringify(doc, null, 2);
     originalText.value = text.value;
   } catch (e) {
+    if (request !== loadRequest) return;
     error.value = (e as Error).message;
     loading.value = false;
     return;
   }
-  await mountEditor();
+  await mountEditor(request);
 }
 
-async function mountEditor(): Promise<void> {
+async function guardedLoad(): Promise<void> {
+  await confirmBeforeDiscard(load);
+}
+
+async function mountEditor(request = loadRequest): Promise<void> {
   await nextTick();
+  if (request !== loadRequest) return;
   if (!container.value) {
     useFallback.value = true;
     loading.value = false;
@@ -91,6 +106,7 @@ async function mountEditor(): Promise<void> {
   }
   try {
     const helpers = await import("@/codemirror");
+    if (request !== loadRequest) return;
     codeMirror = helpers;
     editor?.view.destroy();
     editor = helpers.createCodeMirrorEditor(container.value, {
@@ -104,9 +120,10 @@ async function mountEditor(): Promise<void> {
       },
     });
   } catch {
+    if (request !== loadRequest) return;
     useFallback.value = true;
   } finally {
-    loading.value = false;
+    if (request === loadRequest) loading.value = false;
   }
 }
 
@@ -152,7 +169,17 @@ async function save(): Promise<void> {
 }
 
 onMounted(load);
-watch(() => [props.connectionId, props.resource?.uid], load);
+watch(
+  () => [
+    props.connectionId,
+    props.resource?.uid,
+    props.source?.routeId,
+    JSON.stringify(props.source?.params ?? {}),
+    JSON.stringify(props.record ?? {}),
+    editorConfig.value?.initialContent,
+  ],
+  guardedLoad,
+);
 watch(language, (next) => {
   codeMirror?.setEditorLanguage(editor, next);
 });
@@ -211,7 +238,12 @@ onUnmounted(() => {
       </div>
     </div>
     <SkeletonList v-if="loading" />
-    <PanelError v-else-if="error" :message="error" retryable @retry="load" />
+    <PanelError
+      v-else-if="error"
+      :message="error"
+      retryable
+      @retry="guardedLoad"
+    />
     <textarea
       v-else-if="useFallback && editable"
       v-model="text"

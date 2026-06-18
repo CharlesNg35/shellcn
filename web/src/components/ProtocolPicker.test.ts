@@ -51,6 +51,20 @@ describe("ProtocolPicker", () => {
     expect(wrapper.text()).not.toContain("SSH");
   });
 
+  it("uses the shared search icon alignment", () => {
+    const wrapper = mount(ProtocolPicker, {
+      props: { modelValue: "", plugins },
+    });
+
+    const iconShell = wrapper.get('input[aria-label="Search protocols"]')
+      .element.previousElementSibling as HTMLElement;
+    expect(iconShell.className).toContain("inset-y-0");
+    expect(iconShell.className).toContain("items-center");
+    expect(
+      wrapper.get('input[aria-label="Search protocols"]').classes(),
+    ).toContain("h-9");
+  });
+
   it("keeps protocol icon tiles light in dark mode for fixed-color SVG icons", () => {
     const wrapper = mount(ProtocolPicker, {
       props: { modelValue: "ssh", plugins },

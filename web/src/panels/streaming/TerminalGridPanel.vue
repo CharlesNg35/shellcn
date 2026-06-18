@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import Tooltip from "primevue/tooltip";
 import AppIcon from "@/components/AppIcon.vue";
@@ -281,8 +281,6 @@ onMounted(() => {
   resetLayout(true);
   initialized.value = true;
 });
-
-onBeforeUnmount(closeAllPaneStreams);
 
 watch(
   layout,

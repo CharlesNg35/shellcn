@@ -90,10 +90,13 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     return () => channel.listeners.delete(fn);
   }
 
-  function send(key: string, data: string): void {
+  function send(key: string, data: string): boolean {
     const channel = channels.get(key);
-    if (channel && channel.socket.readyState === WS_OPEN)
+    if (channel && channel.socket.readyState === WS_OPEN) {
       channel.socket.send(data);
+      return true;
+    }
+    return false;
   }
 
   async function sendWhenOpen(

@@ -258,6 +258,64 @@ describe("TreeWorkspace", () => {
     expect(panelMounts).toBe(2);
   });
 
+  it("refreshes the resource tree after a list action completes", async () => {
+    let treeRefreshKey = "";
+    const wrapper = mount(TreeWorkspace, {
+      props: {
+        connectionId: "c1",
+        tree: [],
+        resources: [
+          {
+            kind: "database",
+            title: "Databases",
+            list: { routeId: "mysql.databases.list" },
+            columns: [],
+            actions: { toolbar: ["mysql.database.drop"] },
+            detail: { header: { title: "Database" }, tabs: [] },
+          },
+        ] as never,
+        actions: [],
+      },
+      global: {
+        stubs: {
+          AppIcon: true,
+          Button: { template: "<button><slot /></button>" },
+          ResourceTree: {
+            name: "ResourceTree",
+            props: ["refreshKey"],
+            updated() {
+              treeRefreshKey = String(
+                (this as { refreshKey?: string }).refreshKey ?? "",
+              );
+            },
+            template: "<div data-test='tree' />",
+          },
+          VueDraggable: { template: "<div><slot /></div>" },
+          PanelHost: {
+            emits: ["actionDone"],
+            template:
+              "<button data-test='done' @click=\"$emit('actionDone', { id: 'mysql.database.drop', label: 'Drop' })\">done</button>",
+          },
+        },
+      },
+    });
+    const ws = useWorkspaceStore();
+    ws.openView("c1", {
+      id: "list:database",
+      title: "Databases",
+      kind: "list",
+      resourceKind: "database",
+    });
+    await nextTick();
+    await flushPromises();
+
+    await wrapper.get("[data-test='done']").trigger("click");
+    await nextTick();
+
+    expect(treeRefreshKey).toBe("1");
+    wrapper.unmount();
+  });
+
   it("pins a preview tab on double-click", async () => {
     const wrapper = mountWorkspace();
     const ws = useWorkspaceStore();

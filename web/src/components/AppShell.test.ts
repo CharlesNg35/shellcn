@@ -20,6 +20,35 @@ beforeEach(() => {
 });
 
 describe("AppShell", () => {
+  it("keeps the connection search icon vertically anchored to the input", async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: "/",
+          component: AppShell,
+          children: [{ path: "", component: { template: "<div />" } }],
+        },
+      ],
+    });
+    await router.push("/");
+    await router.isReady();
+
+    const wrapper = mount(
+      { template: "<RouterView />" },
+      { global: { plugins: [router] } },
+    );
+    await flushPromises();
+
+    const iconShell = wrapper.get('input[aria-label="Search connections"]')
+      .element.previousElementSibling as HTMLElement;
+    expect(iconShell.className).toContain("inset-y-0");
+    expect(iconShell.className).toContain("items-center");
+    expect(
+      wrapper.get('input[aria-label="Search connections"]').classes(),
+    ).toContain("h-9");
+  });
+
   it("does not remount the active workspace on query-only navigation", async () => {
     let mounts = 0;
     let unmounts = 0;

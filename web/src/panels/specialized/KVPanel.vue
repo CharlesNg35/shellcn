@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
+import Badge from "primevue/badge";
 import { useToast } from "primevue/usetoast";
 import { fetchDoc, fetchPage, runFormAction } from "@/api/dataSource";
 import type { KVPanelConfig, Page } from "@/types/projection";
@@ -15,6 +16,7 @@ import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "@/components/SkeletonList.vue";
 import AppIcon from "@/components/AppIcon.vue";
 import { dialogRoot } from "@/primevue/preset";
+import { useDirtyGuard } from "../shared/useDirtyGuard";
 
 interface KVEntry {
   key: string;
@@ -28,11 +30,16 @@ interface KVDetail extends KVEntry {
   encoding?: string;
 }
 
+interface RowSelectEvent {
+  data: KVEntry;
+}
+
 const props = defineProps<PanelProps>();
 const toast = useToast();
 
 const entries = ref<KVEntry[]>([]);
 const selected = ref<KVEntry | null>(null);
+const tableSelection = ref<KVEntry | null>(null);
 const detail = ref<KVDetail | null>(null);
 const editor = ref("");
 const type = ref("string");
@@ -45,6 +52,8 @@ const createOpen = ref(false);
 const createKeyName = ref("");
 const createType = ref("string");
 const createValue = ref("");
+let detailRequest = 0;
+let filterLoadHandle: ReturnType<typeof setTimeout> | undefined;
 const config = computed(() => props.config as KVPanelConfig | undefined);
 const keyParam = computed(() => config.value?.keyParam ?? "key");
 const writable = computed(() => config.value?.writable === true);
@@ -59,6 +68,20 @@ const editorLanguage = computed(() =>
     ? "json"
     : "plaintext",
 );
+const dirty = computed(() => {
+  if (!writable.value || !detail.value) {
+    return false;
+  }
+  const currentType = detail.value.type ?? selected.value?.type ?? "string";
+  return (
+    editor.value !== stringify(detail.value.value) || type.value !== currentType
+  );
+});
+const { confirmBeforeDiscard } = useDirtyGuard({
+  isDirty: () => dirty.value,
+  header: "Discard unsaved key changes?",
+  message: "This key has unsaved changes. Discard them and continue?",
+});
 
 const visibleEntries = computed(() => {
   const q = filterText.value.trim().toLowerCase();
@@ -85,6 +108,11 @@ function stringify(value: unknown): string {
     : JSON.stringify(value ?? "", null, 2);
 }
 
+function activateEntry(entry: KVEntry | null): void {
+  selected.value = entry;
+  tableSelection.value = entry;
+}
+
 async function load(): Promise<void> {
   if (!props.source) {
     loading.value = false;
@@ -92,13 +120,26 @@ async function load(): Promise<void> {
   }
   loading.value = true;
   error.value = null;
+  const selectedKey = selected.value?.key;
+  const search = filterText.value.trim();
   try {
-    const page = await fetchPage<KVEntry>(props.connectionId, props.source, {
-      resource: props.resource,
-      record: props.record,
-    });
+    const page = await fetchPage<KVEntry>(
+      props.connectionId,
+      props.source,
+      {
+        resource: props.resource,
+        record: props.record,
+      },
+      {
+        filter: search ? { q: search } : undefined,
+      },
+    );
     entries.value = normalizeList(page);
-    selected.value = entries.value[0] ?? null;
+    const next =
+      entries.value.find((entry) => entry.key === selectedKey) ??
+      entries.value[0] ??
+      null;
+    activateEntry(next);
     if (selected.value) await loadDetail(selected.value);
   } catch (e) {
     error.value = (e as Error).message;
@@ -108,7 +149,11 @@ async function load(): Promise<void> {
 }
 
 async function loadDetail(entry: KVEntry): Promise<void> {
-  selected.value = entry;
+  const request = ++detailRequest;
+  activateEntry(entry);
+  detail.value = null;
+  editor.value = "";
+  type.value = entry.type ?? "string";
   const routeId = config.value?.readRouteId;
   if (!routeId) {
     detail.value = entry;
@@ -118,14 +163,19 @@ async function loadDetail(entry: KVEntry): Promise<void> {
   }
   loadingDetail.value = true;
   try {
-    detail.value = await fetchDoc<KVDetail>(
+    const loaded = await fetchDoc<KVDetail>(
       props.connectionId,
       { routeId, params: { [keyParam.value]: entry.key } },
       { resource: props.resource, record: props.record },
     );
+    if (request !== detailRequest) return;
+    detail.value = loaded;
     editor.value = stringify(detail.value.value);
     type.value = detail.value.type ?? entry.type ?? "string";
   } catch (e) {
+    if (request !== detailRequest) return;
+    detail.value = null;
+    editor.value = "";
     toast.add({
       severity: "error",
       summary: "Could not load key",
@@ -133,12 +183,43 @@ async function loadDetail(entry: KVEntry): Promise<void> {
       life: 4000,
     });
   } finally {
-    loadingDetail.value = false;
+    if (request === detailRequest) loadingDetail.value = false;
   }
 }
 
+async function guardedLoad(): Promise<void> {
+  await confirmBeforeDiscard(load);
+}
+
+function queueFilterLoad(): void {
+  if (filterLoadHandle) clearTimeout(filterLoadHandle);
+  filterLoadHandle = setTimeout(() => {
+    filterLoadHandle = undefined;
+    if (!dirty.value) void load();
+  }, 250);
+}
+
+async function guardedLoadDetail(entry: KVEntry): Promise<boolean> {
+  return confirmBeforeDiscard(() => loadDetail(entry));
+}
+
+async function selectRow(event: RowSelectEvent): Promise<void> {
+  if (event.data.key === selected.value?.key) {
+    tableSelection.value = selected.value;
+    return;
+  }
+  const selectedChanged = await guardedLoadDetail(event.data);
+  if (!selectedChanged) {
+    tableSelection.value = selected.value;
+  }
+}
+
+function restoreSelection(): void {
+  tableSelection.value = selected.value;
+}
+
 async function save(): Promise<void> {
-  if (!selected.value || !config.value?.writeRouteId) return;
+  if (!selected.value || !detail.value || !config.value?.writeRouteId) return;
   saving.value = true;
   try {
     await runFormAction(
@@ -210,7 +291,7 @@ async function remove(): Promise<void> {
     );
     toast.add({ severity: "success", summary: "Key deleted", life: 2200 });
     detail.value = null;
-    selected.value = null;
+    activateEntry(null);
     await load();
   } catch (e) {
     toast.add({
@@ -226,6 +307,12 @@ async function remove(): Promise<void> {
 
 watch(() => [props.connectionId, props.resource?.uid], load, {
   immediate: true,
+});
+
+watch(filterText, queueFilterLoad);
+
+onUnmounted(() => {
+  if (filterLoadHandle) clearTimeout(filterLoadHandle);
 });
 </script>
 
@@ -247,7 +334,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           type="button"
           severity="secondary"
           :disabled="loading"
-          @click="load"
+          @click="guardedLoad"
         >
           <AppIcon
             :icon="{ type: 'lucide', value: 'refresh-cw' }"
@@ -268,7 +355,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         v-if="error && !entries.length"
         :message="error"
         retryable
-        @retry="load"
+        @retry="guardedLoad"
       />
       <SkeletonList v-else-if="loading && !entries.length" :rows="8" />
       <PanelError
@@ -276,16 +363,18 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         class="border-b border-surface-200 dark:border-surface-800"
         :message="error"
         retryable
-        @retry="load"
+        @retry="guardedLoad"
       />
       <DataTable
         v-if="entries.length || (!loading && !error)"
+        v-model:selection="tableSelection"
         :value="visibleEntries"
         data-key="key"
         scrollable
         scroll-height="flex"
         selection-mode="single"
-        @row-click="loadDetail($event.data as KVEntry)"
+        @row-select="selectRow"
+        @row-unselect="restoreSelection"
       >
         <Column field="key" header="Key" />
         <Column field="type" header="Type" style="width: 6rem" />
@@ -307,6 +396,12 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           </p>
         </div>
         <div v-if="writable && selected" class="flex items-center gap-2">
+          <Badge
+            v-if="dirty"
+            value="Unsaved"
+            severity="warn"
+            aria-live="polite"
+          />
           <Button
             v-if="config?.deleteRouteId"
             type="button"
@@ -321,7 +416,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
             type="button"
             label="Save"
             :loading="saving"
-            :disabled="saving"
+            :disabled="saving || loadingDetail || !detail || !dirty"
             @click="save"
           />
         </div>

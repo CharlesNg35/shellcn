@@ -167,6 +167,7 @@ async function onActionDone(
           :source="current.source"
           :config="currentConfig"
           :resource="resource"
+          :record="row"
           :actions="actions"
           @action-done="onActionDone"
           @select="emit('select', $event)"

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
-import { nextTick } from "vue";
+import { h, nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
+import ConfirmDialog from "primevue/confirmdialog";
 import { installFetch } from "@/test/fetchMock";
 import type { FileBrowserConfig } from "@/types/projection";
 import FileBrowserPanel from "./FileBrowserPanel.vue";
@@ -150,6 +151,19 @@ function panelButtonByLabel(w: ReturnType<typeof mount>, label: string) {
   return w.findAll("button").find((b) => b.attributes("aria-label") === label)!;
 }
 
+function mountFileBrowserWithConfirm(
+  props: InstanceType<typeof FileBrowserPanel>["$props"],
+) {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  return mount(
+    {
+      render: () => h("div", [h(FileBrowserPanel, props), h(ConfirmDialog)]),
+    },
+    { attachTo: host },
+  );
+}
+
 async function setBodyInput(placeholder: string, value: string): Promise<void> {
   const input = document.body.querySelector(
     `input[placeholder="${placeholder}"]`,
@@ -157,6 +171,20 @@ async function setBodyInput(placeholder: string, value: string): Promise<void> {
   input.value = value;
   input.dispatchEvent(new Event("input"));
   await nextTick();
+}
+
+async function dirtyReadme(w: ReturnType<typeof mount>): Promise<void> {
+  await w
+    .findAll("li button")
+    .find((b) => b.text().includes("README.md"))!
+    .trigger("click");
+  await flushPromises();
+  await vi.waitFor(() => expect(codeMirrorEditors.length).toBeGreaterThan(0));
+  const editor = codeMirrorEditors.at(-1)!;
+  editor.setValue("# Unsaved");
+  editor.emitChange();
+  await nextTick();
+  expect(w.text()).toContain("Unsaved");
 }
 
 describe("FileBrowserPanel", () => {
@@ -195,6 +223,9 @@ describe("FileBrowserPanel", () => {
     expect(w.text()).toContain("README.md");
 
     const filter = w.get('input[aria-label="Filter files"]');
+    const iconShell = filter.element.previousElementSibling as HTMLElement;
+    expect(iconShell.className).toContain("inset-y-0");
+    expect(iconShell.className).toContain("items-center");
     await filter.setValue("readme");
     expect(w.text()).toContain("README.md");
     expect(w.text()).not.toContain("etc");
@@ -352,6 +383,45 @@ describe("FileBrowserPanel", () => {
     await w.get('[aria-label="Open etc"]').trigger("click");
     await flushPromises();
     expect(w.text()).toContain("hosts");
+  });
+
+  it("keeps editing when directory navigation is canceled with unsaved file changes", async () => {
+    const w = mountFileBrowserWithConfirm({
+      connectionId: "c1",
+      source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+      config: writableConfig(),
+    });
+    await flushPromises();
+    await dirtyReadme(w);
+
+    await w.get('[aria-label="Open etc"]').trigger("click");
+    await flushPromises();
+    bodyButton("Keep editing")!.click();
+    await flushPromises();
+
+    expect(w.text()).toContain("README.md");
+    expect(w.text()).toContain("Unsaved");
+    expect(w.text()).not.toContain("hosts");
+    w.unmount();
+  });
+
+  it("discards unsaved file changes before directory navigation", async () => {
+    const w = mountFileBrowserWithConfirm({
+      connectionId: "c1",
+      source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+      config: writableConfig(),
+    });
+    await flushPromises();
+    await dirtyReadme(w);
+
+    await w.get('[aria-label="Open etc"]').trigger("click");
+    await flushPromises();
+    bodyButton("Discard changes")!.click();
+    await flushPromises();
+
+    expect(w.text()).toContain("hosts");
+    expect(w.text()).not.toContain("Unsaved");
+    w.unmount();
   });
 
   it("uses the resolved server path for the initial home directory", async () => {

@@ -17,10 +17,15 @@ const inputBase = cn(
 export const inputClass = inputBase;
 
 export const searchInputClass = cn(
-  "w-full py-1.5 pl-9 pr-3 text-sm text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 dark:text-surface-100",
+  "h-9 w-full py-1.5 pl-9 pr-3 text-sm leading-5 text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 dark:text-surface-100",
   fieldSurface,
   focusRing,
 );
+export const searchFieldClass = "relative block w-full";
+export const searchIconLeftClass =
+  "pointer-events-none absolute inset-y-0 left-3 flex items-center justify-center text-surface-400";
+export const searchIconRightClass =
+  "pointer-events-none absolute inset-y-0 right-3 flex items-center justify-center text-surface-400";
 
 export const dialogRoot = (maxWidth = "max-w-md"): string =>
   cn(
@@ -172,8 +177,16 @@ function buttonRoot(options: ButtonPassThroughMethodOptions<unknown>): string {
 
 const overlay =
   "mt-1.5 origin-top overflow-hidden rounded-lg border border-surface-200 bg-surface-0 p-1 shadow-lg ring-1 ring-surface-950/5 dark:border-surface-700 dark:bg-surface-900 dark:ring-surface-0/5";
+const selectOverlay = cn(overlay, "p-0");
 const option =
   "cursor-pointer truncate rounded-md px-2.5 py-1.5 text-sm text-surface-700 transition-colors data-[p-focused=true]:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-200 dark:data-[p-focused=true]:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/15 dark:data-[p-selected=true]:text-primary-300";
+const selectFilterHeader =
+  "border-b border-surface-200 p-2 dark:border-surface-800";
+const selectFilterContainer = "relative flex w-full min-w-0 items-center";
+const selectFilterInput = searchInputClass;
+const selectFilterIconContainer =
+  "pointer-events-none absolute inset-y-0 left-3 flex items-center justify-center text-surface-400";
+const selectFilterIcon = "h-4 w-4";
 const overlayTransition = {
   enterFromClass: "opacity-0 scale-95",
   enterActiveClass: "transition duration-100 ease-out",
@@ -329,10 +342,15 @@ export const primeVuePassthrough = {
     label:
       "min-w-0 flex-1 truncate px-2.5 py-1.5 text-left text-surface-800 dark:text-surface-100",
     dropdown: "shrink-0 px-2 text-surface-400",
-    overlay,
+    overlay: selectOverlay,
     transition: overlayTransition,
+    header: selectFilterHeader,
     listContainer: "max-h-60 overflow-auto p-1",
     option,
+    pcFilterContainer: { root: selectFilterContainer },
+    pcFilter: { root: selectFilterInput },
+    pcFilterIconContainer: { root: selectFilterIconContainer },
+    filterIcon: selectFilterIcon,
     emptyMessage: "px-3 py-2 text-sm text-surface-400",
   },
 
@@ -348,11 +366,14 @@ export const primeVuePassthrough = {
     label:
       "flex min-h-9 flex-wrap items-center gap-1.5 px-2 py-1.5 text-left text-surface-500 dark:text-surface-400",
     dropdown: "shrink-0 px-2 text-surface-400",
-    overlay,
+    overlay: selectOverlay,
     transition: overlayTransition,
-    header:
-      "flex items-center gap-2 border-b border-surface-200 px-3 py-2 dark:border-surface-800",
+    header: cn(selectFilterHeader, "flex items-center gap-2"),
     pcHeaderCheckbox: checkbox,
+    pcFilterContainer: { root: cn(selectFilterContainer, "flex-1") },
+    pcFilter: { root: selectFilterInput },
+    pcFilterIconContainer: { root: selectFilterIconContainer },
+    filterIcon: selectFilterIcon,
     listContainer: "max-h-60 overflow-auto p-1",
     option:
       "flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-surface-700 transition-colors data-[p-focused=true]:bg-surface-100 dark:text-surface-200 dark:data-[p-focused=true]:bg-surface-800",

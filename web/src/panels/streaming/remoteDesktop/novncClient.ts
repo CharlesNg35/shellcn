@@ -8,6 +8,7 @@ interface RfbLike {
   clipViewport: boolean;
   resizeSession: boolean;
   background: string;
+  focus?: () => void;
   disconnect(): void;
   addEventListener(type: string, listener: (e: CustomEvent) => void): void;
 }
@@ -43,6 +44,7 @@ export async function connectNoVNCDesktop({
 
   rfb.addEventListener("connect", () => {
     hooks.status("ready");
+    rfb.focus?.();
   });
   rfb.addEventListener("disconnect", (event) => {
     hooks.status(event.detail?.clean ? "disconnected" : "connection-lost");

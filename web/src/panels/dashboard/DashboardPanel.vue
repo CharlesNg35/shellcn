@@ -20,9 +20,15 @@ const emit = defineEmits<{
 const cells = computed<DashboardCell[]>(
   () => (props.config as DashboardPanelConfig | undefined)?.cells ?? [],
 );
-const variantData = computed<Record<string, unknown>>(() =>
-  props.resource ? { ...props.resource } : {},
-);
+const variantData = computed<Record<string, unknown>>(() => {
+  if (props.record) {
+    return { ...props.record };
+  }
+  if (props.resource) {
+    return { ...props.resource };
+  }
+  return {};
+});
 </script>
 
 <template>

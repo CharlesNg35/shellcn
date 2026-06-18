@@ -12,6 +12,7 @@ import SkeletonList from "@/components/SkeletonList.vue";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import { useTheme } from "@/composables/useTheme";
 import type { CodeMirrorCompletion, CodeMirrorEditor } from "@/codemirror";
+import { useDirtyGuard } from "../shared/useDirtyGuard";
 
 const props = defineProps<PanelProps>();
 const queryConfig = computed(
@@ -52,6 +53,7 @@ const confirmationMessage = ref("");
 const completionItems = ref<CodeMirrorCompletion[]>([]);
 let editor: CodeMirrorEditor | null = null;
 let codeMirror: typeof import("@/codemirror") | null = null;
+let completionRequest = 0;
 const { isDark } = useTheme();
 const editorLanguage = computed(
   () => queryConfig.value?.language ?? "plaintext",
@@ -65,6 +67,21 @@ const emptyText = computed(
   () => queryConfig.value?.emptyText ?? "Execute to see results.",
 );
 const canExport = computed(() => queryConfig.value?.exportable === true);
+const baselineQuery = ref(query.value);
+
+function syncQueryFromEditor(): void {
+  if (editor) query.value = codeMirror?.editorValue(editor) ?? query.value;
+}
+
+function queryDirty(): boolean {
+  return query.value !== baselineQuery.value;
+}
+
+const { confirmBeforeDiscard } = useDirtyGuard({
+  isDirty: queryDirty,
+  header: "Discard unsaved query changes?",
+  message: "The current query has unsaved changes. Discard them and continue?",
+});
 
 // Export the current result set — only when the plugin opts in via the manifest.
 const exportMenu = ref<{ toggle: (event: Event) => void } | null>(null);
@@ -125,9 +142,14 @@ async function onReconnect(): Promise<void> {
 }
 
 function run(confirm = false): void {
-  if (editor) query.value = codeMirror?.editorValue(editor) ?? query.value;
+  if (status.value !== "open") {
+    error.value = "The query stream is not connected yet.";
+    return;
+  }
+  syncQueryFromEditor();
   const text = query.value.trim();
   if (!text) return;
+  baselineQuery.value = query.value;
   history.value = [text, ...history.value.filter((q) => q !== text)].slice(
     0,
     8,
@@ -135,7 +157,10 @@ function run(confirm = false): void {
   running.value = true;
   error.value = null;
   pendingConfirmation.value = false;
-  send(JSON.stringify({ query: query.value, confirm }));
+  if (!send(JSON.stringify({ query: query.value, confirm }))) {
+    running.value = false;
+    error.value = "The query stream is not ready. Reconnect and try again.";
+  }
 }
 
 async function cancel(): Promise<void> {
@@ -174,9 +199,22 @@ async function loadCompletions(): Promise<CodeMirrorCompletion[]> {
   }
 }
 
-function recall(text: string): void {
+async function refreshCompletions(): Promise<void> {
+  const request = ++completionRequest;
+  const items = await loadCompletions();
+  if (request !== completionRequest) return;
+  completionItems.value = items;
+  codeMirror?.setEditorCompletions(editor, items, editorLanguage.value);
+}
+
+function applyQuery(text: string): void {
   query.value = text;
+  baselineQuery.value = text;
   codeMirror?.setEditorValue(editor, text);
+}
+
+async function recall(text: string): Promise<void> {
+  await confirmBeforeDiscard(() => applyQuery(text));
 }
 
 function confirmExecution(): void {
@@ -195,7 +233,7 @@ onMounted(async () => {
   try {
     const helpers = await import("@/codemirror");
     codeMirror = helpers;
-    completionItems.value = await loadCompletions();
+    await refreshCompletions();
     editor = helpers.createCodeMirrorEditor(container.value, {
       value: query.value,
       language: editorLanguage.value,
@@ -224,16 +262,21 @@ watch(
       params: props.source?.params,
       resource: props.resource?.uid,
       initialQuery: queryConfig.value?.initialQuery,
+      language: queryConfig.value?.language,
+      completionRouteId: queryConfig.value?.completionRouteId,
+      completionParams: queryConfig.value?.completionParams,
     }),
   async () => {
-    query.value = initialQuery();
-    results.value = null;
-    running.value = false;
-    error.value = null;
-    pendingConfirmation.value = false;
-    confirmationMessage.value = "";
-    codeMirror?.setEditorValue(editor, query.value);
-    completionItems.value = await loadCompletions();
+    await confirmBeforeDiscard(async () => {
+      applyQuery(initialQuery());
+      codeMirror?.setEditorLanguage(editor, editorLanguage.value);
+      results.value = null;
+      running.value = false;
+      error.value = null;
+      pendingConfirmation.value = false;
+      confirmationMessage.value = "";
+      await refreshCompletions();
+    });
   },
 );
 
@@ -276,7 +319,7 @@ onUnmounted(() => {
           size="small"
           :label="executeLabel"
           :loading="running"
-          :disabled="running"
+          :disabled="running || status !== 'open'"
           @click="run()"
         />
       </div>

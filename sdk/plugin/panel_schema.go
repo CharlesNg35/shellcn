@@ -19,7 +19,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 		PanelTable: {
 			Type: "object",
 			Properties: props(
-				prop("columns", array(object())),
+				prop("columns", array(columnObject())),
 				prop("columnsSource", dataSource()),
 				prop("watch", dataSource()),
 				prop("refreshIntervalMs", number()),
@@ -338,6 +338,42 @@ func dataSource() PanelConfigProperty {
 			prop("params", stringMap()),
 		),
 		Required: []string{"routeId"},
+	}
+}
+
+func optionObject() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("label", stringProp()),
+			prop("value", object()),
+		),
+		Required: []string{"label", "value"},
+	}
+}
+
+func severityMap() PanelConfigProperty {
+	return PanelConfigProperty{Type: "object", Properties: map[string]PanelConfigProperty{"*": enum("info", "success", "warn", "danger", "secondary")}}
+}
+
+func columnObject() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("key", stringProp()),
+			prop("label", stringProp()),
+			prop("sortable", boolProp()),
+			prop("type", enum("text", "badge", "bytes", "datetime", "relative_time", "number", "percent", "bool", "json", "icon")),
+			prop("width", stringProp()),
+			prop("editable", boolProp()),
+			prop("editor", enum("text", "textarea", "number", "toggle", "select", "json")),
+			prop("options", array(optionObject())),
+			prop("readOnly", boolProp()),
+			prop("nullable", boolProp()),
+			prop("precision", number()),
+			prop("severities", severityMap()),
+		),
+		Required: []string{"key", "label"},
 	}
 }
 

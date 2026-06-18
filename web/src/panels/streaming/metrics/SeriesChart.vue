@@ -56,6 +56,14 @@ const options = computed<ChartOptions>(() => {
 });
 
 const canvasEl = ref<HTMLCanvasElement | null>(null);
+const summary = computed(() =>
+  props.series
+    .map((item) => {
+      const latest = item.data[item.data.length - 1];
+      return `${item.label}: ${latest ?? "no data"}`;
+    })
+    .join("; "),
+);
 useChart(
   canvasEl,
   "line",
@@ -69,7 +77,9 @@ useChart(
     class="rounded-xl border border-surface-200 bg-surface-0 p-4 dark:border-surface-800 dark:bg-surface-900"
   >
     <div class="h-56">
-      <canvas ref="canvasEl" />
+      <canvas ref="canvasEl" role="img" :aria-label="summary">
+        {{ summary }}
+      </canvas>
     </div>
   </div>
 </template>

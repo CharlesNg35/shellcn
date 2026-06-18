@@ -622,6 +622,10 @@ ORDER BY ORDINAL_POSITION`, []any{database, table})
 	for i := range rows {
 		rows[i]["database"] = database
 		rows[i]["table"] = table
+		dbType := fmt.Sprint(rows[i]["type"])
+		readOnly := strings.Contains(strings.ToLower(fmt.Sprint(rows[i]["extra"])), "auto_increment") ||
+			strings.Contains(strings.ToLower(fmt.Sprint(rows[i]["extra"])), "generated")
+		sqldb.AnnotateTableColumn(rows[i], dbType, readOnly)
 	}
 	return pageRows(rc, rows)
 }

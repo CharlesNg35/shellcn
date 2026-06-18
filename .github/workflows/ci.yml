@@ -31,19 +31,18 @@ jobs:
       - run: pnpm -C web build
       - run: go build ./...
       - run: go test -race ./...
+      - name: Install govulncheck
+        env:
+          GOVULNCHECK_VERSION: v1.3.0
+        run: |
+          GOBIN="$RUNNER_TEMP/go/bin" go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+          echo "$RUNNER_TEMP/go/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/go/bin/govulncheck" -version
       - name: Run govulncheck
-        uses: golang/govulncheck-action@v1
-        with:
-          go-version-input: "1.26.4"
-          go-package: ./...
-          repo-checkout: false
+        run: govulncheck -format text ./...
       - name: Run govulncheck for SDK
-        uses: golang/govulncheck-action@v1
-        with:
-          go-version-input: "1.26.4"
-          go-package: ./...
-          work-dir: sdk
-          repo-checkout: false
+        working-directory: sdk
+        run: govulncheck -format text ./...
       - uses: golangci/golangci-lint-action@v8
         with:
           version: v2.12

@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import IconField from "primevue/iconfield";
+import InputIcon from "primevue/inputicon";
+import InputText from "primevue/inputtext";
 import AppIcon from "./AppIcon.vue";
-import { searchInputClass } from "../primevue/preset";
+import {
+  searchFieldClass,
+  searchIconLeftClass,
+  searchInputClass,
+} from "../primevue/preset";
 import type { PluginCategoryInfo, PluginSummary } from "../types/projection";
 
 const props = defineProps<{
@@ -55,14 +62,11 @@ const groups = computed<PluginGroup[]>(() => {
 
 <template>
   <div class="flex flex-col gap-3">
-    <div class="relative">
-      <span
-        class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-surface-400"
-        aria-hidden="true"
-      >
+    <IconField :class="searchFieldClass">
+      <InputIcon :class="searchIconLeftClass">
         <AppIcon :icon="{ type: 'lucide', value: 'search' }" :size="16" />
-      </span>
-      <input
+      </InputIcon>
+      <InputText
         v-model="query"
         type="search"
         autofocus
@@ -70,7 +74,7 @@ const groups = computed<PluginGroup[]>(() => {
         aria-label="Search protocols"
         :class="searchInputClass"
       />
-    </div>
+    </IconField>
 
     <div
       role="radiogroup"

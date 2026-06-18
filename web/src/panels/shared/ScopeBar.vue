@@ -25,6 +25,10 @@ const store = useScopeStore();
 const options = reactive<Record<string, FilterOption[]>>({});
 const suggestions = reactive<Record<string, FilterOption[]>>({});
 const loading = ref(false);
+const scopeControlOverlayStyle = {
+  width: "13rem",
+  maxWidth: "calc(100vw - 2rem)",
+};
 let stops: (() => void)[] = [];
 let loadVersion = 0;
 
@@ -49,6 +53,10 @@ function set(f: ScopeFilter, v: string): void {
 
 function multiple(f: ScopeFilter): boolean {
   return f.multiple === true;
+}
+
+function showSearch(f: ScopeFilter): boolean {
+  return f.disableSearch !== true;
 }
 
 function ensureDefault(f: ScopeFilter): void {
@@ -279,9 +287,10 @@ onUnmounted(stopWatches);
           :options="loaded(f)"
           option-label="label"
           option-value="value"
-          filter
+          :filter="showSearch(f)"
           :placeholder="f.allLabel ?? f.label"
           :loading="loading"
+          :overlay-style="scopeControlOverlayStyle"
           :aria-label="f.label"
           @update:model-value="setMembers(f, $event)"
         />
@@ -308,9 +317,10 @@ onUnmounted(stopWatches);
           :options="choices(f)"
           option-label="label"
           option-value="value"
-          filter
+          :filter="showSearch(f)"
           :placeholder="f.allLabel ?? f.label"
           :loading="loading"
+          :overlay-style="scopeControlOverlayStyle"
           :aria-label="f.label"
           @update:model-value="set(f, $event ?? '')"
         />

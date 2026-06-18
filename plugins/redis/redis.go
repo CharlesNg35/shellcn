@@ -34,12 +34,14 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				ValueTypes: []string{"string", "hash", "list", "set", "zset"},
 			}},
 			{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "redis.terminal", Method: plugin.MethodWS}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
+			{Key: "monitor", Label: "Monitor", Icon: icon("activity"), Type: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "redis.monitor", Method: plugin.MethodWS}},
 			{Key: "clients", Label: "Clients", Icon: icon("users"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.clients.list"}, Config: clientsTableConfig()},
 			{Key: "channels", Label: "Channels", Icon: icon("radio-tower"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.channels.list"}, Config: channelsTableConfig()},
 			{Key: "info", Label: "Info", Icon: icon("file-text"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "redis.info"}, Config: infoDetailConfig()},
 		},
 		Streams: []plugin.Stream{
 			{ID: "redis.terminal", Kind: plugin.StreamTerminal, RouteID: "redis.terminal"},
+			{ID: "redis.monitor", Kind: plugin.StreamLogs, RouteID: "redis.monitor"},
 		},
 	}
 }
@@ -83,6 +85,8 @@ func databaseScope() plugin.ScopeFilter {
 		Param:         databaseScopeParam,
 		Label:         "Database",
 		Icon:          icon("database"),
+		Control:       plugin.ScopeSelect,
+		DisableSearch: true,
 		OptionsSource: &plugin.DataSource{RouteID: "redis.databases.list"},
 		ValueField:    "value",
 		LabelField:    "label",

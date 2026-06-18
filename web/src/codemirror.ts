@@ -658,6 +658,7 @@ export function createCodeMirrorDiffView(
           ...diffEditorExtensions(options.language, theme, "Modified content"),
           unifiedMergeView({
             original: options.original,
+            mergeControls: false,
             gutter: true,
             collapseUnchanged: diffCollapse(options.collapseUnchanged),
           }),

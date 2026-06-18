@@ -10,6 +10,7 @@ const emit = defineEmits<{ retry: [] }>();
 
 <template>
   <div
+    role="alert"
     class="flex flex-col items-center justify-center gap-3 px-6 py-10 text-center"
   >
     <span

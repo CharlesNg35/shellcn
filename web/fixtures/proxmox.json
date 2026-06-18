@@ -233,8 +233,7 @@
               }
             },
             "config": {
-              "resize": true,
-              "clipboard": true
+              "resize": true
             }
           },
           {

@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import AppIcon from "@/components/AppIcon.vue";
 import PanelHost from "../core/PanelHost.vue";
 import { resolvedPanelConfig, resolvedPanelType } from "../core/variants";
+import { isVisible } from "../form/condition";
 import type {
   Action,
   DashboardCell,
@@ -59,6 +61,12 @@ function cellPanel(cell: DashboardCell): PanelType {
     : resolvedPanelType(cell, props.variantData ?? {});
 }
 
+const visibleCells = computed(() =>
+  props.cells.filter((cell) =>
+    isVisible(cell.visibleWhen, props.variantData ?? {}),
+  ),
+);
+
 function onCardAction(action: Action, result?: Record<string, unknown>): void {
   emit("actionDone", action, result);
 }
@@ -67,11 +75,11 @@ function onCardAction(action: Action, result?: Record<string, unknown>): void {
 <template>
   <div class="h-full overflow-auto p-4">
     <div
-      v-if="props.cells.length"
+      v-if="visibleCells.length"
       class="grid grid-cols-1 gap-4 lg:grid-cols-2"
     >
       <section
-        v-for="cell in props.cells"
+        v-for="cell in visibleCells"
         :key="cell.key"
         :class="spanClass(cell)"
         class="flex flex-col overflow-hidden rounded-xl border border-surface-200 bg-surface-0 dark:border-surface-800 dark:bg-surface-900"

@@ -136,7 +136,7 @@ func entryColumns() []plugin.Column {
 func attributeColumns() []plugin.Column {
 	return []plugin.Column{
 		{Key: "attribute", Label: "Attribute", Sortable: true, ReadOnly: true},
-		{Key: "value", Label: "Value"},
+		{Key: "value", Label: "Value", Editable: true, Editor: plugin.ColumnEditorText},
 	}
 }
 

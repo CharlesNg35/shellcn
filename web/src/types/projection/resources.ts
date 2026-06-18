@@ -13,6 +13,7 @@ export interface ScopeFilter {
   control?: ScopeControl;
   multiple?: boolean;
   allowCustom?: boolean;
+  disableSearch?: boolean;
   optionsSource?: DataSource;
   watchSource?: DataSource;
   options?: FilterOption[];

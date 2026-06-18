@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	redisclient "github.com/redis/go-redis/v9"
@@ -47,6 +49,22 @@ type scopedRedis struct {
 	session  *Session
 	client   *redisclient.Client
 	database int
+	owned    bool
+}
+
+// monitorConn is a dedicated connection for the MONITOR stream. go-redis returns
+// a pooled connection to its pool right after issuing MONITOR; the pool then
+// reaps it for carrying "unread data" (the monitor feed), which silently stalls
+// the stream. A sticky single connection with no read timeout keeps it alive.
+//
+// Teardown closes the captured raw socket directly: the pool's own close runs a
+// health-check read that deadlocks against the live, timeout-free reader.
+type monitorConn struct {
+	client *redisclient.Client
+	conn   *redisclient.Conn
+
+	mu   sync.Mutex
+	raws []net.Conn
 }
 
 type confirmationError struct {
@@ -69,6 +87,7 @@ func routes() []plugin.Route {
 		{ID: "redis.clients.list", Method: plugin.MethodGet, Path: "/clients", Permission: "redis.clients.read", Risk: plugin.RiskSafe, AuditEvent: "redis.clients.list", Handle: listClients},
 		{ID: "redis.channels.list", Method: plugin.MethodGet, Path: "/channels", Permission: "redis.pubsub.read", Risk: plugin.RiskSafe, AuditEvent: "redis.channels.list", Handle: listChannels},
 		{ID: "redis.terminal", Method: plugin.MethodWS, Path: "/terminal", Permission: "redis.command.execute", Risk: plugin.RiskPrivileged, AuditEvent: "redis.terminal", Stream: terminalStream},
+		{ID: "redis.monitor", Method: plugin.MethodWS, Path: "/monitor", Permission: "redis.monitor.read", Risk: plugin.RiskPrivileged, AuditEvent: "redis.monitor", Stream: monitorStream},
 		{ID: "redis.completion", Method: plugin.MethodGet, Path: "/completion", Permission: "redis.read", Risk: plugin.RiskSafe, AuditEvent: "redis.completion", Handle: completionRoute},
 	}
 }
@@ -97,16 +116,57 @@ func scopedRedisClient(rc *plugin.RequestContext) (*scopedRedis, error) {
 }
 
 func scopedRedisForDB(s *Session, db int, dedicated bool) *scopedRedis {
-	if db == s.opts.Database && !dedicated {
-		return &scopedRedis{session: s, client: s.client, database: db}
+	if dedicated {
+		opts := *s.client.Options()
+		opts.DB = db
+		return &scopedRedis{session: s, client: redisclient.NewClient(&opts), database: db, owned: true}
 	}
+	return &scopedRedis{session: s, client: s.scopedClient(db), database: db}
+}
+
+func newMonitorConn(s *Session, db int) *monitorConn {
 	opts := *s.client.Options()
 	opts.DB = db
-	return &scopedRedis{session: s, client: redisclient.NewClient(&opts), database: db}
+	opts.PoolSize = 1
+	opts.MinIdleConns = 0
+	opts.ReadTimeout = -1
+	mc := &monitorConn{}
+	dial := opts.Dialer
+	opts.Dialer = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		conn, err := dial(ctx, network, addr)
+		if err == nil {
+			mc.mu.Lock()
+			mc.raws = append(mc.raws, conn)
+			mc.mu.Unlock()
+		}
+		return conn, err
+	}
+	mc.client = redisclient.NewClient(&opts)
+	mc.conn = mc.client.Conn()
+	return mc
+}
+
+func (m *monitorConn) Close() {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	raws := m.raws
+	m.raws = nil
+	m.mu.Unlock()
+	for _, c := range raws {
+		_ = c.Close()
+	}
+	// Skip conn.Close(): the sticky pool returns the connection to the parent pool
+	// and inspects its buffered data, racing the monitor reader. Closing the raw
+	// socket above already unblocks the reader; client.Close() drops the pool.
+	if m.client != nil {
+		_ = m.client.Close()
+	}
 }
 
 func (sr *scopedRedis) Close() {
-	if sr == nil || sr.client == nil || sr.client == sr.session.client {
+	if sr == nil || !sr.owned || sr.client == nil {
 		return
 	}
 	_ = sr.client.Close()
@@ -246,17 +306,32 @@ func listKeys(rc *plugin.RequestContext) (any, error) {
 	}
 	ctx, cancel := commandContext(rc.Ctx, sr.session)
 	defer cancel()
-	keys, next, err := sr.client.Scan(ctx, cursor, pattern, int64(limit)).Result()
-	if err != nil {
-		return nil, redisErr(err)
-	}
-	items := make([]keyEntry, 0, len(keys))
-	for _, key := range keys {
-		entry, err := keySummary(ctx, sr.client, key)
+	keys := make([]string, 0, limit)
+	seen := make(map[string]bool, limit)
+	next := cursor
+	// Consume whole SCAN batches: the returned cursor advances past the entire
+	// batch, so dropping part of one to honor the limit would skip those keys on
+	// the next page. A batch may push the page slightly over the requested limit.
+	for {
+		batch, nextCursor, err := sr.client.Scan(ctx, next, pattern, int64(limit)).Result()
 		if err != nil {
-			return nil, err
+			return nil, redisErr(err)
 		}
-		items = append(items, entry)
+		next = nextCursor
+		for _, key := range batch {
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			keys = append(keys, key)
+		}
+		if next == 0 || len(keys) >= limit {
+			break
+		}
+	}
+	items, err := keyEntries(ctx, sr.client, keys)
+	if err != nil {
+		return nil, err
 	}
 	sort.SliceStable(items, func(i, j int) bool { return items[i].Key < items[j].Key })
 	nextCursor := ""
@@ -264,6 +339,21 @@ func listKeys(rc *plugin.RequestContext) (any, error) {
 		nextCursor = strconv.FormatUint(next, 10)
 	}
 	return plugin.Page[keyEntry]{Items: items, NextCursor: nextCursor}, nil
+}
+
+func keyEntries(ctx context.Context, client *redisclient.Client, keys []string) ([]keyEntry, error) {
+	items := make([]keyEntry, 0, len(keys))
+	for _, key := range keys {
+		entry, err := keySummary(ctx, client, key)
+		if err != nil {
+			return nil, err
+		}
+		if entry.Type == "none" {
+			continue
+		}
+		items = append(items, entry)
+	}
+	return items, nil
 }
 
 func readKey(rc *plugin.RequestContext) (any, error) {
@@ -476,6 +566,73 @@ func terminalStream(rc *plugin.RequestContext, client plugin.ClientStream) error
 			return err
 		}
 	}
+}
+
+func monitorStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
+	s, err := redisSession(rc)
+	if err != nil {
+		return err
+	}
+	db, err := selectedDatabase(rc, s.opts.Database)
+	if err != nil {
+		return err
+	}
+	mc := newMonitorConn(s, db)
+	lines := make(chan string, 256)
+	monitor := mc.conn.Monitor(client.Context(), lines)
+	if err := monitor.Err(); err != nil {
+		mc.Close()
+		return redisErr(err)
+	}
+	monitor.Start()
+	// Closing the dedicated connection is what unblocks the monitor reader, which
+	// otherwise parks in a blocking read holding Stop()'s mutex on an idle server.
+	// Registered last so it runs first: Close before Stop on teardown.
+	defer monitor.Stop()
+	defer mc.Close()
+	if err := writeLogFrame(client, fmt.Sprintf("Redis MONITOR started. Showing server-wide command traffic; selected database is %d.", db)); err != nil {
+		return err
+	}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-client.Context().Done():
+			return nil
+		case <-ticker.C:
+			if err := monitor.Err(); err != nil {
+				return redisErr(err)
+			}
+		case line, ok := <-lines:
+			if !ok {
+				return nil
+			}
+			if line == "" {
+				continue
+			}
+			if err := writeLogFrame(client, line); err != nil {
+				if client.Context().Err() != nil || errors.Is(err, io.ErrClosedPipe) {
+					return nil
+				}
+				return err
+			}
+		}
+	}
+}
+
+func writeLogFrame(w io.Writer, line string) error {
+	frame, err := json.Marshal(struct {
+		TS   string `json:"ts,omitempty"`
+		Line string `json:"line"`
+	}{
+		TS:   time.Now().UTC().Format(time.RFC3339),
+		Line: line,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(frame)
+	return err
 }
 
 func completionRoute(*plugin.RequestContext) (any, error) {

@@ -10,6 +10,7 @@ import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "@/components/SkeletonList.vue";
 import AppIcon from "@/components/AppIcon.vue";
+import { useRefreshableSource } from "../shared/useRefreshableSource";
 
 interface TraceSpan {
   id: string;
@@ -36,17 +37,31 @@ type SpanRow = TraceSpan & {
 
 const props = defineProps<PanelProps>();
 
-const loadedOnce = ref(false);
-const refreshing = ref(false);
-const error = ref<string | null>(null);
-const payload = ref<TracePayload>({});
 const filterText = ref("");
 const selected = ref<SpanRow | null>(null);
 const traceConfig = computed(
   () => props.config as TracePanelConfig | undefined,
 );
-const showInitialLoader = computed(() => refreshing.value && !loadedOnce.value);
-const blockingError = computed(() => error.value && !loadedOnce.value);
+
+async function loadTrace(): Promise<TracePayload> {
+  if (!props.source) return {};
+  return fetchDoc<TracePayload>(props.connectionId, props.source, {
+    resource: props.resource,
+    record: props.record,
+  });
+}
+
+const {
+  data: payload,
+  refreshing,
+  error,
+  showInitialLoader,
+  blockingError,
+  load,
+  reset,
+} = useRefreshableSource<TracePayload>(loadTrace, {
+  initialValue: () => ({}),
+});
 
 function spanStart(span: TraceSpan): number {
   if (typeof span.startMs === "number") return span.startMs;
@@ -83,7 +98,10 @@ const rows = computed<SpanRow[]>(() => {
     });
     for (const child of byParent.get(span.id) ?? []) visit(child, depth + 1);
   };
-  const roots = byParent.get("") ?? spans.filter((span) => !span.parentId);
+  const spanIds = new Set(spans.map((span) => span.id));
+  const roots = spans.filter(
+    (span) => !span.parentId || !spanIds.has(span.parentId),
+  );
   for (const root of roots) visit(root, 0);
   return out;
 });
@@ -117,43 +135,27 @@ function spanService(row: SpanRow): string {
   return String(value ?? row.service ?? "unknown");
 }
 
+async function refreshTrace(): Promise<void> {
+  const next = await load();
+  if (next) selected.value = null;
+}
+
 function selectRow(event: { data: unknown }): void {
   selected.value = event.data as SpanRow;
 }
 
-async function load(): Promise<void> {
-  if (!props.source) {
-    loadedOnce.value = true;
-    return;
-  }
-  if (refreshing.value) return;
-  refreshing.value = true;
-  error.value = null;
-  try {
-    payload.value = await fetchDoc<TracePayload>(
-      props.connectionId,
-      props.source,
-      {
-        resource: props.resource,
-        record: props.record,
-      },
-    );
-    selected.value = null;
-    loadedOnce.value = true;
-  } catch (e) {
-    error.value = (e as Error).message;
-  } finally {
-    refreshing.value = false;
-  }
-}
-
 watch(
-  () => [props.connectionId, props.resource?.uid],
+  () => [
+    props.connectionId,
+    props.resource?.uid,
+    props.source?.routeId,
+    JSON.stringify(props.source?.params ?? {}),
+    JSON.stringify(props.record ?? {}),
+  ],
   () => {
-    payload.value = {};
     selected.value = null;
-    loadedOnce.value = false;
-    void load();
+    reset();
+    void refreshTrace();
   },
   {
     immediate: true,
@@ -178,7 +180,7 @@ watch(
         severity="secondary"
         class="ml-auto"
         :disabled="refreshing"
-        @click="load"
+        @click="refreshTrace"
       >
         <AppIcon
           :icon="{ type: 'lucide', value: 'refresh-cw' }"
@@ -194,9 +196,9 @@ watch(
         <SkeletonList v-if="showInitialLoader" />
         <PanelError
           v-else-if="blockingError"
-          :message="error ?? ''"
+          :message="blockingError"
           retryable
-          @retry="load"
+          @retry="refreshTrace"
         />
         <DataTable
           v-else
@@ -208,7 +210,7 @@ watch(
           @row-click="selectRow"
         >
           <template v-if="error" #header>
-            <PanelError :message="error" retryable @retry="load" />
+            <PanelError :message="error" retryable @retry="refreshTrace" />
           </template>
           <template #empty>No spans.</template>
           <Column header="Span">
