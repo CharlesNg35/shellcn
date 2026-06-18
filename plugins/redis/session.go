@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	redisclient "github.com/redis/go-redis/v9"
@@ -14,6 +15,31 @@ type Session struct {
 	client *redisclient.Client
 	opts   options
 	closed atomic.Bool
+
+	mu        sync.Mutex
+	dbClients map[int]*redisclient.Client
+}
+
+// scopedClient returns a client bound to db, reusing the session's primary
+// client for the default database and lazily caching one sub-client per other
+// database so repeated requests don't churn connection pools.
+func (s *Session) scopedClient(db int) *redisclient.Client {
+	if db == s.opts.Database {
+		return s.client
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if c, ok := s.dbClients[db]; ok {
+		return c
+	}
+	opts := *s.client.Options()
+	opts.DB = db
+	c := redisclient.NewClient(&opts)
+	if s.dbClients == nil {
+		s.dbClients = make(map[int]*redisclient.Client)
+	}
+	s.dbClients[db] = c
+	return c
 }
 
 func connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, error) {
@@ -65,6 +91,12 @@ func (s *Session) OpenChannel(context.Context, plugin.ChannelRequest) (plugin.Ch
 
 func (s *Session) Close() error {
 	s.closed.Store(true)
+	s.mu.Lock()
+	for db, c := range s.dbClients {
+		_ = c.Close()
+		delete(s.dbClients, db)
+	}
+	s.mu.Unlock()
 	if s.client == nil {
 		return nil
 	}

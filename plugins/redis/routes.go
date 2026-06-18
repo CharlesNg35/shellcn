@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	redisclient "github.com/redis/go-redis/v9"
@@ -47,6 +49,22 @@ type scopedRedis struct {
 	session  *Session
 	client   *redisclient.Client
 	database int
+	owned    bool
+}
+
+// monitorConn is a dedicated connection for the MONITOR stream. go-redis returns
+// a pooled connection to its pool right after issuing MONITOR; the pool then
+// reaps it for carrying "unread data" (the monitor feed), which silently stalls
+// the stream. A sticky single connection with no read timeout keeps it alive.
+//
+// Teardown closes the captured raw socket directly: the pool's own close runs a
+// health-check read that deadlocks against the live, timeout-free reader.
+type monitorConn struct {
+	client *redisclient.Client
+	conn   *redisclient.Conn
+
+	mu   sync.Mutex
+	raws []net.Conn
 }
 
 type confirmationError struct {
@@ -98,25 +116,57 @@ func scopedRedisClient(rc *plugin.RequestContext) (*scopedRedis, error) {
 }
 
 func scopedRedisForDB(s *Session, db int, dedicated bool) *scopedRedis {
-	if db == s.opts.Database && !dedicated {
-		return &scopedRedis{session: s, client: s.client, database: db}
+	if dedicated {
+		opts := *s.client.Options()
+		opts.DB = db
+		return &scopedRedis{session: s, client: redisclient.NewClient(&opts), database: db, owned: true}
 	}
-	opts := *s.client.Options()
-	opts.DB = db
-	return &scopedRedis{session: s, client: redisclient.NewClient(&opts), database: db}
+	return &scopedRedis{session: s, client: s.scopedClient(db), database: db}
 }
 
-func scopedRedisForMonitor(s *Session, db int) *scopedRedis {
+func newMonitorConn(s *Session, db int) *monitorConn {
 	opts := *s.client.Options()
 	opts.DB = db
 	opts.PoolSize = 1
 	opts.MinIdleConns = 0
 	opts.ReadTimeout = -1
-	return &scopedRedis{session: s, client: redisclient.NewClient(&opts), database: db}
+	mc := &monitorConn{}
+	dial := opts.Dialer
+	opts.Dialer = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		conn, err := dial(ctx, network, addr)
+		if err == nil {
+			mc.mu.Lock()
+			mc.raws = append(mc.raws, conn)
+			mc.mu.Unlock()
+		}
+		return conn, err
+	}
+	mc.client = redisclient.NewClient(&opts)
+	mc.conn = mc.client.Conn()
+	return mc
+}
+
+func (m *monitorConn) Close() {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	raws := m.raws
+	m.raws = nil
+	m.mu.Unlock()
+	for _, c := range raws {
+		_ = c.Close()
+	}
+	// Skip conn.Close(): the sticky pool returns the connection to the parent pool
+	// and inspects its buffered data, racing the monitor reader. Closing the raw
+	// socket above already unblocks the reader; client.Close() drops the pool.
+	if m.client != nil {
+		_ = m.client.Close()
+	}
 }
 
 func (sr *scopedRedis) Close() {
-	if sr == nil || sr.client == nil || sr.client == sr.session.client {
+	if sr == nil || !sr.owned || sr.client == nil {
 		return
 	}
 	_ = sr.client.Close()
@@ -259,6 +309,9 @@ func listKeys(rc *plugin.RequestContext) (any, error) {
 	keys := make([]string, 0, limit)
 	seen := make(map[string]bool, limit)
 	next := cursor
+	// Consume whole SCAN batches: the returned cursor advances past the entire
+	// batch, so dropping part of one to honor the limit would skip those keys on
+	// the next page. A batch may push the page slightly over the requested limit.
 	for {
 		batch, nextCursor, err := sr.client.Scan(ctx, next, pattern, int64(limit)).Result()
 		if err != nil {
@@ -271,9 +324,6 @@ func listKeys(rc *plugin.RequestContext) (any, error) {
 			}
 			seen[key] = true
 			keys = append(keys, key)
-			if len(keys) >= limit {
-				break
-			}
 		}
 		if next == 0 || len(keys) >= limit {
 			break
@@ -527,16 +577,20 @@ func monitorStream(rc *plugin.RequestContext, client plugin.ClientStream) error 
 	if err != nil {
 		return err
 	}
-	sr := scopedRedisForMonitor(s, db)
-	defer sr.Close()
+	mc := newMonitorConn(s, db)
 	lines := make(chan string, 256)
-	monitor := sr.client.Monitor(client.Context(), lines)
+	monitor := mc.conn.Monitor(client.Context(), lines)
 	if err := monitor.Err(); err != nil {
+		mc.Close()
 		return redisErr(err)
 	}
 	monitor.Start()
+	// Closing the dedicated connection is what unblocks the monitor reader, which
+	// otherwise parks in a blocking read holding Stop()'s mutex on an idle server.
+	// Registered last so it runs first: Close before Stop on teardown.
 	defer monitor.Stop()
-	if err := writeLogFrame(client, fmt.Sprintf("Redis MONITOR started. Showing server-wide command traffic; selected database is %d.", sr.database)); err != nil {
+	defer mc.Close()
+	if err := writeLogFrame(client, fmt.Sprintf("Redis MONITOR started. Showing server-wide command traffic; selected database is %d.", db)); err != nil {
 		return err
 	}
 	ticker := time.NewTicker(time.Second)

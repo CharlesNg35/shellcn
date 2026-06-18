@@ -263,9 +263,12 @@ func TestMonitorUsesDedicatedNoReadTimeoutClient(t *testing.T) {
 	defer func() { _ = base.Close() }()
 	s := &Session{client: base}
 
-	monitor := scopedRedisForMonitor(s, 3)
-	defer monitor.Close()
-	opts := monitor.client.Options()
+	mc := newMonitorConn(s, 3)
+	defer mc.Close()
+	if mc.conn == nil {
+		t.Fatal("monitor must use a dedicated sticky connection")
+	}
+	opts := mc.client.Options()
 	if opts.DB != 3 {
 		t.Fatalf("monitor DB = %d, want 3", opts.DB)
 	}
