@@ -265,12 +265,25 @@ func (s *Session) execCapture(ctx context.Context, ns, pod, container string, co
 	}
 	var stdout, stderr bytes.Buffer
 	if err := executor.StreamWithContext(ctx, remotecommand.StreamOptions{Stdin: stdin, Stdout: &stdout, Stderr: &stderr}); err != nil {
+		if execMissingTool(err) {
+			return nil, errNoShell
+		}
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
 			return stdout.Bytes(), fmt.Errorf("%w: %s", plugin.ErrUnavailable, msg)
 		}
 		return stdout.Bytes(), apiErr(err)
 	}
 	return stdout.Bytes(), nil
+}
+
+// errNoShell is returned when the container lacks the coreutils the exec-backed
+// file browser needs (e.g. a distroless image); kubectl cp fails the same way.
+var errNoShell = fmt.Errorf("%w: this container has no shell or file utilities (e.g. a distroless image), so file browsing is unavailable", plugin.ErrNotSupported)
+
+func execMissingTool(err error) bool {
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "executable file not found") ||
+		(strings.Contains(s, "exec:") && strings.Contains(s, "no such file or directory"))
 }
 
 // execStream runs a command and streams its stdout, for downloads.
