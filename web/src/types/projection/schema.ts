@@ -51,6 +51,11 @@ export const Operator = {
   Nin: "nin",
   Empty: "empty",
   NotEmpty: "notEmpty",
+  Gt: "gt",
+  Lt: "lt",
+  Gte: "gte",
+  Lte: "lte",
+  Contains: "contains",
 } as const;
 export type Operator = (typeof Operator)[keyof typeof Operator];
 
@@ -63,6 +68,9 @@ export interface Rule {
 export interface Condition {
   allOf?: Rule[];
   anyOf?: Rule[];
+  all?: Condition[];
+  any?: Condition[];
+  not?: Condition;
 }
 
 export const ValidatorType = {

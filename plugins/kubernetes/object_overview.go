@@ -21,6 +21,7 @@ func ResourceOverview(rc *plugin.RequestContext) (any, error) {
 		delete(out, "data")
 		delete(out, "stringData")
 	}
+	out["can"] = s.accessReview(rc.Ctx, k, rc.Param("namespace"), name)
 	return out, nil
 }
 

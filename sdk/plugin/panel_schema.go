@@ -117,6 +117,9 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("saveParams", stringMap()),
 				prop("saveBodyKey", stringProp()),
 				prop("saveExtra", object()),
+				prop("watch", dataSource()),
+				prop("refreshField", stringProp()),
+				prop("dryRunKey", stringProp()),
 			),
 		},
 		PanelDiff: {
@@ -173,6 +176,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 			Properties: props(
 				prop("sections", array(objectDetailSection())),
 				prop("rawToggle", boolProp()),
+				prop("watch", dataSource()),
 			),
 		},
 		PanelTimeline: {
@@ -186,6 +190,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("resourceField", stringProp()),
 				prop("emptyText", stringProp()),
 				prop("refreshIntervalMs", number()),
+				prop("watch", dataSource()),
 			),
 		},
 		PanelTaskProgress: {

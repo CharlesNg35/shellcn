@@ -112,7 +112,7 @@ func clusterResourceType() plugin.ResourceType {
 		{
 			Key: "events", Label: "Recent events", Type: plugin.PanelTimeline, Span: 2,
 			Source: &plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": "event"}},
-			Config: eventTimelineConfig(),
+			Config: eventTimelineConfig(nil),
 		},
 	}}
 	return plugin.ResourceType{

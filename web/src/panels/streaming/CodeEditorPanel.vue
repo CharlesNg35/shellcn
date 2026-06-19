@@ -2,8 +2,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
-import { fetchDoc, runAction } from "@/api/dataSource";
-import type { CodeEditorConfig } from "@/types/projection";
+import { fetchDoc, runAction, watch as watchResource } from "@/api/dataSource";
+import type { CodeEditorConfig, ResourceEvent } from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "@/components/SkeletonList.vue";
@@ -26,6 +26,15 @@ const saveError = ref<string | null>(null);
 const saved = ref(false);
 const originalText = ref("");
 const showDiff = ref(false);
+const externalChanged = ref(false);
+const deletedOnServer = ref(false);
+const serverContent = ref<string | null>(null);
+const previewing = ref(false);
+const diffOriginal = ref("");
+const diffModified = ref("");
+const diffOriginalLabel = ref("Loaded");
+const diffModifiedLabel = ref("Edited");
+let stopWatch: (() => void) | null = null;
 let editor: CodeMirrorEditor | null = null;
 let codeMirror: typeof import("@/codemirror") | null = null;
 let loadRequest = 0;
@@ -37,6 +46,13 @@ const { isDark } = useTheme();
 const language = computed(() => editorConfig.value?.language ?? "plaintext");
 const saveRouteId = computed(() => editorConfig.value?.saveRouteId);
 const editable = computed(() => Boolean(saveRouteId.value));
+const canPreview = computed(() =>
+  Boolean(
+    editable.value &&
+    editorConfig.value?.dryRunKey &&
+    editorConfig.value?.refreshField,
+  ),
+);
 const changed = computed(() => text.value !== originalText.value);
 const { confirmBeforeDiscard } = useDirtyGuard({
   isDirty: () => editable.value && changed.value,
@@ -52,10 +68,6 @@ const diffDialogPt = {
 const diffDialogCloseButtonProps = {
   "aria-label": "Close diff review",
   title: "Close diff review",
-};
-const diffDialogMaximizeButtonProps = {
-  "aria-label": "Maximize or restore diff review",
-  title: "Maximize or restore diff review",
 };
 
 async function load(): Promise<void> {
@@ -96,6 +108,54 @@ async function guardedLoad(): Promise<void> {
   await confirmBeforeDiscard(load);
 }
 
+// onServerPush updates the editor in place when clean, and stashes the change
+// behind a notice when the user has unsaved edits so work is never clobbered.
+function onServerPush(ev: ResourceEvent): void {
+  if (ev.type === "deleted") {
+    deletedOnServer.value = true;
+    return;
+  }
+  deletedOnServer.value = false;
+  const next = ev.resource;
+  if (typeof next !== "string") return;
+  syncTextFromEditor();
+  if (!changed.value) {
+    originalText.value = next;
+    text.value = next;
+    externalChanged.value = false;
+    serverContent.value = null;
+    return;
+  }
+  serverContent.value = next;
+  externalChanged.value = true;
+}
+
+function reloadFromServer(): void {
+  if (serverContent.value !== null) {
+    originalText.value = serverContent.value;
+    text.value = serverContent.value;
+    serverContent.value = null;
+  }
+  externalChanged.value = false;
+  saved.value = false;
+}
+
+function startWatch(): void {
+  const source = editorConfig.value?.watch;
+  if (stopWatch || !source) return;
+  stopWatch = watchResource(
+    props.connectionId,
+    source,
+    { resource: props.resource, record: props.record },
+    onServerPush,
+  );
+}
+
+function stopWatching(): void {
+  stopWatch?.();
+  stopWatch = null;
+}
+
 async function mountEditor(request = loadRequest): Promise<void> {
   await nextTick();
   if (request !== loadRequest) return;
@@ -131,9 +191,63 @@ function syncTextFromEditor(): void {
   if (editor) text.value = codeMirror?.editorValue(editor) ?? text.value;
 }
 
-function openDiff(): void {
+function saveBody(extra?: Record<string, unknown>): Record<string, unknown> {
+  const bodyKey = editorConfig.value?.saveBodyKey;
+  const base = bodyKey
+    ? {
+        ...(editorConfig.value?.saveExtra ?? {}),
+        [bodyKey]: JSON.parse(text.value),
+      }
+    : { content: text.value };
+  return { ...base, ...(extra ?? {}) };
+}
+
+// review prefers a dry-run server preview (would-be result after defaulting),
+// falling back to the local edited-vs-loaded diff when it's unavailable or fails.
+async function review(): Promise<void> {
   syncTextFromEditor();
+  saveError.value = null;
+  diffOriginal.value = originalText.value;
+  diffModified.value = text.value;
+  diffOriginalLabel.value = "Loaded";
+  diffModifiedLabel.value = "Edited";
+
+  if (canPreview.value) {
+    const preview = await dryRun();
+    if (preview !== null) {
+      diffModified.value = preview;
+      diffOriginalLabel.value = "Live";
+      diffModifiedLabel.value = "Preview";
+    }
+  }
   showDiff.value = true;
+}
+
+// dryRun returns the server's would-be content, or null on unavailable/failure
+// (surfacing the error, e.g. a validation rejection).
+async function dryRun(): Promise<string | null> {
+  const routeId = saveRouteId.value;
+  const dryRunKey = editorConfig.value?.dryRunKey;
+  const refreshField = editorConfig.value?.refreshField;
+  if (!routeId || !dryRunKey || !refreshField) return null;
+  previewing.value = true;
+  try {
+    const result = await runAction(
+      props.connectionId,
+      routeId,
+      { resource: props.resource, record: props.record },
+      saveBody({ [dryRunKey]: true }),
+      editorConfig.value?.saveParams ?? props.source?.params ?? {},
+      editorConfig.value?.saveMethod ?? "PUT",
+    );
+    const content = result[refreshField];
+    return typeof content === "string" ? content : null;
+  } catch (e) {
+    saveError.value = (e as Error).message;
+    return null;
+  } finally {
+    previewing.value = false;
+  }
 }
 
 async function save(): Promise<void> {
@@ -143,23 +257,27 @@ async function save(): Promise<void> {
   saving.value = true;
   saveError.value = null;
   try {
-    const bodyKey = editorConfig.value?.saveBodyKey;
-    const body = bodyKey
-      ? {
-          ...(editorConfig.value?.saveExtra ?? {}),
-          [bodyKey]: JSON.parse(text.value),
-        }
-      : { content: text.value };
-    await runAction(
+    const result = await runAction(
       props.connectionId,
       routeId,
       { resource: props.resource, record: props.record },
-      body,
+      saveBody(),
       editorConfig.value?.saveParams ?? props.source?.params ?? {},
       editorConfig.value?.saveMethod ?? "PUT",
     );
+    // Reset the baseline to the server's canonical content so the next save and
+    // the live watch reconcile against exactly what was persisted.
+    const refreshField = editorConfig.value?.refreshField;
+    const fresh = refreshField ? result[refreshField] : undefined;
+    if (typeof fresh === "string") {
+      text.value = fresh;
+      originalText.value = fresh;
+    } else {
+      originalText.value = text.value;
+    }
     saved.value = true;
-    originalText.value = text.value;
+    externalChanged.value = false;
+    serverContent.value = null;
     showDiff.value = false;
   } catch (e) {
     saveError.value = (e as Error).message;
@@ -168,7 +286,10 @@ async function save(): Promise<void> {
   }
 }
 
-onMounted(load);
+onMounted(async () => {
+  await load();
+  startWatch();
+});
 watch(
   () => [
     props.connectionId,
@@ -193,6 +314,7 @@ watch(isDark, () => {
   codeMirror?.syncCodeMirrorTheme(editor);
 });
 onUnmounted(() => {
+  stopWatching();
   try {
     editor?.view.destroy();
   } catch {
@@ -219,14 +341,15 @@ onUnmounted(() => {
           severity="secondary"
           variant="outlined"
           size="small"
-          aria-label="Show changes"
-          @click="openDiff"
+          :loading="previewing"
+          aria-label="Review changes"
+          @click="review"
         >
           <AppIcon
             :icon="{ type: 'lucide', value: 'git-compare' }"
             :size="14"
           />
-          Diff
+          Review changes
         </Button>
         <Button
           type="button"
@@ -236,6 +359,37 @@ onUnmounted(() => {
           @click="save"
         />
       </div>
+    </div>
+    <div
+      v-if="externalChanged"
+      class="flex items-center justify-between gap-2 border-b border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+    >
+      <span
+        >This object changed on the server while you have unsaved edits.</span
+      >
+      <div class="flex items-center gap-2">
+        <Button
+          type="button"
+          severity="secondary"
+          size="small"
+          label="Reload"
+          @click="reloadFromServer"
+        />
+        <Button
+          type="button"
+          severity="secondary"
+          variant="text"
+          size="small"
+          label="Keep editing"
+          @click="externalChanged = false"
+        />
+      </div>
+    </div>
+    <div
+      v-if="deletedOnServer"
+      class="border-b border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300"
+    >
+      This object no longer exists on the server.
     </div>
     <SkeletonList v-if="loading" />
     <PanelError
@@ -262,21 +416,19 @@ onUnmounted(() => {
     <Dialog
       v-model:visible="showDiff"
       modal
-      maximizable
       header="Review changes"
       :style="diffDialogStyle"
       :breakpoints="diffDialogBreakpoints"
       :pt="diffDialogPt"
       :close-button-props="diffDialogCloseButtonProps"
-      :maximize-button-props="diffDialogMaximizeButtonProps"
     >
       <div class="h-[min(76vh,56rem)] min-h-0">
         <CodeDiffView
-          :original="originalText"
-          :modified="text"
+          :original="diffOriginal"
+          :modified="diffModified"
           :language="language"
-          original-label="Loaded"
-          modified-label="Edited"
+          :original-label="diffOriginalLabel"
+          :modified-label="diffModifiedLabel"
           collapse-unchanged
         />
       </div>

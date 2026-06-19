@@ -16,7 +16,7 @@ import AppIcon from "@/components/AppIcon.vue";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import ObjectDetailFieldRow from "./ObjectDetailFieldRow.vue";
 import { formatValue, humanize, valueFor } from "./objectDetailFormat";
-import { useRefreshableSource } from "../shared/useRefreshableSource";
+import { useLiveObject } from "../shared/useLiveObject";
 
 const props = defineProps<PanelProps>();
 
@@ -43,9 +43,14 @@ const {
   blockingError,
   load,
   reset,
-} = useRefreshableSource<unknown>(loadDetail, {
-  initialValue: () => null,
-});
+  deleted,
+} = useLiveObject<unknown>(
+  props.connectionId,
+  cfg.value.watch,
+  { resource: props.resource, record: props.record },
+  loadDetail,
+  { initialValue: () => null },
+);
 
 function clearCopiedTimer(): void {
   if (copiedTimer) clearTimeout(copiedTimer);
@@ -137,6 +142,13 @@ onUnmounted(clearCopiedTimer);
         :label="mode === 'fields' ? 'Raw' : 'Fields'"
         @click="mode = mode === 'fields' ? 'raw' : 'fields'"
       />
+    </div>
+
+    <div
+      v-if="deleted"
+      class="border-b border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+    >
+      This resource no longer exists on the server.
     </div>
 
     <div class="min-h-0 flex-1">

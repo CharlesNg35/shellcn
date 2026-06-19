@@ -39,6 +39,9 @@ async function track<T>(connectionId: string, run: Promise<T>): Promise<T> {
 export interface ResolveContext {
   resource?: ResourceIdentity | null;
   record?: Row | null;
+  // response carries an action's JSON result so a follow-up panel's params can
+  // reference ${response.x} (see the open_panel action effect).
+  response?: Record<string, unknown> | null;
 }
 
 function withScope(
@@ -78,6 +81,9 @@ export function lookupRaw(expr: string, ctx: ResolveContext): unknown {
   }
   if (expr.startsWith("record.")) {
     return lookupPath(ctx.record, expr.slice("record.".length));
+  }
+  if (expr.startsWith("response.")) {
+    return lookupPath(ctx.response, expr.slice("response.".length));
   }
   return undefined;
 }

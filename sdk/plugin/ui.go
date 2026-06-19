@@ -77,6 +77,9 @@ const (
 	StreamMetrics  StreamKind = "metrics"
 	StreamTask     StreamKind = "task"
 	StreamCanvas   StreamKind = "canvas"
+	// StreamResource is a server-push watch of resource state: list deltas for a
+	// table/tree or object snapshots for a detail/editor.
+	StreamResource StreamKind = "resource"
 )
 
 // DataSource binds a panel to a route by id; params interpolate from the active
@@ -260,6 +263,8 @@ type ObjectDetailSection struct {
 type ObjectDetailConfig struct {
 	Sections  []ObjectDetailSection `json:"sections,omitempty"`
 	RawToggle bool                  `json:"rawToggle,omitempty"`
+	// Watch is an optional StreamResource source that live-updates the panel.
+	Watch *DataSource `json:"watch,omitempty"`
 }
 
 // MetricUsage renders one live used/capacity row in a metrics panel. It uses
@@ -276,6 +281,8 @@ type TimelineConfig struct {
 	ResourceField     string `json:"resourceField,omitempty"`
 	EmptyText         string `json:"emptyText,omitempty"`
 	RefreshIntervalMs int    `json:"refreshIntervalMs,omitempty"`
+	// Watch is an optional StreamResource source, preferred over RefreshIntervalMs.
+	Watch *DataSource `json:"watch,omitempty"`
 }
 
 type TaskProgressConfig struct {
@@ -512,6 +519,14 @@ type CodeEditorConfig struct {
 	SaveParams     map[string]string `json:"saveParams,omitempty"`
 	SaveBodyKey    string            `json:"saveBodyKey,omitempty"`
 	SaveExtra      map[string]any    `json:"saveExtra,omitempty"`
+	// Watch is an optional StreamResource source pushing the current content; the
+	// editor live-updates when clean and shows a notice when there are unsaved edits.
+	Watch *DataSource `json:"watch,omitempty"`
+	// RefreshField is the save-response key whose content resets the editor baseline.
+	RefreshField string `json:"refreshField,omitempty"`
+	// DryRunKey, with RefreshField, enables a Preview: the save body is sent with
+	// this key set true and the returned content is diffed against the live baseline.
+	DryRunKey string `json:"dryRunKey,omitempty"`
 }
 
 type DiffMode string
@@ -706,13 +721,36 @@ type ActionSuccess struct {
 	Effects  []ActionEffect `json:"effects,omitempty"`
 }
 
+func (a *ActionSuccess) effects() []ActionEffect {
+	if a == nil {
+		return nil
+	}
+	return a.Effects
+}
+
 type ActionEffectType string
 
-const ActionEffectTerminalInput ActionEffectType = "terminal_input"
+const (
+	ActionEffectTerminalInput ActionEffectType = "terminal_input"
+	ActionEffectOpenPanel     ActionEffectType = "open_panel"
+)
 
 type ActionEffect struct {
 	Type          ActionEffectType     `json:"type"`
 	TerminalInput *TerminalInputEffect `json:"terminalInput,omitempty"`
+	OpenPanel     *OpenPanelEffect     `json:"openPanel,omitempty"`
+}
+
+// OpenPanelEffect opens a panel after an action succeeds; source params may
+// interpolate the action's JSON result via ${response.x}, so a route's output can
+// drive a follow-up panel (create a resource, then open a terminal into it).
+type OpenPanelEffect struct {
+	Open   OpenTarget  `json:"open"` // dock or dialog
+	Panel  PanelType   `json:"panel"`
+	Title  string      `json:"title,omitempty"`
+	Icon   Icon        `json:"icon,omitzero"`
+	Source *DataSource `json:"source,omitempty"`
+	Config PanelConfig `json:"config,omitempty"`
 }
 
 type TerminalInputEffect struct {

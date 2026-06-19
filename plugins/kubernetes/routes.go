@@ -24,6 +24,7 @@ func Routes() []plugin.Route {
 		{ID: "kubernetes.resource.overview", Method: plugin.MethodGet, Path: "/resources/{kind}/overview", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.overview", Handle: ResourceOverview},
 		{ID: "kubernetes.resource.columns", Method: plugin.MethodGet, Path: "/resources/{kind}/columns", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.columns", Handle: ColumnsForKind},
 		{ID: "kubernetes.resource.watch", Method: plugin.MethodWS, Path: "/resources/{kind}/watch", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.watch", Stream: WatchResource},
+		{ID: "kubernetes.resource.object.watch", Method: plugin.MethodWS, Path: "/resources/{kind}/object/watch", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.object.watch", Stream: WatchObject},
 
 		{ID: "kubernetes.resource.delete", Method: plugin.MethodDelete, Path: "/resources/{kind}/delete", Permission: permDelete, Risk: plugin.RiskDestructive, AuditEvent: "kubernetes.resource.delete", Handle: DeleteResource},
 		{ID: "kubernetes.resource.scale", Method: plugin.MethodPost, Path: "/resources/{kind}/scale", Permission: permWrite, Risk: plugin.RiskWrite, AuditEvent: "kubernetes.resource.scale", Input: scaleSchema(), Handle: ScaleResource},
@@ -37,13 +38,24 @@ func Routes() []plugin.Route {
 		{ID: "kubernetes.cronjob.trigger", Method: plugin.MethodPost, Path: "/resources/{kind}/trigger", Permission: permWrite, Risk: plugin.RiskWrite, AuditEvent: "kubernetes.cronjob.trigger", Handle: TriggerCronJob},
 
 		{ID: "kubernetes.resource.yaml", Method: plugin.MethodGet, Path: "/resources/{kind}/yaml", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.yaml", Handle: GetYAML},
+		{ID: "kubernetes.resource.yaml.watch", Method: plugin.MethodWS, Path: "/resources/{kind}/yaml/watch", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.yaml.watch", Stream: WatchObjectYAML},
 		{ID: "kubernetes.resource.template", Method: plugin.MethodGet, Path: "/resources/{kind}/template", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.template", Handle: TemplateYAML},
 		{ID: "kubernetes.resource.apply", Method: plugin.MethodPost, Path: "/apply", Permission: permWrite, Risk: plugin.RiskWrite, AuditEvent: "kubernetes.resource.apply", Input: applySchema(), Handle: ApplyYAML},
 		{ID: "kubernetes.resource.events", Method: plugin.MethodGet, Path: "/resources/{kind}/events", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.events", Handle: ResourceEvents},
+		{ID: "kubernetes.resource.events.watch", Method: plugin.MethodWS, Path: "/resources/{kind}/events/watch", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.events.watch", Stream: WatchEvents},
 
 		{ID: "kubernetes.pod.logs", Method: plugin.MethodWS, Path: "/pods/logs", Permission: "kubernetes.pods.logs", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.logs", Stream: LogsStream},
 		{ID: "kubernetes.workload.logs", Method: plugin.MethodWS, Path: "/resources/{kind}/logs", Permission: "kubernetes.pods.logs", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.workload.logs", Stream: WorkloadLogsStream},
 		{ID: "kubernetes.pod.exec", Method: plugin.MethodWS, Path: "/pods/exec", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.exec", Stream: ExecStream},
+		{ID: "kubernetes.pod.debug.create", Method: plugin.MethodPost, Path: "/pods/debug", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.debug.create", Handle: DebugCreate},
+
+		{ID: "kubernetes.pod.files.list", Method: plugin.MethodGet, Path: "/pods/files/list/{path}", Permission: "kubernetes.pods.exec", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.files.list", Handle: PodFilesList},
+		{ID: "kubernetes.pod.files.read", Method: plugin.MethodGet, Path: "/pods/files/read/{path}", Permission: "kubernetes.pods.exec", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.files.read", Handle: PodFileRead},
+		{ID: "kubernetes.pod.files.download", Method: plugin.MethodGet, Path: "/pods/files/download/{path}", Permission: "kubernetes.pods.exec", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.files.download", Handle: PodFileDownload},
+		{ID: "kubernetes.pod.files.write", Method: plugin.MethodPut, Path: "/pods/files/write/{path}", Permission: "kubernetes.pods.exec", Risk: plugin.RiskWrite, AuditEvent: "kubernetes.pod.files.write", Handle: PodFileWrite},
+		{ID: "kubernetes.pod.files.upload", Method: plugin.MethodPost, Path: "/pods/files/upload/{path}", Permission: "kubernetes.pods.exec", Risk: plugin.RiskWrite, AuditEvent: "kubernetes.pod.files.upload", Input: podUploadSchema(), Handle: PodFileUpload},
+		{ID: "kubernetes.pod.files.mkdir", Method: plugin.MethodPost, Path: "/pods/files/mkdir/{path}", Permission: "kubernetes.pods.exec", Risk: plugin.RiskWrite, AuditEvent: "kubernetes.pod.files.mkdir", Handle: PodFileMkdir},
+		{ID: "kubernetes.pod.files.delete", Method: plugin.MethodDelete, Path: "/pods/files/delete/{path}", Permission: "kubernetes.pods.exec", Risk: plugin.RiskDestructive, AuditEvent: "kubernetes.pod.files.delete", Handle: PodFileDelete},
 		{ID: "kubernetes.cluster.shell", Method: plugin.MethodWS, Path: "/cluster/shell", Permission: permClusterShell, Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.cluster.shell", Stream: ClusterShellStream},
 
 		{ID: "kubernetes.cluster.list", Method: plugin.MethodGet, Path: "/overview", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.cluster.list", Handle: ClusterList},

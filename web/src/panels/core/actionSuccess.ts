@@ -1,12 +1,18 @@
 import { nextTick, type ComputedRef } from "vue";
-import { channelKey, type ResolveContext } from "@/api/dataSource";
+import {
+  channelKey,
+  resolveParams,
+  type ResolveContext,
+} from "@/api/dataSource";
 import { useNotify } from "@/composables/useNotify";
+import { useDockStore } from "@/stores/dock";
 import { useStreamChannelsStore } from "@/stores/streamChannels";
 import {
   ActionEffectType,
   PanelType,
   type Action,
   type ActionEffect,
+  type OpenPanelEffect,
   type Tab as TabDef,
   type TerminalInputEffect,
 } from "@/types/projection";
@@ -49,6 +55,40 @@ export function useActionSuccess(runtime: ActionSuccessRuntime) {
       case ActionEffectType.TerminalInput:
         await runTerminalInput(action, effect.terminalInput, result);
         break;
+      case ActionEffectType.OpenPanel:
+        runOpenPanel(effect.openPanel, result);
+        break;
+    }
+  }
+
+  // runOpenPanel opens a dock/dialog panel after the action, resolving the source
+  // params against the action result (${response.x}) plus the active context.
+  function runOpenPanel(
+    effect?: OpenPanelEffect,
+    result?: Record<string, unknown>,
+  ): void {
+    if (!effect?.source) return;
+    const ctx: ResolveContext = {
+      ...(runtime.context?.() ?? {}),
+      response: result ?? null,
+    };
+    const params = resolveParams(effect.source.params, ctx);
+    const id = `${effect.source.routeId}:${Object.values(params).join(":")}`;
+    const item = {
+      id,
+      title: effect.title ?? "",
+      icon: effect.icon,
+      panel: effect.panel,
+      source: { ...effect.source, params },
+      config: effect.config as Record<string, unknown> | undefined,
+      resource: ctx.resource ?? null,
+      record: ctx.record ?? null,
+    };
+    const dock = useDockStore();
+    if (effect.open === "dialog") {
+      dock.openDialog(runtime.connectionId(), item);
+    } else {
+      dock.open(runtime.connectionId(), item);
     }
   }
 

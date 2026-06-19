@@ -61,14 +61,15 @@ func cleanAgentError(err error) error {
 	return err
 }
 
-// writeError normalizes any error to a JSON envelope + status. Genuine 5xx
-// detail is logged and hidden; 503 (unavailable) carries its message through, as
-// it is an expected, client-actionable state rather than a server fault.
+// writeError normalizes any error to a JSON envelope + status. Genuine server
+// faults (500/502/504) are logged and their detail hidden; the deliberate,
+// client-actionable states — 503 (unavailable) and 501 (not supported) — carry
+// their message through, since it tells the user what to do, not a server fault.
 func writeError(w http.ResponseWriter, log *slog.Logger, err error) {
 	err = cleanAgentError(err)
 	status := statusFor(err)
 	msg := err.Error()
-	if status >= 500 && status != http.StatusServiceUnavailable {
+	if status >= 500 && status != http.StatusServiceUnavailable && status != http.StatusNotImplemented {
 		if log != nil {
 			log.Error("request failed", "err", err)
 		}

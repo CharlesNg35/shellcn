@@ -403,10 +403,16 @@
     "code_editor": {
       "type": "object",
       "properties": {
+        "dryRunKey": {
+          "type": "string"
+        },
         "initialContent": {
           "type": "string"
         },
         "language": {
+          "type": "string"
+        },
+        "refreshField": {
           "type": "string"
         },
         "saveBodyKey": {
@@ -434,6 +440,36 @@
         },
         "saveRouteId": {
           "type": "string"
+        },
+        "watch": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": [
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE",
+                "WS"
+              ]
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "*": {
+                  "type": "string"
+                }
+              }
+            },
+            "routeId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "routeId"
+          ]
         }
       }
     },
@@ -1017,6 +1053,36 @@
               }
             }
           }
+        },
+        "watch": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": [
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE",
+                "WS"
+              ]
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "*": {
+                  "type": "string"
+                }
+              }
+            },
+            "routeId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "routeId"
+          ]
         }
       }
     },
@@ -1618,6 +1684,36 @@
         },
         "titleField": {
           "type": "string"
+        },
+        "watch": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": [
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE",
+                "WS"
+              ]
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "*": {
+                  "type": "string"
+                }
+              }
+            },
+            "routeId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "routeId"
+          ]
         }
       }
     },

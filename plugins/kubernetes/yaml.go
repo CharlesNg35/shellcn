@@ -16,7 +16,7 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-// GetYAML returns a resource as editable YAML (managedFields/status stripped).
+// GetYAML returns a resource as editable YAML (server-managed fields stripped).
 func GetYAML(rc *plugin.RequestContext) (any, error) {
 	s, k, name, err := resourceTarget(rc)
 	if err != nil {
@@ -26,14 +26,45 @@ func GetYAML(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, apiErr(err)
 	}
-	unstructured.RemoveNestedField(o.Object, "metadata", "managedFields")
-	unstructured.RemoveNestedField(o.Object, "status")
+	cleanForEdit(o)
 	if k.redact {
 		unstructured.RemoveNestedField(o.Object, "data")
 	}
+	return toYAML(o)
+}
+
+// cleanForEdit strips server-managed and cluster-assigned fields so the manifest
+// round-trips cleanly through server-side apply. A resourceVersion left in the body
+// acts as an optimistic-concurrency precondition, so a stale editor would fail every
+// re-apply after the first; the other fields are noise the apiserver re-derives.
+func cleanForEdit(o *unstructured.Unstructured) {
+	for _, path := range [][]string{
+		{"metadata", "resourceVersion"},
+		{"metadata", "uid"},
+		{"metadata", "creationTimestamp"},
+		{"metadata", "generation"},
+		{"metadata", "selfLink"},
+		{"metadata", "managedFields"},
+		{"status"},
+	} {
+		unstructured.RemoveNestedField(o.Object, path...)
+	}
+	annotations, _, _ := unstructured.NestedMap(o.Object, "metadata", "annotations")
+	if annotations == nil {
+		return
+	}
+	delete(annotations, "kubectl.kubernetes.io/last-applied-configuration")
+	if len(annotations) == 0 {
+		unstructured.RemoveNestedField(o.Object, "metadata", "annotations")
+		return
+	}
+	_ = unstructured.SetNestedMap(o.Object, annotations, "metadata", "annotations")
+}
+
+func toYAML(o *unstructured.Unstructured) (string, error) {
 	out, err := yaml.Marshal(o.Object)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	return string(out), nil
 }
@@ -177,11 +208,21 @@ func (s *Session) applyManifest(rc *plugin.RequestContext, o *unstructured.Unstr
 	if err != nil {
 		return nil, apiErr(err)
 	}
+	cleanForEdit(applied)
+	if gvk.Kind == "Secret" && gvk.Group == "" {
+		unstructured.RemoveNestedField(applied.Object, "data")
+		unstructured.RemoveNestedField(applied.Object, "stringData")
+	}
+	content, err := toYAML(applied)
+	if err != nil {
+		return nil, err
+	}
 	return map[string]any{
 		"ok":        true,
 		"kind":      gvk.Kind,
 		"name":      applied.GetName(),
 		"namespace": applied.GetNamespace(),
 		"dryRun":    dryRun,
+		"content":   content,
 	}, nil
 }

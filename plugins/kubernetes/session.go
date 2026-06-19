@@ -46,6 +46,17 @@ type Session struct {
 	stopped      bool
 	bridge       *loopback.Bridge           // lazy, agent transport only
 	pfTransports map[string]*http.Transport // lazy; pools port-forward tunnels per pod port
+	hub          *watchHub                  // lazy; multiplexes resource watches
+}
+
+// liveHub returns the per-session watch multiplexer, started on first use.
+func (s *Session) liveHub() *watchHub {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.hub == nil && !s.stopped {
+		s.hub = newWatchHub(s)
+	}
+	return s.hub
 }
 
 // Connect builds the REST config for the connection's transport and wires the
@@ -168,6 +179,10 @@ func (s *Session) Close() error {
 	if !s.stopped {
 		s.stopped = true
 		close(s.stopCh)
+	}
+	if s.hub != nil {
+		s.hub.Close()
+		s.hub = nil
 	}
 	if s.bridge != nil {
 		_ = s.bridge.Close()

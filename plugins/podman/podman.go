@@ -55,7 +55,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 			{ID: "podman.overview.metrics", Kind: plugin.StreamMetrics, RouteID: "podman.overview.metrics"},
 			{ID: "podman.container.logs", Kind: plugin.StreamLogs, RouteID: "podman.container.logs"},
 			{ID: "podman.container.exec", Kind: plugin.StreamTerminal, RouteID: "podman.container.exec"},
-			{ID: "podman.events.watch", Kind: plugin.StreamLogs, RouteID: "podman.events.watch"},
+			{ID: "podman.events.watch", Kind: plugin.StreamResource, RouteID: "podman.events.watch"},
 		},
 		Recording: []plugin.RecordingCapability{{
 			Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2},

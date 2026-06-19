@@ -709,7 +709,7 @@ func streamKindKeepAlivePolicy(kind plugin.StreamKind) streamKeepAlivePolicy {
 	if streamKindHasContinuousClientReader(kind) {
 		return streamKeepAlivePolicy{enabled: true}
 	}
-	if kind == plugin.StreamLogs {
+	if kind == plugin.StreamLogs || kind == plugin.StreamResource {
 		return streamKeepAlivePolicy{enabled: true, controlReader: true}
 	}
 	if kind == plugin.StreamQuery {

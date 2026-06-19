@@ -9,7 +9,7 @@ import type { Action, ResourceIdentity, Row } from "@/types/projection";
 import { RiskLevel } from "@/types/projection";
 import AppIcon from "@/components/AppIcon.vue";
 import SchemaForm from "../form/SchemaForm.vue";
-import { isVisible } from "../form/condition";
+import { isVisible, resolveField } from "../form/condition";
 import { useDockStore, type DockItem } from "@/stores/dock";
 import { dialogRoot } from "@/primevue/preset";
 import { cn } from "@/utils/cn";
@@ -71,7 +71,7 @@ function recordMatches(
 ): boolean {
   const r = rec as Record<string, unknown>;
   const rules = [...(cond.allOf ?? []), ...(cond.anyOf ?? [])];
-  if (rules.some((x) => r[x.field] === undefined)) return true;
+  if (rules.some((x) => resolveField(r, x.field) === undefined)) return true;
   return isVisible(cond, r);
 }
 

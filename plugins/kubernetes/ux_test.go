@@ -151,7 +151,7 @@ func TestPodDetailHasMetricsLogsAndShell(t *testing.T) {
 	for _, tab := range res.Detail.Tabs {
 		order = append(order, tab.Key)
 	}
-	want := []string{"overview", "yaml", "metrics", "logs", "terminal", "events"}
+	want := []string{"overview", "yaml", "metrics", "logs", "terminal", "files", "events"}
 	if strings.Join(order, ",") != strings.Join(want, ",") {
 		t.Fatalf("pod detail tabs = %v, want %v", order, want)
 	}

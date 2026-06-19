@@ -1923,6 +1923,50 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
+  it("review prefers the server dry-run preview when configured", async () => {
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ ok: true, content: "apiVersion: v1\nkind: Pod\nstatus: {}\n" }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+        ),
+      ),
+    );
+    const w = mount(CodeEditorPanel, {
+      props: {
+        connectionId: "c1",
+        config: {
+          language: "yaml",
+          initialContent: "apiVersion: v1\nkind: Pod\n",
+          saveRouteId: "kubernetes.resource.apply",
+          saveMethod: "POST",
+          dryRunKey: "dryRun",
+          refreshField: "content",
+        },
+      },
+    });
+    await flushPromises();
+    mockCodeMirror.value = "apiVersion: v1\nkind: Service\n";
+    mockCodeMirror.onChange?.(mockCodeMirror.value);
+    await nextTick();
+    await w
+      .findAll("button")
+      .find((button) => button.text() === "Review changes")!
+      .trigger("click");
+    await flushPromises();
+
+    // The diff's modified side is the server's would-be result, not the raw edit.
+    expect(mockCodeMirror.diffOptions).toMatchObject({
+      original: "apiVersion: v1\nkind: Pod\n",
+      modified: "apiVersion: v1\nkind: Pod\nstatus: {}\n",
+    });
+    w.unmount();
+  });
+
   it("opens a code editor diff only after content changes", async () => {
     const w = mount(CodeEditorPanel, {
       props: {
@@ -1937,7 +1981,7 @@ describe("streaming stub panels", () => {
     });
     await flushPromises();
 
-    expect(w.findAll("button").some((button) => button.text() === "Diff")).toBe(
+    expect(w.findAll("button").some((button) => button.text() === "Review changes")).toBe(
       false,
     );
 
@@ -1947,7 +1991,7 @@ describe("streaming stub panels", () => {
 
     await w
       .findAll("button")
-      .find((button) => button.text() === "Diff")!
+      .find((button) => button.text() === "Review changes")!
       .trigger("click");
     await flushPromises();
 
@@ -1971,10 +2015,7 @@ describe("streaming stub panels", () => {
       "aria-label": "Close diff review",
       title: "Close diff review",
     });
-    expect(dialog.props("maximizeButtonProps")).toMatchObject({
-      "aria-label": "Maximize or restore diff review",
-      title: "Maximize or restore diff review",
-    });
+    expect(dialog.props("maximizable")).toBeFalsy();
     expect(dialogPt.root).toContain("max-w-6xl");
     expect(dialogPt.content).toContain("overflow-hidden");
     expect(dialogPt.content).toContain("p-0");

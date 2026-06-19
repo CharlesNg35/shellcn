@@ -42,6 +42,7 @@ export const StreamKind = {
   Metrics: "metrics",
   Task: "task",
   Canvas: "canvas",
+  Resource: "resource",
 } as const;
 export type StreamKind = (typeof StreamKind)[keyof typeof StreamKind];
 
@@ -172,6 +173,9 @@ export interface CodeEditorConfig {
   saveParams?: Record<string, string>;
   saveBodyKey?: string;
   saveExtra?: Record<string, unknown>;
+  watch?: DataSource;
+  refreshField?: string;
+  dryRunKey?: string;
 }
 
 export const DiffMode = {
@@ -318,6 +322,7 @@ export interface ObjectDetailSection {
 export interface ObjectDetailPanelConfig {
   sections?: ObjectDetailSection[];
   rawToggle?: boolean;
+  watch?: DataSource;
 }
 
 export interface TimelinePanelConfig {
@@ -329,6 +334,7 @@ export interface TimelinePanelConfig {
   resourceField?: string;
   emptyText?: string;
   refreshIntervalMs?: number;
+  watch?: DataSource;
 }
 
 export interface TaskProgressPanelConfig {
@@ -488,6 +494,7 @@ export interface ActionSuccess {
 
 export const ActionEffectType = {
   TerminalInput: "terminal_input",
+  OpenPanel: "open_panel",
 } as const;
 export type ActionEffectType =
   (typeof ActionEffectType)[keyof typeof ActionEffectType];
@@ -495,6 +502,7 @@ export type ActionEffectType =
 export interface ActionEffect {
   type: ActionEffectType;
   terminalInput?: TerminalInputEffect;
+  openPanel?: OpenPanelEffect;
 }
 
 export interface TerminalInputEffect {
@@ -502,6 +510,15 @@ export interface TerminalInputEffect {
   text?: string;
   resultField?: string;
   appendNewline?: boolean;
+}
+
+export interface OpenPanelEffect {
+  open: OpenTarget;
+  panel: PanelType;
+  title?: string;
+  icon?: Icon;
+  source?: DataSource;
+  config?: Record<string, unknown>;
 }
 
 export const NavigateTarget = {
