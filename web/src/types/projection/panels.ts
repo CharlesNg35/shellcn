@@ -175,6 +175,7 @@ export interface CodeEditorConfig {
   saveExtra?: Record<string, unknown>;
   watch?: DataSource;
   refreshField?: string;
+  dryRunKey?: string;
 }
 
 export const DiffMode = {

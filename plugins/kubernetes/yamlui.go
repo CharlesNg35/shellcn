@@ -12,6 +12,7 @@ func yamlEditorConfig(watch *plugin.DataSource) plugin.CodeEditorConfig {
 		SaveRouteID:  "kubernetes.resource.apply",
 		SaveMethod:   plugin.MethodPost,
 		RefreshField: "content",
+		DryRunKey:    "dryRun",
 		Watch:        watch,
 	}
 }

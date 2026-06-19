@@ -119,6 +119,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("saveExtra", object()),
 				prop("watch", dataSource()),
 				prop("refreshField", stringProp()),
+				prop("dryRunKey", stringProp()),
 			),
 		},
 		PanelDiff: {

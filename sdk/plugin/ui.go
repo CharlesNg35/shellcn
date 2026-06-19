@@ -524,6 +524,9 @@ type CodeEditorConfig struct {
 	Watch *DataSource `json:"watch,omitempty"`
 	// RefreshField is the save-response key whose content resets the editor baseline.
 	RefreshField string `json:"refreshField,omitempty"`
+	// DryRunKey, with RefreshField, enables a Preview: the save body is sent with
+	// this key set true and the returned content is diffed against the live baseline.
+	DryRunKey string `json:"dryRunKey,omitempty"`
 }
 
 type DiffMode string

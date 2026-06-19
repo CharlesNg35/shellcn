@@ -403,6 +403,9 @@
     "code_editor": {
       "type": "object",
       "properties": {
+        "dryRunKey": {
+          "type": "string"
+        },
         "initialContent": {
           "type": "string"
         },

@@ -12,16 +12,13 @@ import Timeline from "primevue/timeline";
 import Button from "primevue/button";
 import { fetchPage, watch as watchResource } from "@/api/dataSource";
 import type { PanelProps } from "../core/types";
-import type {
-  ResourceEvent,
-  Row,
-  TimelinePanelConfig,
-} from "@/types/projection";
+import type { Row, TimelinePanelConfig } from "@/types/projection";
 import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "@/components/SkeletonList.vue";
 import AppIcon from "@/components/AppIcon.vue";
 import { badgeClassFor } from "../shared/severity";
 import { useRefreshableSource } from "../shared/useRefreshableSource";
+import { useLiveCollection } from "../shared/useLiveCollection";
 
 const props = defineProps<PanelProps>();
 
@@ -86,16 +83,12 @@ function rowKey(row: Row): string {
   );
 }
 
-// mergeEvent upserts a streamed entry newest-first, keyed by uid, so the timeline
-// updates live instead of polling.
-function mergeEvent(ev: ResourceEvent): void {
-  const row = ev.resource as Row | undefined;
-  const key = ev.ref?.uid ?? (row ? rowKey(row) : undefined);
-  if (!key) return;
-  const next = rows.value.filter((r) => rowKey(r) !== key);
-  if (ev.type !== "deleted" && row) next.unshift(row);
-  rows.value = next.slice(0, MAX_ROWS);
-}
+const { apply: mergeEvent } = useLiveCollection({
+  rows,
+  keyOf: rowKey,
+  prepend: true,
+  max: MAX_ROWS,
+});
 
 let stopWatch: (() => void) | null = null;
 function startWatch(): void {

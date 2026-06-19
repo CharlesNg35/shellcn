@@ -61,12 +61,18 @@ func WatchObject(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	if err != nil {
 		return err
 	}
+	// RBAC is computed once per connection (it doesn't change mid-session) and
+	// merged into every frame so action gating stays consistent across live updates.
+	can := s.accessReview(rc.Ctx, k, rc.Param("namespace"), name)
 	return streamObject(rc, client, s, k, name, func(o obj) any {
 		out := overviewRecord(k, o)
 		if k.redact {
 			out["redacted"] = true
 			delete(out, "data")
 			delete(out, "stringData")
+		}
+		for key, allowed := range can {
+			out[key] = allowed
 		}
 		return out
 	})

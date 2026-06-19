@@ -35,6 +35,9 @@ func TestYAMLEditorWatchesAndRefreshes(t *testing.T) {
 	if ec.RefreshField != "content" {
 		t.Fatalf("yaml editor refreshField = %q, want content", ec.RefreshField)
 	}
+	if ec.DryRunKey != "dryRun" {
+		t.Fatalf("yaml editor dryRunKey = %q, want dryRun", ec.DryRunKey)
+	}
 	// The Create dialog has no live object to watch.
 	if create := yamlEditorConfig(nil); create.Watch != nil {
 		t.Fatal("create editor must not declare a watch")

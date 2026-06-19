@@ -557,44 +557,24 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 			add("%s method cannot be WS", ctx)
 		}
 	}
+	// checkConfig and checkPanel collapse the otherwise-repeated 11-argument
+	// checkPanelConfigRoutes call; checkPanel covers a panel's source, config, and
+	// variants (a variant inherits the panel's source). ctx strings match the
+	// originals so error messages are unchanged.
+	checkConfig := func(ctx string, config PanelConfig) {
+		checkPanelConfigRoutes(ctx, config, checkReadSource, checkWriteSource, checkRouteID, checkWriteRouteID, checkMultipartRouteID, checkStreamSource, checkPanelSource, checkActionIDs, checkBridgeRoute, add)
+	}
+	checkPanel := func(ctx string, p Panel) {
+		checkPanelSource(ctx+" source", p.Type, p.Source)
+		checkConfig(ctx, p.Config)
+		for i, variant := range p.Variants {
+			checkPanelSource(fmt.Sprintf("%s variants[%d] source", ctx, i), variant.Type, p.Source)
+			checkConfig(fmt.Sprintf("%s variants[%d]", ctx, i), variant.Config)
+		}
+	}
 	checkTabs := func(ctx string, tabs []Panel) {
 		for _, t := range tabs {
-			checkPanelSource(fmt.Sprintf("%s tab %q source", ctx, t.Key), t.Type, t.Source)
-			checkPanelConfigRoutes(
-				fmt.Sprintf("%s tab %q", ctx, t.Key),
-				t.Config,
-				checkReadSource,
-				checkWriteSource,
-				checkRouteID,
-				checkWriteRouteID,
-				checkMultipartRouteID,
-				checkStreamSource,
-				checkPanelSource,
-				checkActionIDs,
-				checkBridgeRoute,
-				add,
-			)
-			for i, variant := range t.Variants {
-				checkPanelSource(
-					fmt.Sprintf("%s tab %q variants[%d] source", ctx, t.Key, i),
-					variant.Type,
-					t.Source,
-				)
-				checkPanelConfigRoutes(
-					fmt.Sprintf("%s tab %q variants[%d]", ctx, t.Key, i),
-					variant.Config,
-					checkReadSource,
-					checkWriteSource,
-					checkRouteID,
-					checkWriteRouteID,
-					checkMultipartRouteID,
-					checkStreamSource,
-					checkPanelSource,
-					checkActionIDs,
-					checkBridgeRoute,
-					add,
-				)
-			}
+			checkPanel(fmt.Sprintf("%s tab %q", ctx, t.Key), t)
 		}
 	}
 
@@ -603,20 +583,7 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 		if action.Panel == "" || (action.Open != OpenDock && action.Open != OpenDialog) {
 			continue
 		}
-		checkPanelConfigRoutes(
-			fmt.Sprintf("action %q panel", action.ID),
-			action.Config,
-			checkReadSource,
-			checkWriteSource,
-			checkRouteID,
-			checkWriteRouteID,
-			checkMultipartRouteID,
-			checkStreamSource,
-			checkPanelSource,
-			checkActionIDs,
-			checkBridgeRoute,
-			add,
-		)
+		checkConfig(fmt.Sprintf("action %q panel", action.ID), action.Config)
 	}
 	resourceKinds := map[string]bool{}
 	for _, rt := range m.Resources {
@@ -698,6 +665,22 @@ func checkPanelConfigRoutes(
 	checkBridgeRoute func(string, WasmBridgeRoute),
 	add func(string, ...any),
 ) {
+	// recursePanel checks a nested panel (dashboard cell, split child) and its
+	// variants, threading the same checkers through the recursion.
+	recurseConfig := func(ctx string, cfg PanelConfig) {
+		checkPanelConfigRoutes(ctx, cfg, checkReadSource, checkWriteSource, checkRouteID, checkWriteRouteID, checkMultipartRouteID, checkStreamSource, checkPanelSource, checkActionIDs, checkBridgeRoute, add)
+	}
+	recursePanel := func(ctx string, p Panel) {
+		if p.Type == "" {
+			add("%s is missing a panel type", ctx)
+		}
+		checkPanelSource(ctx+" source", p.Type, p.Source)
+		recurseConfig(ctx, p.Config)
+		for i, variant := range p.Variants {
+			checkPanelSource(fmt.Sprintf("%s variants[%d] source", ctx, i), variant.Type, p.Source)
+			recurseConfig(fmt.Sprintf("%s variants[%d]", ctx, i), variant.Config)
+		}
+	}
 	switch c := config.(type) {
 	case TableConfig:
 		validateTableConfig(ctx, c, add)
@@ -825,89 +808,11 @@ func checkPanelConfigRoutes(
 		}
 	case DashboardConfig:
 		for _, cell := range c.Cells {
-			cellCtx := fmt.Sprintf("%s cell %q", ctx, cell.Key)
-			if cell.Type == "" {
-				add("%s is missing a panel type", cellCtx)
-			}
-			checkPanelSource(cellCtx+" source", cell.Type, cell.Source)
-			checkPanelConfigRoutes(
-				cellCtx,
-				cell.Config,
-				checkReadSource,
-				checkWriteSource,
-				checkRouteID,
-				checkWriteRouteID,
-				checkMultipartRouteID,
-				checkStreamSource,
-				checkPanelSource,
-				checkActionIDs,
-				checkBridgeRoute,
-				add,
-			)
-			for i, variant := range cell.Variants {
-				checkPanelSource(
-					fmt.Sprintf("%s variants[%d] source", cellCtx, i),
-					variant.Type,
-					cell.Source,
-				)
-				checkPanelConfigRoutes(
-					fmt.Sprintf("%s variants[%d]", cellCtx, i),
-					variant.Config,
-					checkReadSource,
-					checkWriteSource,
-					checkRouteID,
-					checkWriteRouteID,
-					checkMultipartRouteID,
-					checkStreamSource,
-					checkPanelSource,
-					checkActionIDs,
-					checkBridgeRoute,
-					add,
-				)
-			}
+			recursePanel(fmt.Sprintf("%s cell %q", ctx, cell.Key), cell)
 		}
 	case SplitConfig:
 		for _, child := range c.Panels {
-			childCtx := fmt.Sprintf("%s split panel %q", ctx, child.Key)
-			if child.Type == "" {
-				add("%s is missing a panel type", childCtx)
-			}
-			checkPanelSource(childCtx+" source", child.Type, child.Source)
-			checkPanelConfigRoutes(
-				childCtx,
-				child.Config,
-				checkReadSource,
-				checkWriteSource,
-				checkRouteID,
-				checkWriteRouteID,
-				checkMultipartRouteID,
-				checkStreamSource,
-				checkPanelSource,
-				checkActionIDs,
-				checkBridgeRoute,
-				add,
-			)
-			for i, variant := range child.Variants {
-				checkPanelSource(
-					fmt.Sprintf("%s variants[%d] source", childCtx, i),
-					variant.Type,
-					child.Source,
-				)
-				checkPanelConfigRoutes(
-					fmt.Sprintf("%s variants[%d]", childCtx, i),
-					variant.Config,
-					checkReadSource,
-					checkWriteSource,
-					checkRouteID,
-					checkWriteRouteID,
-					checkMultipartRouteID,
-					checkStreamSource,
-					checkPanelSource,
-					checkActionIDs,
-					checkBridgeRoute,
-					add,
-				)
-			}
+			recursePanel(fmt.Sprintf("%s split panel %q", ctx, child.Key), child.Panel)
 		}
 	}
 }

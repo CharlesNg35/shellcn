@@ -29,6 +29,11 @@ const showDiff = ref(false);
 const externalChanged = ref(false);
 const deletedOnServer = ref(false);
 const serverContent = ref<string | null>(null);
+const previewing = ref(false);
+const diffOriginal = ref("");
+const diffModified = ref("");
+const diffOriginalLabel = ref("Loaded");
+const diffModifiedLabel = ref("Edited");
 let stopWatch: (() => void) | null = null;
 let editor: CodeMirrorEditor | null = null;
 let codeMirror: typeof import("@/codemirror") | null = null;
@@ -41,6 +46,13 @@ const { isDark } = useTheme();
 const language = computed(() => editorConfig.value?.language ?? "plaintext");
 const saveRouteId = computed(() => editorConfig.value?.saveRouteId);
 const editable = computed(() => Boolean(saveRouteId.value));
+const canPreview = computed(() =>
+  Boolean(
+    editable.value &&
+    editorConfig.value?.dryRunKey &&
+    editorConfig.value?.refreshField,
+  ),
+);
 const changed = computed(() => text.value !== originalText.value);
 const { confirmBeforeDiscard } = useDirtyGuard({
   isDirty: () => editable.value && changed.value,
@@ -183,9 +195,60 @@ function syncTextFromEditor(): void {
   if (editor) text.value = codeMirror?.editorValue(editor) ?? text.value;
 }
 
+function saveBody(extra?: Record<string, unknown>): Record<string, unknown> {
+  const bodyKey = editorConfig.value?.saveBodyKey;
+  const base = bodyKey
+    ? {
+        ...(editorConfig.value?.saveExtra ?? {}),
+        [bodyKey]: JSON.parse(text.value),
+      }
+    : { content: text.value };
+  return { ...base, ...(extra ?? {}) };
+}
+
 function openDiff(): void {
   syncTextFromEditor();
+  diffOriginal.value = originalText.value;
+  diffModified.value = text.value;
+  diffOriginalLabel.value = "Loaded";
+  diffModifiedLabel.value = "Edited";
   showDiff.value = true;
+}
+
+// preview applies the edit as a dry run and diffs the server's would-be result
+// against the live baseline, surfacing defaulting/normalization before saving.
+async function preview(): Promise<void> {
+  const routeId = saveRouteId.value;
+  const dryRunKey = editorConfig.value?.dryRunKey;
+  const refreshField = editorConfig.value?.refreshField;
+  if (!routeId || !dryRunKey || !refreshField) return;
+  syncTextFromEditor();
+  previewing.value = true;
+  saveError.value = null;
+  try {
+    const result = await runAction(
+      props.connectionId,
+      routeId,
+      { resource: props.resource, record: props.record },
+      saveBody({ [dryRunKey]: true }),
+      editorConfig.value?.saveParams ?? props.source?.params ?? {},
+      editorConfig.value?.saveMethod ?? "PUT",
+    );
+    const content = result[refreshField];
+    if (typeof content !== "string") {
+      saveError.value = "Preview unavailable";
+      return;
+    }
+    diffOriginal.value = originalText.value;
+    diffModified.value = content;
+    diffOriginalLabel.value = "Live";
+    diffModifiedLabel.value = "Preview";
+    showDiff.value = true;
+  } catch (e) {
+    saveError.value = (e as Error).message;
+  } finally {
+    previewing.value = false;
+  }
 }
 
 async function save(): Promise<void> {
@@ -195,18 +258,11 @@ async function save(): Promise<void> {
   saving.value = true;
   saveError.value = null;
   try {
-    const bodyKey = editorConfig.value?.saveBodyKey;
-    const body = bodyKey
-      ? {
-          ...(editorConfig.value?.saveExtra ?? {}),
-          [bodyKey]: JSON.parse(text.value),
-        }
-      : { content: text.value };
     const result = await runAction(
       props.connectionId,
       routeId,
       { resource: props.resource, record: props.record },
-      body,
+      saveBody(),
       editorConfig.value?.saveParams ?? props.source?.params ?? {},
       editorConfig.value?.saveMethod ?? "PUT",
     );
@@ -280,6 +336,19 @@ onUnmounted(() => {
           saveError
         }}</span>
         <span v-else-if="saved" class="text-xs text-emerald-500">Saved</span>
+        <Button
+          v-if="canPreview && changed"
+          type="button"
+          severity="secondary"
+          variant="outlined"
+          size="small"
+          :loading="previewing"
+          aria-label="Preview server changes"
+          @click="preview"
+        >
+          <AppIcon :icon="{ type: 'lucide', value: 'eye' }" :size="14" />
+          Preview
+        </Button>
         <Button
           v-if="changed"
           type="button"
@@ -370,11 +439,11 @@ onUnmounted(() => {
     >
       <div class="h-[min(76vh,56rem)] min-h-0">
         <CodeDiffView
-          :original="originalText"
-          :modified="text"
+          :original="diffOriginal"
+          :modified="diffModified"
           :language="language"
-          original-label="Loaded"
-          modified-label="Edited"
+          :original-label="diffOriginalLabel"
+          :modified-label="diffModifiedLabel"
           collapse-unchanged
         />
       </div>
