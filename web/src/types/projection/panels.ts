@@ -494,6 +494,7 @@ export interface ActionSuccess {
 
 export const ActionEffectType = {
   TerminalInput: "terminal_input",
+  OpenPanel: "open_panel",
 } as const;
 export type ActionEffectType =
   (typeof ActionEffectType)[keyof typeof ActionEffectType];
@@ -501,6 +502,7 @@ export type ActionEffectType =
 export interface ActionEffect {
   type: ActionEffectType;
   terminalInput?: TerminalInputEffect;
+  openPanel?: OpenPanelEffect;
 }
 
 export interface TerminalInputEffect {
@@ -508,6 +510,15 @@ export interface TerminalInputEffect {
   text?: string;
   resultField?: string;
   appendNewline?: boolean;
+}
+
+export interface OpenPanelEffect {
+  open: OpenTarget;
+  panel: PanelType;
+  title?: string;
+  icon?: Icon;
+  source?: DataSource;
+  config?: Record<string, unknown>;
 }
 
 export const NavigateTarget = {

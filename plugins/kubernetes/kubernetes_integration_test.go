@@ -299,6 +299,53 @@ func TestIntegrationKubernetesOps(t *testing.T) {
 		// Restore schedulability so cleanup deletes settle cleanly.
 		_, _ = UncordonNode(rcBody(s, map[string]string{"kind": "node", "name": nodeName}, ""))
 	})
+
+	t.Run("debug adds and starts an ephemeral container", func(t *testing.T) {
+		dep := newDeployment("debugtarget", "nginx:1.25")
+		if _, err := s.clientset.AppsV1().Deployments("default").Create(ctx, dep, metav1.CreateOptions{}); err != nil {
+			t.Fatalf("create deployment: %v", err)
+		}
+		t.Cleanup(func() {
+			_ = s.clientset.AppsV1().Deployments("default").Delete(ctx, "debugtarget", metav1.DeleteOptions{})
+		})
+		waitRunningPodUID(t, s, "app=debugtarget")
+
+		pods, err := s.clientset.CoreV1().Pods("default").List(ctx, metav1.ListOptions{LabelSelector: "app=debugtarget"})
+		if err != nil {
+			t.Fatalf("list pods: %v", err)
+		}
+		var podName string
+		for i := range pods.Items {
+			if pods.Items[i].Status.Phase == corev1.PodRunning {
+				podName = pods.Items[i].Name
+				break
+			}
+		}
+		if podName == "" {
+			t.Fatal("no running debug target pod")
+		}
+
+		name, err := s.addEphemeralContainer(ctx, "default", podName, defaultDebugImage, "")
+		if err != nil {
+			t.Fatalf("add ephemeral container: %v", err)
+		}
+		if err := s.waitEphemeralRunning(ctx, "default", podName, name); err != nil {
+			t.Fatalf("ephemeral container did not start: %v", err)
+		}
+		p, err := s.clientset.CoreV1().Pods("default").Get(ctx, podName, metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("get pod: %v", err)
+		}
+		found := false
+		for _, ec := range p.Spec.EphemeralContainers {
+			if ec.Name == name {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("ephemeral container %q missing from pod spec", name)
+		}
+	})
 }
 
 func newDeployment(name, image string) *appsv1.Deployment {

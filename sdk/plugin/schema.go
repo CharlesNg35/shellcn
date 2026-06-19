@@ -59,6 +59,11 @@ const (
 	OpNin      Operator = "nin"
 	OpEmpty    Operator = "empty"
 	OpNotEmpty Operator = "notEmpty"
+	OpGt       Operator = "gt"
+	OpLt       Operator = "lt"
+	OpGte      Operator = "gte"
+	OpLte      Operator = "lte"
+	OpContains Operator = "contains"
 )
 
 // ValidatorType is the kind of server-side check applied to a field value.
@@ -90,10 +95,15 @@ type Rule struct {
 	Value any      `json:"value,omitempty"`
 }
 
-// Condition is a structured visibility predicate.
+// Condition is a structured visibility predicate. AllOf/AnyOf hold leaf rules;
+// All/Any/Not nest sub-conditions so arbitrary boolean logic composes, e.g.
+// "(A and B) or (C and not D)".
 type Condition struct {
-	AllOf []Rule `json:"allOf,omitempty"`
-	AnyOf []Rule `json:"anyOf,omitempty"`
+	AllOf []Rule      `json:"allOf,omitempty"`
+	AnyOf []Rule      `json:"anyOf,omitempty"`
+	All   []Condition `json:"all,omitempty"`
+	Any   []Condition `json:"any,omitempty"`
+	Not   *Condition  `json:"not,omitempty"`
 }
 
 type Validator struct {

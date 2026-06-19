@@ -32,22 +32,26 @@ func TestResourceOverviewIncludesRBAC(t *testing.T) {
 		t.Fatalf("overview: %v", err)
 	}
 	row := out.(Row)
-	if row["canDelete"] != false {
-		t.Fatalf("canDelete = %v, want false", row["canDelete"])
+	can, ok := row["can"].(map[string]any)
+	if !ok {
+		t.Fatalf("can map missing: %#v", row["can"])
 	}
-	if row["canPatch"] != true || row["canUpdate"] != true {
-		t.Fatalf("canPatch=%v canUpdate=%v, want true", row["canPatch"], row["canUpdate"])
+	if can["delete"] != false {
+		t.Fatalf("can.delete = %v, want false", can["delete"])
+	}
+	if can["patch"] != true || can["update"] != true {
+		t.Fatalf("can.patch=%v can.update=%v, want true", can["patch"], can["update"])
 	}
 }
 
 func TestDestructiveActionsGatedByRBAC(t *testing.T) {
 	want := map[string]string{
-		"kubernetes.resource.delete":       "canDelete",
-		"kubernetes.customresource.delete": "canDelete",
-		"kubernetes.resource.scale":        "canPatch",
-		"kubernetes.resource.restart":      "canPatch",
-		"kubernetes.node.drain":            "canPatch",
-		"kubernetes.rollout.undo":          "canPatch",
+		"kubernetes.resource.delete":       "can.delete",
+		"kubernetes.customresource.delete": "can.delete",
+		"kubernetes.resource.scale":        "can.patch",
+		"kubernetes.resource.restart":      "can.patch",
+		"kubernetes.node.drain":            "can.patch",
+		"kubernetes.rollout.undo":          "can.patch",
 	}
 	for _, a := range actions() {
 		field, ok := want[a.ID]

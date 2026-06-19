@@ -255,6 +255,18 @@ func validateActions(m Manifest, routes map[string]Route, tabs map[string]bool, 
 					if input.Text == "" && input.ResultField == "" {
 						add("action %q onSuccess.effects[%d].terminalInput requires text or resultField", a.ID, i)
 					}
+				case ActionEffectOpenPanel:
+					op := effect.OpenPanel
+					if op == nil {
+						add("action %q onSuccess.effects[%d].openPanel is required", a.ID, i)
+						continue
+					}
+					if op.Open != OpenDock && op.Open != OpenDialog {
+						add("action %q onSuccess.effects[%d].openPanel.open must be dock or dialog", a.ID, i)
+					}
+					if op.Panel == "" {
+						add("action %q onSuccess.effects[%d].openPanel declares no panel type", a.ID, i)
+					}
 				default:
 					add("action %q onSuccess.effects[%d].type %q is not known", a.ID, i, effect.Type)
 				}
@@ -557,10 +569,9 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 			add("%s method cannot be WS", ctx)
 		}
 	}
-	// checkConfig and checkPanel collapse the otherwise-repeated 11-argument
-	// checkPanelConfigRoutes call; checkPanel covers a panel's source, config, and
-	// variants (a variant inherits the panel's source). ctx strings match the
-	// originals so error messages are unchanged.
+	// checkConfig/checkPanel collapse the otherwise-repeated 11-argument call (a
+	// variant inherits the panel's source). ctx strings match the originals so
+	// error messages are unchanged.
 	checkConfig := func(ctx string, config PanelConfig) {
 		checkPanelConfigRoutes(ctx, config, checkReadSource, checkWriteSource, checkRouteID, checkWriteRouteID, checkMultipartRouteID, checkStreamSource, checkPanelSource, checkActionIDs, checkBridgeRoute, add)
 	}
@@ -580,6 +591,14 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 
 	checkTabs("connection", m.Tabs)
 	for _, action := range m.Actions {
+		for i, effect := range action.OnSuccess.effects() {
+			if effect.Type != ActionEffectOpenPanel || effect.OpenPanel == nil {
+				continue
+			}
+			ctx := fmt.Sprintf("action %q onSuccess.effects[%d].openPanel", action.ID, i)
+			checkPanelSource(ctx+" source", effect.OpenPanel.Panel, effect.OpenPanel.Source)
+			checkConfig(ctx, effect.OpenPanel.Config)
+		}
 		if action.Panel == "" || (action.Open != OpenDock && action.Open != OpenDialog) {
 			continue
 		}

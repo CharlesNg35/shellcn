@@ -123,10 +123,10 @@ func overviewTab(k kind, params map[string]string) plugin.Panel {
 func actions() []plugin.Action {
 	uid := map[string]string{"kind": "${resource.kind}", "namespace": "${resource.namespace}", "name": "${resource.name}"}
 	customUID := map[string]string{"kind": "${resource.scope}", "namespace": "${resource.namespace}", "name": "${resource.name}"}
-	// RBAC gates from the detail record (see accessReview); absent in list rows, so
-	// these fail open there and only disable an action in the detail view.
-	canDelete := plugin.Rule{Field: "canDelete", Op: plugin.OpEq, Value: true}
-	canPatch := plugin.Rule{Field: "canPatch", Op: plugin.OpEq, Value: true}
+	// RBAC gates from the detail record's nested can map (see accessReview); absent
+	// in list rows, so these fail open there and only disable an action in detail.
+	canDelete := plugin.Rule{Field: "can.delete", Op: plugin.OpEq, Value: true}
+	canPatch := plugin.Rule{Field: "can.patch", Op: plugin.OpEq, Value: true}
 	base := []plugin.Action{
 		{ID: "kubernetes.resource.delete", Label: "Delete", Icon: lucide("trash"), RouteID: "kubernetes.resource.delete", Params: uid, Confirm: true, ConfirmText: "Delete this Kubernetes resource? Kubernetes may also delete dependent objects through owner references and finalizers.", EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{canDelete}}, OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 		{ID: "kubernetes.customresource.delete", Label: "Delete", Icon: lucide("trash"), RouteID: "kubernetes.resource.delete", Params: customUID, Confirm: true, ConfirmText: "Delete this custom resource? Kubernetes may also delete dependent objects through owner references and finalizers.", EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{canDelete}}, OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
@@ -139,6 +139,7 @@ func actions() []plugin.Action {
 		{ID: "kubernetes.cronjob.trigger", Label: "Trigger now", Icon: lucide("play"), RouteID: "kubernetes.cronjob.trigger", Params: uid, Confirm: true, ConfirmText: "Create a one-off Job from this CronJob now? This does not change the schedule."},
 		{ID: "kubernetes.service.open", Label: "Open", Icon: lucide("external-link"), RouteID: "kubernetes.service.open", Open: plugin.OpenURL, Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}, {Field: "type", Op: plugin.OpNeq, Value: "ExternalName"}}}},
 		{ID: "kubernetes.pod.open", Label: "Open", Icon: lucide("external-link"), RouteID: "kubernetes.pod.open", Open: plugin.OpenURL, Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}, {Field: "status", Op: plugin.OpEq, Value: "Running"}}}},
+		debugAction(),
 	}
 	base = append(base, clusterShellAction(), applyYAMLAction())
 	for _, k := range kinds {

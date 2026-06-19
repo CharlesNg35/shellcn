@@ -47,6 +47,7 @@ func Routes() []plugin.Route {
 		{ID: "kubernetes.pod.logs", Method: plugin.MethodWS, Path: "/pods/logs", Permission: "kubernetes.pods.logs", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.logs", Stream: LogsStream},
 		{ID: "kubernetes.workload.logs", Method: plugin.MethodWS, Path: "/resources/{kind}/logs", Permission: "kubernetes.pods.logs", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.workload.logs", Stream: WorkloadLogsStream},
 		{ID: "kubernetes.pod.exec", Method: plugin.MethodWS, Path: "/pods/exec", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.exec", Stream: ExecStream},
+		{ID: "kubernetes.pod.debug.create", Method: plugin.MethodPost, Path: "/pods/debug", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.debug.create", Handle: DebugCreate},
 		{ID: "kubernetes.cluster.shell", Method: plugin.MethodWS, Path: "/cluster/shell", Permission: permClusterShell, Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.cluster.shell", Stream: ClusterShellStream},
 
 		{ID: "kubernetes.cluster.list", Method: plugin.MethodGet, Path: "/overview", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.cluster.list", Handle: ClusterList},

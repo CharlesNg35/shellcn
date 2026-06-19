@@ -721,13 +721,36 @@ type ActionSuccess struct {
 	Effects  []ActionEffect `json:"effects,omitempty"`
 }
 
+func (a *ActionSuccess) effects() []ActionEffect {
+	if a == nil {
+		return nil
+	}
+	return a.Effects
+}
+
 type ActionEffectType string
 
-const ActionEffectTerminalInput ActionEffectType = "terminal_input"
+const (
+	ActionEffectTerminalInput ActionEffectType = "terminal_input"
+	ActionEffectOpenPanel     ActionEffectType = "open_panel"
+)
 
 type ActionEffect struct {
 	Type          ActionEffectType     `json:"type"`
 	TerminalInput *TerminalInputEffect `json:"terminalInput,omitempty"`
+	OpenPanel     *OpenPanelEffect     `json:"openPanel,omitempty"`
+}
+
+// OpenPanelEffect opens a panel after an action succeeds; source params may
+// interpolate the action's JSON result via ${response.x}, so a route's output can
+// drive a follow-up panel (create a resource, then open a terminal into it).
+type OpenPanelEffect struct {
+	Open   OpenTarget  `json:"open"` // dock or dialog
+	Panel  PanelType   `json:"panel"`
+	Title  string      `json:"title,omitempty"`
+	Icon   Icon        `json:"icon,omitzero"`
+	Source *DataSource `json:"source,omitempty"`
+	Config PanelConfig `json:"config,omitempty"`
 }
 
 type TerminalInputEffect struct {

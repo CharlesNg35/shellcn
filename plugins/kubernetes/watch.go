@@ -71,9 +71,7 @@ func WatchObject(rc *plugin.RequestContext, client plugin.ClientStream) error {
 			delete(out, "data")
 			delete(out, "stringData")
 		}
-		for key, allowed := range can {
-			out[key] = allowed
-		}
+		out["can"] = can
 		return out
 	})
 }

@@ -536,19 +536,60 @@ func visible(cond *Condition, values map[string]any) bool {
 		return true
 	}
 	for _, rule := range cond.AllOf {
-		if !matchRule(rule, values[rule.Field]) {
+		if !matchRule(rule, resolveField(values, rule.Field)) {
 			return false
 		}
 	}
 	if len(cond.AnyOf) > 0 {
+		matched := false
 		for _, rule := range cond.AnyOf {
-			if matchRule(rule, values[rule.Field]) {
-				return true
+			if matchRule(rule, resolveField(values, rule.Field)) {
+				matched = true
+				break
 			}
 		}
+		if !matched {
+			return false
+		}
+	}
+	for i := range cond.All {
+		if !visible(&cond.All[i], values) {
+			return false
+		}
+	}
+	if len(cond.Any) > 0 {
+		matched := false
+		for i := range cond.Any {
+			if visible(&cond.Any[i], values) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	if cond.Not != nil && visible(cond.Not, values) {
 		return false
 	}
 	return true
+}
+
+// resolveField reads a condition field, supporting dotted paths (e.g. "can.delete").
+// An exact key wins first, so existing flat keys keep working unchanged.
+func resolveField(values map[string]any, path string) any {
+	if v, ok := values[path]; ok {
+		return v
+	}
+	var cur any = values
+	for _, seg := range strings.Split(path, ".") {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return nil
+		}
+		cur = m[seg]
+	}
+	return cur
 }
 
 func matchRule(rule Rule, value any) bool {
@@ -575,9 +616,56 @@ func matchRule(rule Rule, value any) bool {
 		return emptyValue(value, value == nil)
 	case OpNotEmpty:
 		return !emptyValue(value, value == nil)
+	case OpGt, OpLt, OpGte, OpLte:
+		return compareNumbers(rule.Op, value, rule.Value)
+	case OpContains:
+		return containsValue(value, rule.Value)
 	default:
 		return false
 	}
+}
+
+func compareNumbers(op Operator, a, b any) bool {
+	x, ok1 := toNumber(a)
+	y, ok2 := toNumber(b)
+	if !ok1 || !ok2 {
+		return false
+	}
+	switch op {
+	case OpGt:
+		return x > y
+	case OpLt:
+		return x < y
+	case OpGte:
+		return x >= y
+	case OpLte:
+		return x <= y
+	default:
+		return false
+	}
+}
+
+func toNumber(v any) (float64, bool) {
+	if n, ok := numberValue(v); ok {
+		return n, true
+	}
+	if s, ok := v.(string); ok {
+		n, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+		return n, err == nil
+	}
+	return 0, false
+}
+
+func containsValue(value, want any) bool {
+	if list, ok := value.([]any); ok {
+		for _, item := range list {
+			if fmt.Sprint(item) == fmt.Sprint(want) {
+				return true
+			}
+		}
+		return false
+	}
+	return strings.Contains(fmt.Sprint(value), fmt.Sprint(want))
 }
 
 func asList(value any) []any {

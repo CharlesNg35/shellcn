@@ -8,33 +8,27 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// permissionKeys maps the RBAC verbs probed for an object to the flat record keys
-// the manifest's EnabledWhen rules read. An absent key fails open (action shown),
-// so RBAC errors never hide an action the user might be able to perform.
-var permissionKeys = map[string]string{
-	"update": "canUpdate",
-	"patch":  "canPatch",
-	"delete": "canDelete",
-}
+// permissionVerbs surface under a nested "can" map that EnabledWhen rules read by
+// dotted path (can.patch …); an absent value fails open.
+var permissionVerbs = []string{"update", "patch", "delete"}
 
-// accessReview probes the user's RBAC for one object concurrently and returns the
-// flat canUpdate/canPatch/canDelete booleans for the detail view to gate actions.
+// accessReview probes the user's RBAC for one object concurrently.
 func (s *Session) accessReview(ctx context.Context, k kind, namespace, name string) map[string]any {
-	out := make(map[string]any, len(permissionKeys))
+	can := make(map[string]any, len(permissionVerbs))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	for verb, key := range permissionKeys {
+	for _, verb := range permissionVerbs {
 		wg.Add(1)
-		go func(verb, key string) {
+		go func(verb string) {
 			defer wg.Done()
 			allowed := s.canI(ctx, k, namespace, name, verb)
 			mu.Lock()
-			out[key] = allowed
+			can[verb] = allowed
 			mu.Unlock()
-		}(verb, key)
+		}(verb)
 	}
 	wg.Wait()
-	return out
+	return can
 }
 
 func (s *Session) canI(ctx context.Context, k kind, namespace, name, verb string) bool {
