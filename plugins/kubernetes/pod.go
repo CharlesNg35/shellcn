@@ -43,6 +43,7 @@ func podDetailTabs() []plugin.Panel {
 			Config:      plugin.TerminalConfig{Zoom: true, Search: true},
 			VisibleWhen: runningPod(),
 		},
+		podFilesTab(),
 	}
 }
 
