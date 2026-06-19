@@ -69,10 +69,6 @@ const diffDialogCloseButtonProps = {
   "aria-label": "Close diff review",
   title: "Close diff review",
 };
-const diffDialogMaximizeButtonProps = {
-  "aria-label": "Maximize or restore diff review",
-  title: "Maximize or restore diff review",
-};
 
 async function load(): Promise<void> {
   const request = ++loadRequest;
@@ -206,25 +202,35 @@ function saveBody(extra?: Record<string, unknown>): Record<string, unknown> {
   return { ...base, ...(extra ?? {}) };
 }
 
-function openDiff(): void {
+// review prefers a dry-run server preview (would-be result after defaulting),
+// falling back to the local edited-vs-loaded diff when it's unavailable or fails.
+async function review(): Promise<void> {
   syncTextFromEditor();
+  saveError.value = null;
   diffOriginal.value = originalText.value;
   diffModified.value = text.value;
   diffOriginalLabel.value = "Loaded";
   diffModifiedLabel.value = "Edited";
+
+  if (canPreview.value) {
+    const preview = await dryRun();
+    if (preview !== null) {
+      diffModified.value = preview;
+      diffOriginalLabel.value = "Live";
+      diffModifiedLabel.value = "Preview";
+    }
+  }
   showDiff.value = true;
 }
 
-// preview applies the edit as a dry run and diffs the server's would-be result
-// against the live baseline, surfacing defaulting/normalization before saving.
-async function preview(): Promise<void> {
+// dryRun returns the server's would-be content, or null on unavailable/failure
+// (surfacing the error, e.g. a validation rejection).
+async function dryRun(): Promise<string | null> {
   const routeId = saveRouteId.value;
   const dryRunKey = editorConfig.value?.dryRunKey;
   const refreshField = editorConfig.value?.refreshField;
-  if (!routeId || !dryRunKey || !refreshField) return;
-  syncTextFromEditor();
+  if (!routeId || !dryRunKey || !refreshField) return null;
   previewing.value = true;
-  saveError.value = null;
   try {
     const result = await runAction(
       props.connectionId,
@@ -235,17 +241,10 @@ async function preview(): Promise<void> {
       editorConfig.value?.saveMethod ?? "PUT",
     );
     const content = result[refreshField];
-    if (typeof content !== "string") {
-      saveError.value = "Preview unavailable";
-      return;
-    }
-    diffOriginal.value = originalText.value;
-    diffModified.value = content;
-    diffOriginalLabel.value = "Live";
-    diffModifiedLabel.value = "Preview";
-    showDiff.value = true;
+    return typeof content === "string" ? content : null;
   } catch (e) {
     saveError.value = (e as Error).message;
+    return null;
   } finally {
     previewing.value = false;
   }
@@ -337,32 +336,20 @@ onUnmounted(() => {
         }}</span>
         <span v-else-if="saved" class="text-xs text-emerald-500">Saved</span>
         <Button
-          v-if="canPreview && changed"
-          type="button"
-          severity="secondary"
-          variant="outlined"
-          size="small"
-          :loading="previewing"
-          aria-label="Preview server changes"
-          @click="preview"
-        >
-          <AppIcon :icon="{ type: 'lucide', value: 'eye' }" :size="14" />
-          Preview
-        </Button>
-        <Button
           v-if="changed"
           type="button"
           severity="secondary"
           variant="outlined"
           size="small"
-          aria-label="Show changes"
-          @click="openDiff"
+          :loading="previewing"
+          aria-label="Review changes"
+          @click="review"
         >
           <AppIcon
             :icon="{ type: 'lucide', value: 'git-compare' }"
             :size="14"
           />
-          Diff
+          Review changes
         </Button>
         <Button
           type="button"
@@ -429,13 +416,11 @@ onUnmounted(() => {
     <Dialog
       v-model:visible="showDiff"
       modal
-      maximizable
       header="Review changes"
       :style="diffDialogStyle"
       :breakpoints="diffDialogBreakpoints"
       :pt="diffDialogPt"
       :close-button-props="diffDialogCloseButtonProps"
-      :maximize-button-props="diffDialogMaximizeButtonProps"
     >
       <div class="h-[min(76vh,56rem)] min-h-0">
         <CodeDiffView

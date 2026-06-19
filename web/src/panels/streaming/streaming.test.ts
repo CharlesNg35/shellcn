@@ -1937,7 +1937,7 @@ describe("streaming stub panels", () => {
     });
     await flushPromises();
 
-    expect(w.findAll("button").some((button) => button.text() === "Diff")).toBe(
+    expect(w.findAll("button").some((button) => button.text() === "Review changes")).toBe(
       false,
     );
 
@@ -1947,7 +1947,7 @@ describe("streaming stub panels", () => {
 
     await w
       .findAll("button")
-      .find((button) => button.text() === "Diff")!
+      .find((button) => button.text() === "Review changes")!
       .trigger("click");
     await flushPromises();
 
@@ -1971,10 +1971,7 @@ describe("streaming stub panels", () => {
       "aria-label": "Close diff review",
       title: "Close diff review",
     });
-    expect(dialog.props("maximizeButtonProps")).toMatchObject({
-      "aria-label": "Maximize or restore diff review",
-      title: "Maximize or restore diff review",
-    });
+    expect(dialog.props("maximizable")).toBeFalsy();
     expect(dialogPt.root).toContain("max-w-6xl");
     expect(dialogPt.content).toContain("overflow-hidden");
     expect(dialogPt.content).toContain("p-0");
