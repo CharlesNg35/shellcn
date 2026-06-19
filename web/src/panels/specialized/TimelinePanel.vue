@@ -3,15 +3,20 @@ import {
   computed,
   onActivated,
   onDeactivated,
+  onScopeDispose,
   ref,
   watch as vueWatch,
 } from "vue";
 import { useDocumentVisibility, useIntervalFn } from "@vueuse/core";
 import Timeline from "primevue/timeline";
 import Button from "primevue/button";
-import { fetchPage } from "@/api/dataSource";
+import { fetchPage, watch as watchResource } from "@/api/dataSource";
 import type { PanelProps } from "../core/types";
-import type { Row, TimelinePanelConfig } from "@/types/projection";
+import type {
+  ResourceEvent,
+  Row,
+  TimelinePanelConfig,
+} from "@/types/projection";
 import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "@/components/SkeletonList.vue";
 import AppIcon from "@/components/AppIcon.vue";
@@ -33,6 +38,8 @@ const severityField = computed(() => cfg.value.severityField ?? "severity");
 const iconField = computed(() => cfg.value.iconField ?? "icon");
 const emptyText = computed(() => cfg.value.emptyText ?? "No events.");
 const refreshMs = computed(() => cfg.value.refreshIntervalMs ?? 0);
+const hasWatch = computed(() => Boolean(cfg.value.watch));
+const MAX_ROWS = 200;
 
 async function loadTimeline(): Promise<Row[]> {
   if (!props.source) return [];
@@ -71,6 +78,42 @@ function timeText(row: Row): string {
   return Number.isNaN(ts) ? value : new Date(ts).toLocaleString();
 }
 
+function rowKey(row: Row): string {
+  const ref = row.ref as { uid?: string } | undefined;
+  return (
+    ref?.uid ??
+    `${text(row, titleField.value)}|${text(row, timestampField.value)}`
+  );
+}
+
+// mergeEvent upserts a streamed entry newest-first, keyed by uid, so the timeline
+// updates live instead of polling.
+function mergeEvent(ev: ResourceEvent): void {
+  const row = ev.resource as Row | undefined;
+  const key = ev.ref?.uid ?? (row ? rowKey(row) : undefined);
+  if (!key) return;
+  const next = rows.value.filter((r) => rowKey(r) !== key);
+  if (ev.type !== "deleted" && row) next.unshift(row);
+  rows.value = next.slice(0, MAX_ROWS);
+}
+
+let stopWatch: (() => void) | null = null;
+function startWatch(): void {
+  const source = cfg.value.watch;
+  if (stopWatch || !source) return;
+  stopWatch = watchResource(
+    props.connectionId,
+    source,
+    { resource: props.resource, record: props.record },
+    mergeEvent,
+  );
+}
+function stopWatching(): void {
+  stopWatch?.();
+  stopWatch = null;
+}
+onScopeDispose(stopWatching);
+
 const { pause, resume } = useIntervalFn(load, () => refreshMs.value || 1000, {
   immediate: false,
 });
@@ -99,7 +142,11 @@ vueWatch(
 );
 
 vueWatch(
-  () => refreshMs.value > 0 && active.value && visibility.value === "visible",
+  () =>
+    refreshMs.value > 0 &&
+    !hasWatch.value &&
+    active.value &&
+    visibility.value === "visible",
   (on) => {
     if (!on) {
       pause();
@@ -107,6 +154,12 @@ vueWatch(
     }
     resume();
   },
+  { immediate: true },
+);
+
+vueWatch(
+  () => hasWatch.value && active.value,
+  (on) => (on ? startWatch() : stopWatching()),
   { immediate: true },
 );
 </script>

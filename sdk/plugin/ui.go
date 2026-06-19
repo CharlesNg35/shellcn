@@ -77,6 +77,9 @@ const (
 	StreamMetrics  StreamKind = "metrics"
 	StreamTask     StreamKind = "task"
 	StreamCanvas   StreamKind = "canvas"
+	// StreamResource is a server-push watch of resource state: list deltas for a
+	// table/tree or object snapshots for a detail/editor.
+	StreamResource StreamKind = "resource"
 )
 
 // DataSource binds a panel to a route by id; params interpolate from the active
@@ -260,6 +263,8 @@ type ObjectDetailSection struct {
 type ObjectDetailConfig struct {
 	Sections  []ObjectDetailSection `json:"sections,omitempty"`
 	RawToggle bool                  `json:"rawToggle,omitempty"`
+	// Watch is an optional StreamResource source that live-updates the panel.
+	Watch *DataSource `json:"watch,omitempty"`
 }
 
 // MetricUsage renders one live used/capacity row in a metrics panel. It uses
@@ -276,6 +281,8 @@ type TimelineConfig struct {
 	ResourceField     string `json:"resourceField,omitempty"`
 	EmptyText         string `json:"emptyText,omitempty"`
 	RefreshIntervalMs int    `json:"refreshIntervalMs,omitempty"`
+	// Watch is an optional StreamResource source, preferred over RefreshIntervalMs.
+	Watch *DataSource `json:"watch,omitempty"`
 }
 
 type TaskProgressConfig struct {
@@ -512,6 +519,11 @@ type CodeEditorConfig struct {
 	SaveParams     map[string]string `json:"saveParams,omitempty"`
 	SaveBodyKey    string            `json:"saveBodyKey,omitempty"`
 	SaveExtra      map[string]any    `json:"saveExtra,omitempty"`
+	// Watch is an optional StreamResource source pushing the current content; the
+	// editor live-updates when clean and shows a notice when there are unsaved edits.
+	Watch *DataSource `json:"watch,omitempty"`
+	// RefreshField is the save-response key whose content resets the editor baseline.
+	RefreshField string `json:"refreshField,omitempty"`
 }
 
 type DiffMode string

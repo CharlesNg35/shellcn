@@ -111,10 +111,12 @@ func customResourceType() plugin.ResourceType {
 }
 
 func overviewTab(k kind, params map[string]string) plugin.Panel {
+	cfg := overviewDetailConfig(k)
+	cfg.Watch = &plugin.DataSource{RouteID: "kubernetes.resource.object.watch", Method: plugin.MethodWS, Params: params}
 	return plugin.Panel{
 		Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelObjectDetail,
 		Source: &plugin.DataSource{RouteID: "kubernetes.resource.overview", Params: params},
-		Config: overviewDetailConfig(k),
+		Config: cfg,
 	}
 }
 

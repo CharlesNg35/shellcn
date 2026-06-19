@@ -42,6 +42,7 @@ export const StreamKind = {
   Metrics: "metrics",
   Task: "task",
   Canvas: "canvas",
+  Resource: "resource",
 } as const;
 export type StreamKind = (typeof StreamKind)[keyof typeof StreamKind];
 
@@ -172,6 +173,8 @@ export interface CodeEditorConfig {
   saveParams?: Record<string, string>;
   saveBodyKey?: string;
   saveExtra?: Record<string, unknown>;
+  watch?: DataSource;
+  refreshField?: string;
 }
 
 export const DiffMode = {
@@ -318,6 +321,7 @@ export interface ObjectDetailSection {
 export interface ObjectDetailPanelConfig {
   sections?: ObjectDetailSection[];
   rawToggle?: boolean;
+  watch?: DataSource;
 }
 
 export interface TimelinePanelConfig {
@@ -329,6 +333,7 @@ export interface TimelinePanelConfig {
   resourceField?: string;
   emptyText?: string;
   refreshIntervalMs?: number;
+  watch?: DataSource;
 }
 
 export interface TaskProgressPanelConfig {

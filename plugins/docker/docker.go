@@ -81,7 +81,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 			{ID: "docker.engine.shell", Kind: plugin.StreamTerminal, RouteID: "docker.engine.shell"},
 			{ID: "docker.container.logs", Kind: plugin.StreamLogs, RouteID: "docker.container.logs"},
 			{ID: "docker.container.exec", Kind: plugin.StreamTerminal, RouteID: "docker.container.exec"},
-			{ID: "docker.events.watch", Kind: plugin.StreamLogs, RouteID: "docker.events.watch"},
+			{ID: "docker.events.watch", Kind: plugin.StreamResource, RouteID: "docker.events.watch"},
 		},
 		Recording: []plugin.RecordingCapability{{
 			Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2},

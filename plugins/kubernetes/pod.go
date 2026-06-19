@@ -50,6 +50,10 @@ func podDetailTabs() []plugin.Panel {
 // streams the overview dashboards bind to.
 func streams() []plugin.Stream {
 	return []plugin.Stream{
+		{ID: "kubernetes.resource.watch", Kind: plugin.StreamResource, RouteID: "kubernetes.resource.watch"},
+		{ID: "kubernetes.resource.object.watch", Kind: plugin.StreamResource, RouteID: "kubernetes.resource.object.watch"},
+		{ID: "kubernetes.resource.yaml.watch", Kind: plugin.StreamResource, RouteID: "kubernetes.resource.yaml.watch"},
+		{ID: "kubernetes.resource.events.watch", Kind: plugin.StreamResource, RouteID: "kubernetes.resource.events.watch"},
 		{ID: "kubernetes.pod.logs", Kind: plugin.StreamLogs, RouteID: "kubernetes.pod.logs"},
 		{ID: "kubernetes.workload.logs", Kind: plugin.StreamLogs, RouteID: "kubernetes.workload.logs"},
 		{ID: "kubernetes.pod.exec", Kind: plugin.StreamTerminal, RouteID: "kubernetes.pod.exec"},

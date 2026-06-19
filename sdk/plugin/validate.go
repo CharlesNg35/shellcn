@@ -736,6 +736,17 @@ func checkPanelConfigRoutes(
 	case CodeEditorConfig:
 		checkWriteRouteID(ctx+" saveRouteId", c.SaveRouteID)
 		validateWriteConfigMethod(ctx+" saveMethod", c.SaveMethod, add)
+		if c.Watch != nil {
+			checkStreamSource(ctx+" watch", c.Watch)
+		}
+	case ObjectDetailConfig:
+		if c.Watch != nil {
+			checkStreamSource(ctx+" watch", c.Watch)
+		}
+	case TimelineConfig:
+		if c.Watch != nil {
+			checkStreamSource(ctx+" watch", c.Watch)
+		}
 	case QueryEditorConfig:
 		checkWriteRouteID(ctx+" cancelRouteId", c.CancelRouteID)
 		checkRouteID(ctx+" completionRouteId", c.CompletionRouteID)

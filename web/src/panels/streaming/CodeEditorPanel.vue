@@ -2,8 +2,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
-import { fetchDoc, runAction } from "@/api/dataSource";
-import type { CodeEditorConfig } from "@/types/projection";
+import { fetchDoc, runAction, watch as watchResource } from "@/api/dataSource";
+import type { CodeEditorConfig, ResourceEvent } from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "@/components/SkeletonList.vue";
@@ -26,6 +26,10 @@ const saveError = ref<string | null>(null);
 const saved = ref(false);
 const originalText = ref("");
 const showDiff = ref(false);
+const externalChanged = ref(false);
+const deletedOnServer = ref(false);
+const serverContent = ref<string | null>(null);
+let stopWatch: (() => void) | null = null;
 let editor: CodeMirrorEditor | null = null;
 let codeMirror: typeof import("@/codemirror") | null = null;
 let loadRequest = 0;
@@ -96,6 +100,54 @@ async function guardedLoad(): Promise<void> {
   await confirmBeforeDiscard(load);
 }
 
+// onServerPush updates the editor in place when clean, and stashes the change
+// behind a notice when the user has unsaved edits so work is never clobbered.
+function onServerPush(ev: ResourceEvent): void {
+  if (ev.type === "deleted") {
+    deletedOnServer.value = true;
+    return;
+  }
+  deletedOnServer.value = false;
+  const next = ev.resource;
+  if (typeof next !== "string") return;
+  syncTextFromEditor();
+  if (!changed.value) {
+    originalText.value = next;
+    text.value = next;
+    externalChanged.value = false;
+    serverContent.value = null;
+    return;
+  }
+  serverContent.value = next;
+  externalChanged.value = true;
+}
+
+function reloadFromServer(): void {
+  if (serverContent.value !== null) {
+    originalText.value = serverContent.value;
+    text.value = serverContent.value;
+    serverContent.value = null;
+  }
+  externalChanged.value = false;
+  saved.value = false;
+}
+
+function startWatch(): void {
+  const source = editorConfig.value?.watch;
+  if (stopWatch || !source) return;
+  stopWatch = watchResource(
+    props.connectionId,
+    source,
+    { resource: props.resource, record: props.record },
+    onServerPush,
+  );
+}
+
+function stopWatching(): void {
+  stopWatch?.();
+  stopWatch = null;
+}
+
 async function mountEditor(request = loadRequest): Promise<void> {
   await nextTick();
   if (request !== loadRequest) return;
@@ -150,7 +202,7 @@ async function save(): Promise<void> {
           [bodyKey]: JSON.parse(text.value),
         }
       : { content: text.value };
-    await runAction(
+    const result = await runAction(
       props.connectionId,
       routeId,
       { resource: props.resource, record: props.record },
@@ -158,8 +210,19 @@ async function save(): Promise<void> {
       editorConfig.value?.saveParams ?? props.source?.params ?? {},
       editorConfig.value?.saveMethod ?? "PUT",
     );
+    // Reset the baseline to the server's canonical content so the next save and
+    // the live watch reconcile against exactly what was persisted.
+    const refreshField = editorConfig.value?.refreshField;
+    const fresh = refreshField ? result[refreshField] : undefined;
+    if (typeof fresh === "string") {
+      text.value = fresh;
+      originalText.value = fresh;
+    } else {
+      originalText.value = text.value;
+    }
     saved.value = true;
-    originalText.value = text.value;
+    externalChanged.value = false;
+    serverContent.value = null;
     showDiff.value = false;
   } catch (e) {
     saveError.value = (e as Error).message;
@@ -168,7 +231,10 @@ async function save(): Promise<void> {
   }
 }
 
-onMounted(load);
+onMounted(async () => {
+  await load();
+  startWatch();
+});
 watch(
   () => [
     props.connectionId,
@@ -193,6 +259,7 @@ watch(isDark, () => {
   codeMirror?.syncCodeMirrorTheme(editor);
 });
 onUnmounted(() => {
+  stopWatching();
   try {
     editor?.view.destroy();
   } catch {
@@ -236,6 +303,37 @@ onUnmounted(() => {
           @click="save"
         />
       </div>
+    </div>
+    <div
+      v-if="externalChanged"
+      class="flex items-center justify-between gap-2 border-b border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+    >
+      <span
+        >This object changed on the server while you have unsaved edits.</span
+      >
+      <div class="flex items-center gap-2">
+        <Button
+          type="button"
+          severity="secondary"
+          size="small"
+          label="Reload"
+          @click="reloadFromServer"
+        />
+        <Button
+          type="button"
+          severity="secondary"
+          variant="text"
+          size="small"
+          label="Keep editing"
+          @click="externalChanged = false"
+        />
+      </div>
+    </div>
+    <div
+      v-if="deletedOnServer"
+      class="border-b border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300"
+    >
+      This object no longer exists on the server.
     </div>
     <SkeletonList v-if="loading" />
     <PanelError
