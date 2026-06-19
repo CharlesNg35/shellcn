@@ -49,10 +49,15 @@ func TestOverviewTabWatchesObject(t *testing.T) {
 	if !ok {
 		t.Fatal("pod kind missing")
 	}
-	tab := overviewTab(k, map[string]string{"kind": "pod", "name": "x"})
-	cfg, ok := tab.Config.(plugin.ObjectDetailConfig)
-	if !ok || cfg.Watch == nil || cfg.Watch.RouteID != "kubernetes.resource.object.watch" {
-		t.Fatalf("overview tab must watch object.watch, got %+v", tab.Config)
+	// Both built-in and custom-resource overview tabs must live-watch the object.
+	for name, tab := range map[string]plugin.Panel{
+		"builtin": overviewTab(k, map[string]string{"kind": "pod", "name": "x"}),
+		"crd":     crdOverviewTab(),
+	} {
+		cfg, ok := tab.Config.(plugin.ObjectDetailConfig)
+		if !ok || cfg.Watch == nil || cfg.Watch.RouteID != "kubernetes.resource.object.watch" {
+			t.Fatalf("%s overview tab must watch object.watch, got %+v", name, tab.Config)
+		}
 	}
 }
 

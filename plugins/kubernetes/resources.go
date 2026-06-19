@@ -98,11 +98,7 @@ func customResourceType() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
-				{
-					Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelObjectDetail,
-					Source: &plugin.DataSource{RouteID: "kubernetes.resource.overview", Params: map[string]string{"kind": "${resource.scope}", "namespace": "${resource.namespace}", "name": "${resource.name}"}},
-					Config: genericOverviewDetailConfig(),
-				},
+				crdOverviewTab(),
 				customResourceYAMLTab(),
 				customResourceEventsTab(),
 			},
@@ -112,12 +108,27 @@ func customResourceType() plugin.ResourceType {
 
 func overviewTab(k kind, params map[string]string) plugin.Panel {
 	cfg := overviewDetailConfig(k)
-	cfg.Watch = &plugin.DataSource{RouteID: "kubernetes.resource.object.watch", Method: plugin.MethodWS, Params: params}
+	cfg.Watch = objectWatchSource(params)
 	return plugin.Panel{
 		Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelObjectDetail,
 		Source: &plugin.DataSource{RouteID: "kubernetes.resource.overview", Params: params},
 		Config: cfg,
 	}
+}
+
+func crdOverviewTab() plugin.Panel {
+	params := map[string]string{"kind": "${resource.scope}", "namespace": "${resource.namespace}", "name": "${resource.name}"}
+	cfg := genericOverviewDetailConfig()
+	cfg.Watch = objectWatchSource(params)
+	return plugin.Panel{
+		Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelObjectDetail,
+		Source: &plugin.DataSource{RouteID: "kubernetes.resource.overview", Params: params},
+		Config: cfg,
+	}
+}
+
+func objectWatchSource(params map[string]string) *plugin.DataSource {
+	return &plugin.DataSource{RouteID: "kubernetes.resource.object.watch", Method: plugin.MethodWS, Params: params}
 }
 
 func actions() []plugin.Action {
