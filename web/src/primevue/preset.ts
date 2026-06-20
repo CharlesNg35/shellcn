@@ -342,6 +342,7 @@ export const primeVuePassthrough = {
     label:
       "min-w-0 flex-1 truncate px-2.5 py-1.5 text-left text-surface-800 dark:text-surface-100",
     dropdown: "shrink-0 px-2 text-surface-400",
+    loadingIcon: "h-4 w-4 animate-spin",
     overlay: selectOverlay,
     transition: overlayTransition,
     header: selectFilterHeader,
@@ -366,6 +367,7 @@ export const primeVuePassthrough = {
     label:
       "flex min-h-9 flex-wrap items-center gap-1.5 px-2 py-1.5 text-left text-surface-500 dark:text-surface-400",
     dropdown: "shrink-0 px-2 text-surface-400",
+    loadingIcon: "h-4 w-4 animate-spin",
     overlay: selectOverlay,
     transition: overlayTransition,
     header: cn(selectFilterHeader, "flex items-center gap-2"),
@@ -401,6 +403,8 @@ export const primeVuePassthrough = {
       "w-full min-w-16 bg-transparent px-0.5 py-1 text-sm text-surface-800 outline-none placeholder:text-surface-400 dark:text-surface-100",
     dropdown:
       "absolute right-0 top-0 flex h-full items-center px-2 text-surface-400",
+    loader:
+      "absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-surface-400 data-[p-has-dropdown=true]:right-8",
     overlay,
     transition: overlayTransition,
     listContainer: "max-h-60 overflow-auto p-1",

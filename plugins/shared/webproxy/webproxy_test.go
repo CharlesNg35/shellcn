@@ -66,6 +66,9 @@ func TestServeRewritesHTMLUnderPrefix(t *testing.T) {
 	if !strings.Contains(body, "Location.prototype") {
 		t.Fatalf("shim does not keep JS location navigations under the prefix: %s", body)
 	}
+	if !strings.Contains(body, "HTMLAnchorElement.prototype") {
+		t.Fatalf("shim does not rewrite JS-set anchor navigations: %s", body)
+	}
 }
 
 // A redirect Location is mapped back under the prefix whether it is root-relative
@@ -96,6 +99,73 @@ func TestServeRewritesRedirectLocation(t *testing.T) {
 			t.Errorf("Location %q rewritten to %q, want %q", loc, got, want)
 		}
 		upstream.Close()
+	}
+}
+
+// A server redirect to the public host (an app that built the URL from
+// X-Forwarded-Host) maps back under the prefix; an external redirect is left alone.
+func TestServeRewritesPublicHostRedirect(t *testing.T) {
+	cases := map[string]string{
+		"https://app.example.com/login":          "/proxy/x/login",
+		"//app.example.com/login":                "/proxy/x/login",
+		"https://accounts.google.com/o/oauth2?a": "https://accounts.google.com/o/oauth2?a",
+	}
+	for loc, want := range cases {
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Location", loc)
+			w.WriteHeader(http.StatusFound)
+		}))
+		base, _ := url.Parse(upstream.URL)
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = "app.example.com"
+		rec := httptest.NewRecorder()
+		webproxy.Serve(rec, req, webproxy.Options{
+			Base: base, Transport: http.DefaultTransport, UpstreamPath: "/", PublicPrefix: "/proxy/x",
+		})
+		if got := rec.Header().Get("Location"); got != want {
+			t.Errorf("Location %q rewritten to %q, want %q", loc, got, want)
+		}
+		upstream.Close()
+	}
+}
+
+// An absolute self-link on the public host in an HTML body maps back under prefix.
+func TestServeRewritesPublicHostLinkInBody(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, `<html><head></head><body><a href="https://app.example.com/page">p</a></body></html>`)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "app.example.com"
+	rec := httptest.NewRecorder()
+	webproxy.Serve(rec, req, webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/", PublicPrefix: "/proxy/x",
+	})
+	if body := rec.Body.String(); !strings.Contains(body, `href="/proxy/x/page"`) {
+		t.Fatalf("public-host link not mapped: %s", body)
+	}
+}
+
+// An upstream cookie Domain is dropped so the browser keeps the cookie.
+func TestServeDropsCookieDomain(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Add("Set-Cookie", "sid=abc; Domain=pod.local; Path=/; HttpOnly")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+	rec := httptest.NewRecorder()
+	webproxy.Serve(rec, httptest.NewRequest(http.MethodGet, "/", nil), webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/", PublicPrefix: "/proxy/x",
+	})
+	got := strings.Join(rec.Result().Header.Values("Set-Cookie"), "\n")
+	if strings.Contains(got, "Domain") {
+		t.Fatalf("Domain not dropped: %q", got)
+	}
+	if !strings.Contains(got, "sid=abc; Path=/proxy/x; HttpOnly") {
+		t.Fatalf("cookie not scoped to prefix: %q", got)
 	}
 }
 

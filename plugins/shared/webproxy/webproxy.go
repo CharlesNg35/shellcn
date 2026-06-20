@@ -76,7 +76,7 @@ func Serve(w http.ResponseWriter, r *http.Request, o Options) {
 		Transport:     o.Transport,
 		FlushInterval: -1,
 		//nolint:bodyclose // body is read+closed in the HTML branch; otherwise the ReverseProxy owns it.
-		ModifyResponse: rewriteResponse(o.Base, o.SourcePrefix, o.PublicPrefix),
+		ModifyResponse: rewriteResponse(o.Base, o.SourcePrefix, o.PublicPrefix, r.Host),
 	}
 	proxy.ServeHTTP(w, r)
 }
@@ -94,23 +94,17 @@ var (
 	cssURL            = regexp.MustCompile(`url\(\s*(['"]?)(/[^'")\s]*)(['"]?)\s*\)`)
 )
 
-// rewriteResponse adapts an upstream response to live under prefix: Location +
-// Set-Cookie paths, framing/CSP headers, and HTML/CSS bodies. sourcePrefix is a
-// path the upstream injects (API server proxy); upstreamOrigin is the scheme://host
-// the app was told it has — both map back to prefix.
-func rewriteResponse(base *url.URL, sourcePrefix, prefix string) func(*http.Response) error {
-	upstreamOrigin := ""
+// rewriteResponse maps an upstream response back under prefix: Location, Set-Cookie,
+// framing/CSP headers, and HTML/CSS bodies.
+func rewriteResponse(base *url.URL, sourcePrefix, prefix, publicHost string) func(*http.Response) error {
+	upstreamOrigin, upstreamHost := "", ""
 	if base != nil {
 		upstreamOrigin = base.Scheme + "://" + base.Host
+		upstreamHost = base.Host
 	}
 	return func(resp *http.Response) error {
-		switch loc := resp.Header.Get("Location"); {
-		case upstreamOrigin != "" && strings.HasPrefix(loc, upstreamOrigin):
-			resp.Header.Set("Location", prefix+strings.TrimPrefix(loc, upstreamOrigin))
-		case sourcePrefix != "" && strings.HasPrefix(loc, sourcePrefix):
-			resp.Header.Set("Location", prefix+strings.TrimPrefix(loc, sourcePrefix))
-		case strings.HasPrefix(loc, "/") && !strings.HasPrefix(loc, "//") && !strings.HasPrefix(loc, prefix):
-			resp.Header.Set("Location", prefix+loc)
+		if loc := resp.Header.Get("Location"); loc != "" {
+			resp.Header.Set("Location", mapLocation(loc, prefix, publicHost, upstreamHost, sourcePrefix))
 		}
 		rewriteCookiePaths(resp.Header, prefix)
 		// Allow embedding + the inline shim by relaxing framing/CSP.
@@ -130,6 +124,9 @@ func rewriteResponse(base *url.URL, sourcePrefix, prefix string) func(*http.Resp
 			return err
 		}
 		out := string(body)
+		if publicHost != "" {
+			out = stripOrigins(out, prefix, "https://"+publicHost, "http://"+publicHost)
+		}
 		if isHTML {
 			out = rewriteHTML(out, sourcePrefix, upstreamOrigin, prefix)
 		} else {
@@ -140,6 +137,67 @@ func rewriteResponse(base *url.URL, sourcePrefix, prefix string) func(*http.Resp
 		resp.Header.Set("Content-Length", strconv.Itoa(len(out)))
 		return nil
 	}
+}
+
+// mapLocation rewrites a redirect Location to stay under prefix. It maps targets on
+// the app itself (root-relative, upstream/public host, or protocol-relative) and
+// leaves external redirects untouched; idempotent if already prefixed.
+func mapLocation(loc, prefix, publicHost, upstreamHost, sourcePrefix string) string {
+	if loc == "" {
+		return loc
+	}
+	if sourcePrefix != "" && strings.HasPrefix(loc, sourcePrefix) {
+		return prefix + strings.TrimPrefix(loc, sourcePrefix)
+	}
+	u, err := url.Parse(loc)
+	if err != nil {
+		return loc
+	}
+	if u.Host != "" {
+		if !sameHost(u.Host, publicHost) && !sameHost(u.Host, upstreamHost) {
+			return loc
+		}
+		u.Scheme, u.Opaque, u.Host, u.User = "", "", "", nil
+	} else if u.Path == "" || u.Path[0] != '/' {
+		return loc
+	}
+	if u.Path == prefix || strings.HasPrefix(u.Path, prefix+"/") {
+		return u.String()
+	}
+	if u.Path == "" {
+		u.Path = "/"
+	}
+	u.Path = prefix + u.Path
+	u.RawPath = ""
+	return u.String()
+}
+
+func sameHost(a, b string) bool { return b != "" && strings.EqualFold(a, b) }
+
+// stripOrigins maps each origin to prefix, skipping occurrences already followed by
+// prefix so it never double-prefixes.
+func stripOrigins(s, prefix string, origins ...string) string {
+	for _, origin := range origins {
+		if origin == "" || !strings.Contains(s, origin) {
+			continue
+		}
+		var b strings.Builder
+		rest := s
+		for {
+			i := strings.Index(rest, origin)
+			if i < 0 {
+				b.WriteString(rest)
+				break
+			}
+			b.WriteString(rest[:i])
+			rest = rest[i+len(origin):]
+			if !strings.HasPrefix(rest, prefix) {
+				b.WriteString(prefix)
+			}
+		}
+		s = b.String()
+	}
+	return s
 }
 
 // rewriteHTML prefixes the app's URLs and injects the runtime shim. No <base> is
@@ -239,30 +297,39 @@ func rewriteCookiePaths(h http.Header, prefix string) {
 	}
 }
 
-// rewriteCookiePath scopes a cookie to the prefix. A __Host- cookie is left as-is:
-// its spec requires Path=/, so narrowing it would void the cookie.
+// rewriteCookiePath scopes a cookie to the prefix and drops any upstream Domain. A
+// __Host- cookie is left as-is: its spec requires Path=/, so narrowing it would void
+// the cookie.
 func rewriteCookiePath(cookie, prefix string) string {
 	if name := strings.TrimSpace(strings.SplitN(cookie, "=", 2)[0]); strings.HasPrefix(name, "__Host-") {
 		return cookie
 	}
 	parts := strings.Split(cookie, ";")
+	kept := parts[:0]
 	hasPath := false
-	for i, p := range parts {
-		if kv := strings.SplitN(strings.TrimSpace(p), "=", 2); strings.EqualFold(kv[0], "Path") {
-			parts[i] = " Path=" + prefix
+	for _, p := range parts {
+		key, _, _ := strings.Cut(strings.TrimSpace(p), "=")
+		switch {
+		case strings.EqualFold(key, "Domain"):
+			// An upstream Domain is rejected by the browser on the gateway host.
+			continue
+		case strings.EqualFold(key, "Path"):
+			kept = append(kept, " Path="+prefix)
 			hasPath = true
+		default:
+			kept = append(kept, p)
 		}
 	}
 	if !hasPath {
-		parts = append(parts, " Path="+prefix)
+		kept = append(kept, " Path="+prefix)
 	}
-	return strings.Join(parts, ";")
+	return strings.Join(kept, ";")
 }
 
-// injectShim inserts a script that keeps the app's runtime requests and
-// navigations under the prefix — fetch/XHR, WebSocket/EventSource/Worker,
-// history, location (assign/replace/href), dynamically-set asset attributes, and
-// form actions — plus the in-scope service worker.
+// injectShim inserts a script that keeps the app's runtime requests and navigations
+// under the prefix — fetch/XHR, WebSocket/EventSource/Worker, history, location
+// (assign/replace/href), assets, and form actions — plus the in-scope service
+// worker.
 func injectShim(html, prefix string) string {
 	shim := `<script>(function(){var p=` + jsString(prefix) + `;
 function fix(u){if(typeof u!=="string")return u;if(u.charAt(0)==="/"&&u.charAt(1)!=="/"&&u.indexOf(p)!==0)return p+u;var o=location.origin;if(u.indexOf(o+"/")===0&&u.slice(o.length).indexOf(p)!==0)return o+p+u.slice(o.length);return u;}
@@ -271,7 +338,7 @@ var ox=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u)
 function wrap(C){if(!C)return C;function W(){var a=[].slice.call(arguments);if(a.length)a[0]=fix(a[0]);return new (Function.prototype.bind.apply(C,[null].concat(a)))();}W.prototype=C.prototype;["CONNECTING","OPEN","CLOSING","CLOSED"].forEach(function(k){if(k in C)W[k]=C[k];});return W;}
 try{window.WebSocket=wrap(window.WebSocket);window.EventSource=wrap(window.EventSource);window.Worker=wrap(window.Worker);}catch(e){}
 function patch(proto,prop){var d=Object.getOwnPropertyDescriptor(proto,prop);if(d&&d.set)Object.defineProperty(proto,prop,{configurable:true,enumerable:d.enumerable,get:function(){return d.get.call(this);},set:function(v){d.set.call(this,fix(v));}});}
-try{patch(HTMLScriptElement.prototype,"src");patch(HTMLLinkElement.prototype,"href");patch(HTMLImageElement.prototype,"src");}catch(e){}
+try{patch(HTMLScriptElement.prototype,"src");patch(HTMLLinkElement.prototype,"href");patch(HTMLImageElement.prototype,"src");patch(HTMLAnchorElement.prototype,"href");}catch(e){}
 var sa=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){return sa.call(this,n,(typeof v==="string"&&/^(src|href|action|formaction|poster)$/i.test(n))?fix(v):v);};
 ["pushState","replaceState"].forEach(function(m){var o=history[m];if(o)history[m]=function(s,t,u){return o.call(this,s,t,typeof u==="string"?fix(u):u);};});
 ["assign","replace"].forEach(function(m){var o=location[m];if(o)try{location[m]=function(u){return o.call(location,fix(u));};}catch(e){}});

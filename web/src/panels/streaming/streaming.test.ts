@@ -1930,7 +1930,10 @@ describe("streaming stub panels", () => {
       vi.fn(() =>
         Promise.resolve(
           new Response(
-            JSON.stringify({ ok: true, content: "apiVersion: v1\nkind: Pod\nstatus: {}\n" }),
+            JSON.stringify({
+              ok: true,
+              content: "apiVersion: v1\nkind: Pod\nstatus: {}\n",
+            }),
             { status: 200, headers: { "Content-Type": "application/json" } },
           ),
         ),
@@ -1981,9 +1984,9 @@ describe("streaming stub panels", () => {
     });
     await flushPromises();
 
-    expect(w.findAll("button").some((button) => button.text() === "Review changes")).toBe(
-      false,
-    );
+    expect(
+      w.findAll("button").some((button) => button.text() === "Review changes"),
+    ).toBe(false);
 
     mockCodeMirror.value = "apiVersion: v1\nkind: Service\n";
     mockCodeMirror.onChange?.(mockCodeMirror.value);

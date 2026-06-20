@@ -7,6 +7,7 @@ import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import Tree from "primevue/tree";
+import Select from "primevue/select";
 import { opsUsageCaption, opsUsageRow, primeVuePassthrough } from "./preset";
 
 describe("primeVuePassthrough", () => {
@@ -289,6 +290,34 @@ describe("primeVuePassthrough", () => {
       "inline-flex",
     );
     expect(primeVuePassthrough.autocomplete.pcChip.label).toContain("truncate");
+  });
+
+  it("aligns and spins the loading indicator on scope-control inputs", () => {
+    expect(primeVuePassthrough.select.loadingIcon).toContain("animate-spin");
+    expect(primeVuePassthrough.multiselect.loadingIcon).toContain(
+      "animate-spin",
+    );
+    expect(primeVuePassthrough.autocomplete.loader).toContain("absolute");
+    expect(primeVuePassthrough.autocomplete.loader).toContain("animate-spin");
+    expect(primeVuePassthrough.autocomplete.loader).toContain(
+      "-translate-y-1/2",
+    );
+    expect(primeVuePassthrough.autocomplete.loader).toContain(
+      "data-[p-has-dropdown=true]:right-8",
+    );
+  });
+
+  it("renders the select loading icon via the pass-through key", () => {
+    const wrapper = mount(Select, {
+      props: { loading: true, options: [] },
+      global: {
+        plugins: [[PrimeVue, { unstyled: true, pt: primeVuePassthrough }]],
+      },
+    });
+    const icon = wrapper.find('[data-pc-section="loadingicon"]');
+    expect(icon.exists()).toBe(true);
+    expect(icon.classes()).toContain("animate-spin");
+    wrapper.unmount();
   });
 
   it("keeps searchable select filter icons anchored inside the filter field", () => {
