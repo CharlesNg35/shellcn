@@ -191,11 +191,14 @@ watch(
 watch(
   () => props.refreshKey,
   async () => {
-    await reloadExpanded(nodes.value, { force: true, loading: false });
+    await Promise.all([
+      reloadExpanded(nodes.value, { force: true, loading: false }),
+      loadBadges(),
+    ]);
   },
 );
 
-onMounted(async () => {
+async function loadBadges(): Promise<void> {
   for (const g of props.groups) {
     if (!g.badge?.source) continue;
     try {
@@ -208,7 +211,9 @@ onMounted(async () => {
       continue;
     }
   }
-});
+}
+
+onMounted(loadBadges);
 </script>
 
 <template>

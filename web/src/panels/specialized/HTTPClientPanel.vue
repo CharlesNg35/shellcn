@@ -246,8 +246,16 @@ async function send(): Promise<void> {
               :key="index"
               class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.25rem] gap-2"
             >
-              <InputText v-model="header.key" placeholder="Header" />
-              <InputText v-model="header.value" placeholder="Value" />
+              <InputText
+                v-model="header.key"
+                placeholder="Header"
+                :aria-label="`Header ${index + 1} name`"
+              />
+              <InputText
+                v-model="header.value"
+                placeholder="Value"
+                :aria-label="`Header ${index + 1} value`"
+              />
               <Button
                 type="button"
                 text

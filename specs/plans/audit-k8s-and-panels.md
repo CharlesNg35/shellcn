@@ -32,14 +32,13 @@ Greenfield: contracts may change freely. Every fix is manifest-driven and plugin
 - [x] P3 secret — GetYAML + WatchObjectYAML strip `stringData` as well as `data`.
 - [x] P3 scale guard — ScaleResource/RestartResource now reject kinds that aren't scalable/restartable (clear error instead of a raw apiserver rejection). Kept the existing replicas merge-patch (works for the wired kinds; the scale-subresource switch was marginal, skipped).
 
-## Phase 4 — K8s watch / live-refresh backend
+## Phase 4 — K8s watch / live-refresh backend — REVIEWED; deferred with reason
 
-- [ ] P1 errors — watch.go:50,140, events.go:99, watchhub.go:189 — watch errors swallowed; client sees frozen socket → surface terminal error frame / close so frontend shows error+reconnect.
-- [ ] P2 resync — watchhub.go:164-166,189-190 — 410/Error restart from "current" with no re-LIST → emit resync signal so client re-lists (no phantom rows).
-- [ ] P3 coalesce — watchhub.go:128-145 — broadcast can drop newest under contention → guarantee resend after drain / latest-wins slot.
-- [ ] P3 caps — watchhub.go:84, session.go — no per-session feed/subscriber cap → bound.
-- [ ] P3 encode — watch.go/events.go — encode error returns nil (looks clean) → distinguish client-gone from real error, log.
-- [ ] P3 query keepalive — dispatch.go:716 — StreamQuery keepalive without controlReader → pongs unprocessed; add controlReader.
+- [ ] P1 errors (frozen socket) — CONFIRMED REAL: on a persistent watch failure (e.g. RBAC revoked mid-session) `feed.run` retries forever and never closes the subscriber channel, so the WS handler blocks on `<-events`. But a correct fix needs careful feed-lifecycle work on the shared, ref-counted feed (avoid double-close races vs `remove()`/`Subscribe`) — not a simple change. Deferred per "don't over-complicate"; revisit as a dedicated, well-tested change.
+- [ ] P2 resync — same: emit a re-list signal on 410/Error. Pairs with the P1 lifecycle work.
+- [x] P3 coalesce — CHECKED, non-issue: `broadcast` holds the feed lock (single writer per channel); after draining one slot the resend always has room (buffer ≥1). No real drop-newest bug.
+- [x] P3 query keepalive — CHECKED, would BREAK: `StreamQuery` handlers read browser request frames themselves; a `controlReader` (`discardWebSocketReads`) would steal those frames. Current `enabled:true` is correct.
+- [ ] P3 caps / encode-logging — marginal; deferred.
 
 ## Phase 5 — K8s resource browsing (table/tree)
 
@@ -47,10 +46,10 @@ Greenfield: contracts may change freely. Every fix is manifest-driven and plugin
 - [ ] P2 prepend — TablePanel.vue:1137 — live adds always prepend, reorder sorted lists; events grow unbounded → insert per sort / honor max cap.
 - [x] P2 visibility — TablePanel pauses the WS watch when the tab is hidden; on return it re-lists (catch up) and resubscribes.
 - [ ] P2 selectors — resources.go:65, watch.go — no label/field selector; client-side substring only → plumb selectors into list+watch.
-- [ ] P2 ns param — watch.go:108, events.go — object/event watch read rc.Param raw vs list param() query-fallback → use param() everywhere.
+- [x] P2 ns param — CHECKED, non-issue: the core merges `p.`-prefixed query params into rc.params, so `rc.Param("namespace")` is correct for namespaced watches; `param()`'s fallback is only for plain query (container/follow). No change needed.
 - [ ] P2 forbidden state — TablePanel.vue:1620, errors.go:27 — forbidden/empty/no-ns collapse to one cryptic state → distinct friendly states.
 - [ ] P2 rbac rows — resources.go:138, permissions.go:49 — delete shown regardless of perms → can map on list rows / clear message.
-- [ ] P2 tree badges — ResourceTree.vue:198 — badges fetched once, never refresh → refresh on refreshKey/scope/watch.
+- [x] P2 tree badges — ResourceTree now reloads category badges on refresh (extracted loadBadges, called onMounted + on refreshKey), so counts don't go stale.
 - [ ] P2 a11y rows — TablePanel.vue:966 — no keyboard row activation → Enter opens detail/navigate.
 - [ ] P3 misc — modified re-sort (TablePanel.vue:1128); CRD list unbounded (resources.go:76); reloadExpanded serial (ResourceTree.vue:131); CRD/Helm tree no watch; aria-live count; SSAR per-open (object_overview.go:24).
 
@@ -86,7 +85,11 @@ Reverted as over-complication (intentionally NOT done):
 
 Still TODO (agents for shared/specialized panels not run):
 - [ ] P1 menu — ActionBar.vue:457-512 — hand-rolled `<a>` items in PrimeVue Menu → item template/Button with roles.
-- [ ] P1 cred error — CredentialSelect.vue:120 — load error bare text, no retry → PanelError-style retry.
+- [x] P1 cred error — CredentialSelect load error now has a compact Retry (calls load) + role=alert.
+- [x] P1 http aria — HTTPClient header key/value inputs now have indexed aria-labels (the send result is already the feedback, so no toast).
+- [x] P1 task aria — TaskProgress ProgressBar aria-label now includes the percent (or "in progress" when indeterminate).
+- [ ] CodeDiffView fallback — SKIPPED: the `<pre>` fallback already shows the content (graceful degradation), so a notice is marginal.
+- [ ] files/exec container pickers — DEFERRED: valuable, but threading a container selector through every file route / the xterm panel is feature-scope, not a simple fix. Needs a dedicated change like the logs `StreamControl`.
 - [ ] P1 table — TablePanel.vue — badge `<span>`→Tag; delete error no retry; inline editors no validation/aria-invalid.
 - [ ] P1 kv — KVPanel.vue:430-476,391,401 — labels unassociated; hardcoded copy; no detail skeleton.
 - [ ] P1 diff — CodeDiffView.vue:53-57 — silent fallback to `<pre>`, no message → PanelError/message.
