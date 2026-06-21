@@ -66,6 +66,14 @@ const canPreview = computed(() =>
   ),
 );
 const changed = computed(() => text.value !== originalText.value);
+// Re-saving identical content is pointless when editing an existing object; a
+// create/template editor may still submit its starting content as-is.
+const requiresChange = computed(
+  () =>
+    editable.value &&
+    props.source != null &&
+    editorConfig.value?.initialContent === undefined,
+);
 const { confirmBeforeDiscard } = useDirtyGuard({
   isDirty: () => editable.value && changed.value,
   header: "Discard unsaved editor changes?",
@@ -290,19 +298,22 @@ async function save(): Promise<void> {
     } else {
       originalText.value = text.value;
     }
-    saved.value = true;
     externalChanged.value = false;
     serverContent.value = null;
     showDiff.value = false;
-    const toast = editorConfig.value?.saveToast;
-    if (toast) {
-      notify.success(
-        toast.summary || "Saved",
-        fillResponse(toast.detail, result),
-      );
-    }
+    // One success channel: a toast when the dialog closes (the inline pill wouldn't
+    // be seen), otherwise the inline pill for an in-tab editor.
     if (editorConfig.value?.saveDismiss === "close") {
+      const toast = editorConfig.value?.saveToast;
+      if (toast) {
+        notify.success(
+          toast.summary || "Saved",
+          fillResponse(toast.detail, result),
+        );
+      }
       emit("close");
+    } else {
+      saved.value = true;
     }
   } catch (e) {
     saveError.value = (e as Error).message;
@@ -359,7 +370,7 @@ onUnmounted(() => {
         <span v-if="saveError" class="text-xs text-red-500">{{
           saveError
         }}</span>
-        <span v-else-if="saved" class="text-xs text-emerald-500">{{
+        <span v-else-if="saved && !changed" class="text-xs text-emerald-500">{{
           editorConfig?.saveToast?.summary ?? "Saved"
         }}</span>
         <Button
@@ -382,7 +393,7 @@ onUnmounted(() => {
           type="button"
           label="Save"
           :loading="saving"
-          :disabled="saving"
+          :disabled="saving || (requiresChange && !changed)"
           @click="save"
         />
       </div>

@@ -434,6 +434,7 @@ onUnmounted(() => {
             option-label="label"
             option-value="value"
             :disabled="!writable"
+            aria-label="Type"
           />
         </div>
         <CodeTextEditor
@@ -470,6 +471,7 @@ onUnmounted(() => {
             :options="typeOptions"
             option-label="label"
             option-value="value"
+            aria-label="Type"
           />
         </div>
         <div class="h-56">

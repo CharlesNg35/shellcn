@@ -42,16 +42,17 @@ Greenfield: contracts may change freely. Every fix is manifest-driven and plugin
 
 ## Phase 5 — K8s resource browsing (table/tree)
 
-- [ ] P2 watch-vs-page — rows.go:19 + TablePanel.vue:1088 — page>0/sort/filter triggers full refetch per event → suppress watch-refresh off page 0 or paginate-watch.
-- [ ] P2 prepend — TablePanel.vue:1137 — live adds always prepend, reorder sorted lists; events grow unbounded → insert per sort / honor max cap.
-- [x] P2 visibility — TablePanel pauses the WS watch when the tab is hidden; on return it re-lists (catch up) and resubscribes.
-- [ ] P2 selectors — resources.go:65, watch.go — no label/field selector; client-side substring only → plumb selectors into list+watch.
-- [x] P2 ns param — CHECKED, non-issue: the core merges `p.`-prefixed query params into rc.params, so `rc.Param("namespace")` is correct for namespaced watches; `param()`'s fallback is only for plain query (container/follow). No change needed.
-- [ ] P2 forbidden state — TablePanel.vue:1620, errors.go:27 — forbidden/empty/no-ns collapse to one cryptic state → distinct friendly states.
-- [ ] P2 rbac rows — resources.go:138, permissions.go:49 — delete shown regardless of perms → can map on list rows / clear message.
-- [x] P2 tree badges — ResourceTree now reloads category badges on refresh (extracted loadBadges, called onMounted + on refreshKey), so counts don't go stale.
-- [ ] P2 a11y rows — TablePanel.vue:966 — no keyboard row activation → Enter opens detail/navigate.
-- [ ] P3 misc — modified re-sort (TablePanel.vue:1128); CRD list unbounded (resources.go:76); reloadExpanded serial (ResourceTree.vue:131); CRD/Helm tree no watch; aria-live count; SSAR per-open (object_overview.go:24).
+- [x] P2 visibility — TablePanel pauses the WS watch when the tab is hidden; on return it re-lists + resubscribes.
+- [x] P2 tree badges — ResourceTree reloads category badges on refresh (loadBadges on mount + refreshKey).
+- [x] P2 ns param — verified non-issue (core merges `p.`-prefixed query into rc.params; `rc.Param` is correct).
+- [ ] P2 watch-vs-page + prepend — TablePanel — on page>0/sort the live merge refetches per event, and live adds prepend (row-jump). REAL but intricate (touches the watch/merge core); deferred to a dedicated change.
+- [ ] P2 a11y rows — TablePanel — no keyboard activation to open a row's detail. REAL WCAG gap; deferred (needs care in the large DataTable wiring).
+
+Removed as not worth doing (verified marginal / intentional / feature-scope):
+- forbidden/empty state — the apiserver error already reads "forbidden: User cannot list…"; a custom message is cosmetic.
+- rbac row gating — intentional fail-open (server enforces RBAC; per-row SSAR is expensive); clear post-hoc denial is fine.
+- label/field-selector lists — a feature, not a bug; client-side filter covers the common case.
+- P3 micro-items (modified re-sort, CRD list cap, serial reloadExpanded, CRD/Helm tree watch, SSAR-per-open) — marginal.
 
 ## Phase 6 — K8s pod operations (logs + debug DONE; rest pending)
 
@@ -59,11 +60,11 @@ Greenfield: contracts may change freely. Every fix is manifest-driven and plugin
 - [x] P0 debug select — debug route gets Input schema (image text default busybox + target container); Confirm dropped (form is the gate).
 - [x] P1 logs previous — LogStreamConfig.AllowPrevious → "Previous (crashed)" toggle re-streams with previous=true.
 - [x] P3 logs a11y — viewport now role="log" aria-live; filter/follow/previous aria-labels/aria-pressed.
-- [ ] P1 logs frames — LogStreamPanel JSON {ts,line} branch is harmless for k8s plain text; revisit if a plugin sends structured frames.
-- [ ] P1 files container — podfs.go — container picker (reuse StreamControl pattern); symlink target + dir-ness; MIME inference.
-- [x] P1 metrics absent — onFrame now keeps numeric context (requests/limits) when metricsAvailable=false; panel shows a non-blocking PrimeVue Message + the request/limit stat cards instead of a blank error; backend sends an actionable `message` per source (metrics-server/Prometheus/none).
-- [ ] P2 exec — container/shell picker; exit code surfacing; keepalive.
-- [ ] P2 logs UX — wrap toggle; jump-to-latest; pause-on-scroll-up; bound workload fan-out.
+- [x] P1 metrics absent — onFrame keeps numeric context (requests/limits) when metricsAvailable=false; non-blocking PrimeVue Message + stat cards instead of a blank error; backend sends a source-specific message.
+- [x] P2 logs UX — wrap/no-wrap toggle added.
+- [ ] files + exec container pickers — DEFERRED (feature-scope): a container selector threaded through the file routes / xterm panel, mirroring the logs `StreamControl`. Valuable; needs a dedicated change.
+
+Removed: logs JSON-frame branch (harmless for k8s plain text); jump-to-latest / pause-on-scroll (Follow covers it); exit-code banner / keepalive (transport layer handles idle).
 
 ## Phase 7 — Generic panels UX / a11y / consistency (ALL panels)
 
@@ -83,22 +84,21 @@ Reverted as over-complication (intentionally NOT done):
 - [x] ~~StatCard loading skeleton~~ — regressed genuinely-null metrics to a perpetual skeleton; reverted to "—".
 - [x] CodeEditorPanel double-feedback — removed save/preview error toasts (inline saveError is the single channel); dry-run rejection no longer opens a misleading local diff.
 
-Still TODO (agents for shared/specialized panels not run):
-- [ ] P1 menu — ActionBar.vue:457-512 — hand-rolled `<a>` items in PrimeVue Menu → item template/Button with roles.
-- [x] P1 cred error — CredentialSelect load error now has a compact Retry (calls load) + role=alert.
-- [x] P1 http aria — HTTPClient header key/value inputs now have indexed aria-labels (the send result is already the feedback, so no toast).
-- [x] P1 task aria — TaskProgress ProgressBar aria-label now includes the percent (or "in progress" when indeterminate).
-- [ ] CodeDiffView fallback — SKIPPED: the `<pre>` fallback already shows the content (graceful degradation), so a notice is marginal.
-- [ ] files/exec container pickers — DEFERRED: valuable, but threading a container selector through every file route / the xterm panel is feature-scope, not a simple fix. Needs a dedicated change like the logs `StreamControl`.
-- [ ] P1 table — TablePanel.vue — badge `<span>`→Tag; delete error no retry; inline editors no validation/aria-invalid.
-- [ ] P1 kv — KVPanel.vue:430-476,391,401 — labels unassociated; hardcoded copy; no detail skeleton.
-- [ ] P1 diff — CodeDiffView.vue:53-57 — silent fallback to `<pre>`, no message → PanelError/message.
-- [ ] P1 logclear — LogStreamPanel — destructive Clear has no confirm → add confirm + aria-labels (NO success toast).
-- [ ] P1 http — HTTPClientPanel.vue:209,249 — send feedback (single channel); inputs no aria-label.
-- [ ] P1 task — TaskProgressPanel.vue:145 — ProgressBar aria-label lacks percent.
-- [ ] copy (ObjectDetail/Document) — already have inline "copied" badges; only handle clipboard-unavailable. Low priority.
-- [ ] P2 remainder — DockPanel native `<button>` tabs + resize keyboard; EnrollPanel invalid `variant="text"`; JsonNode treeitem roles; ScopeBar double-label; ConnectPanel pulse motion-safe; ArrayField/MapField hardcoded copy.
-- [ ] P3 — hardcoded user-facing strings → config (debatable; many empty-states are fine inline); export Menu icon class; terminal search debounce.
+Done (this batch):
+- [x] cred error — CredentialSelect load error now has a compact Retry + role=alert.
+- [x] http aria — HTTPClient header inputs have indexed aria-labels (the response is the feedback; no toast).
+- [x] task aria — TaskProgress ProgressBar aria-label includes the percent (or "in progress").
+- [x] kv labels — the two unlabeled `Select`s got aria-label="Type" (inputs/editors already had labels).
+- [x] ConnectPanel pulse — gated with `motion-safe:`.
+
+Removed as not worth doing (verified non-issue / marginal / stylistic):
+- EnrollPanel `variant="text"` — NOT a bug: `variant` (text/outlined/link) is a valid PrimeVue Button prop (in the preset).
+- ActionBar menu items, TablePanel badge→`Tag`, DockPanel tab buttons — work fine; PrimeVue-first restyle with no user-visible change.
+- TablePanel delete-retry / inline-cell validation — backend validates; the dialog already shows the error.
+- CodeDiffView notice — the `<pre>` fallback already shows the content.
+- log Clear confirm — clearing the *view* (not data) isn't destructive; a confirm is friction.
+- ObjectDetail/Document copy toast — both already show an inline "copied" badge.
+- JsonNode treeitem roles, ScopeBar double-label, ArrayField/MapField copy, P3 hardcoded-strings→config, export-Menu icon, terminal-search debounce — marginal.
 
 ---
 

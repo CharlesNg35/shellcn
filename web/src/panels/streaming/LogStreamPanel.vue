@@ -17,6 +17,7 @@ const lines = ref<string[]>([]);
 const pausedBuffer = ref<string[]>([]);
 const paused = ref(false);
 const follow = ref(true);
+const wrap = ref(true);
 const filterText = ref("");
 const viewport = ref<HTMLElement | null>(null);
 const reconnecting = ref(false);
@@ -192,12 +193,14 @@ onActivated(() => void nextTick(scrollToBottom));
       </template>
       <InputText
         v-model="filterText"
+        size="small"
         placeholder="Filter logs"
         aria-label="Filter logs"
         class="max-w-64"
       />
       <Button
         type="button"
+        size="small"
         severity="secondary"
         :label="pauseLabel"
         :aria-pressed="paused"
@@ -205,14 +208,24 @@ onActivated(() => void nextTick(scrollToBottom));
       />
       <Button
         type="button"
+        size="small"
         severity="secondary"
         :label="follow ? 'Following' : 'Follow'"
         :aria-pressed="follow"
         @click="follow = !follow"
       />
       <Button
+        type="button"
+        size="small"
+        severity="secondary"
+        :label="wrap ? 'Wrap' : 'No wrap'"
+        :aria-pressed="wrap"
+        @click="wrap = !wrap"
+      />
+      <Button
         v-if="cfg?.allowPrevious"
         type="button"
+        size="small"
         severity="secondary"
         :label="previous ? 'Previous (on)' : 'Previous'"
         :aria-pressed="previous"
@@ -224,12 +237,14 @@ onActivated(() => void nextTick(scrollToBottom));
       />
       <Button
         type="button"
+        size="small"
         severity="secondary"
         label="Clear"
         @click="lines = []"
       />
       <Button
         as="a"
+        size="small"
         severity="secondary"
         :href="downloadHref"
         download="logs.txt"
@@ -246,7 +261,7 @@ onActivated(() => void nextTick(scrollToBottom));
       <div
         v-for="(line, i) in visibleLines"
         :key="i"
-        class="whitespace-pre-wrap"
+        :class="wrap ? 'whitespace-pre-wrap' : 'whitespace-pre'"
       >
         {{ line }}
       </div>
