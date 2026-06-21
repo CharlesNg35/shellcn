@@ -474,6 +474,7 @@ async function onActionDone(
               :source="dockState.dialog.source"
               :config="dockState.dialog.config"
               :resource="dockState.dialog.resource"
+              @close="dock.closeDialog(id)"
             />
           </div>
         </Dialog>

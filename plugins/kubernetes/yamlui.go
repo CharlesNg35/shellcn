@@ -14,6 +14,7 @@ func yamlEditorConfig(watch *plugin.DataSource) plugin.CodeEditorConfig {
 		RefreshField: "content",
 		DryRunKey:    "dryRun",
 		Watch:        watch,
+		SaveToast:    &plugin.SaveToast{Summary: "Applied"},
 	}
 }
 
@@ -90,11 +91,14 @@ func eventTimelineConfig(watch *plugin.DataSource) plugin.TimelineConfig {
 // createAction opens a dynamically-generated starter manifest for kind in a
 // dialog; saving applies it. One per kind so the list's "Create" knows its kind.
 func createAction(k kind) plugin.Action {
+	cfg := yamlEditorConfig(nil)
+	cfg.SaveToast = &plugin.SaveToast{Summary: "Created " + k.title}
+	cfg.SaveDismiss = plugin.SaveDismissClose
 	return plugin.Action{
 		ID: "kubernetes.create." + k.name, Label: "Create " + k.title, Icon: lucide("plus"),
 		RouteID: "kubernetes.resource.template", Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor,
 		Params: map[string]string{"kind": k.name},
-		Config: yamlEditorConfig(nil),
+		Config: cfg,
 	}
 }
 
@@ -103,9 +107,12 @@ func createAction(k kind) plugin.Action {
 // scope params (not a static Params here). The template is derived from the CRD
 // schema like any other kind.
 func createCustomResourceAction() plugin.Action {
+	cfg := yamlEditorConfig(nil)
+	cfg.SaveToast = &plugin.SaveToast{Summary: "Created"}
+	cfg.SaveDismiss = plugin.SaveDismissClose
 	return plugin.Action{
 		ID: "kubernetes.create.customresource", Label: "Create", Icon: lucide("plus"),
 		RouteID: "kubernetes.resource.template", Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor,
-		Config: yamlEditorConfig(nil),
+		Config: cfg,
 	}
 }

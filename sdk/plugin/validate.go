@@ -668,6 +668,22 @@ func validateWriteConfigMethod(ctx string, method Method, add func(string, ...an
 	}
 }
 
+func checkSaveFeedback(ctx string, toast *SaveToast, dismiss SaveDismiss, add func(string, ...any)) {
+	switch dismiss {
+	case SaveDismissNone, SaveDismissClose:
+	default:
+		add("%s saveDismiss %q is not a known value", ctx, dismiss)
+	}
+	if toast == nil || toast.Severity == "" {
+		return
+	}
+	switch toast.Severity {
+	case SeverityInfo, SeveritySuccess, SeverityWarn, SeverityDanger, SeveritySecondary:
+	default:
+		add("%s saveToast.severity %q is not a known severity", ctx, toast.Severity)
+	}
+}
+
 // checkPanelConfigRoutes validates the route/action IDs a typed panel config
 // references by switching on the concrete config — no string-key introspection.
 func checkPanelConfigRoutes(
@@ -735,12 +751,14 @@ func checkPanelConfigRoutes(
 	case FormPanelConfig:
 		checkWriteRouteID(ctx+" submitRouteId", c.SubmitRouteID)
 		validateWriteConfigMethod(ctx+" submitMethod", c.SubmitMethod, add)
+		checkSaveFeedback(ctx, c.SaveToast, c.SaveDismiss, add)
 	case CodeEditorConfig:
 		checkWriteRouteID(ctx+" saveRouteId", c.SaveRouteID)
 		validateWriteConfigMethod(ctx+" saveMethod", c.SaveMethod, add)
 		if c.Watch != nil {
 			checkStreamSource(ctx+" watch", c.Watch)
 		}
+		checkSaveFeedback(ctx, c.SaveToast, c.SaveDismiss, add)
 	case ObjectDetailConfig:
 		if c.Watch != nil {
 			checkStreamSource(ctx+" watch", c.Watch)

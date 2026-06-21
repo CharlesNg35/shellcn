@@ -158,11 +158,22 @@ export const FileOperation = {
 
 export type FileOperation = (typeof FileOperation)[keyof typeof FileOperation];
 
+export interface SaveToast {
+  summary?: string;
+  detail?: string;
+  severity?: Severity;
+}
+
+export const SaveDismiss = { Close: "close" } as const;
+export type SaveDismiss = (typeof SaveDismiss)[keyof typeof SaveDismiss] | "";
+
 export interface FormPanelConfig {
   submitRouteId?: string;
   submitMethod?: Exclude<Method, "GET" | "WS">;
   submitLabel?: string;
   params?: Record<string, string>;
+  saveToast?: SaveToast;
+  saveDismiss?: SaveDismiss;
 }
 
 export interface CodeEditorConfig {
@@ -176,6 +187,8 @@ export interface CodeEditorConfig {
   watch?: DataSource;
   refreshField?: string;
   dryRunKey?: string;
+  saveToast?: SaveToast;
+  saveDismiss?: SaveDismiss;
 }
 
 export const DiffMode = {

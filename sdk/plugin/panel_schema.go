@@ -58,6 +58,8 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("submitMethod", enum("POST", "PUT", "PATCH", "DELETE")),
 				prop("submitLabel", stringProp()),
 				prop("params", stringMap()),
+				prop("saveToast", saveToast()),
+				prop("saveDismiss", enum("close")),
 			),
 		},
 		PanelDashboard: {
@@ -120,6 +122,8 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("watch", dataSource()),
 				prop("refreshField", stringProp()),
 				prop("dryRunKey", stringProp()),
+				prop("saveToast", saveToast()),
+				prop("saveDismiss", enum("close")),
 			),
 		},
 		PanelDiff: {
@@ -343,6 +347,17 @@ func dataSource() PanelConfigProperty {
 			prop("params", stringMap()),
 		),
 		Required: []string{"routeId"},
+	}
+}
+
+func saveToast() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("summary", stringProp()),
+			prop("detail", stringProp()),
+			prop("severity", enum("info", "success", "warn", "danger", "secondary")),
+		),
 	}
 }
 

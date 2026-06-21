@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	stderrors "errors"
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,9 +28,18 @@ func apiErr(err error) error {
 		return fmt.Errorf("%w: %v", plugin.ErrForbidden, err)
 	case apierrors.IsInvalid(err), apierrors.IsBadRequest(err):
 		return fmt.Errorf("%w: %v", plugin.ErrInvalidInput, err)
+	case apierrors.IsMethodNotSupported(err), apierrors.IsNotAcceptable(err), apierrors.IsUnsupportedMediaType(err):
+		return fmt.Errorf("%w: %v", plugin.ErrNotSupported, err)
 	case apierrors.IsServiceUnavailable(err), apierrors.IsServerTimeout(err), apierrors.IsTimeout(err):
 		return fmt.Errorf("%w: %v", plugin.ErrUnavailable, err)
-	default:
-		return err
 	}
+	// Any other client-side (4xx) apiserver error surfaces its message as invalid
+	// input rather than collapsing to an opaque 500 with the detail hidden.
+	var status apierrors.APIStatus
+	if stderrors.As(err, &status) {
+		if code := status.Status().Code; code >= 400 && code < 500 {
+			return fmt.Errorf("%w: %v", plugin.ErrInvalidInput, err)
+		}
+	}
+	return err
 }

@@ -13,8 +13,20 @@ import AppIcon from "@/components/AppIcon.vue";
 import CodeDiffView from "../shared/CodeDiffView.vue";
 import { dialogRoot } from "@/primevue/preset";
 import { useDirtyGuard } from "../shared/useDirtyGuard";
+import { useNotify } from "@/composables/useNotify";
 
 const props = defineProps<PanelProps>();
+const emit = defineEmits<{ close: [] }>();
+const notify = useNotify();
+
+function fillResponse(
+  template: string | undefined,
+  result: Record<string, unknown>,
+): string | undefined {
+  return template?.replace(/\$\{response\.([^}]+)\}/g, (_, key) =>
+    String(result[key] ?? ""),
+  );
+}
 
 const text = ref("");
 const loading = ref(true);
@@ -244,6 +256,7 @@ async function dryRun(): Promise<string | null> {
     return typeof content === "string" ? content : null;
   } catch (e) {
     saveError.value = (e as Error).message;
+    notify.error("Preview failed", saveError.value ?? undefined);
     return null;
   } finally {
     previewing.value = false;
@@ -279,8 +292,19 @@ async function save(): Promise<void> {
     externalChanged.value = false;
     serverContent.value = null;
     showDiff.value = false;
+    const toast = editorConfig.value?.saveToast;
+    if (toast) {
+      notify.success(
+        toast.summary || "Saved",
+        fillResponse(toast.detail, result),
+      );
+    }
+    if (editorConfig.value?.saveDismiss === "close") {
+      emit("close");
+    }
   } catch (e) {
     saveError.value = (e as Error).message;
+    notify.error("Save failed", saveError.value ?? undefined);
   } finally {
     saving.value = false;
   }
@@ -334,7 +358,9 @@ onUnmounted(() => {
         <span v-if="saveError" class="text-xs text-red-500">{{
           saveError
         }}</span>
-        <span v-else-if="saved" class="text-xs text-emerald-500">Saved</span>
+        <span v-else-if="saved" class="text-xs text-emerald-500">{{
+          editorConfig?.saveToast?.summary ?? "Saved"
+        }}</span>
         <Button
           v-if="changed"
           type="button"

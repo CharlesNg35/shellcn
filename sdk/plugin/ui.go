@@ -226,6 +226,8 @@ type FormPanelConfig struct {
 	SubmitMethod  Method            `json:"submitMethod,omitempty"`
 	SubmitLabel   string            `json:"submitLabel,omitempty"`
 	Params        map[string]string `json:"params,omitempty"`
+	SaveToast     *SaveToast        `json:"saveToast,omitempty"`
+	SaveDismiss   SaveDismiss       `json:"saveDismiss,omitempty"`
 }
 
 // DashboardConfig renders multiple panels in one responsive grid.
@@ -527,7 +529,27 @@ type CodeEditorConfig struct {
 	// DryRunKey, with RefreshField, enables a Preview: the save body is sent with
 	// this key set true and the returned content is diffed against the live baseline.
 	DryRunKey string `json:"dryRunKey,omitempty"`
+	// SaveToast is success feedback shown after a save; SaveDismiss closes the host
+	// dialog on success. Both are generic and apply to any save-capable panel.
+	SaveToast   *SaveToast  `json:"saveToast,omitempty"`
+	SaveDismiss SaveDismiss `json:"saveDismiss,omitempty"`
 }
+
+// SaveToast is optional success feedback for a save/apply. Detail may interpolate
+// the save response via ${response.x}.
+type SaveToast struct {
+	Summary  string   `json:"summary,omitempty"`
+	Detail   string   `json:"detail,omitempty"`
+	Severity Severity `json:"severity,omitempty"`
+}
+
+// SaveDismiss selects what happens to a save panel's host surface after success.
+type SaveDismiss string
+
+const (
+	SaveDismissNone  SaveDismiss = ""
+	SaveDismissClose SaveDismiss = "close"
+)
 
 type DiffMode string
 

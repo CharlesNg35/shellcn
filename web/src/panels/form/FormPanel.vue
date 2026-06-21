@@ -9,6 +9,7 @@ import SkeletonList from "@/components/SkeletonList.vue";
 import SchemaForm from "./SchemaForm.vue";
 
 const props = defineProps<PanelProps>();
+const emit = defineEmits<{ close: [] }>();
 const toast = useToast();
 
 const formConfig = computed(() => props.config as FormPanelConfig | undefined);
@@ -49,12 +50,16 @@ async function submit(value: Record<string, unknown>): Promise<void> {
       formConfig.value?.params ?? props.source?.params ?? {},
       formConfig.value?.submitMethod ?? "PATCH",
     );
+    const feedback = formConfig.value?.saveToast;
     toast.add({
-      severity: "success",
-      summary: "Saved",
-      detail: "Changes were submitted.",
+      severity: feedback?.severity ?? "success",
+      summary: feedback?.summary ?? "Saved",
+      detail: feedback?.detail ?? "Changes were submitted.",
       life: 2200,
     });
+    if (formConfig.value?.saveDismiss === "close") {
+      emit("close");
+    }
   } catch (e) {
     toast.add({
       severity: "error",

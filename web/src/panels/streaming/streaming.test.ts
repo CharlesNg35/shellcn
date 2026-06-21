@@ -1923,6 +1923,36 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
+  it("emits close after a successful save when saveDismiss is set", async () => {
+    vi.unstubAllGlobals();
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    installFetch(() => ({ body: { ok: true } }));
+    mockCodeMirror.value = "name: app";
+
+    const w = mount(CodeEditorPanel, {
+      props: {
+        connectionId: "c1",
+        config: {
+          language: "yaml",
+          saveRouteId: "kubernetes.resource.apply",
+          saveMethod: "POST",
+          saveToast: { summary: "Applied" },
+          saveDismiss: "close",
+        },
+      },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Save"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.emitted("close")).toBeTruthy();
+    w.unmount();
+  });
+
   it("review prefers the server dry-run preview when configured", async () => {
     vi.stubGlobal("ResizeObserver", FakeResizeObserver);
     vi.stubGlobal(
