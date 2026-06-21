@@ -10,10 +10,18 @@ import (
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
+
+// previousUnavailable reports the apiserver's "no previous container instance"
+// rejection — a 400 when previous logs are requested but the container has not
+// restarted — so the log view can show a friendly note instead of a raw error.
+func previousUnavailable(err error) bool {
+	return apierrors.IsBadRequest(err) && strings.Contains(err.Error(), "previous terminated container")
+}
 
 // LogsStream streams a pod container's logs to the client. Pod logs are a plain
 // chunked GET (no upgrade), so this works over both direct and agent transport
@@ -48,6 +56,10 @@ func LogsStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 		opts.Container = containers[0]
 		stream, err := s.Clientset().CoreV1().Pods(ns).GetLogs(pod, &opts).Stream(rc.Ctx)
 		if err != nil {
+			if base.Previous && previousUnavailable(err) {
+				_, werr := io.WriteString(client, "No previous logs: this container has not restarted.\n")
+				return werr
+			}
 			return apiErr(err)
 		}
 		defer func() { _ = stream.Close() }()
@@ -72,7 +84,11 @@ func LogsStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 			defer wg.Done()
 			stream, err := s.Clientset().CoreV1().Pods(ns).GetLogs(pod, &opts).Stream(rc.Ctx)
 			if err != nil {
-				_, _ = write(fmt.Appendf(nil, "[%s] %s\n", container, apiErr(err)))
+				msg := apiErr(err).Error()
+				if base.Previous && previousUnavailable(err) {
+					msg = "no previous logs (container has not restarted)"
+				}
+				_, _ = write(fmt.Appendf(nil, "[%s] %s\n", container, msg))
 				return
 			}
 			defer func() { _ = stream.Close() }()

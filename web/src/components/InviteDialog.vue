@@ -6,7 +6,6 @@ import InputText from "primevue/inputtext";
 import Button from "primevue/button";
 import { ApiError } from "../api/client";
 import { invitationsApi } from "../api/invitations";
-import { useNotify } from "../composables/useNotify";
 import AppIcon from "./AppIcon.vue";
 import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
 import { Role, ROLE_OPTIONS } from "../constants/roles";
@@ -17,8 +16,6 @@ const emit = defineEmits<{
   "update:visible": [value: boolean];
   created: [];
 }>();
-
-const notify = useNotify();
 
 const email = ref("");
 const role = ref<Role>(Role.Viewer);
@@ -75,7 +72,6 @@ async function copyLink(): Promise<void> {
   try {
     await navigator.clipboard?.writeText(result.value.link);
     copied.value = true;
-    notify.success("Link copied");
     clearCopiedTimer();
     copiedTimer = setTimeout(() => (copied.value = false), 1500);
   } catch {

@@ -128,13 +128,12 @@ async function onReconnect(): Promise<void> {
       @reconnect="onReconnect"
     />
     <div class="min-h-0 flex-1 space-y-4 overflow-auto p-4">
-      <Message
-        v-if="availabilityMessage"
-        severity="warn"
-        :closable="false"
-        >{{ availabilityMessage }}</Message
-      >
-      <PanelLoader v-if="hasMetrics && !receivedSample && !availabilityMessage" />
+      <Message v-if="availabilityMessage" severity="warn" :closable="false">{{
+        availabilityMessage
+      }}</Message>
+      <PanelLoader
+        v-if="hasMetrics && !receivedSample && !availabilityMessage"
+      />
       <div
         v-if="stats.length && receivedSample"
         class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"

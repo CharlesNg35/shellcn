@@ -230,7 +230,6 @@ async function save(): Promise<void> {
       { [keyParam.value]: selected.value.key },
       "PUT",
     );
-    toast.add({ severity: "success", summary: "Key saved", life: 2200 });
     await load();
   } catch (e) {
     toast.add({

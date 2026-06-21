@@ -26,6 +26,11 @@ const busy = ref(false);
 const error = ref<string | null>(null);
 
 const isEdit = computed(() => Boolean(props.folder));
+const dirty = computed(
+  () =>
+    name.value.trim() !== (props.folder?.name ?? "") ||
+    color.value !== (props.folder?.color ?? "blue"),
+);
 
 const swatches: Array<{
   value: FolderColor;
@@ -161,7 +166,7 @@ async function save(): Promise<void> {
           type="button"
           :label="isEdit ? 'Save changes' : 'Create folder'"
           :loading="busy"
-          :disabled="busy"
+          :disabled="busy || (isEdit && !dirty)"
           :pt="{ root: btnPrimary }"
           @click="save"
         />
