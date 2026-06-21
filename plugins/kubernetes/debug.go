@@ -21,6 +21,9 @@ func debugAction() plugin.Action {
 		ID: "kubernetes.pod.debug", Label: "Debug", Icon: lucide("bug"),
 		RouteID: "kubernetes.pod.debug.create",
 		Params:  map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"},
+		Confirm: true,
+		ConfirmText: "Add an ephemeral debug container to this pod and open a shell? " +
+			"The container persists until the pod is recreated.",
 		EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{
 			{Field: "status", Op: plugin.OpEq, Value: "Running"},
 			{Field: "can.patch", Op: plugin.OpEq, Value: true},

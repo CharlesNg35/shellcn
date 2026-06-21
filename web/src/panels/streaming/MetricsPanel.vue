@@ -12,7 +12,7 @@ import type {
 } from "@/types/projection";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import PanelLoader from "@/components/PanelLoader.vue";
-import PanelError from "../shared/PanelError.vue";
+import Message from "primevue/message";
 import StatCard from "./metrics/StatCard.vue";
 import GaugeChart from "./metrics/GaugeChart.vue";
 import SeriesChart from "./metrics/SeriesChart.vue";
@@ -65,13 +65,8 @@ function onFrame(raw: string): void {
   } catch {
     return;
   }
-  if (frame.metricsAvailable === false || frame.available === false) {
-    availabilityMessage.value =
-      typeof frame.message === "string"
-        ? frame.message
-        : "Metrics source unavailable.";
-    return;
-  }
+  const unavailable =
+    frame.metricsAvailable === false || frame.available === false;
   let changed = false;
   for (const [k, v] of Object.entries(frame)) {
     if (typeof v === "number") {
@@ -79,9 +74,15 @@ function onFrame(raw: string): void {
       changed = true;
     }
   }
-  if (!changed) return;
-  availabilityMessage.value = null;
-  receivedSample.value = true;
+  // Keep any context the backend still sent (e.g. requests/limits) visible; only the
+  // live-usage charts are hidden when the source is unavailable.
+  availabilityMessage.value = unavailable
+    ? typeof frame.message === "string"
+      ? frame.message
+      : "Live metrics are unavailable."
+    : null;
+  if (changed) receivedSample.value = true;
+  if (unavailable || !changed) return;
   labels.value.push(new Date().toLocaleTimeString());
   if (labels.value.length > historyLimit.value) labels.value.shift();
   for (const s of series.value) {
@@ -127,15 +128,15 @@ async function onReconnect(): Promise<void> {
       @reconnect="onReconnect"
     />
     <div class="min-h-0 flex-1 space-y-4 overflow-auto p-4">
-      <PanelError
+      <Message
         v-if="availabilityMessage"
-        :message="availabilityMessage"
-        retryable
-        @retry="onReconnect"
-      />
-      <PanelLoader v-else-if="hasMetrics && !receivedSample" />
+        severity="warn"
+        :closable="false"
+        >{{ availabilityMessage }}</Message
+      >
+      <PanelLoader v-if="hasMetrics && !receivedSample && !availabilityMessage" />
       <div
-        v-if="stats.length && !availabilityMessage && receivedSample"
+        v-if="stats.length && receivedSample"
         class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
       >
         <StatCard

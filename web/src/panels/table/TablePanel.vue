@@ -1266,6 +1266,21 @@ vueWatch(
   { immediate: true },
 );
 
+// Pause the live watch while the tab is hidden; on return, re-list to catch up on
+// anything missed and resubscribe.
+vueWatch(
+  () => visibility.value === "visible",
+  (visible) => {
+    if (!active.value || refreshMs.value > 0 || !watchSource.value) return;
+    if (visible) {
+      load(first.value);
+      startWatch();
+    } else {
+      stopResourceWatch();
+    }
+  },
+);
+
 vueWatch([filterText, sortField, sortOrder, first, pageSize], () =>
   saveTableState(),
 );

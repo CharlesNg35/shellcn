@@ -45,7 +45,7 @@ Greenfield: contracts may change freely. Every fix is manifest-driven and plugin
 
 - [ ] P2 watch-vs-page — rows.go:19 + TablePanel.vue:1088 — page>0/sort/filter triggers full refetch per event → suppress watch-refresh off page 0 or paginate-watch.
 - [ ] P2 prepend — TablePanel.vue:1137 — live adds always prepend, reorder sorted lists; events grow unbounded → insert per sort / honor max cap.
-- [ ] P2 visibility — TablePanel.vue:1146 — WS watch not paused on document.hidden → gate startWatch on visibility.
+- [x] P2 visibility — TablePanel pauses the WS watch when the tab is hidden; on return it re-lists (catch up) and resubscribes.
 - [ ] P2 selectors — resources.go:65, watch.go — no label/field selector; client-side substring only → plumb selectors into list+watch.
 - [ ] P2 ns param — watch.go:108, events.go — object/event watch read rc.Param raw vs list param() query-fallback → use param() everywhere.
 - [ ] P2 forbidden state — TablePanel.vue:1620, errors.go:27 — forbidden/empty/no-ns collapse to one cryptic state → distinct friendly states.
@@ -62,7 +62,7 @@ Greenfield: contracts may change freely. Every fix is manifest-driven and plugin
 - [x] P3 logs a11y — viewport now role="log" aria-live; filter/follow/previous aria-labels/aria-pressed.
 - [ ] P1 logs frames — LogStreamPanel JSON {ts,line} branch is harmless for k8s plain text; revisit if a plugin sends structured frames.
 - [ ] P1 files container — podfs.go — container picker (reuse StreamControl pattern); symlink target + dir-ness; MIME inference.
-- [ ] P1 metrics absent — MetricsPanel.vue + metrics.go — render requests/limits when metrics-server absent + specific message + pod Usage gauges.
+- [x] P1 metrics absent — onFrame now keeps numeric context (requests/limits) when metricsAvailable=false; panel shows a non-blocking PrimeVue Message + the request/limit stat cards instead of a blank error; backend sends an actionable `message` per source (metrics-server/Prometheus/none).
 - [ ] P2 exec — container/shell picker; exit code surfacing; keepalive.
 - [ ] P2 logs UX — wrap toggle; jump-to-latest; pause-on-scroll-up; bound workload fan-out.
 

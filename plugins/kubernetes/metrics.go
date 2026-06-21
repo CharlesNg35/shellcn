@@ -60,7 +60,7 @@ func metricsLoop(rc *plugin.RequestContext, client plugin.ClientStream, frame fu
 }
 
 func (s *Session) clusterFrame(ctx context.Context) map[string]any {
-	frame := map[string]any{"metricsAvailable": false}
+	frame := map[string]any{"metricsAvailable": false, "message": s.metricsMessage()}
 
 	nodes, err := s.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -119,7 +119,7 @@ func (s *Session) clusterUsage(ctx context.Context) (cpuCores, memBytes float64,
 }
 
 func (s *Session) nodeFrame(ctx context.Context, node string) map[string]any {
-	frame := map[string]any{"metricsAvailable": false}
+	frame := map[string]any{"metricsAvailable": false, "message": s.metricsMessage()}
 	n, err := s.clientset.CoreV1().Nodes().Get(ctx, node, metav1.GetOptions{})
 	if err != nil {
 		return frame
@@ -143,8 +143,21 @@ func (s *Session) nodeFrame(ctx context.Context, node string) map[string]any {
 	return frame
 }
 
+// metricsMessage explains, actionably, why live usage is unavailable for the
+// configured source. Only surfaced by the UI when metricsAvailable is false.
+func (s *Session) metricsMessage() string {
+	switch s.metricsSrc {
+	case metricsNone:
+		return "Live usage is unavailable: metrics-server is not installed in this cluster."
+	case metricsProm:
+		return "Live usage is unavailable: the configured Prometheus source is unreachable."
+	default:
+		return "Live usage is temporarily unavailable from metrics-server."
+	}
+}
+
 func (s *Session) podFrame(ctx context.Context, namespace, name string) map[string]any {
-	frame := map[string]any{"metricsAvailable": false}
+	frame := map[string]any{"metricsAvailable": false, "message": s.metricsMessage()}
 	pod, err := s.clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return frame
