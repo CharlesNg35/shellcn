@@ -206,6 +206,49 @@ func TestYAMLDryRunThreadsFlag(t *testing.T) {
 	}
 }
 
+func TestApplyYAMLMultiDocReturnsCombinedContent(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{"kind": "APIVersions", "versions": []any{"v1"}})
+	})
+	mux.HandleFunc("/apis", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{"kind": "APIGroupList", "groups": []any{}})
+	})
+	mux.HandleFunc("/api/v1", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"kind": "APIResourceList", "groupVersion": "v1",
+			"resources": []any{obj{"name": "configmaps", "namespaced": true, "kind": "ConfigMap"}},
+		})
+	})
+	for _, name := range []string{"a", "b"} {
+		n := name
+		mux.HandleFunc("/api/v1/namespaces/default/configmaps/"+n, func(w http.ResponseWriter, _ *http.Request) {
+			writeJSON(w, obj{
+				"apiVersion": "v1", "kind": "ConfigMap",
+				"metadata": obj{"name": n, "namespace": "default", "resourceVersion": "1"},
+				"data":     obj{"k": n},
+			})
+		})
+	}
+	sess := connectTo(t, mux)
+
+	stream := "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n  namespace: default\ndata:\n  k: a\n" +
+		"---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: b\n  namespace: default\ndata:\n  k: b\n"
+	body, _ := json.Marshal(map[string]any{"content": stream})
+	res, err := ApplyYAML(plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, sess, nil, nil, body))
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	m := res.(map[string]any)
+	if m["count"] != 2 {
+		t.Fatalf("count = %v, want 2", m["count"])
+	}
+	content, _ := m["content"].(string)
+	if !strings.Contains(content, "name: a") || !strings.Contains(content, "name: b") || !strings.Contains(content, "---") {
+		t.Fatalf("combined content missing both docs/separator: %q", content)
+	}
+}
+
 func TestDecodeManifestsSplitsDocuments(t *testing.T) {
 	stream := "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n" +
 		"---\n# a comment-only document is skipped\n" +

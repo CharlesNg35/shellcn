@@ -152,7 +152,19 @@ func ApplyYAML(rc *plugin.RequestContext) (any, error) {
 	if len(results) == 1 {
 		return results[0], nil
 	}
-	return map[string]any{"ok": true, "dryRun": req.DryRun, "count": len(results), "applied": results}, nil
+	// Join the canonical documents so the editor's RefreshField resets to the whole
+	// applied manifest (and a multi-doc dry-run can still diff).
+	parts := make([]string, 0, len(results))
+	for _, r := range results {
+		if c, ok := r["content"].(string); ok {
+			parts = append(parts, c)
+		}
+	}
+	return map[string]any{
+		"ok": true, "dryRun": req.DryRun, "count": len(results),
+		"applied": results,
+		"content": strings.Join(parts, "---\n"),
+	}, nil
 }
 
 // decodeManifests splits a YAML/JSON stream into its documents, skipping blanks.

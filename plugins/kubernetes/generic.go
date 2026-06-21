@@ -153,6 +153,14 @@ type ScaleRequest struct {
 }
 
 // ScaleResource sets spec.replicas on scalable workloads.
+// scalableKinds support replica scaling; restartableKinds have a pod template to
+// stamp. Guarding gives a clear error rather than a raw apiserver rejection if the
+// route is hit for a kind the action was never meant for.
+var (
+	scalableKinds    = map[string]bool{"deployment": true, "statefulset": true, "replicaset": true, "replicationcontroller": true}
+	restartableKinds = map[string]bool{"deployment": true, "statefulset": true, "daemonset": true, "replicaset": true}
+)
+
 func ScaleResource(rc *plugin.RequestContext) (any, error) {
 	var req ScaleRequest
 	if err := rc.Bind(&req); err != nil {
@@ -161,12 +169,18 @@ func ScaleResource(rc *plugin.RequestContext) (any, error) {
 	if req.Replicas < 0 {
 		return nil, fmt.Errorf("%w: replicas must be >= 0", plugin.ErrInvalidInput)
 	}
+	if !scalableKinds[rc.Param("kind")] {
+		return nil, fmt.Errorf("%w: %q is not a scalable workload", plugin.ErrInvalidInput, rc.Param("kind"))
+	}
 	patch := []byte(fmt.Sprintf(`{"spec":{"replicas":%d}}`, req.Replicas))
 	return patchResource(rc, types.MergePatchType, patch)
 }
 
 // RestartResource triggers a rolling restart (the kubectl rollout-restart stamp).
 func RestartResource(rc *plugin.RequestContext) (any, error) {
+	if !restartableKinds[rc.Param("kind")] {
+		return nil, fmt.Errorf("%w: %q has no rolling restart", plugin.ErrInvalidInput, rc.Param("kind"))
+	}
 	stamp := time.Now().UTC().Format(time.RFC3339)
 	patch := []byte(fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":%q}}}}}`, stamp))
 	return patchResource(rc, types.StrategicMergePatchType, patch)

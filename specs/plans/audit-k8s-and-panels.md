@@ -21,7 +21,7 @@ Greenfield: contracts may change freely. Every fix is manifest-driven and plugin
 - [x] P0 apply verb — yaml.go `replaceOrCreate` — GET-then-Update(PUT, fresh RV, 409 retry) for existing objects, Create for new; replaces SSA → fixes duplicate port.
 - [x] P1 error mapping — errors.go apiErr — added IsMethodNotSupported→ErrNotSupported and a generic 4xx StatusError → ErrInvalidInput fallthrough so dry-run errors surface their message (no hidden 500).
 - [x] tests — TestYAMLApplyReplacesPorts (rename-port → http,https no duplicate, PUT), TestYAMLDryRunThreadsFlag (dryRun=All + content), TestYAMLEditRoundTrip rewritten for PUT+fresh-RV. lint clean.
-- [ ] P2 multi-doc — yaml.go:150-153 — multi-doc apply returns no top-level `content`, breaks RefreshField → deferred (single-doc tab/dialog unaffected; revisit for multi-doc preview).
+- [x] P2 multi-doc — ApplyYAML now returns a top-level `content` joining the applied docs (`---`), so multi-doc RefreshField/preview work. Test: TestApplyYAMLMultiDocReturnsCombinedContent.
 
 ## Phase 3 — K8s routes security/correctness ✅ DONE (P1/P2 + secret)
 
@@ -30,7 +30,7 @@ Greenfield: contracts may change freely. Every fix is manifest-driven and plugin
 - [x] P2 events ns — ResourceEvents + WatchEvents validate name and namespace before building field selectors.
 - [x] P2 rbac gate — cronjob.trigger now EnabledWhen can.patch.
 - [x] P3 secret — GetYAML + WatchObjectYAML strip `stringData` as well as `data`.
-- [ ] P3 scale guard — generic.go:156-173 — guard scalable kinds / scale subresource → deferred (apiErr maps failures; no privilege gain).
+- [x] P3 scale guard — ScaleResource/RestartResource now reject kinds that aren't scalable/restartable (clear error instead of a raw apiserver rejection). Kept the existing replicas merge-patch (works for the wired kinds; the scale-subresource switch was marginal, skipped).
 
 ## Phase 4 — K8s watch / live-refresh backend
 
@@ -68,30 +68,39 @@ Greenfield: contracts may change freely. Every fix is manifest-driven and plugin
 
 ## Phase 7 — Generic panels UX / a11y / consistency (ALL panels)
 
-- [ ] P0 form a11y — FormField.vue:~371 — controls lack aria-invalid/aria-describedby → link errors to controls.
-- [ ] P0 grid keyboard — FileEntryGrid.vue:54-109 — no keyboard nav; checkbox in span not operable → roving focus + operable checkbox.
+**Feedback principle (from review):** one channel per outcome. Stream/connection status lives in `StreamStatusBar`, NOT per-panel toasts. No toast + inline error for the same failure. Don't add success toasts to routine/idempotent actions.
+
+Done (landed + kept after review prune):
+- [x] P0 form a11y — FormField aria-invalid/aria-describedby link errors to every control (computed errorId/describedBy/ariaInvalid).
+- [x] P0 grid keyboard — FileEntryGrid full roving-tabindex 2D keyboard nav + Enter/Space; aria-current→aria-selected (grid + list).
+- [x] P1 form groups — radio group + object groups now fieldset/legend; slider value aria-live; FileUpload aria-label + invalid; SchemaForm submit aria-busy.
+- [x] P1 query — error span role=alert/aria-live; result `<th>` scope="col" (heavy red-box styling reverted as noise).
+- [x] P1 file select/dnd — aria-selected; drop-zone role=status + live announce; chmod Select aria-label.
+- [x] P1 termgrid — destructive "reset all panes" confirm (confirmDanger); pane counter role=status/aria-live. (Per-split/close toasts deliberately NOT added — noise.)
+- [x] P2 partial — StreamStatusBar status role/aria-live + motion-safe pulse + popover role; GaugeChart/SeriesChart disable animation on prefers-reduced-motion; RemoteDesktop REC pulse motion-safe; error text role=alert across stream panels.
+
+Reverted as over-complication (intentionally NOT done):
+- [x] ~~P1 streams reconnect toasts~~ — StreamStatusBar already shows reconnect/error; toasts were redundant. Kept only role=alert on error text.
+- [x] ~~StatCard loading skeleton~~ — regressed genuinely-null metrics to a perpetual skeleton; reverted to "—".
+- [x] CodeEditorPanel double-feedback — removed save/preview error toasts (inline saveError is the single channel); dry-run rejection no longer opens a misleading local diff.
+
+Still TODO (agents for shared/specialized panels not run):
 - [ ] P1 menu — ActionBar.vue:457-512 — hand-rolled `<a>` items in PrimeVue Menu → item template/Button with roles.
 - [ ] P1 cred error — CredentialSelect.vue:120 — load error bare text, no retry → PanelError-style retry.
-- [ ] P1 table — TablePanel.vue:~1491,~1685,~1530 — badge `<span>`→Tag; delete error no retry; inline editors no validation/aria-invalid.
-- [ ] P1 form groups — FormField.vue:295-312,278,211 — radio no fieldset/legend; slider no live value; FileUpload no loading/error/toast.
+- [ ] P1 table — TablePanel.vue — badge `<span>`→Tag; delete error no retry; inline editors no validation/aria-invalid.
 - [ ] P1 kv — KVPanel.vue:430-476,391,401 — labels unassociated; hardcoded copy; no detail skeleton.
-- [ ] P1 copy — ObjectDetailPanel.vue:90, DocumentPanel.vue:51 — silent clipboard copy → toast.
 - [ ] P1 diff — CodeDiffView.vue:53-57 — silent fallback to `<pre>`, no message → PanelError/message.
-- [ ] P1 query — QueryEditorPanel.vue:306 — error not role=alert; headers no scope/caption.
-- [ ] P1 streams — TerminalPanel.vue:241,387 / RemoteDesktopPanel.vue:173,297 / CanvasPanel.vue:304 — silent reconnect; implicit alert roles → toast + role=alert.
-- [ ] P1 logclear — LogStreamPanel.vue:138 — destructive Clear silent, no confirm → confirm + toast + aria-labels.
-- [ ] P1 termgrid — TerminalGridPanel.vue:280/349/367/385 — silent destructive split/close/reset → feedback/confirm.
-- [ ] P1 file select — FileEntryGrid.vue:63/FileEntryList.vue:93 — aria-current misused → aria-selected.
-- [ ] P1 file dnd — FileBrowserPanel.vue:240-246,760-766,1013 — drag-drop no keyboard alt/announce; chmod Select no aria-label.
-- [ ] P1 http — HTTPClientPanel.vue:209,249 — silent send; inputs no aria-label.
-- [ ] P1 task — TaskProgressPanel.vue:138,145 — silent cancel/retry; ProgressBar aria-label no percent.
-- [ ] P2 batch — reduced-motion gating (GaugeChart/SeriesChart/StreamStatusBar/ConnectPanel/Terminal/Table draggable); aria-labels (object-detail/document/log/term buttons); skeletons (StatCard/KV detail/RemoteDesktop); DockPanel native `<button>` tabs + resize keyboard; EnrollPanel invalid `variant="text"` + silent download; FieldGroup fieldset; JsonNode treeitem roles; ScopeBar double-label; ArrayField/MapField hardcoded copy.
-- [ ] P3 batch — hardcoded user-facing strings → config (Fallback/Wasm/Dashboard/Trace/HTTPClient/QueryEditor export); export Menu icon class; submit aria-busy; terminal search debounce; severity contrast check.
+- [ ] P1 logclear — LogStreamPanel — destructive Clear has no confirm → add confirm + aria-labels (NO success toast).
+- [ ] P1 http — HTTPClientPanel.vue:209,249 — send feedback (single channel); inputs no aria-label.
+- [ ] P1 task — TaskProgressPanel.vue:145 — ProgressBar aria-label lacks percent.
+- [ ] copy (ObjectDetail/Document) — already have inline "copied" badges; only handle clipboard-unavailable. Low priority.
+- [ ] P2 remainder — DockPanel native `<button>` tabs + resize keyboard; EnrollPanel invalid `variant="text"`; JsonNode treeitem roles; ScopeBar double-label; ConnectPanel pulse motion-safe; ArrayField/MapField hardcoded copy.
+- [ ] P3 — hardcoded user-facing strings → config (debatable; many empty-states are fine inline); export Menu icon class; terminal search debounce.
 
 ---
 
-## Cross-cutting refactors (do early, reused by many fixes)
+## Cross-cutting principles (apply, don't over-apply)
 
-- [ ] Standardize error states on `PanelError` (role=alert + retry) and loading on `SkeletonList` (motion-safe) — replace ad-hoc red `<p>` and bare spinners.
-- [ ] `useNotify` success/error helper used by every side-effecting action.
-- [ ] `prefers-reduced-motion` honored via `motion-safe:`/media query everywhere motion is used.
+- [ ] Standardize error states on `PanelError` (role=alert + retry) and loading on `SkeletonList` (motion-safe) — replace ad-hoc red `<p>` and bare spinners. (Skeletons only for things that actually load — never for genuinely-absent values.)
+- One feedback channel per outcome: a contextual inline error OR a toast, never both. Stream/connection state stays in `StreamStatusBar`. Toasts only for actions whose result isn't otherwise visible (e.g. a dialog that closes on success). Do NOT toast routine/idempotent actions.
+- [ ] `prefers-reduced-motion` honored via `motion-safe:` (CSS) or a media-query check (JS charts) wherever motion is used.
