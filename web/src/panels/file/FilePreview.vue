@@ -82,6 +82,7 @@ const src = computed(() => props.streamSrc || props.content?.url || "");
 
       <div
         v-else
+        role="status"
         class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center"
       >
         <p class="text-surface-600 dark:text-surface-300">
@@ -109,6 +110,8 @@ const src = computed(() => props.streamSrc || props.content?.url || "");
 
     <div
       v-else
+      role="status"
+      aria-live="polite"
       class="flex h-full items-center justify-center p-6 text-sm text-surface-400"
     >
       Select a file to preview.

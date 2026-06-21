@@ -758,12 +758,17 @@ watch(
   <div ref="panelEl" class="relative flex h-full flex-col">
     <div
       v-if="dropActive"
+      role="status"
+      :aria-label="`Drop files to upload to ${cwd}`"
       class="pointer-events-none absolute inset-0 z-10 m-2 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary-400 bg-primary-50/80 text-primary-700 dark:border-primary-500 dark:bg-primary-950/70 dark:text-primary-200"
     >
       <AppIcon :icon="{ type: 'lucide', value: 'upload-cloud' }" :size="32" />
       <p class="text-sm font-medium">Drop files to upload here</p>
       <p class="text-xs opacity-80">{{ cwd }}</p>
     </div>
+    <p class="sr-only" role="status" aria-live="polite">
+      {{ dropActive ? `Drop files to upload to ${cwd}` : "" }}
+    </p>
 
     <FileCrumbs :path="cwd" @navigate="guardedLoadList" />
 
@@ -1016,6 +1021,7 @@ watch(
             option-label="label"
             option-value="value"
             placeholder="Choose permissions"
+            aria-label="Permission preset"
             fluid
             :disabled="mutating"
           />

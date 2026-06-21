@@ -226,6 +226,9 @@ async function review(): Promise<void> {
 
   if (canPreview.value) {
     const preview = await dryRun();
+    // A server rejection is shown inline; don't open a local diff that would imply
+    // the change is valid.
+    if (saveError.value) return;
     if (preview !== null) {
       diffModified.value = preview;
       diffOriginalLabel.value = "Live";
@@ -256,7 +259,6 @@ async function dryRun(): Promise<string | null> {
     return typeof content === "string" ? content : null;
   } catch (e) {
     saveError.value = (e as Error).message;
-    notify.error("Preview failed", saveError.value ?? undefined);
     return null;
   } finally {
     previewing.value = false;
@@ -304,7 +306,6 @@ async function save(): Promise<void> {
     }
   } catch (e) {
     saveError.value = (e as Error).message;
-    notify.error("Save failed", saveError.value ?? undefined);
   } finally {
     saving.value = false;
   }

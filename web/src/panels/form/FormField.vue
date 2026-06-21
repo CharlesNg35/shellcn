@@ -99,6 +99,9 @@ const sliderValue = computed(() =>
   typeof props.modelValue === "number" ? props.modelValue : (min.value ?? 0),
 );
 const controlId = computed(() => `field-${props.field.key}`);
+const errorId = computed(() => `${controlId.value}-error`);
+const describedBy = computed(() => (props.error ? errorId.value : undefined));
+const ariaInvalid = computed(() => (props.error ? true : undefined));
 
 const TEXT_INPUT_TYPES: Partial<Record<Field["type"], string>> = {
   [FieldType.Email]: "email",
@@ -180,6 +183,8 @@ function updateFiles(event: FileUploadSelectEvent): void {
       option-label="label"
       option-value="value"
       :placeholder="field.placeholder ?? 'Select…'"
+      :aria-invalid="ariaInvalid"
+      :aria-describedby="describedBy"
       @update:model-value="update"
     />
 
@@ -194,6 +199,8 @@ function updateFiles(event: FileUploadSelectEvent): void {
       filter
       :max-selected-labels="3"
       :placeholder="field.placeholder ?? 'Select…'"
+      :aria-invalid="ariaInvalid"
+      :aria-describedby="describedBy"
       @update:model-value="update"
     />
 
@@ -208,7 +215,9 @@ function updateFiles(event: FileUploadSelectEvent): void {
       mode="basic"
       custom-upload
       :multiple="true"
-      choose-label="Choose file"
+      :choose-label="field.placeholder ?? 'Choose file'"
+      :pt="{ root: { 'aria-label': field.label } }"
+      :invalid="Boolean(error)"
       @select="updateFiles"
     />
 
@@ -230,6 +239,8 @@ function updateFiles(event: FileUploadSelectEvent): void {
       :model-value="(modelValue as string) ?? ''"
       rows="4"
       :placeholder="field.placeholder"
+      :aria-invalid="ariaInvalid"
+      :aria-describedby="describedBy"
       @update:model-value="update"
     />
 
@@ -239,7 +250,11 @@ function updateFiles(event: FileUploadSelectEvent): void {
       :model-value="(modelValue as string) ?? ''"
       :feedback="false"
       toggle-mask
-      :input-props="{ autocomplete: 'new-password' }"
+      :input-props="{
+        autocomplete: 'new-password',
+        'aria-invalid': ariaInvalid,
+        'aria-describedby': describedBy,
+      }"
       @update:model-value="update"
     />
 
@@ -251,6 +266,10 @@ function updateFiles(event: FileUploadSelectEvent): void {
       :min="min"
       :max="max"
       :step="step"
+      :input-props="{
+        'aria-invalid': ariaInvalid,
+        'aria-describedby': describedBy,
+      }"
       @update:model-value="update"
     />
 
@@ -264,6 +283,10 @@ function updateFiles(event: FileUploadSelectEvent): void {
       :min="min"
       :max="max"
       :step="step"
+      :input-props="{
+        'aria-invalid': ariaInvalid,
+        'aria-describedby': describedBy,
+      }"
       @update:model-value="update"
     >
       <template #incrementicon>
@@ -284,18 +307,25 @@ function updateFiles(event: FileUploadSelectEvent): void {
         :max="max ?? 100"
         :step="step"
         class="min-w-0 flex-1"
+        :aria-label="field.label"
+        :aria-invalid="ariaInvalid"
+        :aria-describedby="describedBy"
         @update:model-value="update"
       />
       <span
         class="w-12 shrink-0 text-right text-sm text-surface-700 tabular-nums dark:text-surface-200"
+        aria-live="polite"
         >{{ sliderValue }}</span
       >
     </div>
 
-    <div
+    <fieldset
       v-else-if="field.type === FieldType.Radio"
       class="flex flex-col gap-2 pt-1"
+      :aria-invalid="ariaInvalid"
+      :aria-describedby="describedBy"
     >
+      <legend class="sr-only">{{ field.label }}</legend>
       <label
         v-for="opt in options"
         :key="String(opt.value)"
@@ -309,7 +339,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
         />
         <span>{{ opt.label }}</span>
       </label>
-    </div>
+    </fieldset>
 
     <AutoComplete
       v-else-if="field.type === FieldType.AutoComplete"
@@ -318,6 +348,8 @@ function updateFiles(event: FileUploadSelectEvent): void {
       :suggestions="suggestions"
       dropdown
       :placeholder="field.placeholder"
+      :aria-invalid="ariaInvalid"
+      :aria-describedby="describedBy"
       @complete="onComplete"
       @update:model-value="update"
     />
@@ -357,6 +389,8 @@ function updateFiles(event: FileUploadSelectEvent): void {
       :id="controlId"
       :model-value="(modelValue as string) ?? ''"
       :placeholder="field.placeholder ?? '30s, 5m, 1h'"
+      :aria-invalid="ariaInvalid"
+      :aria-describedby="describedBy"
       @update:model-value="update"
     />
 
@@ -366,10 +400,14 @@ function updateFiles(event: FileUploadSelectEvent): void {
       :type="inputType"
       :model-value="(modelValue as string) ?? ''"
       :placeholder="field.placeholder"
+      :aria-invalid="ariaInvalid"
+      :aria-describedby="describedBy"
       @update:model-value="update"
     />
 
     <p v-if="field.help" class="text-xs text-surface-400">{{ field.help }}</p>
-    <p v-if="error" class="text-xs text-red-500">{{ error }}</p>
+    <p v-if="error" :id="errorId" role="alert" class="text-xs text-red-500">
+      {{ error }}
+    </p>
   </div>
 </template>

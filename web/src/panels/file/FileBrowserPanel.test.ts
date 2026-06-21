@@ -476,8 +476,8 @@ describe("FileBrowserPanel", () => {
       .find((b) => b.text().includes("Grid view"))!
       .trigger("click");
     await w
-      .findAll("button")
-      .find((b) => b.text().includes("README.md"))!
+      .findAll('[role="option"]')
+      .find((o) => o.text().includes("README.md"))!
       .trigger("dblclick");
     await flushPromises();
 

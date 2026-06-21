@@ -105,7 +105,11 @@ function removeAt(index: number): void {
         class="w-1/3 shrink-0"
         @update:model-value="setKey(index, $event ?? '')"
       />
-      <div class="min-w-0 flex-1">
+      <div
+        class="min-w-0 flex-1"
+        role="group"
+        :aria-label="`Value ${index + 1}`"
+      >
         <FormField
           v-if="field.item"
           :field="field.item"
@@ -129,7 +133,13 @@ function removeAt(index: number): void {
     </div>
 
     <div>
-      <Button type="button" severity="secondary" size="small" @click="add">
+      <Button
+        type="button"
+        severity="secondary"
+        size="small"
+        :aria-label="field.addLabel ?? 'Add entry'"
+        @click="add"
+      >
         <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="14" />
         {{ field.addLabel ?? "Add entry" }}
       </Button>

@@ -303,7 +303,13 @@ onUnmounted(() => {
     >
       <span class="text-xs text-surface-400">{{ editorLabel }}</span>
       <div class="flex items-center gap-2">
-        <span v-if="error" class="text-xs text-red-500">{{ error }}</span>
+        <span
+          v-if="error"
+          role="alert"
+          aria-live="assertive"
+          class="text-xs text-red-500"
+          >{{ error }}</span
+        >
         <Button
           v-if="running"
           type="button"
@@ -396,6 +402,7 @@ onUnmounted(() => {
             <th
               v-for="c in results.columns"
               :key="c"
+              scope="col"
               class="border-b border-surface-200 px-3 py-1.5 text-left font-medium text-surface-500 dark:border-surface-800"
             >
               {{ c }}
@@ -428,7 +435,7 @@ onUnmounted(() => {
       :dismissable-mask="true"
       @update:visible="(v) => !v && (pendingConfirmation = false)"
     >
-      <p class="mb-4 text-sm text-surface-500">
+      <p class="mb-4 text-sm text-surface-500" role="alert">
         {{ confirmationMessage }}
       </p>
       <div class="flex justify-end gap-2">

@@ -15,6 +15,7 @@ import type {
   TerminalPanelConfig,
 } from "@/types/projection";
 import { RecordingPolicy as RecordingPolicyEnum } from "@/types/projection";
+import { useConfirmAction } from "@/composables/useConfirmAction";
 import TerminalGridNode, {
   TerminalGridDirection,
   type TerminalGridDirection as TerminalGridDirectionValue,
@@ -25,6 +26,7 @@ const TerminalGridAutoDirection = "auto" as const;
 
 const props = defineProps<PanelProps>();
 const streams = useStreamChannelsStore();
+const { confirmDanger } = useConfirmAction();
 const vTooltip = Tooltip;
 
 const cfg = computed(
@@ -251,6 +253,20 @@ function closePane(paneId = activePaneId.value): void {
   }
 }
 
+function requestReset(): void {
+  if (recordingBlocksLayout.value) return;
+  if (paneCount.value <= 1) {
+    resetLayout();
+    return;
+  }
+  confirmDanger({
+    header: "Reset terminal workspace?",
+    message: `This closes all ${paneCount.value} panes and their sessions, then starts fresh.`,
+    acceptLabel: "Reset",
+    accept: () => resetLayout(),
+  });
+}
+
 function resetLayout(force = false): void {
   if (!force && recordingBlocksLayout.value) return;
   if (initialized.value) closeAllPaneStreams();
@@ -316,7 +332,11 @@ watch(
     >
       <div class="flex min-w-0 flex-1 items-center gap-2">
         <div class="truncate text-xs font-medium">{{ activePaneLabel }}</div>
-        <div class="shrink-0 text-xs text-surface-500 dark:text-surface-400">
+        <div
+          class="shrink-0 text-xs text-surface-500 dark:text-surface-400"
+          role="status"
+          aria-live="polite"
+        >
           {{ paneCount }} / {{ maxPanes }} panes
         </div>
       </div>
@@ -415,7 +435,7 @@ watch(
           class="h-7 w-7 px-0 py-0"
           aria-label="Reset terminal workspace"
           :disabled="recordingBlocksLayout"
-          @click="resetLayout()"
+          @click="requestReset"
         >
           <AppIcon :icon="{ type: 'lucide', value: 'rotate-ccw' }" :size="14" />
           <span class="sr-only">Reset layout</span>
@@ -434,6 +454,7 @@ watch(
         :record="record"
         :terminal-config="terminalConfig"
         :split-sizes="splitSizes"
+        :pane-titles="paneTitles"
         @focus="activePaneId = $event"
         @resize="onResize"
         @stream-status-change="onPaneStatusChange"

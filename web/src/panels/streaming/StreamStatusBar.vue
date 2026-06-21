@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, useId } from "vue";
 import Button from "primevue/button";
 import Popover from "primevue/popover";
 import AppIcon from "@/components/AppIcon.vue";
+
+const errorTitleId = useId();
 
 withDefaults(
   defineProps<{
@@ -69,6 +71,10 @@ function reconnectable(status: string): boolean {
     status,
   );
 }
+
+function liveTone(status: string): "assertive" | "polite" {
+  return status === "connecting" ? "polite" : "assertive";
+}
 </script>
 
 <template>
@@ -81,10 +87,18 @@ function reconnectable(status: string): boolean {
     <div class="flex min-w-0 items-center gap-2">
       <span
         class="h-2 w-2 shrink-0 rounded-full"
-        :class="[tone(status), status === 'connecting' ? 'animate-pulse' : '']"
+        :class="[
+          tone(status),
+          status === 'connecting' ? 'motion-safe:animate-pulse' : '',
+        ]"
         aria-hidden="true"
       />
-      <span class="font-medium">{{ label(status) }}</span>
+      <span
+        class="font-medium"
+        :role="status === 'connecting' ? 'status' : 'alert'"
+        :aria-live="liveTone(status)"
+        >{{ label(status) }}</span
+      >
       <Button
         v-if="error"
         type="button"
@@ -101,8 +115,13 @@ function reconnectable(status: string): boolean {
       </Button>
     </div>
     <Popover ref="errorPopover">
-      <div class="max-w-xs space-y-1">
+      <div
+        role="alert"
+        :aria-labelledby="errorTitleId"
+        class="max-w-xs space-y-1"
+      >
         <p
+          :id="errorTitleId"
           class="flex items-center gap-1.5 text-xs font-semibold text-surface-700 dark:text-surface-100"
         >
           <AppIcon

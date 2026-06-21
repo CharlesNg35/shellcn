@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { usePreferredReducedMotion } from "@vueuse/core";
 import type { ChartData, ChartOptions } from "chart.js";
 import { useTheme } from "@/composables/useTheme";
 import { seriesColor } from "./chartTheme";
@@ -17,6 +18,10 @@ const props = withDefaults(
 );
 
 const { isDark } = useTheme();
+const reducedMotion = usePreferredReducedMotion();
+const animationDuration = computed(() =>
+  reducedMotion.value === "reduce" ? 0 : 400,
+);
 const color = computed(() => seriesColor(props.colorIndex));
 
 const pct = computed(() => {
@@ -44,7 +49,7 @@ const options = computed<ChartOptions>(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: { legend: { display: false }, tooltip: { enabled: false } },
-  animation: { duration: 400 },
+  animation: { duration: animationDuration.value },
 }));
 
 const canvasEl = ref<HTMLCanvasElement | null>(null);

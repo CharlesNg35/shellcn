@@ -384,7 +384,12 @@ onUnmounted(() => {
       can-reconnect
       @reconnect="onReconnect"
     />
-    <p v-if="failed" class="p-4 text-base text-surface-400" role="alert">
+    <p
+      v-if="failed"
+      class="p-4 text-base text-surface-400"
+      role="alert"
+      aria-live="assertive"
+    >
       Terminal preview unavailable in this environment.
     </p>
     <div class="relative min-h-0 flex-1">

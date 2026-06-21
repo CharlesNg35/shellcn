@@ -95,6 +95,7 @@ const { status, error, send, reconnect } = useStream(
   { resource: props.resource, record: props.record },
   onFrame,
 );
+
 const showInitialLoader = computed(
   () =>
     !hasRenderedFrame.value &&
@@ -340,6 +341,8 @@ watch(theme, () => {
       </div>
       <div
         v-else-if="frameError"
+        role="alert"
+        aria-live="assertive"
         class="pointer-events-none absolute inset-0 grid place-items-center p-4 text-sm text-surface-500"
       >
         {{ frameError }}

@@ -208,7 +208,7 @@ onUnmounted(() => {
         aria-label="Recording this desktop session"
       >
         <span
-          class="h-2 w-2 animate-pulse rounded-full bg-rose-400"
+          class="h-2 w-2 rounded-full bg-rose-400 motion-safe:animate-pulse"
           aria-hidden="true"
         />
         REC
@@ -250,7 +250,7 @@ onUnmounted(() => {
     />
     <div
       ref="container"
-      class="relative min-h-0 flex-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-500"
+      class="relative min-h-0 flex-1 focus-visible:outline focus-visible:-outline-offset-2 focus-visible:outline-primary-500"
       role="application"
       tabindex="0"
       aria-label="Remote desktop viewport"
