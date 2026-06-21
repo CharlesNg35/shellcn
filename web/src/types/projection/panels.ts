@@ -191,6 +191,17 @@ export interface CodeEditorConfig {
   saveDismiss?: SaveDismiss;
 }
 
+export interface StreamControl {
+  param: string;
+  label?: string;
+  optionsSource?: DataSource;
+}
+
+export interface LogStreamConfig {
+  controls?: StreamControl[];
+  allowPrevious?: boolean;
+}
+
 export const DiffMode = {
   SideBySide: "side_by_side",
   Unified: "unified",

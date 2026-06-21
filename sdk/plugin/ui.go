@@ -65,6 +65,7 @@ func (TaskProgressConfig) panelConfig()  {}
 func (SplitConfig) panelConfig()         {}
 func (CanvasConfig) panelConfig()        {}
 func (WasmConfig) panelConfig()          {}
+func (LogStreamConfig) panelConfig()     {}
 
 // StreamKind tags the long-lived channel a panel binds to.
 type StreamKind string
@@ -550,6 +551,22 @@ const (
 	SaveDismissNone  SaveDismiss = ""
 	SaveDismissClose SaveDismiss = "close"
 )
+
+// StreamControl is a generic selector that re-parameterizes a stream panel (e.g. a
+// logs container picker): the chosen option value is sent as Param on the source and
+// the stream reconnects.
+type StreamControl struct {
+	Param         string      `json:"param"`
+	Label         string      `json:"label,omitempty"`
+	OptionsSource *DataSource `json:"optionsSource,omitempty"`
+}
+
+// LogStreamConfig configures the log viewer: stream controls (e.g. a container
+// picker) and an optional "previous (crashed) logs" toggle.
+type LogStreamConfig struct {
+	Controls      []StreamControl `json:"controls,omitempty"`
+	AllowPrevious bool            `json:"allowPrevious,omitempty"`
+}
 
 type DiffMode string
 

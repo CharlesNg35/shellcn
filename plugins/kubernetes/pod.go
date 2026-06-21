@@ -33,6 +33,13 @@ func podDetailTabs() []plugin.Panel {
 				RouteID: "kubernetes.pod.logs", Method: plugin.MethodWS,
 				Params: podRefParams(map[string]string{"follow": "true", "tail": "500", "timestamps": "true"}),
 			},
+			Config: plugin.LogStreamConfig{
+				Controls: []plugin.StreamControl{{
+					Param: "container", Label: "Container",
+					OptionsSource: &plugin.DataSource{RouteID: "kubernetes.pod.containers", Params: podRefParams(nil)},
+				}},
+				AllowPrevious: true,
+			},
 		},
 		{
 			Key: "terminal", Label: "Shell", Icon: lucide("terminal"), Type: plugin.PanelTerminal,

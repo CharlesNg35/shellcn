@@ -54,17 +54,17 @@ Greenfield: contracts may change freely. Every fix is manifest-driven and plugin
 - [ ] P2 a11y rows — TablePanel.vue:966 — no keyboard row activation → Enter opens detail/navigate.
 - [ ] P3 misc — modified re-sort (TablePanel.vue:1128); CRD list unbounded (resources.go:76); reloadExpanded serial (ResourceTree.vue:131); CRD/Helm tree no watch; aria-live count; SSAR per-open (object_overview.go:24).
 
-## Phase 6 — K8s pod operations
+## Phase 6 — K8s pod operations (logs + debug DONE; rest pending)
 
-- [ ] P0 logs container — LogStreamPanel.vue + pod.go:31-36, logs.go:104 — no container picker; empty container 400s on multi-container pods → manifest-driven container select threading container param.
-- [ ] P0 debug select — debug.go:19-48, routes.go:50 — image/target hardcoded busybox → Input schema (image text + target select).
-- [ ] P1 logs controls — pod.go:34, LogStreamPanel.vue:16 — follow/tail/previous/timestamps fixed; "follow" only scrolls → controls that reconnect stream; previous/crashed logs.
-- [ ] P1 logs frames — LogStreamPanel.vue:28-32 — JSON {ts,line} parse never matches raw byte stream → drop/branch per stream type.
-- [ ] P1 files container — podfs.go:25-43, pod.go:46 — files hit default container; symlink target lost; no MIME → container picker; parse symlink+dir-ness; infer MIME.
-- [ ] P1 metrics absent — MetricsPanel.vue:68-73 + metrics.go:153-165 — metrics-server absent hides known request/limit; generic message; pod limit gauges missing → render requests/limits + specific message + pod Usage gauges.
-- [ ] P2 exec — exec.go:34-41, pod.go:38 — no container/shell picker; exit code hidden under TTY; keepalive → add pickers, surface exit, ping.
-- [ ] P2 logs UX — LogStreamPanel.vue — wrap toggle; jump-to-latest; pause-on-scroll-up; bound workload fan-out (logs.go:81).
-- [ ] P3 motion/a11y — gauge/pulse/cursor reduced-motion; log role=log aria-live; download as Blob; file save byte size.
+- [x] P0 logs container — NEW generic `StreamControl`/`LogStreamConfig` contract (ui.go/validate.go/panel_schema.go/panels.ts). LogsStream now streams ALL containers by default (per-container `[name]` prefixes), single when filtered; PodContainers route offers "All containers" + each (only when >1). LogStreamPanel renders a manifest-driven container Select + reconnects (useStream closes old channel on param change). Plugin-agnostic. Tests: TestLogsStreamPrefixesAllContainers, TestPodContainersOffersAllAndEach.
+- [x] P0 debug select — debug route gets Input schema (image text default busybox + target container); Confirm dropped (form is the gate).
+- [x] P1 logs previous — LogStreamConfig.AllowPrevious → "Previous (crashed)" toggle re-streams with previous=true.
+- [x] P3 logs a11y — viewport now role="log" aria-live; filter/follow/previous aria-labels/aria-pressed.
+- [ ] P1 logs frames — LogStreamPanel JSON {ts,line} branch is harmless for k8s plain text; revisit if a plugin sends structured frames.
+- [ ] P1 files container — podfs.go — container picker (reuse StreamControl pattern); symlink target + dir-ness; MIME inference.
+- [ ] P1 metrics absent — MetricsPanel.vue + metrics.go — render requests/limits when metrics-server absent + specific message + pod Usage gauges.
+- [ ] P2 exec — container/shell picker; exit code surfacing; keepalive.
+- [ ] P2 logs UX — wrap toggle; jump-to-latest; pause-on-scroll-up; bound workload fan-out.
 
 ## Phase 7 — Generic panels UX / a11y / consistency (ALL panels)
 

@@ -48,9 +48,15 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("writable", boolProp()),
 			),
 		},
-		PanelLogStream: {Type: "object", Properties: props()},
-		PanelDocument:  {Type: "object", Properties: props()},
-		PanelEnroll:    {Type: "object", Properties: props()},
+		PanelLogStream: {
+			Type: "object",
+			Properties: props(
+				prop("controls", array(streamControl())),
+				prop("allowPrevious", boolProp()),
+			),
+		},
+		PanelDocument: {Type: "object", Properties: props()},
+		PanelEnroll:   {Type: "object", Properties: props()},
 		PanelForm: {
 			Type: "object",
 			Properties: props(
@@ -347,6 +353,18 @@ func dataSource() PanelConfigProperty {
 			prop("params", stringMap()),
 		),
 		Required: []string{"routeId"},
+	}
+}
+
+func streamControl() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("param", stringProp()),
+			prop("label", stringProp()),
+			prop("optionsSource", dataSource()),
+		),
+		Required: []string{"param"},
 	}
 }
 

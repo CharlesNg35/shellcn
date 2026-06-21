@@ -759,6 +759,12 @@ func checkPanelConfigRoutes(
 			checkStreamSource(ctx+" watch", c.Watch)
 		}
 		checkSaveFeedback(ctx, c.SaveToast, c.SaveDismiss, add)
+	case LogStreamConfig:
+		for i, ctrl := range c.Controls {
+			if ctrl.OptionsSource != nil {
+				checkReadSource(fmt.Sprintf("%s control[%d] optionsSource", ctx, i), *ctrl.OptionsSource)
+			}
+		}
 	case ObjectDetailConfig:
 		if c.Watch != nil {
 			checkStreamSource(ctx+" watch", c.Watch)

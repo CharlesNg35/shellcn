@@ -24,6 +24,7 @@ func TestPanelConfigSchemasCoverConfigJSONFields(t *testing.T) {
 		{plugin.PanelTerminal, reflect.TypeOf(plugin.TerminalConfig{})},
 		{plugin.PanelTerminalGrid, reflect.TypeOf(plugin.TerminalGridConfig{})},
 		{plugin.PanelCodeEditor, reflect.TypeOf(plugin.CodeEditorConfig{})},
+		{plugin.PanelLogStream, reflect.TypeOf(plugin.LogStreamConfig{})},
 		{plugin.PanelDiff, reflect.TypeOf(plugin.DiffConfig{})},
 		{plugin.PanelQueryEditor, reflect.TypeOf(plugin.QueryEditorConfig{})},
 		{plugin.PanelHTTPClient, reflect.TypeOf(plugin.HTTPClientConfig{})},
@@ -52,7 +53,6 @@ func TestPanelConfigSchemasCoverConfiglessPanelTypes(t *testing.T) {
 	schemas := plugin.PanelConfigSchemas()
 	for _, panel := range []plugin.PanelType{
 		plugin.PanelDocument,
-		plugin.PanelLogStream,
 		plugin.PanelEnroll,
 	} {
 		t.Run(string(panel), func(t *testing.T) {

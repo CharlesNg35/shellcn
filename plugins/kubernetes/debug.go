@@ -21,9 +21,6 @@ func debugAction() plugin.Action {
 		ID: "kubernetes.pod.debug", Label: "Debug", Icon: lucide("bug"),
 		RouteID: "kubernetes.pod.debug.create",
 		Params:  map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"},
-		Confirm: true,
-		ConfirmText: "Add an ephemeral debug container to this pod and open a shell? " +
-			"The container persists until the pod is recreated.",
 		EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{
 			{Field: "status", Op: plugin.OpEq, Value: "Running"},
 			{Field: "can.patch", Op: plugin.OpEq, Value: true},
@@ -45,6 +42,18 @@ func debugAction() plugin.Action {
 			},
 		}}},
 	}
+}
+
+// debugSchema is the form shown before adding a debug container: the image to run
+// and an optional target container to share the process namespace with.
+func debugSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{
+		Name: "Debug container",
+		Fields: []plugin.Field{
+			{Key: "image", Label: "Image", Type: plugin.FieldText, Default: defaultDebugImage, Placeholder: defaultDebugImage, Help: "Ephemeral container image. It persists until the pod is recreated."},
+			{Key: "target", Label: "Target container", Type: plugin.FieldText, Placeholder: "default container", Help: "Share the process namespace of this container (blank for the pod default)."},
+		},
+	}}}
 }
 
 // DebugCreate adds an ephemeral debug container to a running pod and returns once

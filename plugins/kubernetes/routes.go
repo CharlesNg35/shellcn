@@ -44,10 +44,11 @@ func Routes() []plugin.Route {
 		{ID: "kubernetes.resource.events", Method: plugin.MethodGet, Path: "/resources/{kind}/events", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.events", Handle: ResourceEvents},
 		{ID: "kubernetes.resource.events.watch", Method: plugin.MethodWS, Path: "/resources/{kind}/events/watch", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.events.watch", Stream: WatchEvents},
 
+		{ID: "kubernetes.pod.containers", Method: plugin.MethodGet, Path: "/pods/containers", Permission: "kubernetes.pods.logs", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.containers", Handle: PodContainers},
 		{ID: "kubernetes.pod.logs", Method: plugin.MethodWS, Path: "/pods/logs", Permission: "kubernetes.pods.logs", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.logs", Stream: LogsStream},
 		{ID: "kubernetes.workload.logs", Method: plugin.MethodWS, Path: "/resources/{kind}/logs", Permission: "kubernetes.pods.logs", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.workload.logs", Stream: WorkloadLogsStream},
 		{ID: "kubernetes.pod.exec", Method: plugin.MethodWS, Path: "/pods/exec", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.exec", Stream: ExecStream},
-		{ID: "kubernetes.pod.debug.create", Method: plugin.MethodPost, Path: "/pods/debug", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.debug.create", Handle: DebugCreate},
+		{ID: "kubernetes.pod.debug.create", Method: plugin.MethodPost, Path: "/pods/debug", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.debug.create", Input: debugSchema(), Handle: DebugCreate},
 
 		{ID: "kubernetes.pod.files.list", Method: plugin.MethodGet, Path: "/pods/files/list/{path}", Permission: "kubernetes.pods.exec", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.files.list", Handle: PodFilesList},
 		{ID: "kubernetes.pod.files.read", Method: plugin.MethodGet, Path: "/pods/files/read/{path}", Permission: "kubernetes.pods.exec", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.files.read", Handle: PodFileRead},

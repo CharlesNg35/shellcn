@@ -30,18 +30,57 @@ func LogsStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	if err := validateName(pod); err != nil {
 		return err
 	}
-	opts := podLogOptions(rc)
-	stream, err := s.Clientset().CoreV1().Pods(ns).GetLogs(pod, opts).Stream(rc.Ctx)
+	base := podLogOptions(rc)
+	filter := strings.TrimSpace(base.Container)
+	base.Container = ""
+	p, err := s.Clientset().CoreV1().Pods(ns).Get(rc.Ctx, pod, metav1.GetOptions{})
 	if err != nil {
 		return apiErr(err)
 	}
-	defer func() { _ = stream.Close() }()
-
-	_, err = io.Copy(client, stream)
-	if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
+	containers := logContainers(*p, filter)
+	if len(containers) == 0 {
 		return nil
 	}
-	return err
+	// One container: stream it verbatim. Multiple (the default "all" view): fan out,
+	// prefixing each line with its container so they interleave readably.
+	if len(containers) == 1 {
+		opts := *base
+		opts.Container = containers[0]
+		stream, err := s.Clientset().CoreV1().Pods(ns).GetLogs(pod, &opts).Stream(rc.Ctx)
+		if err != nil {
+			return apiErr(err)
+		}
+		defer func() { _ = stream.Close() }()
+		_, err = io.Copy(client, stream)
+		if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
+			return nil
+		}
+		return err
+	}
+	var mu sync.Mutex
+	write := func(b []byte) (int, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		return client.Write(b)
+	}
+	var wg sync.WaitGroup
+	for _, c := range containers {
+		opts := *base
+		opts.Container = c
+		wg.Add(1)
+		go func(container string, opts corev1.PodLogOptions) {
+			defer wg.Done()
+			stream, err := s.Clientset().CoreV1().Pods(ns).GetLogs(pod, &opts).Stream(rc.Ctx)
+			if err != nil {
+				_, _ = write(fmt.Appendf(nil, "[%s] %s\n", container, apiErr(err)))
+				return
+			}
+			defer func() { _ = stream.Close() }()
+			_ = copyPrefixedLog(rc.Ctx, write, stream, "["+container+"] ")
+		}(c, opts)
+	}
+	wg.Wait()
+	return nil
 }
 
 func WorkloadLogsStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
@@ -93,7 +132,7 @@ func WorkloadLogsStream(rc *plugin.RequestContext, client plugin.ClientStream) e
 					return
 				}
 				defer func() { _ = stream.Close() }()
-				_ = copyPrefixedLog(rc.Ctx, write, stream, podName, containerName)
+				_ = copyPrefixedLog(rc.Ctx, write, stream, "["+podName+"/"+containerName+"] ")
 			}(pod.Name, container, opts)
 		}
 	}
@@ -115,6 +154,39 @@ func podLogOptions(rc *plugin.RequestContext) *corev1.PodLogOptions {
 	return opts
 }
 
+// PodContainers lists a pod's containers (init then app) as options for a stream
+// control such as the logs container picker.
+func PodContainers(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	ns, name := rc.Param("namespace"), rc.Param("name")
+	if err := validateNamespace(ns); err != nil {
+		return nil, err
+	}
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
+	pod, err := s.Clientset().CoreV1().Pods(ns).Get(rc.Ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, apiErr(err)
+	}
+	items := make([]plugin.Option, 0, len(pod.Spec.InitContainers)+len(pod.Spec.Containers)+1)
+	for _, c := range pod.Spec.InitContainers {
+		items = append(items, plugin.Option{Label: c.Name + " (init)", Value: c.Name})
+	}
+	for _, c := range pod.Spec.Containers {
+		items = append(items, plugin.Option{Label: c.Name, Value: c.Name})
+	}
+	// Offer "All containers" (empty value → stream them merged) only when there is
+	// more than one to choose between.
+	if len(items) > 1 {
+		items = append([]plugin.Option{{Label: "All containers", Value: ""}}, items...)
+	}
+	return plugin.Page[plugin.Option]{Items: items, Total: ptr(len(items))}, nil
+}
+
 func logContainers(pod corev1.Pod, filter string) []string {
 	if filter != "" {
 		return []string{filter}
@@ -129,10 +201,9 @@ func logContainers(pod corev1.Pod, filter string) []string {
 	return containers
 }
 
-func copyPrefixedLog(ctx context.Context, write func([]byte) (int, error), src io.Reader, podName, containerName string) error {
+func copyPrefixedLog(ctx context.Context, write func([]byte) (int, error), src io.Reader, prefix string) error {
 	scanner := bufio.NewScanner(src)
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-	prefix := "[" + podName + "/" + containerName + "] "
 	for scanner.Scan() {
 		if ctx.Err() != nil {
 			return nil

@@ -43,6 +43,13 @@ func (c *captureClient) Context() context.Context { return c.ctx }
 
 func TestLogsStream(t *testing.T) {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web-1", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "v1", "kind": "Pod",
+			"metadata": obj{"name": "web-1", "namespace": "default"},
+			"spec":     obj{"containers": []obj{{"name": "app"}}},
+		})
+	})
 	mux.HandleFunc("/api/v1/namespaces/default/pods/web-1/log", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, "line one\nline two\n")
 	})
@@ -56,6 +63,53 @@ func TestLogsStream(t *testing.T) {
 	}
 	if got := cc.out.String(); !strings.Contains(got, "line one") || !strings.Contains(got, "line two") {
 		t.Fatalf("logs output = %q", got)
+	}
+}
+
+func TestLogsStreamPrefixesAllContainers(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web-1", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "v1", "kind": "Pod",
+			"metadata": obj{"name": "web-1", "namespace": "default"},
+			"spec":     obj{"containers": []obj{{"name": "app"}, {"name": "sidecar"}}},
+		})
+	})
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web-1/log", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, r.URL.Query().Get("container")+"-line\n")
+	})
+	sess := connectTo(t, mux)
+
+	cc := &captureClient{ctx: context.Background()}
+	rcx := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, sess,
+		map[string]string{"namespace": "default", "name": "web-1", "follow": "false"}, nil, nil)
+	if err := LogsStream(rcx, cc); err != nil {
+		t.Fatalf("logs: %v", err)
+	}
+	got := cc.out.String()
+	if !strings.Contains(got, "[app] app-line") || !strings.Contains(got, "[sidecar] sidecar-line") {
+		t.Fatalf("multi-container logs not prefixed per container: %q", got)
+	}
+}
+
+func TestPodContainersOffersAllAndEach(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web-1", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "v1", "kind": "Pod",
+			"metadata": obj{"name": "web-1", "namespace": "default"},
+			"spec":     obj{"containers": []obj{{"name": "app"}, {"name": "sidecar"}}},
+		})
+	})
+	sess := connectTo(t, mux)
+
+	out, err := PodContainers(rc(sess, map[string]string{"namespace": "default", "name": "web-1"}))
+	if err != nil {
+		t.Fatalf("containers: %v", err)
+	}
+	page := out.(plugin.Page[plugin.Option])
+	if len(page.Items) != 3 || page.Items[0].Value != "" || page.Items[0].Label != "All containers" {
+		t.Fatalf("container options = %+v, want [All, app, sidecar]", page.Items)
 	}
 }
 
