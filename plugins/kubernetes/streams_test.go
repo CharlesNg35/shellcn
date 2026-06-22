@@ -190,6 +190,46 @@ func TestPodExecutorBuilds(t *testing.T) {
 	}
 }
 
+func TestExecContainerResolvesDefault(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web-1", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "v1", "kind": "Pod",
+			"metadata": obj{
+				"name": "web-1", "namespace": "default",
+				"annotations": obj{"kubectl.kubernetes.io/default-container": "sidecar"},
+			},
+			"spec": obj{"containers": []obj{{"name": "nginx"}, {"name": "sidecar"}}},
+		})
+	})
+	sess := connectTo(t, mux).(*Session)
+
+	// An explicit container is returned without a pod lookup.
+	if got, err := sess.execContainer(context.Background(), "default", "web-1", "nginx"); err != nil || got != "nginx" {
+		t.Fatalf("explicit = %q, %v", got, err)
+	}
+	// No container falls back to the default-container annotation.
+	if got, err := sess.execContainer(context.Background(), "default", "web-1", ""); err != nil || got != "sidecar" {
+		t.Fatalf("default = %q, %v, want sidecar (annotation)", got, err)
+	}
+}
+
+func TestExecContainerDefaultsToFirstWithoutAnnotation(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web-1", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "v1", "kind": "Pod",
+			"metadata": obj{"name": "web-1", "namespace": "default"},
+			"spec":     obj{"containers": []obj{{"name": "nginx"}, {"name": "sidecar"}}},
+		})
+	})
+	sess := connectTo(t, mux).(*Session)
+
+	if got, err := sess.execContainer(context.Background(), "default", "web-1", ""); err != nil || got != "nginx" {
+		t.Fatalf("default = %q, %v, want first container nginx", got, err)
+	}
+}
+
 func TestStreamExecWritesFullErrorToTerminal(t *testing.T) {
 	msg := strings.Repeat("failed to exec in container: ", 8) + `exec: "/bin/sh": stat /bin/sh: no such file or directory`
 	cc := &captureClient{ctx: context.Background(), in: strings.NewReader("")}

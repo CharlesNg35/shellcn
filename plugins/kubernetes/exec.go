@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
@@ -31,9 +32,13 @@ func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	if err := validateName(pod); err != nil {
 		return err
 	}
+	container, err := s.execContainer(rc.Ctx, ns, pod, param(rc, "container"))
+	if err != nil {
+		return err
+	}
 	tty := boolParam(rc, "tty", true)
 	opts := corev1.PodExecOptions{
-		Container: param(rc, "container"),
+		Container: container,
 		Stdin:     true,
 		Stdout:    true,
 		Stderr:    !tty,
@@ -50,6 +55,26 @@ func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 		intParam(rc, "cols"),
 		intParam(rc, "rows"),
 	)
+}
+
+// execContainer resolves which container to exec into: the requested one, or —
+// when none is given — the pod's default-container annotation, else its first
+// container (mirroring kubectl exec, which the apiserver does not do for us).
+func (s *Session) execContainer(ctx context.Context, ns, pod, requested string) (string, error) {
+	if requested != "" {
+		return requested, nil
+	}
+	p, err := s.Clientset().CoreV1().Pods(ns).Get(ctx, pod, metav1.GetOptions{})
+	if err != nil {
+		return "", apiErr(err)
+	}
+	if name := p.Annotations["kubectl.kubernetes.io/default-container"]; name != "" {
+		return name, nil
+	}
+	if len(p.Spec.Containers) > 0 {
+		return p.Spec.Containers[0].Name, nil
+	}
+	return "", nil
 }
 
 // streamExec bridges an exec executor to the terminal panel: stdin (with resize

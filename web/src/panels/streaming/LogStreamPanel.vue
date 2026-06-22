@@ -125,10 +125,10 @@ onActivated(() => void nextTick(scrollToBottom));
       @reconnect="onReconnect"
     />
     <div
-      class="flex flex-wrap items-center gap-2 border-b border-surface-200 bg-surface-0 px-3 py-2 dark:border-surface-800 dark:bg-surface-950"
+      class="flex items-center gap-2 border-b border-surface-200 bg-surface-0 px-3 py-2 dark:border-surface-800 dark:bg-surface-950"
     >
       <template v-for="ctrl in controls" :key="ctrl.param">
-        <div v-if="controlVisible(ctrl.param)" class="w-40 shrink-0">
+        <div v-if="controlVisible(ctrl.param)" class="w-36 shrink-0">
           <Select
             v-model="controlValues[ctrl.param]"
             :options="controlOptions[ctrl.param] ?? []"
@@ -141,57 +141,60 @@ onActivated(() => void nextTick(scrollToBottom));
           />
         </div>
       </template>
-      <InputText
-        v-model="filterText"
-        size="small"
-        placeholder="Filter logs"
-        aria-label="Filter logs"
-        class="w-44"
-      />
-      <Button
-        type="button"
-        size="small"
-        severity="secondary"
-        :label="follow ? 'Following' : 'Follow'"
-        :aria-pressed="follow"
-        @click="follow = !follow"
-      />
-      <Button
-        type="button"
-        size="small"
-        severity="secondary"
-        :label="wrap ? 'Wrap' : 'No wrap'"
-        :aria-pressed="wrap"
-        @click="wrap = !wrap"
-      />
-      <Button
-        v-if="cfg?.allowPrevious"
-        type="button"
-        size="small"
-        severity="secondary"
-        :label="previous ? 'Previous (on)' : 'Previous'"
-        :aria-pressed="previous"
-        title="Show logs from the previous (crashed) container instance"
-        @click="
-          previous = !previous;
-          restream();
-        "
-      />
-      <Button
-        type="button"
-        size="small"
-        severity="secondary"
-        label="Clear"
-        @click="lines = []"
-      />
-      <Button
-        as="a"
-        size="small"
-        severity="secondary"
-        :href="downloadHref"
-        download="logs.txt"
-        label="Download"
-      />
+      <div class="min-w-0 flex-1">
+        <InputText
+          v-model="filterText"
+          size="small"
+          placeholder="Filter logs"
+          aria-label="Filter logs"
+        />
+      </div>
+      <div class="flex shrink-0 items-center gap-2">
+        <Button
+          type="button"
+          size="small"
+          severity="secondary"
+          :label="follow ? 'Following' : 'Follow'"
+          :aria-pressed="follow"
+          @click="follow = !follow"
+        />
+        <Button
+          type="button"
+          size="small"
+          severity="secondary"
+          :label="wrap ? 'Wrap' : 'No wrap'"
+          :aria-pressed="wrap"
+          @click="wrap = !wrap"
+        />
+        <Button
+          v-if="cfg?.allowPrevious"
+          type="button"
+          size="small"
+          severity="secondary"
+          :label="previous ? 'Previous (on)' : 'Previous'"
+          :aria-pressed="previous"
+          title="Show logs from the previous (crashed) container instance"
+          @click="
+            previous = !previous;
+            restream();
+          "
+        />
+        <Button
+          type="button"
+          size="small"
+          severity="secondary"
+          label="Clear"
+          @click="lines = []"
+        />
+        <Button
+          as="a"
+          size="small"
+          severity="secondary"
+          :href="downloadHref"
+          download="logs.txt"
+          label="Download"
+        />
+      </div>
     </div>
     <div
       ref="viewport"
