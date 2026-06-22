@@ -129,7 +129,10 @@ const uploadTitle = computed(() =>
         @click="emit('mkdir')"
       >
         <template #icon>
-          <AppIcon :icon="{ type: 'lucide', value: 'folder-plus' }" :size="15" />
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'folder-plus' }"
+            :size="15"
+          />
         </template>
       </Button>
 

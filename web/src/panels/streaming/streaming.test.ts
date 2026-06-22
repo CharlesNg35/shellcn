@@ -1701,6 +1701,9 @@ describe("streaming stub panels", () => {
       props: { ...props, config: { zoom: true, search: true } },
     });
     await flushPromises();
+    // Controls start collapsed behind the chevron; expand to reveal them.
+    expect(w.find('[aria-label="Zoom in"]').exists()).toBe(false);
+    await w.find('[aria-label="Show terminal controls"]').trigger("click");
     expect(w.find('[aria-label="Zoom in"]').exists()).toBe(true);
     expect(w.find('[aria-label="Search terminal"]').exists()).toBe(true);
 
