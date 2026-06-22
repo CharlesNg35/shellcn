@@ -976,6 +976,10 @@ function onRowClick(e: DataTableRowClickEvent): void {
     return;
   }
   if (editable.value) return; // body reserved for cell editing
+  activateRow(row);
+}
+
+function activateRow(row: Row): void {
   switch (rowClickMode.value) {
     case RowClickAction.None:
       return;
@@ -991,6 +995,26 @@ function onRowClick(e: DataTableRowClickEvent): void {
   }
   if (navigates(row) || (row.ref && !selectable.value)) emit("select", row);
   else if (selectable.value) toggleSelection(row);
+}
+
+// Keyboard parity for clickable rows: PrimeVue's DataTable only wires row
+// keyboard nav when selectionMode is set, which this panel doesn't use.
+function onRowKeydown(e: KeyboardEvent, row: Row): void {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  if (isInteractiveTarget(e.target)) return;
+  e.preventDefault();
+  activateRow(row);
+}
+
+function bodyRowPT(options: {
+  context?: { index?: number };
+}): Record<string, unknown> {
+  const row = rows.value[options?.context?.index ?? -1];
+  if (!row || editable.value || !rowClickable(row)) return {};
+  return {
+    tabindex: 0,
+    onKeydown: (e: KeyboardEvent) => onRowKeydown(e, row),
+  };
 }
 
 function rowClickable(row: Row): boolean {
@@ -1457,6 +1481,8 @@ onUnmounted(() => {
         scrollable
         scroll-height="flex"
         :row-class="rowClass"
+        :pt="{ bodyRow: bodyRowPT }"
+        :pt-options="{ mergeProps: true }"
         @sort="onSort"
         @page="onPage"
         @row-click="onRowClick"

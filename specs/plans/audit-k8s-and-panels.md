@@ -46,9 +46,10 @@ Greenfield: contracts may change freely. Every fix is manifest-driven and plugin
 - [x] P2 tree badges — ResourceTree reloads category badges on refresh (loadBadges on mount + refreshKey).
 - [x] P2 ns param — verified non-issue (core merges `p.`-prefixed query into rc.params; `rc.Param` is correct).
 - [ ] P2 watch-vs-page + prepend — TablePanel — on page>0/sort the live merge refetches per event, and live adds prepend (row-jump). REAL but intricate (touches the watch/merge core); deferred to a dedicated change.
-- [ ] P2 a11y rows — TablePanel — no keyboard activation to open a row's detail. REAL WCAG gap; deferred (needs care in the large DataTable wiring).
+- [x] P2 a11y rows — TablePanel — clickable rows are now keyboard-operable: a `bodyRow` pass-through makes each actionable row focusable (`tabindex=0`) and Enter/Space runs the same activation as a click (detail/navigate/select), reusing the extracted `activateRow`. `ptOptions.mergeProps` keeps the preset row styling (verified by test). Inner buttons/links still own their own keys via the `isInteractiveTarget` guard. PrimeVue only wires row-keyboard nav when `selectionMode` is set, which this panel doesn't use. Test: "opens the dialog via keyboard on a clickable row".
 
 Removed as not worth doing (verified marginal / intentional / feature-scope):
+
 - forbidden/empty state — the apiserver error already reads "forbidden: User cannot list…"; a custom message is cosmetic.
 - rbac row gating — intentional fail-open (server enforces RBAC; per-row SSAR is expensive); clear post-hoc denial is fine.
 - label/field-selector lists — a feature, not a bug; client-side filter covers the common case.
@@ -73,6 +74,7 @@ Removed: logs JSON-frame branch (harmless for k8s plain text); jump-to-latest / 
 **Feedback principle (from review):** one channel per outcome. Stream/connection status lives in `StreamStatusBar`, NOT per-panel toasts. No toast + inline error for the same failure. Don't add success toasts to routine/idempotent actions.
 
 Done (landed + kept after review prune):
+
 - [x] P0 form a11y — FormField aria-invalid/aria-describedby link errors to every control (computed errorId/describedBy/ariaInvalid).
 - [x] P0 grid keyboard — FileEntryGrid full roving-tabindex 2D keyboard nav + Enter/Space; aria-current→aria-selected (grid + list).
 - [x] P1 form groups — radio group + object groups now fieldset/legend; slider value aria-live; FileUpload aria-label + invalid; SchemaForm submit aria-busy.
@@ -82,11 +84,13 @@ Done (landed + kept after review prune):
 - [x] P2 partial — StreamStatusBar status role/aria-live + motion-safe pulse + popover role; GaugeChart/SeriesChart disable animation on prefers-reduced-motion; RemoteDesktop REC pulse motion-safe; error text role=alert across stream panels.
 
 Reverted as over-complication (intentionally NOT done):
+
 - [x] ~~P1 streams reconnect toasts~~ — StreamStatusBar already shows reconnect/error; toasts were redundant. Kept only role=alert on error text.
 - [x] ~~StatCard loading skeleton~~ — regressed genuinely-null metrics to a perpetual skeleton; reverted to "—".
 - [x] CodeEditorPanel double-feedback — removed save/preview error toasts (inline saveError is the single channel); dry-run rejection no longer opens a misleading local diff.
 
 Done (this batch):
+
 - [x] cred error — CredentialSelect load error now has a compact Retry + role=alert.
 - [x] http aria — HTTPClient header inputs have indexed aria-labels (the response is the feedback; no toast).
 - [x] task aria — TaskProgress ProgressBar aria-label includes the percent (or "in progress").
@@ -94,11 +98,12 @@ Done (this batch):
 - [x] ConnectPanel pulse — gated with `motion-safe:`.
 
 Removed as not worth doing (verified non-issue / marginal / stylistic):
+
 - EnrollPanel `variant="text"` — NOT a bug: `variant` (text/outlined/link) is a valid PrimeVue Button prop (in the preset).
 - ActionBar menu items, TablePanel badge→`Tag`, DockPanel tab buttons — work fine; PrimeVue-first restyle with no user-visible change.
 - TablePanel delete-retry / inline-cell validation — backend validates; the dialog already shows the error.
 - CodeDiffView notice — the `<pre>` fallback already shows the content.
-- log Clear confirm — clearing the *view* (not data) isn't destructive; a confirm is friction.
+- log Clear confirm — clearing the _view_ (not data) isn't destructive; a confirm is friction.
 - ObjectDetail/Document copy toast — both already show an inline "copied" badge.
 - JsonNode treeitem roles, ScopeBar double-label, ArrayField/MapField copy, P3 hardcoded-strings→config, export-Menu icon, terminal-search debounce — marginal.
 

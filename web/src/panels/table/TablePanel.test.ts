@@ -1036,6 +1036,37 @@ describe("TablePanel staged edits", () => {
     w.unmount();
   });
 
+  it("opens the dialog via keyboard on a clickable row", async () => {
+    installFetch(() => ({
+      body: {
+        items: [{ _id: "p1", name: "nginx", cpuPct: 5 }],
+        nextCursor: "",
+        total: 1,
+      },
+    }));
+    const w = mount(TablePanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "server_monitor.processes" },
+        config: {
+          columns: [{ key: "name", label: "Name" }],
+          rowClick: "detail",
+        },
+      },
+    });
+    await flushPromises();
+    const tr = w.find("tbody tr");
+    expect(tr.attributes("tabindex")).toBe("0");
+    // PT merge must keep the preset row styling, not clobber it.
+    expect(tr.classes()).toContain("cursor-pointer");
+    await tr.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+    expect(w.emitted("select")).toBeFalsy();
+    expect(document.body.textContent).toContain("nginx");
+    w.unmount();
+  });
+
   it("pauses live polling while deactivated under KeepAlive", async () => {
     vi.useFakeTimers();
     let calls = 0;

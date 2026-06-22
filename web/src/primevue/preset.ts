@@ -757,7 +757,7 @@ export const primeVuePassthrough = {
       sortIcon: "h-3.5 w-3.5 text-surface-400",
     },
     bodyRow:
-      "cursor-pointer transition-colors hover:bg-surface-50 data-[p-selected=true]:bg-primary-50/70 dark:hover:bg-surface-900 dark:data-[p-selected=true]:bg-primary-500/10",
+      "cursor-pointer outline-none transition-colors hover:bg-surface-50 focus-visible:bg-primary-50/70 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary-500 data-[p-selected=true]:bg-primary-50/70 dark:hover:bg-surface-900 dark:focus-visible:bg-primary-500/15 dark:data-[p-selected=true]:bg-primary-500/10",
     emptyMessageCell: "px-4 py-6 text-center text-surface-400",
     pcRowCheckbox: checkbox,
     pcHeaderCheckbox: checkbox,
