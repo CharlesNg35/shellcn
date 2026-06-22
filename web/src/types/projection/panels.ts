@@ -282,6 +282,7 @@ export interface MetricsPanelConfig {
 export interface TerminalPanelConfig {
   zoom?: boolean;
   search?: boolean;
+  controls?: StreamControl[];
 }
 
 export interface TerminalGridPanelConfig extends TerminalPanelConfig {

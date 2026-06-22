@@ -222,6 +222,33 @@ func (internalPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin.Ses
 	return fakeSess{}, nil
 }
 
+type agentOnlyPlugin struct{}
+
+func (agentOnlyPlugin) Manifest() plugin.Manifest {
+	return plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion, Name: "agentonly", Version: "0", Title: "Agent Only",
+		Category:            plugin.CategoryOther,
+		Layout:              plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{plugin.TransportAgent},
+		Agent: &plugin.AgentProfile{
+			Proxy:   plugin.ProxyTarget{Mode: plugin.AgentTCP, Address: "127.0.0.1:1", Risk: plugin.RiskSafe},
+			Install: []plugin.InstallArtifact{{Label: "Shell", Kind: "shell", Template: "run {{.Token}}"}},
+		},
+		Tabs: []plugin.Panel{{Key: "items", Label: "Items", Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "agentonly.list"}}},
+	}
+}
+
+func (agentOnlyPlugin) Routes() []plugin.Route {
+	return []plugin.Route{{
+		ID: "agentonly.list", Method: plugin.MethodGet, Permission: "agentonly.read", Risk: plugin.RiskSafe, AuditEvent: "agentonly.list",
+		Handle: func(*plugin.RequestContext) (any, error) { return plugin.Page[string]{}, nil },
+	}}
+}
+
+func (agentOnlyPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin.Session, error) {
+	return fakeSess{}, nil
+}
+
 // boomPlugin fails to Connect, so any route on it resolves but the session is unavailable.
 type boomPlugin struct{}
 
@@ -265,6 +292,7 @@ func newHarness(t *testing.T, opts ...func(*server.Deps)) *harness {
 	reg.MustRegister(testPlugin{})
 	reg.MustRegister(boomPlugin{})
 	reg.MustRegister(internalPlugin{})
+	reg.MustRegister(agentOnlyPlugin{})
 	reg.MustRegister(shellssh.New())
 	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg))
 

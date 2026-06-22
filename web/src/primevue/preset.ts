@@ -8,11 +8,31 @@ const focusRing =
 const focusWithinRing =
   "focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-500/30";
 
-const inputBase = cn(
-  "w-full px-2.5 py-1.5 text-sm text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 dark:text-surface-100",
+// Field padding/typography per PrimeVue `size` ("small"/"large", default normal),
+// shared by inputs and selects so every control shrinks consistently.
+const fieldSize = {
+  small: "px-2 py-1 text-xs",
+  normal: "px-2.5 py-1.5 text-sm",
+  large: "px-3 py-2.5 text-base",
+} as const;
+const fieldText = {
+  small: "text-xs",
+  normal: "text-sm",
+  large: "text-base",
+} as const;
+
+type SizedOptions = { props?: { size?: string } };
+function sizeKey(options: SizedOptions): keyof typeof fieldSize {
+  const size = options.props?.size;
+  return size === "small" || size === "large" ? size : "normal";
+}
+
+const inputBaseNoPad = cn(
+  "w-full text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 dark:text-surface-100",
   fieldSurface,
   focusRing,
 );
+const inputBase = cn(inputBaseNoPad, fieldSize.normal);
 
 export const inputClass = inputBase;
 
@@ -308,7 +328,9 @@ const paginator = {
 };
 
 export const primeVuePassthrough = {
-  inputtext: { root: inputBase },
+  inputtext: {
+    root: (o: SizedOptions) => cn(inputBaseNoPad, fieldSize[sizeKey(o)]),
+  },
   breadcrumb: {
     root: "w-full",
     list: "flex flex-wrap items-center gap-1 text-sm",
@@ -334,13 +356,18 @@ export const primeVuePassthrough = {
   },
 
   select: {
-    root: cn(
-      "flex w-full min-w-0 items-center justify-between text-sm transition duration-150",
-      fieldSurface,
-      focusWithinRing,
-    ),
-    label:
-      "min-w-0 flex-1 truncate px-2.5 py-1.5 text-left text-surface-800 dark:text-surface-100",
+    root: (o: SizedOptions) =>
+      cn(
+        "flex w-full min-w-0 items-center justify-between transition duration-150",
+        fieldText[sizeKey(o)],
+        fieldSurface,
+        focusWithinRing,
+      ),
+    label: (o: SizedOptions) =>
+      cn(
+        "min-w-0 flex-1 truncate text-left text-surface-800 dark:text-surface-100",
+        fieldSize[sizeKey(o)],
+      ),
     dropdown: "shrink-0 px-2 text-surface-400",
     loadingIcon: "h-4 w-4 animate-spin",
     overlay: selectOverlay,

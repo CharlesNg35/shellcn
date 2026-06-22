@@ -1,18 +1,28 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon } from "@xterm/addon-search";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
+import Select from "primevue/select";
 import { useStream } from "@/composables/useStream";
 import { useTheme } from "@/composables/useTheme";
 import AppIcon from "@/components/AppIcon.vue";
 import RecordingControls from "@/components/recordings/RecordingControls.vue";
 import type { PanelProps } from "../core/types";
-import type { TerminalPanelConfig } from "@/types/projection";
+import type { DataSource, TerminalPanelConfig } from "@/types/projection";
 import PanelLoader from "@/components/PanelLoader.vue";
 import StreamStatusBar from "./StreamStatusBar.vue";
+import { useStreamControls } from "../shared/useStreamControls";
 import type { ChannelStatus } from "@/stores/streamChannels";
 
 const props = withDefaults(
@@ -38,7 +48,39 @@ const { isDark, theme } = useTheme();
 const cfg = computed(() => props.config as TerminalPanelConfig | undefined);
 const zoomEnabled = computed(() => cfg.value?.zoom === true);
 const searchEnabled = computed(() => cfg.value?.search === true);
-const hasControls = computed(() => zoomEnabled.value || searchEnabled.value);
+const streamControls = computed(() => cfg.value?.controls ?? []);
+
+// A reactive copy of the source so a control can change its params and reconnect,
+// re-parameterizing the session.
+const liveSource = reactive<DataSource>({
+  routeId: props.source?.routeId ?? "",
+  method: props.source?.method,
+  params: { ...(props.source?.params ?? {}) },
+});
+const streamSource = props.source ? liveSource : undefined;
+
+const {
+  values: controlValues,
+  options: controlOptions,
+  load: loadControls,
+  visible: controlVisible,
+  hasVisible: hasVisibleControls,
+  applyTo: applyControls,
+} = useStreamControls(props.connectionId, streamControls, {
+  resource: props.resource,
+  record: props.record,
+});
+const hasControls = computed(
+  () => zoomEnabled.value || searchEnabled.value || hasVisibleControls.value,
+);
+
+// Switching a control reconnects into the new selection; reset the buffer so the
+// previous session's output doesn't bleed into the new one.
+async function onControlChange(): Promise<void> {
+  applyControls(liveSource);
+  term?.reset();
+  await onReconnect();
+}
 
 const darkTerminalTheme: ITheme = {
   background: "#020617",
@@ -189,7 +231,7 @@ watch(searchTerm, () => {
 
 const { status, error, send, reconnect } = useStream(
   props.connectionId,
-  props.source,
+  streamSource,
   { resource: props.resource, record: props.record },
   write,
   { keySuffix: props.streamKeySuffix },
@@ -341,7 +383,10 @@ async function mountTerminal(): Promise<void> {
   }
 }
 
-onMounted(mountTerminal);
+onMounted(() => {
+  void loadControls();
+  void mountTerminal();
+});
 watch(isDark, applyTerminalTheme);
 
 onUnmounted(() => {
@@ -413,6 +458,20 @@ onUnmounted(() => {
           v-if="!searchOpen"
           class="flex items-center gap-0.5 rounded-md border border-surface-200 bg-surface-0/90 p-0.5 shadow-sm backdrop-blur dark:border-surface-700 dark:bg-surface-900/90"
         >
+          <template v-for="ctrl in streamControls" :key="ctrl.param">
+            <div v-if="controlVisible(ctrl.param)" class="w-36 shrink-0">
+              <Select
+                v-model="controlValues[ctrl.param]"
+                :options="controlOptions[ctrl.param] ?? []"
+                option-label="label"
+                option-value="value"
+                :placeholder="ctrl.label"
+                :aria-label="ctrl.label"
+                size="small"
+                @change="onControlChange"
+              />
+            </div>
+          </template>
           <template v-if="zoomEnabled">
             <Button
               type="button"

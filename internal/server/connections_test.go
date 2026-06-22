@@ -155,6 +155,28 @@ func TestConnectionConfigAppliesManifestDefaults(t *testing.T) {
 	}
 }
 
+func TestAgentOnlyConnectionDefaultsAndRejectsDirect(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	resp := h.do(t, http.MethodPost, "/api/connections", "op",
+		strings.NewReader(`{"name":"agent","protocol":"agentonly","config":{}}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create agent-only: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	id := createConnID(t, resp)
+	conn, _ := h.store.Connections.Get(ctx, id)
+	if conn.Transport != "agent" {
+		t.Fatalf("agent-only connection transport = %q, want agent", conn.Transport)
+	}
+
+	resp = h.do(t, http.MethodPost, "/api/connections", "op",
+		strings.NewReader(`{"name":"direct","protocol":"agentonly","transport":"direct","config":{}}`))
+	if resp.Status != http.StatusBadRequest {
+		t.Fatalf("create direct agent-only: want 400, got %d (%s)", resp.Status, resp.Body)
+	}
+}
+
 func TestConnectionRecordingPolicy(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()

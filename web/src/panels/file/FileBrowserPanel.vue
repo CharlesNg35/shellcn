@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useDropZone } from "@vueuse/core";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
@@ -21,7 +21,6 @@ import {
   type FileBrowserConfig,
   type FileContent,
   type FileEntry,
-  type Option,
   type Page,
 } from "@/types/projection";
 import type { PanelProps } from "../core/types";
@@ -35,6 +34,7 @@ import FileSelectionBar from "./FileSelectionBar.vue";
 import FileToolbar from "./FileToolbar.vue";
 import FileOperationDialog from "./FileOperationDialog.vue";
 import { useDirtyGuard } from "../shared/useDirtyGuard";
+import { useStreamControls } from "../shared/useStreamControls";
 import {
   formatBytes,
   languageFor,
@@ -52,8 +52,16 @@ const fileConfig = computed(
 );
 const pathParam = computed(() => fileConfig.value?.pathParam ?? "path");
 const controls = computed(() => fileConfig.value?.controls ?? []);
-const controlValues = reactive<Record<string, string>>({});
-const controlOptions = ref<Record<string, Option[]>>({});
+const {
+  values: controlValues,
+  options: controlOptions,
+  load: loadControls,
+  visible: controlVisible,
+  hasVisible: hasVisibleControls,
+} = useStreamControls(props.connectionId, controls, {
+  resource: props.resource,
+  record: props.record,
+});
 const routes = computed(() => fileConfig.value?.routes);
 const uploadConfig = computed(() => fileConfig.value?.upload);
 const readRouteId = computed(() => routes.value?.read);
@@ -274,37 +282,6 @@ function operationParams(path: string): Record<string, string> {
     [pathParam.value]: path,
   };
 }
-
-async function loadControls(): Promise<void> {
-  for (const ctrl of controls.value) {
-    if (!ctrl.optionsSource) continue;
-    try {
-      const page = await fetchPage<Option>(
-        props.connectionId,
-        ctrl.optionsSource,
-        operationCtx.value,
-        { limit: 200 },
-      );
-      controlOptions.value = {
-        ...controlOptions.value,
-        [ctrl.param]: page.items,
-      };
-      if (controlValues[ctrl.param] === undefined && page.items.length) {
-        controlValues[ctrl.param] = String(page.items[0].value);
-      }
-    } catch {
-      controlOptions.value = { ...controlOptions.value, [ctrl.param]: [] };
-    }
-  }
-}
-
-function controlVisible(param: string): boolean {
-  return (controlOptions.value[param]?.length ?? 0) > 1;
-}
-
-const hasVisibleControls = computed(() =>
-  controls.value.some((ctrl) => controlVisible(ctrl.param)),
-);
 
 function onControlChange(): void {
   void confirmBeforeDiscard(() => {
@@ -824,18 +801,18 @@ watch(
       class="flex flex-wrap items-center gap-2 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
     >
       <template v-for="ctrl in controls" :key="ctrl.param">
-        <Select
-          v-if="controlVisible(ctrl.param)"
-          v-model="controlValues[ctrl.param]"
-          :options="controlOptions[ctrl.param] ?? []"
-          option-label="label"
-          option-value="value"
-          :placeholder="ctrl.label"
-          :aria-label="ctrl.label"
-          size="small"
-          class="w-48"
-          @change="onControlChange"
-        />
+        <div v-if="controlVisible(ctrl.param)" class="w-40 shrink-0">
+          <Select
+            v-model="controlValues[ctrl.param]"
+            :options="controlOptions[ctrl.param] ?? []"
+            option-label="label"
+            option-value="value"
+            :placeholder="ctrl.label"
+            :aria-label="ctrl.label"
+            size="small"
+            @change="onControlChange"
+          />
+        </div>
       </template>
     </div>
 

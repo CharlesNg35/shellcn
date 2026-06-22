@@ -46,7 +46,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities: []plugin.Capability{
 			"services", "stacks", "nodes", "tasks", "logs",
 		},
-		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
+		SupportedTransports: []plugin.Transport{plugin.TransportAgent},
 		Agent: &plugin.AgentProfile{
 			Proxy: plugin.ProxyTarget{Mode: plugin.AgentUnix, Address: defaultSocket, Risk: plugin.RiskPrivileged, Forward: true},
 			Install: []plugin.InstallArtifact{{

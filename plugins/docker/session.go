@@ -7,8 +7,7 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-// defaultSocket is the standard Docker Engine unix socket used when a direct
-// connection doesn't specify one.
+// defaultSocket is the Docker Engine unix socket the enrolled agent proxies.
 const defaultSocket = "/var/run/docker.sock"
 
 // Connect dials the Docker daemon for this connection's transport.

@@ -198,8 +198,8 @@ type FileBrowserConfig struct {
 	Routes    FileBrowserRoutes `json:"routes,omitempty"`
 	Upload    FileUploadConfig  `json:"upload,omitempty"`
 	Writable  bool              `json:"writable,omitempty"`
-	// Controls re-parameterize every file operation (e.g. a container picker): the
-	// chosen value is merged into the route params and the listing reloads.
+	// Controls re-parameterize every file operation: the chosen value is merged
+	// into the route params and the listing reloads.
 	Controls []StreamControl `json:"controls,omitempty"`
 }
 
@@ -508,6 +508,8 @@ type KVConfig struct {
 type TerminalConfig struct {
 	Zoom   bool `json:"zoom,omitempty"`   // font-size +/- controls and Ctrl/⌘ +/-/0
 	Search bool `json:"search,omitempty"` // scrollback find with match navigation
+	// Controls re-parameterize the session and reconnect
+	Controls []StreamControl `json:"controls,omitempty"`
 }
 
 type TerminalGridConfig struct {
@@ -555,17 +557,17 @@ const (
 	SaveDismissClose SaveDismiss = "close"
 )
 
-// StreamControl is a generic selector that re-parameterizes a panel (e.g. a logs or
-// files container picker): the chosen option value is sent as Param on the source and
-// the stream reconnects.
+// StreamControl is a generic selector that re-parameterizes a panel: the chosen
+// option value is sent as Param on the source and the stream reconnects. Options
+// come from OptionsSource (a read route) or, if absent, the panel's own state.
 type StreamControl struct {
 	Param         string      `json:"param"`
 	Label         string      `json:"label,omitempty"`
 	OptionsSource *DataSource `json:"optionsSource,omitempty"`
 }
 
-// LogStreamConfig configures the log viewer: stream controls (e.g. a container
-// picker) and an optional "previous (crashed) logs" toggle.
+// LogStreamConfig configures the log viewer: stream controls that re-parameterize
+// the source and an optional "previous (crashed) logs" toggle.
 type LogStreamConfig struct {
 	Controls      []StreamControl `json:"controls,omitempty"`
 	AllowPrevious bool            `json:"allowPrevious,omitempty"`

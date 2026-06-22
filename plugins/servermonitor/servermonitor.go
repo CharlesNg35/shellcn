@@ -25,7 +25,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities: []plugin.Capability{
 			"host", "metrics", "processes", "services", "disks", "disk_io", "network", "connections", "sessions", "sensors", "cpu",
 		},
-		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
+		SupportedTransports: []plugin.Transport{plugin.TransportAgent},
 		Agent: &plugin.AgentProfile{
 			Proxy: plugin.ProxyTarget{Mode: plugin.AgentHostMonitor, Risk: plugin.RiskSafe},
 			Install: []plugin.InstallArtifact{{

@@ -106,7 +106,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("valueTypes", array(stringProp())),
 			),
 		},
-		PanelTerminal: {Type: "object", Properties: props(prop("zoom", boolProp()), prop("search", boolProp()))},
+		PanelTerminal: {Type: "object", Properties: props(prop("zoom", boolProp()), prop("search", boolProp()), prop("controls", array(streamControl())))},
 		PanelTerminalGrid: {
 			Type: "object",
 			Properties: props(

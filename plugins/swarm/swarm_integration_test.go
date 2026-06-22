@@ -53,8 +53,9 @@ func TestSwarmPluginIntegration(t *testing.T) {
 
 	port, _ := strconv.Atoi(hostPort)
 	sess, err := Connect(ctx, plugin.ConnectConfig{
-		Config: map[string]any{"endpoint_type": "tcp", "host": "127.0.0.1", "port": port},
-		Net:    directNet{},
+		Transport: plugin.TransportAgent,
+		Config:    map[string]any{"endpoint_type": "tcp", "host": "127.0.0.1", "port": port},
+		Net:       directNet{},
 	})
 	if err != nil {
 		t.Fatalf("Connect: %v", err)

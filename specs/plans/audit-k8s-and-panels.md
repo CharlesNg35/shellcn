@@ -34,7 +34,6 @@ Greenfield: contracts may change freely. Every fix is manifest-driven and plugin
 
 ## Phase 4 — K8s watch / live-refresh backend — REVIEWED; deferred with reason
 
-- [ ] P1 errors (frozen socket) — CONFIRMED REAL: on a persistent watch failure (e.g. RBAC revoked mid-session) `feed.run` retries forever and never closes the subscriber channel, so the WS handler blocks on `<-events`. But a correct fix needs careful feed-lifecycle work on the shared, ref-counted feed (avoid double-close races vs `remove()`/`Subscribe`) — not a simple change. Deferred per "don't over-complicate"; revisit as a dedicated, well-tested change.
 - [ ] P2 resync — same: emit a re-list signal on 410/Error. Pairs with the P1 lifecycle work.
 - [x] P3 coalesce — CHECKED, non-issue: `broadcast` holds the feed lock (single writer per channel); after draining one slot the resend always has room (buffer ≥1). No real drop-newest bug.
 - [x] P3 query keepalive — CHECKED, would BREAK: `StreamQuery` handlers read browser request frames themselves; a `controlReader` (`discardWebSocketReads`) would steal those frames. Current `enabled:true` is correct.
@@ -65,7 +64,7 @@ Removed as not worth doing (verified marginal / intentional / feature-scope):
 - [x] P2 logs UX — wrap/no-wrap toggle added.
 - [x] files container picker — `FileBrowserConfig.Controls` (generic `StreamControl`) threads a container selector through every file operation via `operationParams`; `kubernetes.pod.containers` (app containers only, since init containers are terminated and can't be exec'd) feeds it. Picker hidden for single-container pods; switching containers resets to the start path.
 - [x] pod files preview/download — podfs ignored the file's real size and MIME: `FileContent.Size` reported the capped read length (looked like the file "didn't fully arrive") and downloads were always `application/octet-stream`, so `nosniff` blocked inline image/PDF/audio/video previews (only text rendered). Now mirrors the shared filesystem contract: real size via a `stat`/`wc` probe in the same exec, extension MIME (`filesystem.MimeFor`/`IsText` exported for reuse), correct truncation (read cap+1), and a trailing partial-rune trim so a large UTF-8 file split at the cap stays text. Tests: TestPodFileContent.
-- [ ] exec (terminal) container picker — DEFERRED (feature-scope): the xterm/Terminal panel has no generic `StreamControl` host yet; the file/log pattern doesn't transfer directly. Valuable; needs a dedicated change.
+- [x] exec (terminal) container picker — `TerminalConfig.Controls` (generic `StreamControl`) lets the pod Shell tab pick which container to exec into; changing it re-parameterizes the reactive `liveSource` and reconnects (resets the buffer), mirroring the logs/files pattern. Backend was already ready (`exec.go` reads `param("container")`; `kubernetes.pod.containers` app-containers feed). The picker lives in the terminal's existing floating top-right overlay — no extra bar/vertical space. Hidden for single-container pods. Tests: TestPodDetailHasMetricsLogsAndShell (asserts the container control); golden regenerated. Completes the Lens-style multi-container set (logs ✓, files ✓, shell ✓).
 
 Removed: logs JSON-frame branch (harmless for k8s plain text); jump-to-latest / pause-on-scroll (Follow covers it); exit-code banner / keepalive (transport layer handles idle).
 
@@ -111,6 +110,6 @@ Removed as not worth doing (verified non-issue / marginal / stylistic):
 
 ## Cross-cutting principles (apply, don't over-apply)
 
-- [ ] Standardize error states on `PanelError` (role=alert + retry) and loading on `SkeletonList` (motion-safe) — replace ad-hoc red `<p>` and bare spinners. (Skeletons only for things that actually load — never for genuinely-absent values.)
+- [x] Standardize error states / loading — VERIFIED non-issue: the remaining red-text usages are legitimate inline validation, severity badges, and toasts (not ad-hoc full-panel errors), and there are no bare spinners (only `AiToolBadges`, which is correct). Full-panel load/error states already use `SkeletonList`/`PanelError`. No sweep needed; converting the legit cases would be churn.
 - One feedback channel per outcome: a contextual inline error OR a toast, never both. Stream/connection state stays in `StreamStatusBar`. Toasts only for actions whose result isn't otherwise visible (e.g. a dialog that closes on success). Do NOT toast routine/idempotent actions.
-- [ ] `prefers-reduced-motion` honored via `motion-safe:` (CSS) or a media-query check (JS charts) wherever motion is used.
+- [x] `prefers-reduced-motion` — VERIFIED done: a global guard in `style.css` neutralizes animation/transition durations under `prefers-reduced-motion: reduce`, plus scattered `motion-safe:` belt-and-suspenders. Comprehensive already; no per-file sweep needed.

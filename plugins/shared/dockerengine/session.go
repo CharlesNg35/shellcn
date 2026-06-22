@@ -36,8 +36,7 @@ type Session struct {
 	// net dials arbitrary addresses over the connection's transport — used to
 	// reach a container's web port for the browser proxy.
 	net plugin.NetTransport
-	// bridge fronts the agent tunnel as a local socket so the exec hijack works
-	// (nil for direct transport).
+	// bridge fronts the agent tunnel as a local socket so the exec hijack works.
 	bridge *loopback.Bridge
 }
 
@@ -52,6 +51,9 @@ func (s *Session) HTTPClient() *http.Client { return s.http }
 // Connect dials the daemon for cfg's transport. defaultSocket is the unix socket
 // used when none is configured (e.g. /var/run/docker.sock, /run/podman/podman.sock).
 func Connect(ctx context.Context, cfg plugin.ConnectConfig, defaultSocket string) (plugin.Session, error) {
+	if cfg.Transport != plugin.TransportAgent {
+		return nil, fmt.Errorf("%w: docker engine access requires agent transport", plugin.ErrInvalidInput)
+	}
 	ep, err := dockerEndpoint(cfg, defaultSocket)
 	if err != nil {
 		return nil, err
@@ -62,8 +64,7 @@ func Connect(ctx context.Context, cfg plugin.ConnectConfig, defaultSocket string
 	dial := func(ctx context.Context, _, _ string) (net.Conn, error) { return tunnelDial(ctx) }
 
 	// The moby exec hijack bypasses a custom dialer and needs a real socket, so
-	// over the agent we front the tunnel with a loopback bridge and dial that —
-	// mirroring how the k8s exec/port-forward upgraders reach the agent.
+	// the agent tunnel is fronted with a loopback bridge and dialed through that.
 	var bridge *loopback.Bridge
 	if cfg.Transport == plugin.TransportAgent {
 		if bridge, err = loopback.New(tunnelDial); err != nil {

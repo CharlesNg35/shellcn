@@ -21,6 +21,9 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	if m.Layout != plugin.LayoutSidebarTree {
 		t.Fatalf("layout = %q, want sidebar_tree", m.Layout)
 	}
+	if m.SupportsTransport(plugin.TransportDirect) {
+		t.Fatal("docker must not declare direct transport")
+	}
 	if !m.SupportsTransport(plugin.TransportAgent) || m.Agent == nil {
 		t.Fatal("docker must declare agent transport and profile")
 	}
@@ -214,18 +217,14 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	}
 }
 
-func TestConfigSchemaHidesEndpointForAgentTransport(t *testing.T) {
+func TestConfigSchemaDoesNotExposeDirectEndpoint(t *testing.T) {
 	schema := configSchema()
-	direct := map[string]any{plugin.SchemaContextTransport: string(plugin.TransportDirect)}
-	if err := schema.ValidateValuesWithContext(map[string]any{"endpoint_type": "unix", "socket_path": "/var/run/docker.sock"}, nil, direct); err != nil {
-		t.Fatalf("direct unix config rejected: %v", err)
-	}
 	agent := map[string]any{plugin.SchemaContextTransport: string(plugin.TransportAgent)}
 	if err := schema.ValidateValuesWithContext(map[string]any{}, nil, agent); err != nil {
 		t.Fatalf("agent config should not require endpoint fields: %v", err)
 	}
 	if visible := schema.VisibleValues(map[string]any{"endpoint_type": "unix", "socket_path": "/var/run/docker.sock"}, agent); len(visible) != 0 {
-		t.Fatalf("agent config should not persist direct endpoint fields: %#v", visible)
+		t.Fatalf("docker config should not persist direct endpoint fields: %#v", visible)
 	}
 }
 

@@ -170,6 +170,12 @@ func TestPodDetailHasMetricsLogsAndShell(t *testing.T) {
 	if !conditionRequiresStatus(terminal.VisibleWhen, "Running") {
 		t.Fatalf("pod shell should only show for running pods, got %#v", terminal.VisibleWhen)
 	}
+	termCfg, ok := terminal.Config.(plugin.TerminalConfig)
+	if !ok || len(termCfg.Controls) != 1 || termCfg.Controls[0].Param != "container" ||
+		termCfg.Controls[0].OptionsSource == nil ||
+		termCfg.Controls[0].OptionsSource.RouteID != "kubernetes.pod.containers" {
+		t.Fatalf("pod shell should offer a container picker, got %#v", terminal.Config)
+	}
 	logs := res.Detail.Tabs[3]
 	if logs.VisibleWhen != nil {
 		t.Fatalf("pod logs should stay available for terminated/crashing pods, got %#v", logs.VisibleWhen)

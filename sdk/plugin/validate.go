@@ -77,8 +77,15 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 		add("Layout %q is not a valid layout", m.Layout)
 	}
 
-	if !m.SupportsTransport(TransportDirect) {
-		add("SupportedTransports must include %q", TransportDirect)
+	if len(m.SupportedTransports) == 0 {
+		add("SupportedTransports must declare at least one transport")
+	}
+	for _, transport := range m.SupportedTransports {
+		switch transport {
+		case TransportDirect, TransportAgent:
+		default:
+			add("SupportedTransports contains unsupported transport %q", transport)
+		}
 	}
 	if m.SupportsTransport(TransportAgent) && m.Agent == nil {
 		add("AgentProfile is required when transport %q is declared", TransportAgent)
@@ -765,6 +772,12 @@ func checkPanelConfigRoutes(
 		}
 		checkSaveFeedback(ctx, c.SaveToast, c.SaveDismiss, add)
 	case LogStreamConfig:
+		for i, ctrl := range c.Controls {
+			if ctrl.OptionsSource != nil {
+				checkReadSource(fmt.Sprintf("%s control[%d] optionsSource", ctx, i), *ctrl.OptionsSource)
+			}
+		}
+	case TerminalConfig:
 		for i, ctrl := range c.Controls {
 			if ctrl.OptionsSource != nil {
 				checkReadSource(fmt.Sprintf("%s control[%d] optionsSource", ctx, i), *ctrl.OptionsSource)

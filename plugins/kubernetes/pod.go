@@ -47,7 +47,13 @@ func podDetailTabs() []plugin.Panel {
 				RouteID: "kubernetes.pod.exec", Method: plugin.MethodWS,
 				Params: podRefParams(map[string]string{"tty": "true", "cols": "80", "rows": "24"}),
 			},
-			Config:      plugin.TerminalConfig{Zoom: true, Search: true},
+			Config: plugin.TerminalConfig{
+				Zoom: true, Search: true,
+				Controls: []plugin.StreamControl{{
+					Param: "container", Label: "Container",
+					OptionsSource: &plugin.DataSource{RouteID: "kubernetes.pod.containers", Params: podRefParams(nil)},
+				}},
+			},
 			VisibleWhen: runningPod(),
 		},
 		podFilesTab(),

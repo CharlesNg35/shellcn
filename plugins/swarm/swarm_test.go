@@ -30,6 +30,9 @@ func TestManifestDeclaresSwarmWorkspace(t *testing.T) {
 	if m.Layout != plugin.LayoutSidebarTree {
 		t.Fatalf("layout = %q, want sidebar_tree", m.Layout)
 	}
+	if m.SupportsTransport(plugin.TransportDirect) {
+		t.Fatal("swarm must not declare direct transport")
+	}
 	if !m.SupportsTransport(plugin.TransportAgent) || m.Agent == nil {
 		t.Fatal("swarm must declare agent transport and profile")
 	}
@@ -113,8 +116,9 @@ func TestRoutesAgainstFakeSwarmDaemon(t *testing.T) {
 	u, _ := url.Parse(srv.URL)
 	host, port, _ := net.SplitHostPort(u.Host)
 	sess, err := Connect(context.Background(), plugin.ConnectConfig{
-		Config: map[string]any{"endpoint_type": "tcp", "host": host, "port": mustPort(t, port)},
-		Net:    directNet{},
+		Transport: plugin.TransportAgent,
+		Config:    map[string]any{"endpoint_type": "tcp", "host": host, "port": mustPort(t, port)},
+		Net:       directNet{},
 	})
 	if err != nil {
 		t.Fatalf("Connect: %v", err)

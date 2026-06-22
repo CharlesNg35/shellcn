@@ -274,8 +274,9 @@ func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 	u, _ := url.Parse(srv.URL)
 	host, port, _ := net.SplitHostPort(u.Host)
 	sess, err := Connect(context.Background(), plugin.ConnectConfig{
-		Config: map[string]any{"endpoint_type": "tcp", "host": host, "port": mustPort(t, port)},
-		Net:    directNet{},
+		Transport: plugin.TransportAgent,
+		Config:    map[string]any{"endpoint_type": "tcp", "host": host, "port": mustPort(t, port)},
+		Net:       directNet{},
 	}, "/var/run/docker.sock")
 	if err != nil {
 		t.Fatalf("Connect: %v", err)

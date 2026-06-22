@@ -46,8 +46,8 @@ func TestDockerPluginIntegrationLocalDaemon(t *testing.T) {
 	})
 
 	sess, err := Connect(ctx, plugin.ConnectConfig{
-		Config: map[string]any{"endpoint_type": "unix", "socket_path": "/var/run/docker.sock"},
-		Net:    directNet{},
+		Transport: plugin.TransportAgent,
+		Net:       directNet{},
 	})
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -105,7 +105,6 @@ func TestDockerPluginIntegrationAgentTransport(t *testing.T) {
 	sess, err := Connect(ctx, plugin.ConnectConfig{
 		ConnectionID: "docker-agent",
 		Transport:    plugin.TransportAgent,
-		Config:       map[string]any{"endpoint_type": "unix", "socket_path": "/var/run/docker.sock"},
 		Net:          nt,
 	})
 	if err != nil {
@@ -128,8 +127,8 @@ func TestDockerEngineResourceCreateRoundTrip(t *testing.T) {
 	defer cancel()
 
 	sess, err := Connect(ctx, plugin.ConnectConfig{
-		Config: map[string]any{"endpoint_type": "unix", "socket_path": "/var/run/docker.sock"},
-		Net:    directNet{},
+		Transport: plugin.TransportAgent,
+		Net:       directNet{},
 	})
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -197,8 +196,8 @@ func TestDockerEngineOpsIntegrationRoundTrip(t *testing.T) {
 	})
 
 	sess, err := Connect(ctx, plugin.ConnectConfig{
-		Config: map[string]any{"endpoint_type": "unix", "socket_path": "/var/run/docker.sock"},
-		Net:    directNet{},
+		Transport: plugin.TransportAgent,
+		Net:       directNet{},
 	})
 	if err != nil {
 		t.Fatalf("Connect: %v", err)

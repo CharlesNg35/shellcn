@@ -19,8 +19,8 @@ func TestObservabilityPluginsValidateAndRegister(t *testing.T) {
 		if len(proj.Tabs) == 0 || len(proj.Streams) == 0 {
 			t.Fatalf("%s should expose tabs and streams", name)
 		}
-		if len(proj.SupportedTransports) != 2 || proj.SupportedTransports[0] != plugin.TransportDirect || proj.SupportedTransports[1] != plugin.TransportAgent {
-			t.Fatalf("%s should support direct and agent transports: %+v", name, proj.SupportedTransports)
+		if len(proj.SupportedTransports) != 1 || proj.SupportedTransports[0] != plugin.TransportAgent {
+			t.Fatalf("%s should support only agent transport: %+v", name, proj.SupportedTransports)
 		}
 	}
 }
