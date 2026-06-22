@@ -31,7 +31,7 @@ func debugAction() plugin.Action {
 		OnSuccess: &plugin.ActionSuccess{Effects: []plugin.ActionEffect{{
 			Type: plugin.ActionEffectOpenPanel,
 			OpenPanel: &plugin.OpenPanelEffect{
-				Open: plugin.OpenDock, Panel: plugin.PanelTerminal, Title: "Debug", Icon: lucide("bug"),
+				Open: plugin.OpenDock, Panel: plugin.PanelTerminal, Title: "Debug · ${response.name}", Icon: lucide("bug"),
 				Source: &plugin.DataSource{
 					RouteID: "kubernetes.pod.exec", Method: plugin.MethodWS,
 					Params: map[string]string{
