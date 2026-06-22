@@ -31,6 +31,10 @@ func applyYAMLAction() plugin.Action {
 			InitialContent: applyStarter,
 			SaveRouteID:    "kubernetes.resource.apply",
 			SaveMethod:     plugin.MethodPost,
+			RefreshField:   "content",
+			DryRunKey:      "dryRun",
+			SaveToast:      &plugin.SaveToast{Summary: "Applied to cluster"},
+			SaveDismiss:    plugin.SaveDismissClose,
 		},
 		IconOnly: true,
 	}

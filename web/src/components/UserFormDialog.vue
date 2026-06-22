@@ -37,6 +37,16 @@ const role = ref<Role>(Role.Viewer);
 const password = ref("");
 const disabled = ref(false);
 const errors = ref<Record<string, string>>({});
+const dirty = computed(() => {
+  const u = props.user;
+  if (!u) return true;
+  return (
+    email.value.trim() !== (u.email ?? "") ||
+    displayName.value.trim() !== (u.displayName ?? "") ||
+    role.value !== (u.roles[0] ?? Role.Viewer) ||
+    disabled.value !== u.disabled
+  );
+});
 const busy = ref(false);
 
 watch(
@@ -229,7 +239,7 @@ async function save(): Promise<void> {
           type="button"
           :label="isEdit ? 'Save changes' : 'Create user'"
           :loading="busy"
-          :disabled="busy"
+          :disabled="busy || (isEdit && !dirty)"
           :pt="{ root: btnPrimary }"
           @click="save"
         />

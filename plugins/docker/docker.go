@@ -44,7 +44,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities: []plugin.Capability{
 			"containers", "images", "volumes", "networks", "logs", "terminal", "events",
 		},
-		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
+		SupportedTransports: []plugin.Transport{plugin.TransportAgent},
 		Agent: &plugin.AgentProfile{
 			Proxy: plugin.ProxyTarget{Mode: plugin.AgentUnix, Address: "/var/run/docker.sock", Risk: plugin.RiskPrivileged, Forward: true},
 			Install: []plugin.InstallArtifact{
@@ -99,27 +99,7 @@ func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.
 }
 
 func configSchema() plugin.Schema {
-	directOnly := plugin.Condition{AllOf: []plugin.Rule{{Field: plugin.SchemaContextTransport, Op: plugin.OpEq, Value: string(plugin.TransportDirect)}}}
-	directUnix := plugin.Condition{AllOf: []plugin.Rule{
-		{Field: plugin.SchemaContextTransport, Op: plugin.OpEq, Value: string(plugin.TransportDirect)},
-		{Field: "endpoint_type", Op: plugin.OpEq, Value: "unix"},
-	}}
-	directTCP := plugin.Condition{AllOf: []plugin.Rule{
-		{Field: plugin.SchemaContextTransport, Op: plugin.OpEq, Value: string(plugin.TransportDirect)},
-		{Field: "endpoint_type", Op: plugin.OpEq, Value: "tcp"},
-	}}
-	return plugin.Schema{Groups: []plugin.Group{{
-		Name: "Endpoint",
-		Fields: []plugin.Field{
-			{Key: "endpoint_type", Label: "Endpoint", Type: plugin.FieldSelect, Required: true, Default: "unix", VisibleWhen: &directOnly, Options: []plugin.Option{
-				{Label: "Unix socket", Value: "unix"},
-				{Label: "TCP host", Value: "tcp"},
-			}},
-			{Key: "socket_path", Label: "Socket path", Type: plugin.FieldText, Required: true, Default: "/var/run/docker.sock", VisibleWhen: &directUnix},
-			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, Placeholder: "docker.example.internal", VisibleWhen: &directTCP},
-			{Key: "port", Label: "Port", Type: plugin.FieldNumber, Required: true, Default: 2375, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}, VisibleWhen: &directTCP},
-		},
-	}}}
+	return plugin.Schema{}
 }
 
 func tree() []plugin.TreeGroup {

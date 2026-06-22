@@ -13,8 +13,20 @@ import AppIcon from "@/components/AppIcon.vue";
 import CodeDiffView from "../shared/CodeDiffView.vue";
 import { dialogRoot } from "@/primevue/preset";
 import { useDirtyGuard } from "../shared/useDirtyGuard";
+import { useNotify } from "@/composables/useNotify";
 
 const props = defineProps<PanelProps>();
+const emit = defineEmits<{ close: [] }>();
+const notify = useNotify();
+
+function fillResponse(
+  template: string | undefined,
+  result: Record<string, unknown>,
+): string | undefined {
+  return template?.replace(/\$\{response\.([^}]+)\}/g, (_, key) =>
+    String(result[key] ?? ""),
+  );
+}
 
 const text = ref("");
 const loading = ref(true);
@@ -54,6 +66,14 @@ const canPreview = computed(() =>
   ),
 );
 const changed = computed(() => text.value !== originalText.value);
+// Re-saving identical content is pointless when editing an existing object; a
+// create/template editor may still submit its starting content as-is.
+const requiresChange = computed(
+  () =>
+    editable.value &&
+    props.source != null &&
+    editorConfig.value?.initialContent === undefined,
+);
 const { confirmBeforeDiscard } = useDirtyGuard({
   isDirty: () => editable.value && changed.value,
   header: "Discard unsaved editor changes?",
@@ -214,6 +234,9 @@ async function review(): Promise<void> {
 
   if (canPreview.value) {
     const preview = await dryRun();
+    // A server rejection is shown inline; don't open a local diff that would imply
+    // the change is valid.
+    if (saveError.value) return;
     if (preview !== null) {
       diffModified.value = preview;
       diffOriginalLabel.value = "Live";
@@ -275,10 +298,23 @@ async function save(): Promise<void> {
     } else {
       originalText.value = text.value;
     }
-    saved.value = true;
     externalChanged.value = false;
     serverContent.value = null;
     showDiff.value = false;
+    // One success channel: a toast when the dialog closes (the inline pill wouldn't
+    // be seen), otherwise the inline pill for an in-tab editor.
+    if (editorConfig.value?.saveDismiss === "close") {
+      const toast = editorConfig.value?.saveToast;
+      if (toast) {
+        notify.success(
+          toast.summary || "Saved",
+          fillResponse(toast.detail, result),
+        );
+      }
+      emit("close");
+    } else {
+      saved.value = true;
+    }
   } catch (e) {
     saveError.value = (e as Error).message;
   } finally {
@@ -334,7 +370,9 @@ onUnmounted(() => {
         <span v-if="saveError" class="text-xs text-red-500">{{
           saveError
         }}</span>
-        <span v-else-if="saved" class="text-xs text-emerald-500">Saved</span>
+        <span v-else-if="saved && !changed" class="text-xs text-emerald-500">{{
+          editorConfig?.saveToast?.summary ?? "Saved"
+        }}</span>
         <Button
           v-if="changed"
           type="button"
@@ -355,7 +393,7 @@ onUnmounted(() => {
           type="button"
           label="Save"
           :loading="saving"
-          :disabled="saving"
+          :disabled="saving || (requiresChange && !changed)"
           @click="save"
         />
       </div>

@@ -35,6 +35,7 @@ const props = defineProps<{
   record?: Row | null;
   terminalConfig: Record<string, unknown>;
   splitSizes: Record<string, number[]>;
+  paneTitles: Record<string, string>;
 }>();
 
 const emit = defineEmits<{
@@ -102,6 +103,7 @@ function structureKey(node: TerminalGridLayoutNode): string {
         :record="record"
         :terminal-config="terminalConfig"
         :split-sizes="splitSizes"
+        :pane-titles="paneTitles"
         @focus="emit('focus', $event)"
         @resize="(splitId, sizes) => emit('resize', splitId, sizes)"
         @stream-status-change="
@@ -116,7 +118,9 @@ function structureKey(node: TerminalGridLayoutNode): string {
     data-terminal-grid-pane
     :data-pane-id="node.id"
     role="region"
-    :aria-label="`Terminal pane ${node.id}`"
+    :aria-label="`${paneTitles[node.id] ?? 'Terminal'}${
+      node.id === activePaneId ? ' (active)' : ''
+    }`"
     class="relative h-full min-h-0 min-w-0 overflow-hidden bg-surface-0 ring-inset dark:bg-surface-950"
     :class="
       node.id === activePaneId

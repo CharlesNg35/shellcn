@@ -8,11 +8,31 @@ const focusRing =
 const focusWithinRing =
   "focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-500/30";
 
-const inputBase = cn(
-  "w-full px-2.5 py-1.5 text-sm text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 dark:text-surface-100",
+// Field padding/typography per PrimeVue `size` ("small"/"large", default normal),
+// shared by inputs and selects so every control shrinks consistently.
+const fieldSize = {
+  small: "px-2 py-1.5 text-xs",
+  normal: "px-2.5 py-1.5 text-sm",
+  large: "px-3 py-2.5 text-base",
+} as const;
+const fieldText = {
+  small: "text-xs",
+  normal: "text-sm",
+  large: "text-base",
+} as const;
+
+type SizedOptions = { props?: { size?: string } };
+function sizeKey(options: SizedOptions): keyof typeof fieldSize {
+  const size = options.props?.size;
+  return size === "small" || size === "large" ? size : "normal";
+}
+
+const inputBaseNoPad = cn(
+  "w-full text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 dark:text-surface-100",
   fieldSurface,
   focusRing,
 );
+const inputBase = cn(inputBaseNoPad, fieldSize.normal);
 
 export const inputClass = inputBase;
 
@@ -70,9 +90,16 @@ const buttonBase =
 const stepperButton =
   "inline-flex w-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-surface-300 text-surface-600 outline-none transition-colors hover:bg-surface-100 focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:pointer-events-none disabled:opacity-40 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-800";
 const buttonSize = {
-  small: "px-2.5 py-1 text-xs",
+  small: "px-2.5 py-1.5 text-xs",
   normal: "px-3 py-1.5",
   large: "px-4 py-2 text-base",
+};
+// Icon-only buttons square themselves via symmetric padding around the icon, so
+// they track the matching text-button height per size without hand-set w/h.
+const iconButtonSize = {
+  small: "p-1.5",
+  normal: "p-2",
+  large: "p-3",
 };
 const buttonSolid = {
   primary: "bg-primary-600 text-white hover:bg-primary-700",
@@ -153,8 +180,16 @@ function buttonShapeClass(rounded: ButtonProps["rounded"]): string {
 
 function buttonRoot(options: ButtonPassThroughMethodOptions<unknown>): string {
   const props = options.props;
+  // PrimeVue marks a button icon-only when it has an icon (via the `icon` prop or
+  // `#icon` slot) and no label — then it gets symmetric padding instead of the
+  // horizontal text padding, so a square shape falls out without manual sizing.
+  const iconOnly =
+    Boolean((options.instance as { hasIcon?: unknown } | undefined)?.hasIcon) &&
+    !props.label;
   const tone = buttonTone(props.severity);
-  const size = buttonSizeClass(props.size);
+  const size = iconOnly
+    ? iconButtonSize[sizeKey({ props })]
+    : buttonSizeClass(props.size);
   const shape = buttonShapeClass(props.rounded);
   const width = props.fluid && "w-full";
   const variant = props.variant;
@@ -174,6 +209,15 @@ function buttonRoot(options: ButtonPassThroughMethodOptions<unknown>): string {
   }
   return cn(buttonBase, shape, width, size, buttonSolid[tone]);
 }
+
+// Small secondary button, for components (e.g. FileUpload's basic button) that
+// can't take a `size` prop directly — pass it through their pass-through root.
+export const smallSecondaryButtonClass = cn(
+  buttonBase,
+  buttonSize.small,
+  buttonSolid.secondary,
+  "cursor-pointer",
+);
 
 const overlay =
   "mt-1.5 origin-top overflow-hidden rounded-lg border border-surface-200 bg-surface-0 p-1 shadow-lg ring-1 ring-surface-950/5 dark:border-surface-700 dark:bg-surface-900 dark:ring-surface-0/5";
@@ -308,7 +352,9 @@ const paginator = {
 };
 
 export const primeVuePassthrough = {
-  inputtext: { root: inputBase },
+  inputtext: {
+    root: (o: SizedOptions) => cn(inputBaseNoPad, fieldSize[sizeKey(o)]),
+  },
   breadcrumb: {
     root: "w-full",
     list: "flex flex-wrap items-center gap-1 text-sm",
@@ -334,14 +380,20 @@ export const primeVuePassthrough = {
   },
 
   select: {
-    root: cn(
-      "flex w-full min-w-0 items-center justify-between text-sm transition duration-150",
-      fieldSurface,
-      focusWithinRing,
-    ),
-    label:
-      "min-w-0 flex-1 truncate px-2.5 py-1.5 text-left text-surface-800 dark:text-surface-100",
+    root: (o: SizedOptions) =>
+      cn(
+        "flex w-full min-w-0 items-center justify-between transition duration-150",
+        fieldText[sizeKey(o)],
+        fieldSurface,
+        focusWithinRing,
+      ),
+    label: (o: SizedOptions) =>
+      cn(
+        "min-w-0 flex-1 truncate text-left text-surface-800 dark:text-surface-100",
+        fieldSize[sizeKey(o)],
+      ),
     dropdown: "shrink-0 px-2 text-surface-400",
+    loadingIcon: "h-4 w-4 animate-spin",
     overlay: selectOverlay,
     transition: overlayTransition,
     header: selectFilterHeader,
@@ -366,6 +418,7 @@ export const primeVuePassthrough = {
     label:
       "flex min-h-9 flex-wrap items-center gap-1.5 px-2 py-1.5 text-left text-surface-500 dark:text-surface-400",
     dropdown: "shrink-0 px-2 text-surface-400",
+    loadingIcon: "h-4 w-4 animate-spin",
     overlay: selectOverlay,
     transition: overlayTransition,
     header: cn(selectFilterHeader, "flex items-center gap-2"),
@@ -401,6 +454,8 @@ export const primeVuePassthrough = {
       "w-full min-w-16 bg-transparent px-0.5 py-1 text-sm text-surface-800 outline-none placeholder:text-surface-400 dark:text-surface-100",
     dropdown:
       "absolute right-0 top-0 flex h-full items-center px-2 text-surface-400",
+    loader:
+      "absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-surface-400 data-[p-has-dropdown=true]:right-8",
     overlay,
     transition: overlayTransition,
     listContainer: "max-h-60 overflow-auto p-1",
@@ -539,9 +594,11 @@ export const primeVuePassthrough = {
   },
 
   selectbutton: {
-    root: "inline-flex gap-0.5 rounded-md border border-surface-300 bg-surface-0 p-0.5 dark:border-surface-700 dark:bg-surface-950",
+    // overflow-hidden clips a checked option's background to the rounded border so
+    // it can't bleed past the control's edge.
+    root: "inline-flex gap-0.5 overflow-hidden rounded-md border border-surface-300 bg-surface-0 p-0.5 dark:border-surface-700 dark:bg-surface-950",
     pcToggleButton: {
-      root: "inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded text-surface-500 transition-colors hover:bg-surface-100 hover:text-surface-800 data-[p-checked=true]:bg-surface-100 data-[p-checked=true]:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-surface-100 dark:data-[p-checked=true]:bg-surface-800 dark:data-[p-checked=true]:text-surface-0",
+      root: "inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded text-surface-500 transition-colors hover:bg-surface-100 hover:text-surface-800 data-[p-checked=true]:bg-surface-100 data-[p-checked=true]:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-surface-100 dark:data-[p-checked=true]:bg-surface-800 dark:data-[p-checked=true]:text-surface-0",
       content: "inline-flex items-center justify-center",
       label: "sr-only",
     },
@@ -753,7 +810,7 @@ export const primeVuePassthrough = {
       sortIcon: "h-3.5 w-3.5 text-surface-400",
     },
     bodyRow:
-      "cursor-pointer transition-colors hover:bg-surface-50 data-[p-selected=true]:bg-primary-50/70 dark:hover:bg-surface-900 dark:data-[p-selected=true]:bg-primary-500/10",
+      "cursor-pointer outline-none transition-colors hover:bg-surface-50 focus-visible:bg-primary-50/70 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary-500 data-[p-selected=true]:bg-primary-50/70 dark:hover:bg-surface-900 dark:focus-visible:bg-primary-500/15 dark:data-[p-selected=true]:bg-primary-500/10",
     emptyMessageCell: "px-4 py-6 text-center text-surface-400",
     pcRowCheckbox: checkbox,
     pcHeaderCheckbox: checkbox,

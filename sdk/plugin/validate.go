@@ -77,8 +77,15 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 		add("Layout %q is not a valid layout", m.Layout)
 	}
 
-	if !m.SupportsTransport(TransportDirect) {
-		add("SupportedTransports must include %q", TransportDirect)
+	if len(m.SupportedTransports) == 0 {
+		add("SupportedTransports must declare at least one transport")
+	}
+	for _, transport := range m.SupportedTransports {
+		switch transport {
+		case TransportDirect, TransportAgent:
+		default:
+			add("SupportedTransports contains unsupported transport %q", transport)
+		}
 	}
 	if m.SupportsTransport(TransportAgent) && m.Agent == nil {
 		add("AgentProfile is required when transport %q is declared", TransportAgent)
@@ -668,6 +675,22 @@ func validateWriteConfigMethod(ctx string, method Method, add func(string, ...an
 	}
 }
 
+func checkSaveFeedback(ctx string, toast *SaveToast, dismiss SaveDismiss, add func(string, ...any)) {
+	switch dismiss {
+	case SaveDismissNone, SaveDismissClose:
+	default:
+		add("%s saveDismiss %q is not a known value", ctx, dismiss)
+	}
+	if toast == nil || toast.Severity == "" {
+		return
+	}
+	switch toast.Severity {
+	case SeverityInfo, SeveritySuccess, SeverityWarn, SeverityDanger, SeveritySecondary:
+	default:
+		add("%s saveToast.severity %q is not a known severity", ctx, toast.Severity)
+	}
+}
+
 // checkPanelConfigRoutes validates the route/action IDs a typed panel config
 // references by switching on the concrete config — no string-key introspection.
 func checkPanelConfigRoutes(
@@ -732,14 +755,33 @@ func checkPanelConfigRoutes(
 		checkWriteRouteID(ctx+" routes.copy", c.Routes.Copy)
 		checkWriteRouteID(ctx+" routes.chmod", c.Routes.Chmod)
 		checkRouteID(ctx+" routes.archive", c.Routes.Archive)
+		for i, ctrl := range c.Controls {
+			if ctrl.OptionsSource != nil {
+				checkReadSource(fmt.Sprintf("%s control[%d] optionsSource", ctx, i), *ctrl.OptionsSource)
+			}
+		}
 	case FormPanelConfig:
 		checkWriteRouteID(ctx+" submitRouteId", c.SubmitRouteID)
 		validateWriteConfigMethod(ctx+" submitMethod", c.SubmitMethod, add)
+		checkSaveFeedback(ctx, c.SaveToast, c.SaveDismiss, add)
 	case CodeEditorConfig:
 		checkWriteRouteID(ctx+" saveRouteId", c.SaveRouteID)
 		validateWriteConfigMethod(ctx+" saveMethod", c.SaveMethod, add)
 		if c.Watch != nil {
 			checkStreamSource(ctx+" watch", c.Watch)
+		}
+		checkSaveFeedback(ctx, c.SaveToast, c.SaveDismiss, add)
+	case LogStreamConfig:
+		for i, ctrl := range c.Controls {
+			if ctrl.OptionsSource != nil {
+				checkReadSource(fmt.Sprintf("%s control[%d] optionsSource", ctx, i), *ctrl.OptionsSource)
+			}
+		}
+	case TerminalConfig:
+		for i, ctrl := range c.Controls {
+			if ctrl.OptionsSource != nil {
+				checkReadSource(fmt.Sprintf("%s control[%d] optionsSource", ctx, i), *ctrl.OptionsSource)
+			}
 		}
 	case ObjectDetailConfig:
 		if c.Watch != nil {

@@ -147,7 +147,11 @@ async function onReconnect(): Promise<void> {
         :mode="progressMode"
         :value="progressValue"
         :show-value="percent != null"
-        aria-label="Task progress"
+        :aria-label="
+          progressValue == null
+            ? 'Task in progress'
+            : `Task progress ${progressValue}%`
+        "
       />
     </div>
 

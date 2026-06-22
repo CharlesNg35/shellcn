@@ -28,6 +28,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   actionDone: [action: Action, result?: Record<string, unknown>];
   select: [row: Row];
+  close: [];
 }>();
 
 const component = computed(() => resolvePanel(props.panel));
@@ -78,6 +79,7 @@ function onSelect(row: Row): void {
     :actions="actions"
     @action-done="onActionDone"
     @select="onSelect"
+    @close="emit('close')"
   />
   <FallbackPanel v-else :panel="panel" />
 </template>

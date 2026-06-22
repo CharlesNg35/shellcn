@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { usePreferredReducedMotion } from "@vueuse/core";
 import type { ChartData, ChartOptions } from "chart.js";
 import { useTheme } from "@/composables/useTheme";
 import { seriesColor, fade, axisStyle } from "./chartTheme";
@@ -11,6 +12,7 @@ const props = defineProps<{
 }>();
 
 const { isDark } = useTheme();
+const reducedMotion = usePreferredReducedMotion();
 
 const data = computed<ChartData>(() => ({
   labels: [...props.labels],
@@ -51,7 +53,7 @@ const options = computed<ChartOptions>(() => {
         grid: { color: ax.grid },
       },
     },
-    animation: { duration: 300 },
+    animation: { duration: reducedMotion.value === "reduce" ? 0 : 300 },
   };
 });
 

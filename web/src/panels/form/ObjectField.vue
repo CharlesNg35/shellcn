@@ -24,9 +24,10 @@ function set(key: string, value: unknown): void {
 </script>
 
 <template>
-  <div
+  <fieldset
     class="flex min-w-0 flex-col gap-4 rounded-md border border-surface-200 p-3 dark:border-surface-800"
   >
+    <legend v-if="field.label" class="sr-only">{{ field.label }}</legend>
     <FieldGroup
       :fields="field.fields ?? []"
       :values="record"
@@ -35,5 +36,5 @@ function set(key: string, value: unknown): void {
       :record="record"
       @update="set"
     />
-  </div>
+  </fieldset>
 </template>

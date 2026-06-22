@@ -22,6 +22,7 @@ function crumbs(path: string): { label: string; path: string }[] {
     aria-label="Breadcrumb"
     class="flex items-center gap-1 overflow-x-auto border-b border-surface-200 px-3 py-2 text-sm dark:border-surface-800"
   >
+    <slot name="leading" />
     <template v-for="(c, i) in crumbs(path)" :key="c.path">
       <AppIcon
         v-if="i > 0"

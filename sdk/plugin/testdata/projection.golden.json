@@ -418,6 +418,12 @@
         "saveBodyKey": {
           "type": "string"
         },
+        "saveDismiss": {
+          "type": "string",
+          "enum": [
+            "close"
+          ]
+        },
         "saveExtra": {
           "type": "object"
         },
@@ -440,6 +446,27 @@
         },
         "saveRouteId": {
           "type": "string"
+        },
+        "saveToast": {
+          "type": "object",
+          "properties": {
+            "detail": {
+              "type": "string"
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "info",
+                "success",
+                "warn",
+                "danger",
+                "secondary"
+              ]
+            },
+            "summary": {
+              "type": "string"
+            }
+          }
         },
         "watch": {
           "type": "object",
@@ -648,6 +675,53 @@
     "file_browser": {
       "type": "object",
       "properties": {
+        "controls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "optionsSource": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "GET",
+                      "POST",
+                      "PUT",
+                      "PATCH",
+                      "DELETE",
+                      "WS"
+                    ]
+                  },
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "*": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "routeId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "routeId"
+                ]
+              },
+              "param": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "param"
+            ]
+          }
+        },
         "pathParam": {
           "type": "string"
         },
@@ -715,6 +789,33 @@
           "type": "object",
           "properties": {
             "*": {
+              "type": "string"
+            }
+          }
+        },
+        "saveDismiss": {
+          "type": "string",
+          "enum": [
+            "close"
+          ]
+        },
+        "saveToast": {
+          "type": "object",
+          "properties": {
+            "detail": {
+              "type": "string"
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "info",
+                "success",
+                "warn",
+                "danger",
+                "secondary"
+              ]
+            },
+            "summary": {
               "type": "string"
             }
           }
@@ -832,7 +933,58 @@
     },
     "log_stream": {
       "type": "object",
-      "properties": {}
+      "properties": {
+        "allowPrevious": {
+          "type": "boolean"
+        },
+        "controls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "optionsSource": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "GET",
+                      "POST",
+                      "PUT",
+                      "PATCH",
+                      "DELETE",
+                      "WS"
+                    ]
+                  },
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "*": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "routeId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "routeId"
+                ]
+              },
+              "param": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "param"
+            ]
+          }
+        }
+      }
     },
     "metrics": {
       "type": "object",
@@ -1633,6 +1785,53 @@
     "terminal": {
       "type": "object",
       "properties": {
+        "controls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "optionsSource": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "GET",
+                      "POST",
+                      "PUT",
+                      "PATCH",
+                      "DELETE",
+                      "WS"
+                    ]
+                  },
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "*": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "routeId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "routeId"
+                ]
+              },
+              "param": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "param"
+            ]
+          }
+        },
         "search": {
           "type": "boolean"
         },

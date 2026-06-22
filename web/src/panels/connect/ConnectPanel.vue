@@ -30,12 +30,13 @@ const gated = computed(
 );
 
 const agentTone = computed(() => {
-  if (checking.value) return "bg-surface-300 animate-pulse dark:bg-surface-600";
+  if (checking.value)
+    return "bg-surface-300 motion-safe:animate-pulse dark:bg-surface-600";
   switch (agent.status.value) {
     case "online":
       return "bg-emerald-400";
     case "pending":
-      return "bg-amber-400 animate-pulse";
+      return "bg-amber-400 motion-safe:animate-pulse";
     default:
       return "bg-rose-400";
   }

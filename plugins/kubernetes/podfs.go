@@ -37,6 +37,10 @@ func podFilesTab() plugin.Panel {
 			},
 			Upload:   plugin.FileUploadConfig{RouteID: "kubernetes.pod.files.upload", FieldName: "files", Multiple: true},
 			Writable: true,
+			Controls: []plugin.StreamControl{{
+				Param: "container", Label: "Container",
+				OptionsSource: &plugin.DataSource{RouteID: "kubernetes.pod.containers", Params: podRefParams(nil)},
+			}},
 		},
 		VisibleWhen: runningPod(),
 	}
@@ -99,19 +103,61 @@ func PodFileRead(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	p := podPath(rc.Param("path"))
-	out, err := s.execCapture(rc.Ctx, ns, pod, container, []string{"head", "-c", strconv.Itoa(podFileReadLimit), p}, nil)
+	// One round-trip: the real byte size (stat, falling back to wc) on the first
+	// line, then a preview read one byte past the cap so truncation is detectable.
+	// The path is a positional arg ($1), never interpolated, so it can't inject shell.
+	script := fmt.Sprintf(`s=$(stat -c %%s "$1" 2>/dev/null || wc -c < "$1" 2>/dev/null); printf '%%s\n' "$s"; head -c %d "$1"`, podFileReadLimit+1)
+	out, err := s.execCapture(rc.Ctx, ns, pod, container, []string{"sh", "-c", script, "sh", p}, nil)
 	if err != nil {
 		return nil, err
 	}
-	content := filesystem.FileContent{Path: p, Size: int64(len(out))}
-	if utf8.Valid(out) {
+	return podFileContent(p, out), nil
+}
+
+// podFileContent splits the size probe from the preview bytes and classifies the
+// result, mirroring the shared filesystem preview contract.
+func podFileContent(p string, raw []byte) filesystem.FileContent {
+	size, body := splitSizeProbe(raw)
+	truncated := len(body) > podFileReadLimit
+	if truncated {
+		body = trimPartialRune(body[:podFileReadLimit])
+	}
+	if size <= 0 {
+		size = int64(len(body))
+	}
+	mimeType := filesystem.MimeFor(p)
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	content := filesystem.FileContent{Path: p, MIME: mimeType, Size: size}
+	if filesystem.IsText(mimeType, body) {
 		content.Encoding = "utf8"
-		content.Content = string(out)
-		content.Truncated = len(out) >= podFileReadLimit
+		content.Content = string(body)
+		content.Truncated = truncated
 	} else {
 		content.Encoding = "binary"
 	}
-	return content, nil
+	return content
+}
+
+// splitSizeProbe separates the leading size line (always present, possibly empty)
+// from the preview bytes that follow it.
+func splitSizeProbe(raw []byte) (int64, []byte) {
+	head, body, found := bytes.Cut(raw, []byte{'\n'})
+	if !found {
+		return 0, raw
+	}
+	size, _ := strconv.ParseInt(strings.TrimSpace(string(head)), 10, 64)
+	return size, body
+}
+
+// trimPartialRune drops an incomplete trailing UTF-8 rune left by a byte-capped
+// read so a truncated text preview stays valid UTF-8.
+func trimPartialRune(b []byte) []byte {
+	for i := 0; i < utf8.UTFMax && len(b) > 0 && !utf8.Valid(b); i++ {
+		b = b[:len(b)-1]
+	}
+	return b
 }
 
 func PodFileDownload(rc *plugin.RequestContext) (any, error) {
@@ -124,7 +170,11 @@ func PodFileDownload(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &plugin.Download{Name: path.Base(p), MIME: "application/octet-stream", Inline: rc.Param("inline") == "1", Body: body}, nil
+	mimeType := filesystem.MimeFor(p)
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	return &plugin.Download{Name: path.Base(p), MIME: mimeType, Inline: rc.Param("inline") == "1", Body: body}, nil
 }
 
 func PodFileWrite(rc *plugin.RequestContext) (any, error) {

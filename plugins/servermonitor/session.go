@@ -16,24 +16,14 @@ type Session struct {
 }
 
 func Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, error) {
-	var backend hostmonitor.Backend
-	processLimit, ok := cfg.Int("process_limit")
-	if !ok || processLimit <= 0 {
-		processLimit = 1000
+	if cfg.Transport != plugin.TransportAgent {
+		return nil, fmt.Errorf("%w: server monitor requires agent transport", plugin.ErrInvalidInput)
 	}
-	connectionLimit, ok := cfg.Int("connection_limit")
-	if !ok || connectionLimit <= 0 {
-		connectionLimit = 1000
+	baseURL, rt, ok := cfg.Net.HTTP()
+	if !ok {
+		return nil, fmt.Errorf("%w: server monitor agent must expose host_monitor HTTP transport", plugin.ErrUnavailable)
 	}
-	if cfg.Transport == plugin.TransportAgent {
-		baseURL, rt, ok := cfg.Net.HTTP()
-		if !ok {
-			return nil, fmt.Errorf("%w: server monitor agent must expose host_monitor HTTP transport", plugin.ErrUnavailable)
-		}
-		backend = hostmonitor.NewRemote(baseURL, &http.Client{Transport: rt})
-	} else {
-		backend = hostmonitor.NewLocal(hostmonitor.Options{ProcessLimit: processLimit, ConnectionLimit: connectionLimit})
-	}
+	backend := hostmonitor.NewRemote(baseURL, &http.Client{Transport: rt})
 	s := &Session{backend: backend, interval: intervalFromConfig(cfg)}
 	if err := s.HealthCheck(ctx); err != nil {
 		return nil, err

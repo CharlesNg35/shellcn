@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -270,16 +271,32 @@ func manualJobName(cronJob string) string {
 	return cronJob + suffix
 }
 
+// rfc1123Subdomain/rfc1123Label bound resource names and namespaces to the formats
+// the apiserver accepts, which also rejects the metacharacters (`=`, `,`, whitespace)
+// that would otherwise let a crafted name broaden a field selector.
+var (
+	rfc1123Subdomain = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`)
+	rfc1123Label     = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+)
+
 func validateName(name string) error {
-	if strings.TrimSpace(name) == "" {
+	name = strings.TrimSpace(name)
+	if name == "" {
 		return fmt.Errorf("%w: name is required", plugin.ErrInvalidInput)
+	}
+	if len(name) > 253 || !rfc1123Subdomain.MatchString(name) {
+		return fmt.Errorf("%w: invalid resource name %q", plugin.ErrInvalidInput, name)
 	}
 	return nil
 }
 
 func validateNamespace(ns string) error {
-	if strings.TrimSpace(ns) == "" {
+	ns = strings.TrimSpace(ns)
+	if ns == "" {
 		return fmt.Errorf("%w: namespace is required", plugin.ErrInvalidInput)
+	}
+	if len(ns) > 63 || !rfc1123Label.MatchString(ns) {
+		return fmt.Errorf("%w: invalid namespace %q", plugin.ErrInvalidInput, ns)
 	}
 	return nil
 }

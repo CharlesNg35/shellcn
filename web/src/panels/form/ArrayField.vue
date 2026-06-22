@@ -109,6 +109,7 @@ function setScalar(index: number, value: unknown): void {
         severity="secondary"
         size="small"
         :disabled="atMax"
+        :aria-label="field.addLabel ?? `Add ${rowLabel}`"
         @click="add"
       >
         <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="14" />

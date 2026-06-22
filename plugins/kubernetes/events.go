@@ -22,6 +22,9 @@ func ResourceEvents(rc *plugin.RequestContext) (any, error) {
 	if name == "" {
 		return pageRows(rc, nil)
 	}
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
 	ri := s.Dynamic().Resource(eventGVR)
 	opts := metav1.ListOptions{FieldSelector: "involvedObject.name=" + name, Limit: 500}
 	var (
@@ -29,6 +32,9 @@ func ResourceEvents(rc *plugin.RequestContext) (any, error) {
 		err2 error
 	)
 	if ns := rc.Param("namespace"); ns != "" {
+		if err := validateNamespace(ns); err != nil {
+			return nil, err
+		}
 		list, err2 = ri.Namespace(ns).List(rc.Ctx, opts)
 	} else {
 		list, err2 = ri.List(rc.Ctx, opts)
@@ -64,12 +70,18 @@ func WatchEvents(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	if name == "" {
 		return nil
 	}
+	if err := validateName(name); err != nil {
+		return err
+	}
 	hub := s.liveHub()
 	if hub == nil {
 		return nil
 	}
 	key := feedKey{GVR: eventGVR, FieldSelector: "involvedObject.name=" + name}
 	if ns := rc.Param("namespace"); ns != "" {
+		if err := validateNamespace(ns); err != nil {
+			return err
+		}
 		key.Namespace = ns
 	}
 	events, unsubscribe := hub.Subscribe(key)

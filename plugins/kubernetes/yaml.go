@@ -6,11 +6,12 @@ import (
 	"io"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/types"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/yaml"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -29,6 +30,7 @@ func GetYAML(rc *plugin.RequestContext) (any, error) {
 	cleanForEdit(o)
 	if k.redact {
 		unstructured.RemoveNestedField(o.Object, "data")
+		unstructured.RemoveNestedField(o.Object, "stringData")
 	}
 	return toYAML(o)
 }
@@ -150,7 +152,19 @@ func ApplyYAML(rc *plugin.RequestContext) (any, error) {
 	if len(results) == 1 {
 		return results[0], nil
 	}
-	return map[string]any{"ok": true, "dryRun": req.DryRun, "count": len(results), "applied": results}, nil
+	// Join the canonical documents so the editor's RefreshField resets to the whole
+	// applied manifest (and a multi-doc dry-run can still diff).
+	parts := make([]string, 0, len(results))
+	for _, r := range results {
+		if c, ok := r["content"].(string); ok {
+			parts = append(parts, c)
+		}
+	}
+	return map[string]any{
+		"ok": true, "dryRun": req.DryRun, "count": len(results),
+		"applied": results,
+		"content": strings.Join(parts, "---\n"),
+	}, nil
 }
 
 // decodeManifests splits a YAML/JSON stream into its documents, skipping blanks.
@@ -195,16 +209,7 @@ func (s *Session) applyManifest(rc *plugin.RequestContext, o *unstructured.Unstr
 		target = ri.Namespace(ns)
 	}
 
-	data, err := o.MarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	force := true
-	opts := metav1.PatchOptions{FieldManager: plugin.DefaultClientName, Force: &force}
-	if dryRun {
-		opts.DryRun = []string{metav1.DryRunAll}
-	}
-	applied, err := target.Patch(rc.Ctx, o.GetName(), types.ApplyPatchType, data, opts)
+	applied, err := s.replaceOrCreate(rc, target, o, dryRun)
 	if err != nil {
 		return nil, apiErr(err)
 	}
@@ -225,4 +230,33 @@ func (s *Session) applyManifest(rc *plugin.RequestContext, o *unstructured.Unstr
 		"dryRun":    dryRun,
 		"content":   content,
 	}, nil
+}
+
+// replaceOrCreate matches kubectl edit/replace semantics: Update an existing object
+// carrying a freshly read resourceVersion (retry once on a conflict), or Create a new
+// one. Full-object replace avoids server-side apply's associative-list merge, which
+// can synthesize duplicates (e.g. a renamed Service port colliding on name).
+func (s *Session) replaceOrCreate(rc *plugin.RequestContext, target dynamic.ResourceInterface, o *unstructured.Unstructured, dryRun bool) (*unstructured.Unstructured, error) {
+	var dry []string
+	if dryRun {
+		dry = []string{metav1.DryRunAll}
+	}
+	live, err := target.Get(rc.Ctx, o.GetName(), metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return target.Create(rc.Ctx, o, metav1.CreateOptions{DryRun: dry})
+	}
+	if err != nil {
+		return nil, err
+	}
+	o.SetResourceVersion(live.GetResourceVersion())
+	applied, err := target.Update(rc.Ctx, o, metav1.UpdateOptions{DryRun: dry})
+	if !apierrors.IsConflict(err) {
+		return applied, err
+	}
+	live, err = target.Get(rc.Ctx, o.GetName(), metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	o.SetResourceVersion(live.GetResourceVersion())
+	return target.Update(rc.Ctx, o, metav1.UpdateOptions{DryRun: dry})
 }

@@ -117,7 +117,13 @@ watch(() => [props.selector, requestProtocol.value], load, { immediate: true });
       @update:model-value="emit('update:modelValue', $event)"
     />
     <div class="mt-1 flex items-center justify-between gap-2">
-      <p v-if="error" class="text-xs text-red-500">{{ error }}</p>
+      <span
+        v-if="error"
+        class="flex min-w-0 items-center gap-2 text-xs text-red-500"
+      >
+        <span class="truncate" role="alert">{{ error }}</span>
+        <Button link class="shrink-0 text-xs!" @click="load">Retry</Button>
+      </span>
       <p
         v-else-if="!loading && !options.length"
         class="text-xs text-surface-400"

@@ -176,7 +176,7 @@ func (c ConnectConfig) CredentialValueFor(field, key string) string
 // for everything" is wrong.
 type NetTransport interface {
     // L4 — socket/TCP protocols (SSH, Docker, Podman, Postgres, MySQL, Redis,
-    // Mongo, SFTP). Identical for direct and agent transport.
+    // Mongo, SFTP). The core supplies the allowed connection path.
     DialContext(ctx context.Context, network, addr string) (net.Conn, error)
     // L7 — fat HTTP clients (Kubernetes client-go, private REST APIs). Returns a
     // base URL + RoundTripper wired to the target; in agent mode the agent's L7
@@ -202,9 +202,11 @@ type Manifest struct {
     Capabilities    []Capability         // declarative tags (feature detection only)
     CredentialKinds []CredentialKindInfo // plugin-owned reusable credential kinds
 
-    // Connectivity. Every plugin supports "direct". Targets that may sit in a
-    // private network (Docker, K8s, private DBs) ALSO declare "agent" + an
-    // AgentProfile describing what the agent proxies and how to install it (§8.4).
+    // Connectivity. Plugins declare the transports they allow. Host-sensitive
+    // protocols may be agent-only so a shared gateway never dials its own local
+    // Docker/Podman/Swarm socket or host monitor on behalf of an arbitrary user.
+    // Agent-capable plugins declare an AgentProfile describing what the agent
+    // proxies and how to install it (§8.4).
     SupportedTransports []Transport
     Agent               *AgentProfile // required iff TransportAgent is supported
 
@@ -1857,15 +1859,16 @@ const (
 )
 ```
 
-The core wires the transport (§5 `NetTransport`) at the layer the protocol needs,
-and the plugin uses that layer without branching on direct-vs-agent:
+The core wires the transport (§5 `NetTransport`) at the layer the protocol needs.
+Plugins should share session logic across allowed transports where the protocol
+permits it, but security-sensitive protocols may reject direct transport.
 
 - **L4 — socket/TCP protocols** (SSH, Docker, Podman, containerd, Postgres,
-  MySQL, Redis, Mongo, SFTP): use `cfg.Net.DialContext`. This is the genuinely
-  clean case — session code is identical for direct and agent.
+  MySQL, Redis, Mongo, SFTP): use `cfg.Net.DialContext`. When both transports
+  are allowed, session code can usually be identical for direct and agent.
 
 ```go
-// Docker — identical for direct and agent transport.
+// Docker-style daemon client — the core decides how to reach the daemon.
 cli, _ := dockerclient.NewClientWithOpts(
     dockerclient.WithHost("tcp://docker"),              // logical target
     dockerclient.WithDialContext(cfg.Net.DialContext),  // core decides how to reach it
@@ -2365,9 +2368,9 @@ Resources = container{ List:docker.container.list, Watch:docker.container.watch,
               ActionIDs:[docker.container.start/stop/restart/remove],
               Detail.Tabs:[Overview(metrics), Terminal(stream), Logs(stream),
                            Inspect(code_editor), Env(table)] }
-Transport = [direct, agent]   // agent proxies /var/run/docker.sock (unix, privileged)
+Transport = [agent]   // agent proxies /var/run/docker.sock (unix, privileged)
 Note: docker.container.exec is privileged risk by default; session uses cfg.Net.DialContext
-      so direct and agent transport share one code path (§8.2).
+      through the enrolled agent (§8.2).
 ```
 
 **Proxmox** — deep hierarchy; consoles/snapshots live in the VM DetailView:
@@ -2559,7 +2562,8 @@ web/
   `RequestContext`, `Session`, and `NetTransport` so a plugin is unit-testable
   with **no real infrastructure**.
 - The manifest is **validated at registration** with actionable errors (unknown
-  RouteID, duplicate IDs, missing AgentProfile when `agent` is declared, §5).
+  RouteID, duplicate IDs, missing transports, missing AgentProfile when `agent`
+  is declared, §5).
 - Adding a protocol = one plugin package + one line appended to `all()` in
   `plugins/registry.go`. **Zero** other core changes, **zero** frontend changes.
 

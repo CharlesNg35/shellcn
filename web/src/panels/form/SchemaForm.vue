@@ -198,6 +198,7 @@ defineExpose({ submit: onSubmit });
         :label="submitLabel"
         :loading="busy"
         :disabled="busy"
+        :aria-busy="busy ? true : undefined"
       />
     </div>
   </form>

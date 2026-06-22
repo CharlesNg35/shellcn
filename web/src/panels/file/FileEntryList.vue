@@ -55,14 +55,23 @@ function moveFocus(event: KeyboardEvent, dir: 1 | -1): void {
     />
     <p
       v-else-if="!entries.length"
+      role="status"
+      aria-live="polite"
       class="p-6 text-center text-sm text-surface-400"
     >
       {{ emptyText }}
     </p>
-    <ul v-else class="divide-y divide-surface-100 dark:divide-surface-800/70">
+    <ul
+      v-else
+      role="listbox"
+      aria-label="Files"
+      class="divide-y divide-surface-100 dark:divide-surface-800/70"
+    >
       <li
         v-for="entry in entries"
         :key="entry.path"
+        role="option"
+        :aria-selected="selectedPath === entry.path"
         class="group flex items-center transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
         :class="
           selectedPath === entry.path
@@ -90,7 +99,6 @@ function moveFocus(event: KeyboardEvent, dir: 1 | -1): void {
               ? 'text-primary-700 dark:text-primary-200'
               : ''
           "
-          :aria-current="selectedPath === entry.path || undefined"
           :aria-label="
             entry.isDir ? `Open ${entry.name}` : `Select ${entry.name}`
           "

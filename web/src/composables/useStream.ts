@@ -85,6 +85,12 @@ export function useStream(
       if (force) {
         unsub?.();
         unsub = undefined;
+        // Close the channel we were attached to (its key may differ from `existing`
+        // when the source params changed) as well as the recomputed one.
+        if (key.value && key.value !== existing) {
+          store.close(key.value);
+        }
+
         store.close(existing);
         key.value = null;
       }

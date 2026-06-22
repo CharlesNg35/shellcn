@@ -150,7 +150,8 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"name with leading digit", "Name \"1bad\" is invalid", func(m *plugin.Manifest, _ *[]plugin.Route) { m.Name = "1bad" }},
 		{"missing category", "Category is required", func(m *plugin.Manifest, _ *[]plugin.Route) { m.Category = "" }},
 		{"unknown category", "not a built-in category", func(m *plugin.Manifest, _ *[]plugin.Route) { m.Category = "weird" }},
-		{"missing direct transport", "must include", func(m *plugin.Manifest, _ *[]plugin.Route) { m.SupportedTransports = nil }},
+		{"missing transport", "must declare at least one transport", func(m *plugin.Manifest, _ *[]plugin.Route) { m.SupportedTransports = nil }},
+		{"unknown transport", "unsupported transport", func(m *plugin.Manifest, _ *[]plugin.Route) { m.SupportedTransports = []plugin.Transport{"wormhole"} }},
 		{"agent without profile", "AgentProfile is required", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.SupportedTransports = []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent}
 		}},

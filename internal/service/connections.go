@@ -664,10 +664,14 @@ func credentialSelectorKinds(selector *plugin.CredentialSelector) []string {
 	return []string{string(selector.Kind)}
 }
 
-// resolveTransport defaults to direct and rejects unsupported transports.
+// resolveTransport defaults to the plugin's first declared transport and rejects
+// unsupported transports.
 func resolveTransport(m plugin.Manifest, requested string) (string, error) {
 	if requested == "" {
-		return string(plugin.TransportDirect), nil
+		if len(m.SupportedTransports) == 0 {
+			return "", fmt.Errorf("%w: protocol %q has no supported transports", plugin.ErrInvalidInput, m.Name)
+		}
+		return string(m.SupportedTransports[0]), nil
 	}
 	t := plugin.Transport(requested)
 	if !m.SupportsTransport(t) {

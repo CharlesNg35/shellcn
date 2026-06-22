@@ -34,7 +34,7 @@ describe("useActionSuccess open_panel effect", () => {
             openPanel: {
               open: "dock",
               panel: PanelType.Terminal,
-              title: "Debug",
+              title: "Debug · ${response.name}",
               source: {
                 routeId: "kubernetes.pod.exec",
                 method: "WS",
@@ -49,12 +49,16 @@ describe("useActionSuccess open_panel effect", () => {
       },
     } as never;
 
-    await useActionSuccess(runtime).run(action, { container: "debugger-abc" });
+    await useActionSuccess(runtime).run(action, {
+      container: "debugger-abc",
+      name: "web",
+    });
 
     const items = useDockStore().state("c1").items;
     expect(items).toHaveLength(1);
     expect(items[0].panel).toBe(PanelType.Terminal);
     expect(items[0].source.params?.container).toBe("debugger-abc");
     expect(items[0].source.params?.name).toBe("web");
+    expect(items[0].title).toBe("Debug · web"); // title interpolates ${response.name}
   });
 });

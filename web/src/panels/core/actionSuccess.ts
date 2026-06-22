@@ -1,6 +1,7 @@
 import { nextTick, type ComputedRef } from "vue";
 import {
   channelKey,
+  interpolate,
   resolveParams,
   type ResolveContext,
 } from "@/api/dataSource";
@@ -23,6 +24,21 @@ export interface ActionSuccessRuntime {
   resolvePanel: (tab: TabDef) => PanelType;
   selectTab: (key: string) => void;
   context?: () => ResolveContext;
+}
+
+// resolveTitle interpolates ${response.x}/${resource.x} tokens in a panel title,
+// the same context the source params use. Plain titles pass through untouched, and
+// an unresolvable token falls back to the raw title rather than failing the open.
+function resolveTitle(
+  template: string | undefined,
+  ctx: ResolveContext,
+): string {
+  if (!template || !template.includes("${")) return template ?? "";
+  try {
+    return interpolate(template, ctx);
+  } catch {
+    return template;
+  }
 }
 
 export function useActionSuccess(runtime: ActionSuccessRuntime) {
@@ -76,7 +92,7 @@ export function useActionSuccess(runtime: ActionSuccessRuntime) {
     const id = `${effect.source.routeId}:${Object.values(params).join(":")}`;
     const item = {
       id,
-      title: effect.title ?? "",
+      title: resolveTitle(effect.title, ctx),
       icon: effect.icon,
       panel: effect.panel,
       source: { ...effect.source, params },

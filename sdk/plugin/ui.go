@@ -65,6 +65,7 @@ func (TaskProgressConfig) panelConfig()  {}
 func (SplitConfig) panelConfig()         {}
 func (CanvasConfig) panelConfig()        {}
 func (WasmConfig) panelConfig()          {}
+func (LogStreamConfig) panelConfig()     {}
 
 // StreamKind tags the long-lived channel a panel binds to.
 type StreamKind string
@@ -197,6 +198,9 @@ type FileBrowserConfig struct {
 	Routes    FileBrowserRoutes `json:"routes,omitempty"`
 	Upload    FileUploadConfig  `json:"upload,omitempty"`
 	Writable  bool              `json:"writable,omitempty"`
+	// Controls re-parameterize every file operation: the chosen value is merged
+	// into the route params and the listing reloads.
+	Controls []StreamControl `json:"controls,omitempty"`
 }
 
 // FileBrowserRoutes groups request/response file operations.
@@ -226,6 +230,8 @@ type FormPanelConfig struct {
 	SubmitMethod  Method            `json:"submitMethod,omitempty"`
 	SubmitLabel   string            `json:"submitLabel,omitempty"`
 	Params        map[string]string `json:"params,omitempty"`
+	SaveToast     *SaveToast        `json:"saveToast,omitempty"`
+	SaveDismiss   SaveDismiss       `json:"saveDismiss,omitempty"`
 }
 
 // DashboardConfig renders multiple panels in one responsive grid.
@@ -502,6 +508,8 @@ type KVConfig struct {
 type TerminalConfig struct {
 	Zoom   bool `json:"zoom,omitempty"`   // font-size +/- controls and Ctrl/⌘ +/-/0
 	Search bool `json:"search,omitempty"` // scrollback find with match navigation
+	// Controls re-parameterize the session and reconnect
+	Controls []StreamControl `json:"controls,omitempty"`
 }
 
 type TerminalGridConfig struct {
@@ -527,6 +535,42 @@ type CodeEditorConfig struct {
 	// DryRunKey, with RefreshField, enables a Preview: the save body is sent with
 	// this key set true and the returned content is diffed against the live baseline.
 	DryRunKey string `json:"dryRunKey,omitempty"`
+	// SaveToast is success feedback shown after a save; SaveDismiss closes the host
+	// dialog on success. Both are generic and apply to any save-capable panel.
+	SaveToast   *SaveToast  `json:"saveToast,omitempty"`
+	SaveDismiss SaveDismiss `json:"saveDismiss,omitempty"`
+}
+
+// SaveToast is optional success feedback for a save/apply. Detail may interpolate
+// the save response via ${response.x}.
+type SaveToast struct {
+	Summary  string   `json:"summary,omitempty"`
+	Detail   string   `json:"detail,omitempty"`
+	Severity Severity `json:"severity,omitempty"`
+}
+
+// SaveDismiss selects what happens to a save panel's host surface after success.
+type SaveDismiss string
+
+const (
+	SaveDismissNone  SaveDismiss = ""
+	SaveDismissClose SaveDismiss = "close"
+)
+
+// StreamControl is a generic selector that re-parameterizes a panel: the chosen
+// option value is sent as Param on the source and the stream reconnects. Options
+// come from OptionsSource (a read route) or, if absent, the panel's own state.
+type StreamControl struct {
+	Param         string      `json:"param"`
+	Label         string      `json:"label,omitempty"`
+	OptionsSource *DataSource `json:"optionsSource,omitempty"`
+}
+
+// LogStreamConfig configures the log viewer: stream controls that re-parameterize
+// the source and an optional "previous (crashed) logs" toggle.
+type LogStreamConfig struct {
+	Controls      []StreamControl `json:"controls,omitempty"`
+	AllowPrevious bool            `json:"allowPrevious,omitempty"`
 }
 
 type DiffMode string

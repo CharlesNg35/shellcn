@@ -1,10 +1,65 @@
 package kubernetes
 
 import (
+	"bytes"
+	"strconv"
 	"testing"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
+
+func sizeProbe(size int, body []byte) []byte {
+	out := append([]byte(strconv.Itoa(size)), '\n')
+	return append(out, body...)
+}
+
+func TestPodFileContent(t *testing.T) {
+	t.Run("text reports real size from probe", func(t *testing.T) {
+		c := podFileContent("/app/notes.txt", sizeProbe(11, []byte("hello world")))
+		if c.Encoding != "utf8" || c.Content != "hello world" || c.Truncated {
+			t.Fatalf("content = %+v", c)
+		}
+		if c.Size != 11 || c.MIME == "" {
+			t.Fatalf("size/mime = %d %q", c.Size, c.MIME)
+		}
+	})
+
+	t.Run("large text is truncated but keeps the real size", func(t *testing.T) {
+		body := bytes.Repeat([]byte("a"), podFileReadLimit+1)
+		c := podFileContent("/var/log/app.log", sizeProbe(5<<20, body))
+		if !c.Truncated || len(c.Content) != podFileReadLimit {
+			t.Fatalf("truncated=%v len=%d", c.Truncated, len(c.Content))
+		}
+		if c.Size != 5<<20 {
+			t.Fatalf("size = %d, want real file size not preview length", c.Size)
+		}
+	})
+
+	t.Run("multibyte rune split at the cap stays valid utf8", func(t *testing.T) {
+		body := append(bytes.Repeat([]byte("a"), podFileReadLimit-1), []byte("€")...) // € is 3 bytes
+		c := podFileContent("/app/notes.txt", sizeProbe(podFileReadLimit+4, body))
+		if c.Encoding != "utf8" {
+			t.Fatalf("a text file split mid-rune must stay text: %+v", c)
+		}
+		if !c.Truncated || len(c.Content) != podFileReadLimit-1 {
+			t.Fatalf("partial trailing rune not trimmed: len=%d", len(c.Content))
+		}
+	})
+
+	t.Run("binary is classified without content", func(t *testing.T) {
+		c := podFileContent("/bin/tool", sizeProbe(4, []byte{0x00, 0x01, 0x02, 0xff}))
+		if c.Encoding != "binary" || c.Content != "" {
+			t.Fatalf("binary content = %+v", c)
+		}
+	})
+
+	t.Run("missing size probe falls back to read length", func(t *testing.T) {
+		c := podFileContent("/app/x", []byte("no-newline-no-size"))
+		if c.Size != int64(len("no-newline-no-size")) {
+			t.Fatalf("fallback size = %d", c.Size)
+		}
+	})
+}
 
 func TestParseLsOutput(t *testing.T) {
 	out := "total 20\n" +

@@ -265,12 +265,12 @@ func read(rc *plugin.RequestContext) (any, error) {
 		return nil, mapClientError(fs, rerr)
 	}
 	buf = buf[:n]
-	mimeType := mimeFor(p)
+	mimeType := MimeFor(p)
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
 	content := FileContent{Path: p, MIME: mimeType, Size: info.Size()}
-	if isText(mimeType, buf) {
+	if IsText(mimeType, buf) {
 		content.Encoding = "utf8"
 		content.Content = string(buf)
 		content.Truncated = info.Size() > int64(n)
@@ -298,7 +298,7 @@ func download(rc *plugin.RequestContext) (any, error) {
 	}
 	dl := &plugin.Download{
 		Name:    path.Base(p),
-		MIME:    mimeFor(p),
+		MIME:    MimeFor(p),
 		Size:    info.Size(),
 		ModTime: info.ModTime(),
 		Inline:  rc.Param("inline") == "1",
@@ -512,7 +512,7 @@ func fileEntry(p string, info os.FileInfo) FileEntry {
 		Path:    p,
 		IsDir:   info.IsDir(),
 		Size:    info.Size(),
-		MIME:    mimeFor(p),
+		MIME:    MimeFor(p),
 		ModTime: info.ModTime(),
 		Mode:    info.Mode().String(),
 	}
@@ -554,11 +554,13 @@ func cursorOffset(cursor string) int {
 	return n
 }
 
-func mimeFor(p string) string {
+// MimeFor returns the MIME type for a path by file extension, or "" if unknown.
+func MimeFor(p string) string {
 	return mime.TypeByExtension(strings.ToLower(path.Ext(p)))
 }
 
-func isText(mimeType string, buf []byte) bool {
+// IsText reports whether a preview buffer should be served as editable text.
+func IsText(mimeType string, buf []byte) bool {
 	return strings.HasPrefix(mimeType, "text/") ||
 		strings.Contains(mimeType, "json") ||
 		strings.Contains(mimeType, "xml") ||

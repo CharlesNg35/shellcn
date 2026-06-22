@@ -46,11 +46,18 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("routes", fileBrowserRoutes()),
 				prop("upload", fileUpload()),
 				prop("writable", boolProp()),
+				prop("controls", array(streamControl())),
 			),
 		},
-		PanelLogStream: {Type: "object", Properties: props()},
-		PanelDocument:  {Type: "object", Properties: props()},
-		PanelEnroll:    {Type: "object", Properties: props()},
+		PanelLogStream: {
+			Type: "object",
+			Properties: props(
+				prop("controls", array(streamControl())),
+				prop("allowPrevious", boolProp()),
+			),
+		},
+		PanelDocument: {Type: "object", Properties: props()},
+		PanelEnroll:   {Type: "object", Properties: props()},
 		PanelForm: {
 			Type: "object",
 			Properties: props(
@@ -58,6 +65,8 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("submitMethod", enum("POST", "PUT", "PATCH", "DELETE")),
 				prop("submitLabel", stringProp()),
 				prop("params", stringMap()),
+				prop("saveToast", saveToast()),
+				prop("saveDismiss", enum("close")),
 			),
 		},
 		PanelDashboard: {
@@ -97,7 +106,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("valueTypes", array(stringProp())),
 			),
 		},
-		PanelTerminal: {Type: "object", Properties: props(prop("zoom", boolProp()), prop("search", boolProp()))},
+		PanelTerminal: {Type: "object", Properties: props(prop("zoom", boolProp()), prop("search", boolProp()), prop("controls", array(streamControl())))},
 		PanelTerminalGrid: {
 			Type: "object",
 			Properties: props(
@@ -120,6 +129,8 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("watch", dataSource()),
 				prop("refreshField", stringProp()),
 				prop("dryRunKey", stringProp()),
+				prop("saveToast", saveToast()),
+				prop("saveDismiss", enum("close")),
 			),
 		},
 		PanelDiff: {
@@ -343,6 +354,29 @@ func dataSource() PanelConfigProperty {
 			prop("params", stringMap()),
 		),
 		Required: []string{"routeId"},
+	}
+}
+
+func streamControl() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("param", stringProp()),
+			prop("label", stringProp()),
+			prop("optionsSource", dataSource()),
+		),
+		Required: []string{"param"},
+	}
+}
+
+func saveToast() PanelConfigProperty {
+	return PanelConfigProperty{
+		Type: "object",
+		Properties: props(
+			prop("summary", stringProp()),
+			prop("detail", stringProp()),
+			prop("severity", enum("info", "success", "warn", "danger", "secondary")),
+		),
 	}
 }
 

@@ -129,6 +129,7 @@ export interface FileBrowserConfig {
   routes?: FileBrowserRoutes;
   upload?: FileUploadConfig;
   writable?: boolean;
+  controls?: StreamControl[];
 }
 
 export interface FileBrowserRoutes {
@@ -158,11 +159,22 @@ export const FileOperation = {
 
 export type FileOperation = (typeof FileOperation)[keyof typeof FileOperation];
 
+export interface SaveToast {
+  summary?: string;
+  detail?: string;
+  severity?: Severity;
+}
+
+export const SaveDismiss = { Close: "close" } as const;
+export type SaveDismiss = (typeof SaveDismiss)[keyof typeof SaveDismiss] | "";
+
 export interface FormPanelConfig {
   submitRouteId?: string;
   submitMethod?: Exclude<Method, "GET" | "WS">;
   submitLabel?: string;
   params?: Record<string, string>;
+  saveToast?: SaveToast;
+  saveDismiss?: SaveDismiss;
 }
 
 export interface CodeEditorConfig {
@@ -176,6 +188,19 @@ export interface CodeEditorConfig {
   watch?: DataSource;
   refreshField?: string;
   dryRunKey?: string;
+  saveToast?: SaveToast;
+  saveDismiss?: SaveDismiss;
+}
+
+export interface StreamControl {
+  param: string;
+  label?: string;
+  optionsSource?: DataSource;
+}
+
+export interface LogStreamConfig {
+  controls?: StreamControl[];
+  allowPrevious?: boolean;
 }
 
 export const DiffMode = {
@@ -257,6 +282,7 @@ export interface MetricsPanelConfig {
 export interface TerminalPanelConfig {
   zoom?: boolean;
   search?: boolean;
+  controls?: StreamControl[];
 }
 
 export interface TerminalGridPanelConfig extends TerminalPanelConfig {

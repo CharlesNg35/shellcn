@@ -1701,6 +1701,9 @@ describe("streaming stub panels", () => {
       props: { ...props, config: { zoom: true, search: true } },
     });
     await flushPromises();
+    // Controls start collapsed behind the chevron; expand to reveal them.
+    expect(w.find('[aria-label="Zoom in"]').exists()).toBe(false);
+    await w.find('[aria-label="Show terminal controls"]').trigger("click");
     expect(w.find('[aria-label="Zoom in"]').exists()).toBe(true);
     expect(w.find('[aria-label="Search terminal"]').exists()).toBe(true);
 
@@ -1923,6 +1926,36 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
+  it("emits close after a successful save when saveDismiss is set", async () => {
+    vi.unstubAllGlobals();
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    installFetch(() => ({ body: { ok: true } }));
+    mockCodeMirror.value = "name: app";
+
+    const w = mount(CodeEditorPanel, {
+      props: {
+        connectionId: "c1",
+        config: {
+          language: "yaml",
+          saveRouteId: "kubernetes.resource.apply",
+          saveMethod: "POST",
+          saveToast: { summary: "Applied" },
+          saveDismiss: "close",
+        },
+      },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Save"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.emitted("close")).toBeTruthy();
+    w.unmount();
+  });
+
   it("review prefers the server dry-run preview when configured", async () => {
     vi.stubGlobal("ResizeObserver", FakeResizeObserver);
     vi.stubGlobal(
@@ -1930,7 +1963,10 @@ describe("streaming stub panels", () => {
       vi.fn(() =>
         Promise.resolve(
           new Response(
-            JSON.stringify({ ok: true, content: "apiVersion: v1\nkind: Pod\nstatus: {}\n" }),
+            JSON.stringify({
+              ok: true,
+              content: "apiVersion: v1\nkind: Pod\nstatus: {}\n",
+            }),
             { status: 200, headers: { "Content-Type": "application/json" } },
           ),
         ),
@@ -1981,9 +2017,9 @@ describe("streaming stub panels", () => {
     });
     await flushPromises();
 
-    expect(w.findAll("button").some((button) => button.text() === "Review changes")).toBe(
-      false,
-    );
+    expect(
+      w.findAll("button").some((button) => button.text() === "Review changes"),
+    ).toBe(false);
 
     mockCodeMirror.value = "apiVersion: v1\nkind: Service\n";
     mockCodeMirror.onChange?.(mockCodeMirror.value);

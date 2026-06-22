@@ -88,6 +88,7 @@ func WatchObjectYAML(rc *plugin.RequestContext, client plugin.ClientStream) erro
 		cleanForEdit(u)
 		if k.redact {
 			unstructured.RemoveNestedField(u.Object, "data")
+			unstructured.RemoveNestedField(u.Object, "stringData")
 		}
 		content, err := toYAML(u)
 		if err != nil {

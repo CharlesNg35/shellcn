@@ -7,8 +7,7 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-// defaultSocket is the rootful Podman API socket. Rootless setups point at
-// $XDG_RUNTIME_DIR/podman/podman.sock; the user supplies that path explicitly.
+// defaultSocket is the Podman API socket the enrolled agent proxies.
 const defaultSocket = "/run/podman/podman.sock"
 
 // Connect dials Podman's Docker-compatible API socket for this connection.

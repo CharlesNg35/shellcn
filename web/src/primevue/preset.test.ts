@@ -7,6 +7,7 @@ import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import Tree from "primevue/tree";
+import Select from "primevue/select";
 import { opsUsageCaption, opsUsageRow, primeVuePassthrough } from "./preset";
 
 describe("primeVuePassthrough", () => {
@@ -291,6 +292,34 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.autocomplete.pcChip.label).toContain("truncate");
   });
 
+  it("aligns and spins the loading indicator on scope-control inputs", () => {
+    expect(primeVuePassthrough.select.loadingIcon).toContain("animate-spin");
+    expect(primeVuePassthrough.multiselect.loadingIcon).toContain(
+      "animate-spin",
+    );
+    expect(primeVuePassthrough.autocomplete.loader).toContain("absolute");
+    expect(primeVuePassthrough.autocomplete.loader).toContain("animate-spin");
+    expect(primeVuePassthrough.autocomplete.loader).toContain(
+      "-translate-y-1/2",
+    );
+    expect(primeVuePassthrough.autocomplete.loader).toContain(
+      "data-[p-has-dropdown=true]:right-8",
+    );
+  });
+
+  it("renders the select loading icon via the pass-through key", () => {
+    const wrapper = mount(Select, {
+      props: { loading: true, options: [] },
+      global: {
+        plugins: [[PrimeVue, { unstyled: true, pt: primeVuePassthrough }]],
+      },
+    });
+    const icon = wrapper.find('[data-pc-section="loadingicon"]');
+    expect(icon.exists()).toBe(true);
+    expect(icon.classes()).toContain("animate-spin");
+    wrapper.unmount();
+  });
+
   it("keeps searchable select filter icons anchored inside the filter field", () => {
     expect(primeVuePassthrough.select.overlay).toContain("p-0");
     expect(primeVuePassthrough.select.header).toContain("border-b");
@@ -324,10 +353,16 @@ describe("primeVuePassthrough", () => {
     } as Parameters<typeof primeVuePassthrough.button.root>[0]);
     expect(small).toContain("text-xs");
     expect(small).toContain("px-2.5");
-    expect(small).toContain("py-1");
     expect(small).not.toContain("text-sm");
     expect(small).not.toContain("px-3");
-    expect(small).not.toContain("py-1.5");
+
+    const iconOnly = primeVuePassthrough.button.root({
+      props: { size: "small" },
+      instance: { hasIcon: true },
+    } as Parameters<typeof primeVuePassthrough.button.root>[0]);
+    // An icon-only button is squared by symmetric padding, not text padding.
+    expect(iconOnly).toContain("p-1.5");
+    expect(iconOnly).not.toContain("px-2.5");
 
     const large = primeVuePassthrough.button.root({
       props: { size: "large" },

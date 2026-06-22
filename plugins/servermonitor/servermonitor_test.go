@@ -3,6 +3,7 @@ package servermonitor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,13 @@ import (
 func TestManifestValidates(t *testing.T) {
 	if err := plugin.Validate(New().Manifest(), New().Routes()); err != nil {
 		t.Fatalf("manifest invalid: %v", err)
+	}
+	m := New().Manifest()
+	if m.SupportsTransport(plugin.TransportDirect) {
+		t.Fatal("server monitor must not declare direct transport")
+	}
+	if !m.SupportsTransport(plugin.TransportAgent) || m.Agent == nil {
+		t.Fatal("server monitor must declare agent transport and profile")
 	}
 }
 
@@ -138,24 +146,13 @@ func TestCollectionLimitsUseBoundedSteppers(t *testing.T) {
 	}
 }
 
-func TestDirectCollection(t *testing.T) {
-	sess, err := Connect(context.Background(), plugin.ConnectConfig{
+func TestDirectCollectionRejected(t *testing.T) {
+	_, err := Connect(context.Background(), plugin.ConnectConfig{
 		Transport: plugin.TransportDirect,
 		Config:    map[string]any{"process_limit": 50, "metrics_interval_seconds": 1},
 	})
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer func() { _ = sess.Close() }()
-
-	rc := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, sess, nil, nil, nil)
-	out, err := Overview(rc)
-	if err != nil {
-		t.Fatalf("overview: %v", err)
-	}
-	overview, ok := out.(map[string]any)
-	if !ok || overview["hostname"] == "" {
-		t.Fatalf("overview = %#v", out)
+	if !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("direct connect should be rejected with ErrInvalidInput, got %v", err)
 	}
 }
 

@@ -34,6 +34,7 @@ import FileSelectionBar from "./FileSelectionBar.vue";
 import FileToolbar from "./FileToolbar.vue";
 import FileOperationDialog from "./FileOperationDialog.vue";
 import { useDirtyGuard } from "../shared/useDirtyGuard";
+import { useStreamControls } from "../shared/useStreamControls";
 import {
   formatBytes,
   languageFor,
@@ -50,6 +51,17 @@ const fileConfig = computed(
   () => props.config as FileBrowserConfig | undefined,
 );
 const pathParam = computed(() => fileConfig.value?.pathParam ?? "path");
+const controls = computed(() => fileConfig.value?.controls ?? []);
+const {
+  values: controlValues,
+  options: controlOptions,
+  load: loadControls,
+  visible: controlVisible,
+  hasVisible: hasVisibleControls,
+} = useStreamControls(props.connectionId, controls, {
+  resource: props.resource,
+  record: props.record,
+});
 const routes = computed(() => fileConfig.value?.routes);
 const uploadConfig = computed(() => fileConfig.value?.upload);
 const readRouteId = computed(() => routes.value?.read);
@@ -264,7 +276,18 @@ const statusLabel = computed(() => {
 });
 
 function operationParams(path: string): Record<string, string> {
-  return { ...(props.source?.params ?? {}), [pathParam.value]: path };
+  return {
+    ...(props.source?.params ?? {}),
+    ...controlValues,
+    [pathParam.value]: path,
+  };
+}
+
+function onControlChange(): void {
+  void confirmBeforeDiscard(() => {
+    cwd.value = startPath.value;
+    return loadList(startPath.value);
+  });
 }
 
 function parentPath(path: string): string {
@@ -749,7 +772,10 @@ async function retryContent(): Promise<void> {
 
 watch(
   () => [props.connectionId, props.source?.routeId, startPath.value],
-  () => loadList(startPath.value),
+  async () => {
+    await loadControls();
+    await loadList(startPath.value);
+  },
   { immediate: true },
 );
 </script>
@@ -758,14 +784,41 @@ watch(
   <div ref="panelEl" class="relative flex h-full flex-col">
     <div
       v-if="dropActive"
+      role="status"
+      :aria-label="`Drop files to upload to ${cwd}`"
       class="pointer-events-none absolute inset-0 z-10 m-2 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary-400 bg-primary-50/80 text-primary-700 dark:border-primary-500 dark:bg-primary-950/70 dark:text-primary-200"
     >
       <AppIcon :icon="{ type: 'lucide', value: 'upload-cloud' }" :size="32" />
       <p class="text-sm font-medium">Drop files to upload here</p>
       <p class="text-xs opacity-80">{{ cwd }}</p>
     </div>
+    <p class="sr-only" role="status" aria-live="polite">
+      {{ dropActive ? `Drop files to upload to ${cwd}` : "" }}
+    </p>
 
-    <FileCrumbs :path="cwd" @navigate="guardedLoadList" />
+    <FileCrumbs :path="cwd" @navigate="guardedLoadList">
+      <template #leading>
+        <template v-for="ctrl in controls" :key="ctrl.param">
+          <div v-if="controlVisible(ctrl.param)" class="w-36 shrink-0">
+            <Select
+              v-model="controlValues[ctrl.param]"
+              :options="controlOptions[ctrl.param] ?? []"
+              option-label="label"
+              option-value="value"
+              :placeholder="ctrl.label"
+              :aria-label="ctrl.label"
+              size="small"
+              @change="onControlChange"
+            />
+          </div>
+        </template>
+        <span
+          v-if="hasVisibleControls"
+          class="mx-1 h-5 w-px shrink-0 bg-surface-200 dark:bg-surface-800"
+          aria-hidden="true"
+        />
+      </template>
+    </FileCrumbs>
 
     <FileToolbar
       v-model:view-mode="viewMode"
@@ -1016,6 +1069,7 @@ watch(
             option-label="label"
             option-value="value"
             placeholder="Choose permissions"
+            aria-label="Permission preset"
             fluid
             :disabled="mutating"
           />

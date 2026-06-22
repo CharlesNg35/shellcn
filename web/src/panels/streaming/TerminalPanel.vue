@@ -1,18 +1,28 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon } from "@xterm/addon-search";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
+import Select from "primevue/select";
 import { useStream } from "@/composables/useStream";
 import { useTheme } from "@/composables/useTheme";
 import AppIcon from "@/components/AppIcon.vue";
 import RecordingControls from "@/components/recordings/RecordingControls.vue";
 import type { PanelProps } from "../core/types";
-import type { TerminalPanelConfig } from "@/types/projection";
+import type { DataSource, TerminalPanelConfig } from "@/types/projection";
 import PanelLoader from "@/components/PanelLoader.vue";
 import StreamStatusBar from "./StreamStatusBar.vue";
+import { useStreamControls } from "../shared/useStreamControls";
 import type { ChannelStatus } from "@/stores/streamChannels";
 
 const props = withDefaults(
@@ -38,7 +48,39 @@ const { isDark, theme } = useTheme();
 const cfg = computed(() => props.config as TerminalPanelConfig | undefined);
 const zoomEnabled = computed(() => cfg.value?.zoom === true);
 const searchEnabled = computed(() => cfg.value?.search === true);
-const hasControls = computed(() => zoomEnabled.value || searchEnabled.value);
+const streamControls = computed(() => cfg.value?.controls ?? []);
+
+// A reactive copy of the source so a control can change its params and reconnect,
+// re-parameterizing the session.
+const liveSource = reactive<DataSource>({
+  routeId: props.source?.routeId ?? "",
+  method: props.source?.method,
+  params: { ...(props.source?.params ?? {}) },
+});
+const streamSource = props.source ? liveSource : undefined;
+
+const {
+  values: controlValues,
+  options: controlOptions,
+  load: loadControls,
+  visible: controlVisible,
+  hasVisible: hasVisibleControls,
+  applyTo: applyControls,
+} = useStreamControls(props.connectionId, streamControls, {
+  resource: props.resource,
+  record: props.record,
+});
+const hasControls = computed(
+  () => zoomEnabled.value || searchEnabled.value || hasVisibleControls.value,
+);
+
+// Switching a control reconnects into the new selection; reset the buffer so the
+// previous session's output doesn't bleed into the new one.
+async function onControlChange(): Promise<void> {
+  applyControls(liveSource);
+  term?.reset();
+  await onReconnect();
+}
 
 const darkTerminalTheme: ITheme = {
   background: "#020617",
@@ -146,6 +188,14 @@ const searchOpen = ref(false);
 const searchTerm = ref("");
 const searchInput = ref<{ $el: HTMLElement } | null>(null);
 const matches = ref({ current: 0, total: 0 });
+// The control cluster collapses behind a chevron so the terminal stays clean;
+// it expands on demand (and auto-expands when search is opened by shortcut).
+const controlsExpanded = ref(false);
+
+// Shared style for the floating overlay's icon buttons: a uniform 28px square with
+// a hover background only (the icon color stays correct in both light and dark).
+const overlayBtnClass =
+  "flex h-7 w-7 shrink-0 items-center justify-center rounded p-0 text-surface-500 transition-colors hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-800";
 
 const searchDecorations = computed(() => ({
   matchOverviewRuler: "#3b82f6",
@@ -168,6 +218,7 @@ function runFind(forward: boolean, incremental = false): void {
 
 async function openSearch(): Promise<void> {
   if (!searchEnabled.value) return;
+  controlsExpanded.value = true;
   searchOpen.value = true;
   await nextTick();
   const el = searchInput.value?.$el as HTMLElement | undefined;
@@ -189,7 +240,7 @@ watch(searchTerm, () => {
 
 const { status, error, send, reconnect } = useStream(
   props.connectionId,
-  props.source,
+  streamSource,
   { resource: props.resource, record: props.record },
   write,
   { keySuffix: props.streamKeySuffix },
@@ -341,7 +392,10 @@ async function mountTerminal(): Promise<void> {
   }
 }
 
-onMounted(mountTerminal);
+onMounted(() => {
+  void loadControls();
+  void mountTerminal();
+});
 watch(isDark, applyTerminalTheme);
 
 onUnmounted(() => {
@@ -384,7 +438,12 @@ onUnmounted(() => {
       can-reconnect
       @reconnect="onReconnect"
     />
-    <p v-if="failed" class="p-4 text-base text-surface-400" role="alert">
+    <p
+      v-if="failed"
+      class="p-4 text-base text-surface-400"
+      role="alert"
+      aria-live="assertive"
+    >
       Terminal preview unavailable in this environment.
     </p>
     <div class="relative min-h-0 flex-1">
@@ -402,136 +461,188 @@ onUnmounted(() => {
 
       <div
         v-if="hasControls"
-        class="absolute top-2 right-2 z-10 opacity-60 transition-opacity focus-within:opacity-100 hover:opacity-100"
+        class="absolute top-2 right-2 z-10 flex items-center gap-0.5 rounded-md border border-surface-200 bg-surface-0/90 p-0.5 opacity-60 shadow-sm backdrop-blur transition-opacity focus-within:opacity-100 hover:opacity-100 dark:border-surface-700 dark:bg-surface-900/90"
       >
-        <div
-          v-if="!searchOpen"
-          class="flex items-center gap-0.5 rounded-md border border-surface-200 bg-surface-0/90 p-0.5 shadow-sm backdrop-blur dark:border-surface-700 dark:bg-surface-900/90"
+        <Transition
+          enter-active-class="motion-safe:transition motion-safe:duration-150"
+          enter-from-class="opacity-0 translate-x-1"
+          leave-active-class="motion-safe:transition motion-safe:duration-100"
+          leave-to-class="opacity-0 translate-x-1"
         >
-          <template v-if="zoomEnabled">
-            <Button
-              type="button"
-              text
-              rounded
-              severity="secondary"
-              size="small"
-              title="Zoom out (Ctrl/⌘ -)"
-              aria-label="Zoom out"
-              :pt="{ root: 'h-6 w-6 p-0' }"
-              @click="zoomBy(-1)"
-            >
-              <AppIcon :icon="{ type: 'lucide', value: 'minus' }" :size="13" />
-            </Button>
-            <Button
-              type="button"
-              text
-              severity="secondary"
-              size="small"
-              title="Reset zoom (Ctrl/⌘ 0)"
-              aria-label="Reset zoom"
-              :pt="{
-                root: 'h-6 min-w-7 px-1',
-                label:
-                  'text-[10px] tabular-nums text-surface-600 dark:text-surface-300 justify-center items-center flex',
-              }"
-              :label="`${fontSize}px`"
-              @click="resetZoom"
-            />
-            <Button
-              type="button"
-              text
-              rounded
-              severity="secondary"
-              size="small"
-              title="Zoom in (Ctrl/⌘ +)"
-              aria-label="Zoom in"
-              :pt="{ root: 'h-6 w-6 p-0' }"
-              @click="zoomBy(1)"
-            >
-              <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="13" />
-            </Button>
-          </template>
-          <Button
-            v-if="searchEnabled"
-            type="button"
-            text
-            rounded
-            severity="secondary"
-            size="small"
-            title="Search (Ctrl/⌘ F)"
-            aria-label="Search terminal"
-            :pt="{ root: 'h-6 w-6 p-0' }"
-            @click="openSearch"
-          >
-            <AppIcon :icon="{ type: 'lucide', value: 'search' }" :size="13" />
-          </Button>
-        </div>
+          <div v-if="controlsExpanded" class="flex items-center gap-0.5">
+            <div v-if="!searchOpen" class="flex items-center gap-0.5">
+              <template v-for="ctrl in streamControls" :key="ctrl.param">
+                <div
+                  v-if="controlVisible(ctrl.param)"
+                  class="h-7 w-36 shrink-0"
+                >
+                  <Select
+                    v-model="controlValues[ctrl.param]"
+                    :options="controlOptions[ctrl.param] ?? []"
+                    option-label="label"
+                    option-value="value"
+                    :placeholder="ctrl.label"
+                    :aria-label="ctrl.label"
+                    size="small"
+                    class="h-7"
+                    @change="onControlChange"
+                  />
+                </div>
+              </template>
+              <template v-if="zoomEnabled">
+                <Button
+                  type="button"
+                  text
+                  rounded
+                  severity="secondary"
+                  size="small"
+                  title="Zoom out (Ctrl/⌘ -)"
+                  aria-label="Zoom out"
+                  :pt="{ root: overlayBtnClass }"
+                  @click="zoomBy(-1)"
+                >
+                  <AppIcon
+                    :icon="{ type: 'lucide', value: 'minus' }"
+                    :size="13"
+                  />
+                </Button>
+                <Button
+                  type="button"
+                  text
+                  severity="secondary"
+                  size="small"
+                  title="Reset zoom (Ctrl/⌘ 0)"
+                  aria-label="Reset zoom"
+                  :pt="{
+                    root: 'flex h-7 min-w-8 items-center justify-center rounded px-1 transition-colors hover:bg-surface-100 dark:hover:bg-surface-800',
+                    label:
+                      'flex items-center justify-center text-[10px] tabular-nums text-surface-600 dark:text-surface-300',
+                  }"
+                  :label="`${fontSize}px`"
+                  @click="resetZoom"
+                />
+                <Button
+                  type="button"
+                  text
+                  rounded
+                  severity="secondary"
+                  size="small"
+                  title="Zoom in (Ctrl/⌘ +)"
+                  aria-label="Zoom in"
+                  :pt="{ root: overlayBtnClass }"
+                  @click="zoomBy(1)"
+                >
+                  <AppIcon
+                    :icon="{ type: 'lucide', value: 'plus' }"
+                    :size="13"
+                  />
+                </Button>
+              </template>
+              <Button
+                v-if="searchEnabled"
+                type="button"
+                text
+                rounded
+                severity="secondary"
+                size="small"
+                title="Search (Ctrl/⌘ F)"
+                aria-label="Search terminal"
+                :pt="{ root: overlayBtnClass }"
+                @click="openSearch"
+              >
+                <AppIcon
+                  :icon="{ type: 'lucide', value: 'search' }"
+                  :size="13"
+                />
+              </Button>
+            </div>
 
-        <div
-          v-else
-          class="flex items-center gap-1 rounded-md border border-surface-200 bg-surface-0/95 px-1.5 py-1 shadow-sm backdrop-blur dark:border-surface-700 dark:bg-surface-900/95"
+            <div v-else class="flex items-center gap-1">
+              <InputText
+                ref="searchInput"
+                v-model="searchTerm"
+                placeholder="Find"
+                aria-label="Find in terminal"
+                :pt="{ root: 'h-7 w-40 text-xs' }"
+                @keydown.enter.exact.prevent="runFind(true)"
+                @keydown.shift.enter.prevent="runFind(false)"
+                @keydown.esc.prevent="closeSearch"
+              />
+              <span
+                class="min-w-9 text-center text-[10px] text-surface-400 tabular-nums"
+              >
+                {{
+                  matches.total ? `${matches.current}/${matches.total}` : "0/0"
+                }}
+              </span>
+              <Button
+                type="button"
+                text
+                rounded
+                severity="secondary"
+                size="small"
+                title="Previous (Shift+Enter)"
+                aria-label="Previous match"
+                :pt="{ root: overlayBtnClass }"
+                @click="runFind(false)"
+              >
+                <AppIcon
+                  :icon="{ type: 'lucide', value: 'chevron-up' }"
+                  :size="14"
+                />
+              </Button>
+              <Button
+                type="button"
+                text
+                rounded
+                severity="secondary"
+                size="small"
+                title="Next (Enter)"
+                aria-label="Next match"
+                :pt="{ root: overlayBtnClass }"
+                @click="runFind(true)"
+              >
+                <AppIcon
+                  :icon="{ type: 'lucide', value: 'chevron-down' }"
+                  :size="14"
+                />
+              </Button>
+              <Button
+                type="button"
+                text
+                rounded
+                severity="secondary"
+                size="small"
+                title="Close (Esc)"
+                aria-label="Close search"
+                :pt="{ root: overlayBtnClass }"
+                @click="closeSearch"
+              >
+                <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="14" />
+              </Button>
+            </div>
+          </div>
+        </Transition>
+        <Button
+          type="button"
+          :title="controlsExpanded ? 'Hide controls' : 'Show controls'"
+          :aria-label="
+            controlsExpanded
+              ? 'Hide terminal controls'
+              : 'Show terminal controls'
+          "
+          :aria-expanded="controlsExpanded"
+          :pt="{ root: overlayBtnClass }"
+          @click="controlsExpanded = !controlsExpanded"
         >
-          <InputText
-            ref="searchInput"
-            v-model="searchTerm"
-            placeholder="Find"
-            aria-label="Find in terminal"
-            :pt="{ root: 'h-7 w-40 text-xs' }"
-            @keydown.enter.exact.prevent="runFind(true)"
-            @keydown.shift.enter.prevent="runFind(false)"
-            @keydown.esc.prevent="closeSearch"
+          <AppIcon
+            :icon="{
+              type: 'lucide',
+              value: controlsExpanded ? 'chevron-right' : 'chevron-left',
+            }"
+            :size="15"
           />
-          <span
-            class="min-w-9 text-center text-[10px] text-surface-400 tabular-nums"
-          >
-            {{ matches.total ? `${matches.current}/${matches.total}` : "0/0" }}
-          </span>
-          <Button
-            type="button"
-            text
-            rounded
-            severity="secondary"
-            size="small"
-            title="Previous (Shift+Enter)"
-            aria-label="Previous match"
-            :pt="{ root: 'h-6 w-6 p-0' }"
-            @click="runFind(false)"
-          >
-            <AppIcon
-              :icon="{ type: 'lucide', value: 'chevron-up' }"
-              :size="14"
-            />
-          </Button>
-          <Button
-            type="button"
-            text
-            rounded
-            severity="secondary"
-            size="small"
-            title="Next (Enter)"
-            aria-label="Next match"
-            :pt="{ root: 'h-6 w-6 p-0' }"
-            @click="runFind(true)"
-          >
-            <AppIcon
-              :icon="{ type: 'lucide', value: 'chevron-down' }"
-              :size="14"
-            />
-          </Button>
-          <Button
-            type="button"
-            text
-            rounded
-            severity="secondary"
-            size="small"
-            title="Close (Esc)"
-            aria-label="Close search"
-            :pt="{ root: 'h-6 w-6 p-0' }"
-            @click="closeSearch"
-          >
-            <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="14" />
-          </Button>
-        </div>
+        </Button>
       </div>
     </div>
   </div>

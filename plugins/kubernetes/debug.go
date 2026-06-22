@@ -31,7 +31,7 @@ func debugAction() plugin.Action {
 		OnSuccess: &plugin.ActionSuccess{Effects: []plugin.ActionEffect{{
 			Type: plugin.ActionEffectOpenPanel,
 			OpenPanel: &plugin.OpenPanelEffect{
-				Open: plugin.OpenDock, Panel: plugin.PanelTerminal, Title: "Debug", Icon: lucide("bug"),
+				Open: plugin.OpenDock, Panel: plugin.PanelTerminal, Title: "Debug · ${response.name}", Icon: lucide("bug"),
 				Source: &plugin.DataSource{
 					RouteID: "kubernetes.pod.exec", Method: plugin.MethodWS,
 					Params: map[string]string{
@@ -45,6 +45,18 @@ func debugAction() plugin.Action {
 			},
 		}}},
 	}
+}
+
+// debugSchema is the form shown before adding a debug container: the image to run
+// and an optional target container to share the process namespace with.
+func debugSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{
+		Name: "Debug container",
+		Fields: []plugin.Field{
+			{Key: "image", Label: "Image", Type: plugin.FieldText, Default: defaultDebugImage, Placeholder: defaultDebugImage, Help: "Ephemeral container image. It persists until the pod is recreated."},
+			{Key: "target", Label: "Target container", Type: plugin.FieldText, Placeholder: "default container", Help: "Share the process namespace of this container (blank for the pod default)."},
+		},
+	}}}
 }
 
 // DebugCreate adds an ephemeral debug container to a running pod and returns once
