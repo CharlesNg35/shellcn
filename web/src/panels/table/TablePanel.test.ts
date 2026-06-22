@@ -1231,6 +1231,114 @@ describe("TablePanel staged edits", () => {
     w.unmount();
   });
 
+  it("appends a live-added row instead of prepending it (no row-jump)", async () => {
+    const sockets: FakeSocket[] = [];
+    vi.stubGlobal(
+      "WebSocket",
+      class extends FakeSocket {
+        constructor() {
+          super();
+          sockets.push(this);
+        }
+      },
+    );
+    installFetch((url) => {
+      if (url.endsWith("/tickets")) return { body: { ticket: "t1" } };
+      return {
+        body: {
+          items: [row("a", "alpha"), row("b", "beta")],
+          nextCursor: "",
+          total: 2,
+        },
+      };
+    });
+
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "kubernetes.resource.list" },
+        config: { columns, watch: { routeId: "kubernetes.resource.watch" } },
+      },
+    });
+    await flushPromises();
+    expect(sockets).toHaveLength(1);
+
+    sockets[0].emit("message", {
+      data: JSON.stringify({
+        type: "added",
+        ref: { kind: "pod", name: "gamma", uid: "g" },
+        resource: row("g", "gamma"),
+      }),
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    await flushPromises();
+
+    const names = w.findAll("tbody tr").map((tr) => tr.text());
+    expect(names).toHaveLength(3);
+    expect(names[0]).toContain("alpha"); // existing rows keep their place
+    expect(names.at(-1)).toContain("gamma"); // new row appended at the end
+    w.unmount();
+  });
+
+  it("patches a visible row in place under a server view without refetching", async () => {
+    const sockets: FakeSocket[] = [];
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "WebSocket",
+      class extends FakeSocket {
+        constructor() {
+          super();
+          sockets.push(this);
+        }
+      },
+    );
+    installFetch((url) => {
+      urls.push(url);
+      if (url.endsWith("/tickets")) return { body: { ticket: "t1" } };
+      const u = new URL(url, "http://h");
+      if (u.searchParams.get("filter") === "alpha") {
+        return {
+          body: { items: [row("a", "alpha")], nextCursor: "", total: 1 },
+        };
+      }
+      return {
+        body: {
+          items: [row("a", "alpha"), row("b", "beta")],
+          nextCursor: "",
+          total: 2,
+        },
+      };
+    });
+
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "kubernetes.resource.list" },
+        config: { columns, watch: { routeId: "kubernetes.resource.watch" } },
+      },
+    });
+    await flushPromises();
+    await w.find('input[type="search"]').setValue("alpha");
+    await new Promise((r) => setTimeout(r, 300));
+    await flushPromises();
+    const before = urls.filter((u) => u.includes("filter=alpha")).length;
+
+    // A modify of the visible row patches in place — no server round-trip.
+    sockets[0].emit("message", {
+      data: JSON.stringify({
+        type: "modified",
+        ref: { kind: "pod", name: "alpha", uid: "a" },
+        resource: { ...row("a", "alpha"), state: "stopped" },
+      }),
+    });
+    await new Promise((r) => setTimeout(r, 150));
+    await flushPromises();
+
+    expect(w.text()).toContain("stopped");
+    expect(urls.filter((u) => u.includes("filter=alpha")).length).toBe(before);
+    w.unmount();
+  });
+
   it("toggles selection when the selection-column cell is clicked (not just the checkbox)", async () => {
     const w = mount(TablePanel, {
       props: {

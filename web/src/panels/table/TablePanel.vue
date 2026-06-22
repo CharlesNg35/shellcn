@@ -1119,10 +1119,6 @@ function scheduleWatchRefresh(): void {
 
 function applyEvent(ev: ResourceEvent): void {
   if (pendingCount.value > 0) return; // don't clobber buffered staged edits
-  if (hasServerViewState()) {
-    scheduleWatchRefresh();
-    return;
-  }
   pendingEvents.push(ev);
   if (flushHandle === undefined)
     flushHandle = requestAnimationFrame(flushEvents);
@@ -1133,6 +1129,7 @@ function flushEvents(): void {
   const batch = pendingEvents;
   pendingEvents = [];
   if (!batch.length || pendingCount.value > 0) return;
+  const serverView = hasServerViewState();
   const index = new Map<string, number>();
   rows.value.forEach((r, i) => {
     if (r.ref?.uid) index.set(r.ref.uid, i);
@@ -1140,25 +1137,39 @@ function flushEvents(): void {
   const next = rows.value.slice();
   const additions = new Map<string, Row>();
   const removed = new Set<number>();
+  let refetch = false;
   for (const ev of batch) {
     const uid = ev.ref.uid;
+    if (!uid) continue;
     const idx = index.get(uid);
     const type = String(ev.type).toLowerCase();
     if (type === "deleted") {
       if (idx !== undefined) removed.add(idx);
       additions.delete(uid);
     } else if (idx !== undefined) {
+      // A visible row changed: patch it in place — no reorder (so rows the user is
+      // reading don't jump) and no refetch, even under server sort/filter/paging.
       removed.delete(idx);
       if (ev.resource) next[idx] = { ...next[idx], ...(ev.resource as Row) };
     } else if (additions.has(uid)) {
       if (ev.resource)
         additions.set(uid, { ...additions.get(uid)!, ...(ev.resource as Row) });
-    } else if ((type === "added" || type === "updated") && ev.resource) {
-      additions.set(uid, { ...(ev.resource as Row), ref: ev.ref });
+    } else if (type === "added" && ev.resource) {
+      // A brand-new row. In a plain view, append it so existing rows keep their
+      // place; under a server-side view its page/sort position is unknown, so fall
+      // back to a single debounced refetch rather than guessing.
+      if (serverView) refetch = true;
+      else additions.set(uid, { ...(ev.resource as Row), ref: ev.ref });
     }
+    // A "modified" event for a row not on the current page is ignored — applying it
+    // would invent a row that doesn't belong to this view.
   }
   const kept = removed.size ? next.filter((_, i) => !removed.has(i)) : next;
-  rows.value = additions.size ? [...additions.values(), ...kept] : kept;
+  rows.value = additions.size ? [...kept, ...additions.values()] : kept;
+  if (total.value !== undefined && (additions.size || removed.size)) {
+    total.value = Math.max(0, total.value + additions.size - removed.size);
+  }
+  if (refetch) scheduleWatchRefresh();
 }
 
 let stopWatch: (() => void) | undefined;
