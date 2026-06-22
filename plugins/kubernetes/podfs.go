@@ -37,6 +37,10 @@ func podFilesTab() plugin.Panel {
 			},
 			Upload:   plugin.FileUploadConfig{RouteID: "kubernetes.pod.files.upload", FieldName: "files", Multiple: true},
 			Writable: true,
+			Controls: []plugin.StreamControl{{
+				Param: "container", Label: "Container",
+				OptionsSource: &plugin.DataSource{RouteID: "kubernetes.pod.containers", Params: podRefParams(nil)},
+			}},
 		},
 		VisibleWhen: runningPod(),
 	}

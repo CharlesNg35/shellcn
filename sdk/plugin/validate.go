@@ -748,6 +748,11 @@ func checkPanelConfigRoutes(
 		checkWriteRouteID(ctx+" routes.copy", c.Routes.Copy)
 		checkWriteRouteID(ctx+" routes.chmod", c.Routes.Chmod)
 		checkRouteID(ctx+" routes.archive", c.Routes.Archive)
+		for i, ctrl := range c.Controls {
+			if ctrl.OptionsSource != nil {
+				checkReadSource(fmt.Sprintf("%s control[%d] optionsSource", ctx, i), *ctrl.OptionsSource)
+			}
+		}
 	case FormPanelConfig:
 		checkWriteRouteID(ctx+" submitRouteId", c.SubmitRouteID)
 		validateWriteConfigMethod(ctx+" submitMethod", c.SubmitMethod, add)

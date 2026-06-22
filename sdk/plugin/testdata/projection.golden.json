@@ -675,6 +675,53 @@
     "file_browser": {
       "type": "object",
       "properties": {
+        "controls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "optionsSource": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "GET",
+                      "POST",
+                      "PUT",
+                      "PATCH",
+                      "DELETE",
+                      "WS"
+                    ]
+                  },
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "*": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "routeId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "routeId"
+                ]
+              },
+              "param": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "param"
+            ]
+          }
+        },
         "pathParam": {
           "type": "string"
         },

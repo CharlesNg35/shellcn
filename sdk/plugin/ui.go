@@ -198,6 +198,9 @@ type FileBrowserConfig struct {
 	Routes    FileBrowserRoutes `json:"routes,omitempty"`
 	Upload    FileUploadConfig  `json:"upload,omitempty"`
 	Writable  bool              `json:"writable,omitempty"`
+	// Controls re-parameterize every file operation (e.g. a container picker): the
+	// chosen value is merged into the route params and the listing reloads.
+	Controls []StreamControl `json:"controls,omitempty"`
 }
 
 // FileBrowserRoutes groups request/response file operations.
@@ -552,8 +555,8 @@ const (
 	SaveDismissClose SaveDismiss = "close"
 )
 
-// StreamControl is a generic selector that re-parameterizes a stream panel (e.g. a
-// logs container picker): the chosen option value is sent as Param on the source and
+// StreamControl is a generic selector that re-parameterizes a panel (e.g. a logs or
+// files container picker): the chosen option value is sent as Param on the source and
 // the stream reconnects.
 type StreamControl struct {
 	Param         string      `json:"param"`

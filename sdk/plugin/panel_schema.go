@@ -46,6 +46,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("routes", fileBrowserRoutes()),
 				prop("upload", fileUpload()),
 				prop("writable", boolProp()),
+				prop("controls", array(streamControl())),
 			),
 		},
 		PanelLogStream: {

@@ -103,13 +103,23 @@ func TestPodContainersOffersAllAndEach(t *testing.T) {
 	})
 	sess := connectTo(t, mux)
 
-	out, err := PodContainers(rc(sess, map[string]string{"namespace": "default", "name": "web-1"}))
+	// merge=true (logs) prepends "All containers".
+	out, err := PodContainers(rc(sess, map[string]string{"namespace": "default", "name": "web-1", "merge": "true"}))
 	if err != nil {
 		t.Fatalf("containers: %v", err)
 	}
 	page := out.(plugin.Page[plugin.Option])
 	if len(page.Items) != 3 || page.Items[0].Value != "" || page.Items[0].Label != "All containers" {
-		t.Fatalf("container options = %+v, want [All, app, sidecar]", page.Items)
+		t.Fatalf("merged options = %+v, want [All, app, sidecar]", page.Items)
+	}
+
+	// Without merge (files) the picker lists only the containers.
+	out, err = PodContainers(rc(sess, map[string]string{"namespace": "default", "name": "web-1"}))
+	if err != nil {
+		t.Fatalf("containers: %v", err)
+	}
+	if page = out.(plugin.Page[plugin.Option]); len(page.Items) != 2 || page.Items[0].Value != "app" {
+		t.Fatalf("plain options = %+v, want [app, sidecar]", page.Items)
 	}
 }
 

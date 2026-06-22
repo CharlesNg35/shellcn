@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { useDropZone } from "@vueuse/core";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
@@ -21,6 +21,7 @@ import {
   type FileBrowserConfig,
   type FileContent,
   type FileEntry,
+  type Option,
   type Page,
 } from "@/types/projection";
 import type { PanelProps } from "../core/types";
@@ -50,6 +51,9 @@ const fileConfig = computed(
   () => props.config as FileBrowserConfig | undefined,
 );
 const pathParam = computed(() => fileConfig.value?.pathParam ?? "path");
+const controls = computed(() => fileConfig.value?.controls ?? []);
+const controlValues = reactive<Record<string, string>>({});
+const controlOptions = ref<Record<string, Option[]>>({});
 const routes = computed(() => fileConfig.value?.routes);
 const uploadConfig = computed(() => fileConfig.value?.upload);
 const readRouteId = computed(() => routes.value?.read);
@@ -264,7 +268,49 @@ const statusLabel = computed(() => {
 });
 
 function operationParams(path: string): Record<string, string> {
-  return { ...(props.source?.params ?? {}), [pathParam.value]: path };
+  return {
+    ...(props.source?.params ?? {}),
+    ...controlValues,
+    [pathParam.value]: path,
+  };
+}
+
+async function loadControls(): Promise<void> {
+  for (const ctrl of controls.value) {
+    if (!ctrl.optionsSource) continue;
+    try {
+      const page = await fetchPage<Option>(
+        props.connectionId,
+        ctrl.optionsSource,
+        operationCtx.value,
+        { limit: 200 },
+      );
+      controlOptions.value = {
+        ...controlOptions.value,
+        [ctrl.param]: page.items,
+      };
+      if (controlValues[ctrl.param] === undefined && page.items.length) {
+        controlValues[ctrl.param] = String(page.items[0].value);
+      }
+    } catch {
+      controlOptions.value = { ...controlOptions.value, [ctrl.param]: [] };
+    }
+  }
+}
+
+function controlVisible(param: string): boolean {
+  return (controlOptions.value[param]?.length ?? 0) > 1;
+}
+
+const hasVisibleControls = computed(() =>
+  controls.value.some((ctrl) => controlVisible(ctrl.param)),
+);
+
+function onControlChange(): void {
+  void confirmBeforeDiscard(() => {
+    cwd.value = startPath.value;
+    return loadList(startPath.value);
+  });
 }
 
 function parentPath(path: string): string {
@@ -749,7 +795,10 @@ async function retryContent(): Promise<void> {
 
 watch(
   () => [props.connectionId, props.source?.routeId, startPath.value],
-  () => loadList(startPath.value),
+  async () => {
+    await loadControls();
+    await loadList(startPath.value);
+  },
   { immediate: true },
 );
 </script>
@@ -769,6 +818,26 @@ watch(
     <p class="sr-only" role="status" aria-live="polite">
       {{ dropActive ? `Drop files to upload to ${cwd}` : "" }}
     </p>
+
+    <div
+      v-if="hasVisibleControls"
+      class="flex flex-wrap items-center gap-2 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+    >
+      <template v-for="ctrl in controls" :key="ctrl.param">
+        <Select
+          v-if="controlVisible(ctrl.param)"
+          v-model="controlValues[ctrl.param]"
+          :options="controlOptions[ctrl.param] ?? []"
+          option-label="label"
+          option-value="value"
+          :placeholder="ctrl.label"
+          :aria-label="ctrl.label"
+          size="small"
+          class="w-48"
+          @change="onControlChange"
+        />
+      </template>
+    </div>
 
     <FileCrumbs :path="cwd" @navigate="guardedLoadList" />
 

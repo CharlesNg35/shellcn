@@ -129,6 +129,7 @@ export interface FileBrowserConfig {
   routes?: FileBrowserRoutes;
   upload?: FileUploadConfig;
   writable?: boolean;
+  controls?: StreamControl[];
 }
 
 export interface FileBrowserRoutes {

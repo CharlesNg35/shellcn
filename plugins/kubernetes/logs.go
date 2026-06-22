@@ -188,16 +188,21 @@ func PodContainers(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, apiErr(err)
 	}
+	merge := param(rc, "merge") != ""
 	items := make([]plugin.Option, 0, len(pod.Spec.InitContainers)+len(pod.Spec.Containers)+1)
-	for _, c := range pod.Spec.InitContainers {
-		items = append(items, plugin.Option{Label: c.Name + " (init)", Value: c.Name})
+	// Init containers are terminated once the pod runs, so only logs (merge) list
+	// them; an exec-backed files picker can't reach them.
+	if merge {
+		for _, c := range pod.Spec.InitContainers {
+			items = append(items, plugin.Option{Label: c.Name + " (init)", Value: c.Name})
+		}
 	}
 	for _, c := range pod.Spec.Containers {
 		items = append(items, plugin.Option{Label: c.Name, Value: c.Name})
 	}
-	// Offer "All containers" (empty value → stream them merged) only when there is
-	// more than one to choose between.
-	if len(items) > 1 {
+	// "All containers" (empty value → merged) only applies to logs and only when
+	// there is more than one to choose between.
+	if merge && len(items) > 1 {
 		items = append([]plugin.Option{{Label: "All containers", Value: ""}}, items...)
 	}
 	return plugin.Page[plugin.Option]{Items: items, Total: ptr(len(items))}, nil

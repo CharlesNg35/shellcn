@@ -36,7 +36,7 @@ func podDetailTabs() []plugin.Panel {
 			Config: plugin.LogStreamConfig{
 				Controls: []plugin.StreamControl{{
 					Param: "container", Label: "Container",
-					OptionsSource: &plugin.DataSource{RouteID: "kubernetes.pod.containers", Params: podRefParams(nil)},
+					OptionsSource: &plugin.DataSource{RouteID: "kubernetes.pod.containers", Params: podRefParams(map[string]string{"merge": "true"})},
 				}},
 				AllowPrevious: true,
 			},

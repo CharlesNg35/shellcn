@@ -62,7 +62,8 @@ Removed as not worth doing (verified marginal / intentional / feature-scope):
 - [x] P3 logs a11y — viewport now role="log" aria-live; filter/follow/previous aria-labels/aria-pressed.
 - [x] P1 metrics absent — onFrame keeps numeric context (requests/limits) when metricsAvailable=false; non-blocking PrimeVue Message + stat cards instead of a blank error; backend sends a source-specific message.
 - [x] P2 logs UX — wrap/no-wrap toggle added.
-- [ ] files + exec container pickers — DEFERRED (feature-scope): a container selector threaded through the file routes / xterm panel, mirroring the logs `StreamControl`. Valuable; needs a dedicated change.
+- [x] files container picker — `FileBrowserConfig.Controls` (generic `StreamControl`) threads a container selector through every file operation via `operationParams`; `kubernetes.pod.containers` (app containers only, since init containers are terminated and can't be exec'd) feeds it. Picker hidden for single-container pods; switching containers resets to the start path.
+- [ ] exec (terminal) container picker — DEFERRED (feature-scope): the xterm/Terminal panel has no generic `StreamControl` host yet; the file/log pattern doesn't transfer directly. Valuable; needs a dedicated change.
 
 Removed: logs JSON-frame branch (harmless for k8s plain text); jump-to-latest / pause-on-scroll (Follow covers it); exit-code banner / keepalive (transport layer handles idle).
 
