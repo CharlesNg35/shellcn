@@ -796,27 +796,29 @@ watch(
       {{ dropActive ? `Drop files to upload to ${cwd}` : "" }}
     </p>
 
-    <div
-      v-if="hasVisibleControls"
-      class="flex flex-wrap items-center gap-2 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
-    >
-      <template v-for="ctrl in controls" :key="ctrl.param">
-        <div v-if="controlVisible(ctrl.param)" class="w-40 shrink-0">
-          <Select
-            v-model="controlValues[ctrl.param]"
-            :options="controlOptions[ctrl.param] ?? []"
-            option-label="label"
-            option-value="value"
-            :placeholder="ctrl.label"
-            :aria-label="ctrl.label"
-            size="small"
-            @change="onControlChange"
-          />
-        </div>
+    <FileCrumbs :path="cwd" @navigate="guardedLoadList">
+      <template #leading>
+        <template v-for="ctrl in controls" :key="ctrl.param">
+          <div v-if="controlVisible(ctrl.param)" class="w-36 shrink-0">
+            <Select
+              v-model="controlValues[ctrl.param]"
+              :options="controlOptions[ctrl.param] ?? []"
+              option-label="label"
+              option-value="value"
+              :placeholder="ctrl.label"
+              :aria-label="ctrl.label"
+              size="small"
+              @change="onControlChange"
+            />
+          </div>
+        </template>
+        <span
+          v-if="hasVisibleControls"
+          class="mx-1 h-5 w-px shrink-0 bg-surface-200 dark:bg-surface-800"
+          aria-hidden="true"
+        />
       </template>
-    </div>
-
-    <FileCrumbs :path="cwd" @navigate="guardedLoadList" />
+    </FileCrumbs>
 
     <FileToolbar
       v-model:view-mode="viewMode"

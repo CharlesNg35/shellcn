@@ -17,6 +17,7 @@ import {
   searchFieldClass,
   searchIconLeftClass,
   searchInputClass,
+  smallSecondaryButtonClass,
 } from "@/primevue/preset";
 import { cn } from "@/utils/cn";
 
@@ -30,7 +31,7 @@ const sortOptions = [
   { label: "Modified", value: "modified" },
 ];
 
-const searchClass = cn(searchInputClass, "pr-8");
+const searchClass = cn(searchInputClass, "h-7 py-1 pl-8 pr-7 text-xs");
 
 function toggleSortDir(): void {
   sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
@@ -103,7 +104,7 @@ const uploadTitle = computed(() =>
       <FileUpload
         v-if="canUpload"
         mode="basic"
-        class="[&_button]:h-9"
+        :pt="{ pcChooseButton: { root: smallSecondaryButtonClass } }"
         :name="uploadFieldName"
         :multiple="multipleUpload"
         custom-upload
@@ -114,20 +115,22 @@ const uploadTitle = computed(() =>
         @uploader="emit('upload', $event)"
       >
         <template #chooseicon>
-          <AppIcon :icon="{ type: 'lucide', value: 'upload' }" :size="15" />
+          <AppIcon :icon="{ type: 'lucide', value: 'upload' }" :size="14" />
         </template>
       </FileUpload>
       <Button
         v-if="canMkdir"
         type="button"
         severity="secondary"
-        class="h-9"
+        size="small"
+        label="New folder"
         :disabled="mutating"
         title="Create folder"
         @click="emit('mkdir')"
       >
-        <AppIcon :icon="{ type: 'lucide', value: 'folder-plus' }" :size="15" />
-        New folder
+        <template #icon>
+          <AppIcon :icon="{ type: 'lucide', value: 'folder-plus' }" :size="15" />
+        </template>
       </Button>
 
       <span
@@ -139,44 +142,50 @@ const uploadTitle = computed(() =>
         v-if="canShowRename"
         type="button"
         severity="secondary"
-        class="h-9 w-9 px-0!"
+        size="small"
         :disabled="!canRename || mutating"
         title="Rename selected item"
         aria-label="Rename selected item"
         @click="emit('rename')"
       >
-        <AppIcon :icon="{ type: 'lucide', value: 'pencil' }" :size="15" />
+        <template #icon>
+          <AppIcon :icon="{ type: 'lucide', value: 'pencil' }" :size="15" />
+        </template>
       </Button>
       <Button
         v-if="downloadHref"
         as="a"
         severity="secondary"
-        class="h-9 w-9 px-0!"
+        size="small"
         :href="downloadHref"
         :download="downloadName"
         title="Download selected file"
         aria-label="Download selected file"
       >
-        <AppIcon :icon="{ type: 'lucide', value: 'download' }" :size="15" />
+        <template #icon>
+          <AppIcon :icon="{ type: 'lucide', value: 'download' }" :size="15" />
+        </template>
       </Button>
       <Button
         v-if="canShowDelete"
         type="button"
         severity="danger"
         outlined
-        class="h-9 w-9 px-0!"
+        size="small"
         :disabled="!canDelete || mutating"
         title="Delete selected item"
         aria-label="Delete selected item"
         @click="emit('delete')"
       >
-        <AppIcon :icon="{ type: 'lucide', value: 'trash-2' }" :size="15" />
+        <template #icon>
+          <AppIcon :icon="{ type: 'lucide', value: 'trash-2' }" :size="15" />
+        </template>
       </Button>
 
       <div class="ml-auto flex flex-wrap items-center gap-2">
         <IconField :class="[searchFieldClass, 'w-44 sm:w-56']">
-          <InputIcon :class="searchIconLeftClass">
-            <AppIcon :icon="{ type: 'lucide', value: 'search' }" :size="15" />
+          <InputIcon :class="[searchIconLeftClass, 'left-2.5']">
+            <AppIcon :icon="{ type: 'lucide', value: 'search' }" :size="14" />
           </InputIcon>
           <InputText
             v-model="filter"
@@ -207,7 +216,7 @@ const uploadTitle = computed(() =>
           <div class="w-32">
             <Select
               v-model="sortKey"
-              class="h-9"
+              size="small"
               :options="sortOptions"
               option-label="label"
               option-value="value"
@@ -217,40 +226,43 @@ const uploadTitle = computed(() =>
           <Button
             type="button"
             severity="secondary"
-            class="h-9 w-9 px-0!"
+            size="small"
             :title="sortDir === 'asc' ? 'Ascending' : 'Descending'"
             :aria-label="`Sort direction: ${sortDir === 'asc' ? 'ascending' : 'descending'}`"
             @click="toggleSortDir"
           >
-            <AppIcon
-              :icon="{
-                type: 'lucide',
-                value: sortDir === 'asc' ? 'arrow-up' : 'arrow-down',
-              }"
-              :size="15"
-            />
+            <template #icon>
+              <AppIcon
+                :icon="{
+                  type: 'lucide',
+                  value: sortDir === 'asc' ? 'arrow-up' : 'arrow-down',
+                }"
+                :size="15"
+              />
+            </template>
           </Button>
         </div>
 
         <Button
           type="button"
           severity="secondary"
-          class="h-9 w-9 px-0!"
+          size="small"
           title="Refresh folder"
           aria-label="Refresh folder"
           :disabled="loading || mutating"
           @click="emit('refresh')"
         >
-          <AppIcon
-            :icon="{ type: 'lucide', value: 'refresh-cw' }"
-            :size="15"
-            :loading="loading"
-          />
+          <template #icon>
+            <AppIcon
+              :icon="{ type: 'lucide', value: 'refresh-cw' }"
+              :size="15"
+              :loading="loading"
+            />
+          </template>
         </Button>
 
         <SelectButton
           v-model="mode"
-          class="h-9 p-px!"
           :options="viewOptions"
           option-label="label"
           option-value="value"
@@ -260,7 +272,7 @@ const uploadTitle = computed(() =>
           <template #option="{ option }">
             <AppIcon
               :icon="{ type: 'lucide', value: option.icon }"
-              :size="15"
+              :size="14"
               :title="option.label"
             />
             <span class="sr-only">{{ option.label }}</span>

@@ -353,10 +353,16 @@ describe("primeVuePassthrough", () => {
     } as Parameters<typeof primeVuePassthrough.button.root>[0]);
     expect(small).toContain("text-xs");
     expect(small).toContain("px-2.5");
-    expect(small).toContain("py-1");
     expect(small).not.toContain("text-sm");
     expect(small).not.toContain("px-3");
-    expect(small).not.toContain("py-1.5");
+
+    const iconOnly = primeVuePassthrough.button.root({
+      props: { size: "small" },
+      instance: { hasIcon: true },
+    } as Parameters<typeof primeVuePassthrough.button.root>[0]);
+    // An icon-only button is squared by symmetric padding, not text padding.
+    expect(iconOnly).toContain("p-1.5");
+    expect(iconOnly).not.toContain("px-2.5");
 
     const large = primeVuePassthrough.button.root({
       props: { size: "large" },

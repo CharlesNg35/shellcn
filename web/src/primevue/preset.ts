@@ -11,7 +11,7 @@ const focusWithinRing =
 // Field padding/typography per PrimeVue `size` ("small"/"large", default normal),
 // shared by inputs and selects so every control shrinks consistently.
 const fieldSize = {
-  small: "px-2 py-1 text-xs",
+  small: "px-2 py-1.5 text-xs",
   normal: "px-2.5 py-1.5 text-sm",
   large: "px-3 py-2.5 text-base",
 } as const;
@@ -90,9 +90,16 @@ const buttonBase =
 const stepperButton =
   "inline-flex w-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-surface-300 text-surface-600 outline-none transition-colors hover:bg-surface-100 focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:pointer-events-none disabled:opacity-40 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-800";
 const buttonSize = {
-  small: "px-2.5 py-1 text-xs",
+  small: "px-2.5 py-1.5 text-xs",
   normal: "px-3 py-1.5",
   large: "px-4 py-2 text-base",
+};
+// Icon-only buttons square themselves via symmetric padding around the icon, so
+// they track the matching text-button height per size without hand-set w/h.
+const iconButtonSize = {
+  small: "p-1.5",
+  normal: "p-2",
+  large: "p-3",
 };
 const buttonSolid = {
   primary: "bg-primary-600 text-white hover:bg-primary-700",
@@ -173,8 +180,16 @@ function buttonShapeClass(rounded: ButtonProps["rounded"]): string {
 
 function buttonRoot(options: ButtonPassThroughMethodOptions<unknown>): string {
   const props = options.props;
+  // PrimeVue marks a button icon-only when it has an icon (via the `icon` prop or
+  // `#icon` slot) and no label — then it gets symmetric padding instead of the
+  // horizontal text padding, so a square shape falls out without manual sizing.
+  const iconOnly =
+    Boolean((options.instance as { hasIcon?: unknown } | undefined)?.hasIcon) &&
+    !props.label;
   const tone = buttonTone(props.severity);
-  const size = buttonSizeClass(props.size);
+  const size = iconOnly
+    ? iconButtonSize[sizeKey({ props })]
+    : buttonSizeClass(props.size);
   const shape = buttonShapeClass(props.rounded);
   const width = props.fluid && "w-full";
   const variant = props.variant;
@@ -194,6 +209,15 @@ function buttonRoot(options: ButtonPassThroughMethodOptions<unknown>): string {
   }
   return cn(buttonBase, shape, width, size, buttonSolid[tone]);
 }
+
+// Small secondary button, for components (e.g. FileUpload's basic button) that
+// can't take a `size` prop directly — pass it through their pass-through root.
+export const smallSecondaryButtonClass = cn(
+  buttonBase,
+  buttonSize.small,
+  buttonSolid.secondary,
+  "cursor-pointer",
+);
 
 const overlay =
   "mt-1.5 origin-top overflow-hidden rounded-lg border border-surface-200 bg-surface-0 p-1 shadow-lg ring-1 ring-surface-950/5 dark:border-surface-700 dark:bg-surface-900 dark:ring-surface-0/5";
@@ -570,9 +594,11 @@ export const primeVuePassthrough = {
   },
 
   selectbutton: {
-    root: "inline-flex gap-0.5 rounded-md border border-surface-300 bg-surface-0 p-0.5 dark:border-surface-700 dark:bg-surface-950",
+    // overflow-hidden clips a checked option's background to the rounded border so
+    // it can't bleed past the control's edge.
+    root: "inline-flex gap-0.5 overflow-hidden rounded-md border border-surface-300 bg-surface-0 p-0.5 dark:border-surface-700 dark:bg-surface-950",
     pcToggleButton: {
-      root: "inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded text-surface-500 transition-colors hover:bg-surface-100 hover:text-surface-800 data-[p-checked=true]:bg-surface-100 data-[p-checked=true]:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-surface-100 dark:data-[p-checked=true]:bg-surface-800 dark:data-[p-checked=true]:text-surface-0",
+      root: "inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded text-surface-500 transition-colors hover:bg-surface-100 hover:text-surface-800 data-[p-checked=true]:bg-surface-100 data-[p-checked=true]:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-surface-100 dark:data-[p-checked=true]:bg-surface-800 dark:data-[p-checked=true]:text-surface-0",
       content: "inline-flex items-center justify-center",
       label: "sr-only",
     },
