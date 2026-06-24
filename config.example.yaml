@@ -69,3 +69,11 @@ recordings:
   retention_days: 0
   cleanup_interval: 1h
   max_chunk_bytes: 8388608
+
+# Out-of-tree plugins and the plugin marketplace. Values below are the built-in
+# plugins:
+#   dir: plugins.d # directory scanned for external plugin binaries ("" disables)
+#   market:
+#     enabled: true # allow installing plugins from the registry indexes
+#     indexes:
+#       - https://raw.githubusercontent.com/CharlesNg35/shellcn-plugin-registry/main/index.json

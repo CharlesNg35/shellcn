@@ -21,7 +21,10 @@ const (
 
 type Plugin struct{}
 
-func New() *Plugin { return &Plugin{} }
+func New() *Plugin {
+	routeKlog()
+	return &Plugin{}
+}
 
 func (p *Plugin) Manifest() plugin.Manifest {
 	return plugin.Manifest{

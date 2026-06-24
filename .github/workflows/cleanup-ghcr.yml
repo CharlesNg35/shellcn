@@ -1,0 +1,25 @@
+name: Cleanup GHCR Images
+
+on:
+  schedule:
+    - cron: "0 0 * * 0" # Sundays at midnight
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Log deletions without performing them"
+        type: boolean
+        default: false
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    name: Prune untagged images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          packages: shellcn,shellcn-agent
+          delete-untagged: true
+          dry-run: ${{ inputs.dry-run }}
