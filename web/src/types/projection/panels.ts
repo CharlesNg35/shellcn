@@ -21,6 +21,7 @@ export const PanelType = {
   Split: "split",
   Canvas: "canvas",
   Wasm: "wasm",
+  WebProxy: "web_proxy",
   Graph: "graph",
   Trace: "trace",
   KV: "kv",
@@ -492,6 +493,24 @@ export interface WasmPanelConfig {
   scaleMode?: WasmScaleMode;
   capabilities?: WasmCapabilities;
   bridge?: WasmBridge;
+  ariaLabel?: string;
+  instructions?: string;
+}
+
+export const WebProxyCapability = {
+  Clipboard: "clipboard",
+  Downloads: "downloads",
+  Fullscreen: "fullscreen",
+  Popups: "popups",
+  SameOrigin: "same_origin",
+} as const;
+export type WebProxyCapability =
+  (typeof WebProxyCapability)[keyof typeof WebProxyCapability];
+
+export interface WebProxyPanelConfig {
+  path?: string;
+  capabilities?: WebProxyCapability[];
+  openExternal?: boolean;
   ariaLabel?: string;
   instructions?: string;
 }

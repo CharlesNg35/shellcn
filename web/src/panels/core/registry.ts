@@ -38,6 +38,7 @@ export const panelRegistry: Record<string, Component> = {
   [PanelType.Split]: lazy(() => import("../specialized/SplitPanel.vue")),
   [PanelType.Canvas]: lazy(() => import("../streaming/CanvasPanel.vue")),
   [PanelType.Wasm]: lazy(() => import("../wasm/WasmPanel.vue")),
+  [PanelType.WebProxy]: lazy(() => import("../web/WebProxyPanel.vue")),
   [PanelType.Terminal]: lazy(() => import("../streaming/TerminalPanel.vue")),
   [PanelType.TerminalGrid]: lazy(
     () => import("../streaming/TerminalGridPanel.vue"),

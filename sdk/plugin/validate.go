@@ -3,6 +3,7 @@ package plugin
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -867,6 +868,8 @@ func checkPanelConfigRoutes(
 		for i, stream := range c.Bridge.Streams {
 			checkStreamSource(fmt.Sprintf("%s bridge.streams[%d]", ctx, i), &DataSource{RouteID: stream.RouteID, Method: MethodWS, Params: stream.Params})
 		}
+	case WebProxyConfig:
+		validateWebProxyConfig(ctx, c, add)
 	case DashboardConfig:
 		for _, cell := range c.Cells {
 			recursePanel(fmt.Sprintf("%s cell %q", ctx, cell.Key), cell)
@@ -876,6 +879,39 @@ func checkPanelConfigRoutes(
 			recursePanel(fmt.Sprintf("%s split panel %q", ctx, child.Key), child.Panel)
 		}
 	}
+}
+
+func validateWebProxyConfig(ctx string, c WebProxyConfig, add func(string, ...any)) {
+	if c.Path != "" && !validWebProxyPath(c.Path) {
+		add("%s path must be an absolute proxy path without a scheme or host", ctx)
+	}
+	seen := map[WebProxyCapability]bool{}
+	for i, capability := range c.Capabilities {
+		switch capability {
+		case WebProxyCapabilityClipboard, WebProxyCapabilityDownloads, WebProxyCapabilityFullscreen, WebProxyCapabilityPopups, WebProxyCapabilitySameOrigin:
+		default:
+			add("%s capabilities[%d] %q is not supported", ctx, i, capability)
+			continue
+		}
+		if seen[capability] {
+			add("%s capabilities[%d] %q is duplicated", ctx, i, capability)
+		}
+		seen[capability] = true
+	}
+}
+
+func validWebProxyPath(path string) bool {
+	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || strings.HasPrefix(path, `/\`) {
+		return false
+	}
+	if strings.ContainsFunc(path, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+		return false
+	}
+	parsed, err := url.Parse(path)
+	if err != nil {
+		return false
+	}
+	return !parsed.IsAbs() && parsed.Host == "" && strings.HasPrefix(parsed.Path, "/")
 }
 
 func validateTableConfig(ctx string, c TableConfig, add func(string, ...any)) {

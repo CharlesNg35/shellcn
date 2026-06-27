@@ -131,7 +131,7 @@ func fieldsHaveRequired(fields []plugin.Field) bool {
 
 func longLivedPanel(panel plugin.PanelType) bool {
 	switch panel {
-	case plugin.PanelTerminal, plugin.PanelTerminalGrid, plugin.PanelRemoteDesktop, plugin.PanelLogStream, plugin.PanelMetrics, plugin.PanelTaskProgress, plugin.PanelCanvas:
+	case plugin.PanelTerminal, plugin.PanelTerminalGrid, plugin.PanelRemoteDesktop, plugin.PanelLogStream, plugin.PanelMetrics, plugin.PanelTaskProgress, plugin.PanelCanvas, plugin.PanelWebProxy:
 		return true
 	default:
 		return false
