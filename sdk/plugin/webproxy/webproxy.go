@@ -1,8 +1,7 @@
 // Package webproxy reverse-proxies a browser to an upstream web app and rewrites
-// the response so the app works under a gateway sub-path. It is protocol-neutral:
-// a plugin resolves how to reach the upstream (a Kubernetes Service/Pod via the
-// API server proxy, a Docker container's port, …) and hands the request here for
-// the proxying + HTML/redirect/cookie rewriting and the in-scope service worker.
+// the response so the app works under a gateway sub-path. A plugin resolves how
+// to reach the upstream and hands the request here for proxying, response
+// rewriting, and the in-scope service worker.
 package webproxy
 
 import (
@@ -50,9 +49,8 @@ type Options struct {
 	// PublicPrefix is the gateway path the app is served under (for rewriting).
 	PublicPrefix string
 	// SourcePrefix is a prefix the upstream itself injects into the app's links
-	// (e.g. the Kubernetes API server proxy path) and that must be mapped back to
-	// PublicPrefix. Empty when proxying straight to the app (Docker), where the
-	// app emits its own root-relative paths.
+	// and that must be mapped back to PublicPrefix. Empty when proxying straight
+	// to an app that emits its own root-relative paths.
 	SourcePrefix string
 }
 

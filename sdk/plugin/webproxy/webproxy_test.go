@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesng35/shellcn/plugins/shared/webproxy"
+	"github.com/charlesng35/shellcn/sdk/plugin/webproxy"
 )
 
 func TestIsTLSPort(t *testing.T) {
