@@ -81,7 +81,7 @@ type GrantStore interface {
 	ListBySubject(ctx context.Context, subjectID string) ([]models.Grant, error)
 }
 
-// CredentialGrantStore persists credential use-grants (no secret readback).
+// CredentialGrantStore persists credential view-grants (no secret readback).
 type CredentialGrantStore interface {
 	Create(ctx context.Context, g *models.CredentialGrant) error
 	Delete(ctx context.Context, id string) error

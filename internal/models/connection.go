@@ -6,9 +6,18 @@ import "time"
 type Access string
 
 const (
-	AccessUse    Access = "use"    // connect through / read non-secret metadata
-	AccessManage Access = "manage" // edit/share/delete
+	AccessView       Access = "view"
+	AccessManage     Access = "manage"
+	AccessPrivileged Access = "privileged"
 )
+
+func ConnectionGrantAccesses() []Access {
+	return []Access{AccessView, AccessManage, AccessPrivileged}
+}
+
+func CredentialGrantAccesses() []Access {
+	return []Access{AccessView}
+}
 
 // Connection is stored config describing how to reach one target. It is owned by
 // a user, optionally shared, and may carry inline encrypted secrets or reference

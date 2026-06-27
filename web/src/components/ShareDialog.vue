@@ -14,7 +14,12 @@ import AppIcon from "./AppIcon.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { dialogRoot, btnPrimary } from "../primevue/preset";
 import type { GrantRequest } from "../api/grants";
-import type { GrantAccess, ShareGrant, UserSummary } from "../types/projection";
+import {
+  GrantAccess as GrantAccessValue,
+  type GrantAccess,
+  type ShareGrant,
+  type UserSummary,
+} from "../types/projection";
 
 const props = defineProps<{
   visible: boolean;
@@ -22,7 +27,7 @@ const props = defineProps<{
   resource: "connections" | "credentials";
   resourceId: string;
   resourceName: string;
-  // Connections grant use/manage; credentials grant use only.
+  // Connections grant view/manage/privileged; credentials grant view only.
   allowManage?: boolean;
 }>();
 const emit = defineEmits<{ "update:visible": [value: boolean] }>();
@@ -36,7 +41,7 @@ const users = ref<UserOption[]>([]);
 const subject = ref<UserOption | null>(null);
 // Operators can't enumerate users; they share by exact email instead.
 const email = ref("");
-const access = ref<GrantAccess>("use");
+const access = ref<GrantAccess>(GrantAccessValue.View);
 const loading = ref(false);
 const busy = ref(false);
 const { confirmDanger } = useConfirmAction();
@@ -46,8 +51,9 @@ const canAdd = computed(() =>
 );
 
 const accessChoices = [
-  { label: "Use", value: "use" },
-  { label: "Manage", value: "manage" },
+  { label: "View", value: GrantAccessValue.View },
+  { label: "Manage", value: GrantAccessValue.Manage },
+  { label: "Privileged", value: GrantAccessValue.Privileged },
 ];
 
 const subjectChoices = computed(() => {
@@ -59,7 +65,7 @@ async function load(): Promise<void> {
   loading.value = true;
   subject.value = null;
   email.value = "";
-  access.value = "use";
+  access.value = GrantAccessValue.View;
   try {
     grants.value = await grantsApi.list(props.resource, props.resourceId);
     if (auth.isAdmin) await searchUsers("");
@@ -96,7 +102,7 @@ async function add(): Promise<void> {
   busy.value = true;
   try {
     const body: GrantRequest = {
-      access: props.allowManage ? access.value : "use",
+      access: props.allowManage ? access.value : GrantAccessValue.View,
     };
     if (auth.isAdmin && subject.value) body.subjectId = subject.value.id;
     else body.email = email.value.trim();
@@ -108,7 +114,7 @@ async function add(): Promise<void> {
     grants.value = [...grants.value, grant];
     subject.value = null;
     email.value = "";
-    access.value = "use";
+    access.value = GrantAccessValue.View;
     notify.success("Access granted", grant.username);
     if (auth.isAdmin) await searchUsers("");
   } catch (e) {
@@ -186,7 +192,7 @@ async function revoke(grant: ShareGrant): Promise<void> {
             @keyup.enter="add"
           />
         </div>
-        <div v-if="allowManage" class="w-28">
+        <div v-if="allowManage" class="w-36">
           <label
             class="mb-1 block text-xs font-medium text-surface-500 dark:text-surface-400"
           >

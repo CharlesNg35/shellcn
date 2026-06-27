@@ -2102,6 +2102,39 @@
       "required": [
         "entry"
       ]
+    },
+    "web_proxy": {
+      "type": "object",
+      "properties": {
+        "ariaLabel": {
+          "type": "string"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "clipboard",
+              "downloads",
+              "fullscreen",
+              "popups",
+              "same_origin"
+            ]
+          }
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "inlineToolbar": {
+          "type": "boolean"
+        },
+        "openExternal": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        }
+      }
     }
   }
 }

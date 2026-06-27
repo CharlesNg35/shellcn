@@ -289,7 +289,7 @@ func TestDisconnectConnectionSessionClosesOnlyCurrentUserSession(t *testing.T) {
 
 	// op shares c-op with viewer so two distinct users can hold a session on it.
 	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/grants", "op",
-		strings.NewReader(`{"subjectId":"viewer","access":"use"}`)); resp.Status != http.StatusCreated {
+		strings.NewReader(`{"subjectId":"viewer","access":"view"}`)); resp.Status != http.StatusCreated {
 		t.Fatalf("share c-op: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "op", nil); resp.Status != http.StatusOK {
@@ -364,7 +364,7 @@ func TestConnectionSessionKeepaliveHonorsAccess(t *testing.T) {
 		t.Fatalf("viewer without grant: want 403, got %d (%s)", resp.Status, resp.Body)
 	}
 	if err := h.store.Grants.Create(context.Background(), &models.Grant{
-		ID: "g-use-session-c-op", ConnectionID: "c-op", SubjectID: "viewer", Access: models.AccessUse,
+		ID: "g-use-session-c-op", ConnectionID: "c-op", SubjectID: "viewer", Access: models.AccessView,
 	}); err != nil {
 		t.Fatalf("create grant: %v", err)
 	}
@@ -377,7 +377,7 @@ func TestConnectionSessionKeepaliveHonorsAccess(t *testing.T) {
 	}
 	h.sessions["norole"] = h.sessionMgr.Create("norole")
 	if err := h.store.Grants.Create(context.Background(), &models.Grant{
-		ID: "g-use-session-c-op-norole", ConnectionID: "c-op", SubjectID: "norole", Access: models.AccessUse,
+		ID: "g-use-session-c-op-norole", ConnectionID: "c-op", SubjectID: "norole", Access: models.AccessView,
 	}); err != nil {
 		t.Fatalf("create no-role grant: %v", err)
 	}
@@ -394,7 +394,7 @@ func TestDisconnectConnectionSessionHonorsConnectionAccess(t *testing.T) {
 	}
 
 	if err := h.store.Grants.Create(context.Background(), &models.Grant{
-		ID: "g-use-c-op", ConnectionID: "c-op", SubjectID: "viewer", Access: models.AccessUse,
+		ID: "g-use-c-op", ConnectionID: "c-op", SubjectID: "viewer", Access: models.AccessView,
 	}); err != nil {
 		t.Fatalf("create grant: %v", err)
 	}
@@ -438,7 +438,7 @@ func TestConnectionCredentialRefUsability(t *testing.T) {
 	}
 }
 
-func TestSharedManagerCannotReadHiddenCredentialButCanPreserveOrReplace(t *testing.T) {
+func TestSharedGranteeCannotReadOrModifyConnectionCredentials(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
 
@@ -456,38 +456,35 @@ func TestSharedManagerCannotReadHiddenCredentialButCanPreserveOrReplace(t *testi
 	})
 
 	resp = h.do(t, http.MethodGet, "/api/connections/"+id, "viewer", nil)
-	if resp.Status != http.StatusOK {
-		t.Fatalf("shared manager detail: want 200, got %d (%s)", resp.Status, resp.Body)
-	}
-	body := string(resp.Body)
-	if strings.Contains(body, "cred-owner") || strings.Contains(body, "owner-db") {
-		t.Fatalf("shared manager detail leaked hidden credential: %s", body)
-	}
-	if !strings.Contains(body, `"credential_id":{"state":"set","readable":false`) {
-		t.Fatalf("shared manager detail missing redacted credential state: %s", body)
+	if resp.Status != http.StatusForbidden {
+		t.Fatalf("shared grantee detail: want 403, got %d (%s)", resp.Status, resp.Body)
 	}
 
 	resp = h.do(t, http.MethodPut, "/api/connections/"+id, "viewer",
-		strings.NewReader(`{"name":"kept","config":{"host":"h2"},"preserveCredentials":["credential_id"]}`))
-	if resp.Status != http.StatusOK {
-		t.Fatalf("preserve hidden credential: want 200, got %d (%s)", resp.Status, resp.Body)
+		strings.NewReader(`{"name":"hax","config":{"host":"h2"},"preserveCredentials":["credential_id"]}`))
+	if resp.Status != http.StatusForbidden {
+		t.Fatalf("shared grantee preserve: want 403, got %d (%s)", resp.Status, resp.Body)
 	}
+
+	resp = h.do(t, http.MethodPut, "/api/connections/"+id, "viewer",
+		strings.NewReader(`{"name":"hax","config":{"host":"h3","credential_id":"cred-viewer"}}`))
+	if resp.Status != http.StatusForbidden {
+		t.Fatalf("shared grantee replace: want 403, got %d (%s)", resp.Status, resp.Body)
+	}
+
 	conn, _ := h.store.Connections.Get(ctx, id)
 	if conn.Config["credential_id"] != "cred-owner" {
-		t.Fatalf("hidden credential should be preserved, got %#v", conn.Config["credential_id"])
+		t.Fatalf("shared grantee must not change credential, got %#v", conn.Config["credential_id"])
 	}
 
-	_ = h.store.Credentials.Create(ctx, &models.Credential{
-		ID: "cred-viewer", Name: "viewer-db", Kind: "db_password", OwnerID: "viewer",
-	})
-	resp = h.do(t, http.MethodPut, "/api/connections/"+id, "viewer",
-		strings.NewReader(`{"name":"replaced","config":{"host":"h3","credential_id":"cred-viewer"}}`))
+	resp = h.do(t, http.MethodPut, "/api/connections/"+id, "op",
+		strings.NewReader(`{"name":"kept","config":{"host":"h4"},"preserveCredentials":["credential_id"]}`))
 	if resp.Status != http.StatusOK {
-		t.Fatalf("replace with viewer credential: want 200, got %d (%s)", resp.Status, resp.Body)
+		t.Fatalf("owner preserve credential: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
 	conn, _ = h.store.Connections.Get(ctx, id)
-	if conn.Config["credential_id"] != "cred-viewer" {
-		t.Fatalf("credential should be replaced, got %#v", conn.Config["credential_id"])
+	if conn.Config["credential_id"] != "cred-owner" {
+		t.Fatalf("owner preserve should keep credential, got %#v", conn.Config["credential_id"])
 	}
 }
 

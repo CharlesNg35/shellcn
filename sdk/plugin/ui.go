@@ -24,6 +24,7 @@ const (
 	PanelSplit         PanelType = "split"
 	PanelCanvas        PanelType = "canvas"
 	PanelWasm          PanelType = "wasm"
+	PanelWebProxy      PanelType = "web_proxy"
 
 	PanelGraph      PanelType = "graph"
 	PanelTrace      PanelType = "trace"
@@ -65,6 +66,7 @@ func (TaskProgressConfig) panelConfig()  {}
 func (SplitConfig) panelConfig()         {}
 func (CanvasConfig) panelConfig()        {}
 func (WasmConfig) panelConfig()          {}
+func (WebProxyConfig) panelConfig()      {}
 func (LogStreamConfig) panelConfig()     {}
 
 // StreamKind tags the long-lived channel a panel binds to.
@@ -436,6 +438,28 @@ type WasmConfig struct {
 	Bridge       WasmBridge       `json:"bridge,omitempty"`
 	AriaLabel    string           `json:"ariaLabel,omitempty"`
 	Instructions string           `json:"instructions,omitempty"`
+}
+
+type WebProxyCapability string
+
+const (
+	WebProxyCapabilityClipboard  WebProxyCapability = "clipboard"
+	WebProxyCapabilityDownloads  WebProxyCapability = "downloads"
+	WebProxyCapabilityFullscreen WebProxyCapability = "fullscreen"
+	WebProxyCapabilityPopups     WebProxyCapability = "popups"
+	// WebProxyCapabilitySameOrigin lets the embedded page keep a non-opaque
+	// origin. Only enable it for trusted, connection-owned surfaces.
+	WebProxyCapabilitySameOrigin WebProxyCapability = "same_origin"
+)
+
+// WebProxyConfig embeds the connection-scoped HTTP proxy as a panel.
+type WebProxyConfig struct {
+	Path          string               `json:"path,omitempty"`
+	Capabilities  []WebProxyCapability `json:"capabilities,omitempty"`
+	OpenExternal  bool                 `json:"openExternal,omitempty"`
+	InlineToolbar *bool                `json:"inlineToolbar,omitempty"`
+	AriaLabel     string               `json:"ariaLabel,omitempty"`
+	Instructions  string               `json:"instructions,omitempty"`
 }
 
 // MetricStat is one KPI number card in the metrics panel.

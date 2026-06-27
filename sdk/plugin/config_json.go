@@ -26,6 +26,7 @@ var panelConfigDecoders = map[PanelType]func(json.RawMessage) (PanelConfig, erro
 	PanelSplit:         func(r json.RawMessage) (PanelConfig, error) { return decode[SplitConfig](r) },
 	PanelCanvas:        func(r json.RawMessage) (PanelConfig, error) { return decode[CanvasConfig](r) },
 	PanelWasm:          func(r json.RawMessage) (PanelConfig, error) { return decode[WasmConfig](r) },
+	PanelWebProxy:      func(r json.RawMessage) (PanelConfig, error) { return decode[WebProxyConfig](r) },
 }
 
 func decode[T PanelConfig](raw json.RawMessage) (PanelConfig, error) {

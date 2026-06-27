@@ -183,7 +183,28 @@
       "label": "Terminal",
       "icon": { "type": "lucide", "value": "terminal" },
       "panel": "terminal",
-      "source": { "routeId": "ssh.shell", "method": "WS" }
+      "source": {
+        "routeId": "ssh.shell",
+        "method": "WS",
+        "params": { "cols": "80", "rows": "24" }
+      },
+      "config": { "zoom": true, "search": true },
+      "variants": [
+        {
+          "panel": "terminal_grid",
+          "config": {
+            "maxPanes": 6,
+            "defaultPanes": 1,
+            "zoom": true,
+            "search": true
+          },
+          "visibleWhen": {
+            "allOf": [
+              { "field": "terminal_layout", "op": "eq", "value": "grid" }
+            ]
+          }
+        }
+      ]
     },
     {
       "key": "files",

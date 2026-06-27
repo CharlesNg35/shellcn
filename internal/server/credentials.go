@@ -129,7 +129,7 @@ func (s *Server) handleDeleteCredential(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// cleanupCredentialDependents deletes the use-grants tied to a deleted credential
+// cleanupCredentialDependents deletes the view-grants tied to a deleted credential
 // so they cannot be inherited by a future record. Best-effort.
 func (s *Server) cleanupCredentialDependents(ctx context.Context, credID string) {
 	grants, err := s.deps.Store.CredentialGrants.ListByCredential(ctx, credID)

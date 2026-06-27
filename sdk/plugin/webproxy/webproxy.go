@@ -1,8 +1,7 @@
 // Package webproxy reverse-proxies a browser to an upstream web app and rewrites
-// the response so the app works under a gateway sub-path. It is protocol-neutral:
-// a plugin resolves how to reach the upstream (a Kubernetes Service/Pod via the
-// API server proxy, a Docker container's port, …) and hands the request here for
-// the proxying + HTML/redirect/cookie rewriting and the in-scope service worker.
+// the response so the app works under a gateway sub-path. A plugin resolves how
+// to reach the upstream and hands the request here for proxying, response
+// rewriting, and the in-scope service worker.
 package webproxy
 
 import (
@@ -50,10 +49,21 @@ type Options struct {
 	// PublicPrefix is the gateway path the app is served under (for rewriting).
 	PublicPrefix string
 	// SourcePrefix is a prefix the upstream itself injects into the app's links
-	// (e.g. the Kubernetes API server proxy path) and that must be mapped back to
-	// PublicPrefix. Empty when proxying straight to the app (Docker), where the
-	// app emits its own root-relative paths.
+	// and that must be mapped back to PublicPrefix. Empty when proxying straight
+	// to an app that emits its own root-relative paths.
 	SourcePrefix string
+	// WebSocket controls optional request normalization for upstreams that apply
+	// strict browser-origin checks during WebSocket upgrades.
+	WebSocket WebSocketOptions
+}
+
+type WebSocketOptions struct {
+	// RewriteOrigin maps the browser's Origin to the upstream origin for WebSocket
+	// upgrades. This is needed by apps that reject gateway-origin upgrades.
+	RewriteOrigin bool
+	// StripForwardedHeaders removes gateway Forwarded/X-Forwarded-* context from
+	// WebSocket upgrades. Some upstream apps reject upgrades when these are present.
+	StripForwardedHeaders bool
 }
 
 // Serve reverse-proxies r to the upstream and rewrites the response so the app's
@@ -72,6 +82,7 @@ func Serve(w http.ResponseWriter, r *http.Request, o Options) {
 			req.Header.Set("X-Forwarded-Proto", forwardedProto(r))
 			req.Header.Set("X-Forwarded-Uri", r.URL.RequestURI())
 			req.Header.Set("Forwarded", forwardedHeader(r))
+			applyWebSocketOptions(req, o.WebSocket)
 		},
 		Transport:     o.Transport,
 		FlushInterval: -1,
@@ -79,6 +90,30 @@ func Serve(w http.ResponseWriter, r *http.Request, o Options) {
 		ModifyResponse: rewriteResponse(o.Base, o.SourcePrefix, o.PublicPrefix, r.Host),
 	}
 	proxy.ServeHTTP(w, r)
+}
+
+func applyWebSocketOptions(req *http.Request, opts WebSocketOptions) {
+	if !strings.EqualFold(req.Header.Get("Upgrade"), "websocket") || req.URL == nil || req.URL.Host == "" {
+		return
+	}
+	if opts.RewriteOrigin {
+		scheme := req.URL.Scheme
+		if scheme == "" {
+			scheme = "http"
+		}
+		if req.Header.Get("Origin") != "" {
+			req.Header.Set("Origin", scheme+"://"+req.URL.Host)
+		}
+		req.Host = req.URL.Host
+	}
+	if opts.StripForwardedHeaders {
+		req.Header.Del("Forwarded")
+		req.Header["X-Forwarded-For"] = nil
+		req.Header.Del("X-Forwarded-Host")
+		req.Header.Del("X-Forwarded-Prefix")
+		req.Header.Del("X-Forwarded-Proto")
+		req.Header.Del("X-Forwarded-Uri")
+	}
 }
 
 // URL-bearing HTML attributes whose root-relative value (incl. a bare "/") needs
@@ -332,7 +367,7 @@ func rewriteCookiePath(cookie, prefix string) string {
 // worker.
 func injectShim(html, prefix string) string {
 	shim := `<script>(function(){var p=` + jsString(prefix) + `;
-function fix(u){if(typeof u!=="string")return u;if(u.charAt(0)==="/"&&u.charAt(1)!=="/"&&u.indexOf(p)!==0)return p+u;var o=location.origin;if(u.indexOf(o+"/")===0&&u.slice(o.length).indexOf(p)!==0)return o+p+u.slice(o.length);return u;}
+function fix(u){if(typeof u!=="string")return u;if(u.charAt(0)==="/"&&u.charAt(1)!=="/"&&u.indexOf(p)!==0)return p+u;var o=location.origin;if(u.indexOf(o+"/")===0&&u.slice(o.length).indexOf(p)!==0)return o+p+u.slice(o.length);var wo=(location.protocol==="https:"?"wss://":"ws://")+location.host;if(u.indexOf(wo+"/")===0&&u.slice(wo.length).indexOf(p)!==0)return wo+p+u.slice(wo.length);return u;}
 var of=window.fetch;if(of){window.fetch=function(i,o){try{if(typeof i==="string")i=fix(i);else if(i&&i.url)i=new Request(fix(i.url),i);}catch(e){}return of.call(this,i,o);};}
 var ox=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){return ox.apply(this,[m,fix(u)].concat([].slice.call(arguments,2)));};
 function wrap(C){if(!C)return C;function W(){var a=[].slice.call(arguments);if(a.length)a[0]=fix(a[0]);return new (Function.prototype.bind.apply(C,[null].concat(a)))();}W.prototype=C.prototype;["CONNECTING","OPEN","CLOSING","CLOSED"].forEach(function(k){if(k in C)W[k]=C[k];});return W;}

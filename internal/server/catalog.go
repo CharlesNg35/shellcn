@@ -106,7 +106,7 @@ func (s *Server) handleListConnections(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) decorateConnectionAccess(ctx context.Context, user models.User, c models.Connection, dto *connectionDTO, names map[string]string) {
 	dto.Owned = c.OwnerID == user.ID
-	dto.Access = string(models.AccessUse)
+	dto.Access = string(models.AccessView)
 	if dto.Owned {
 		dto.Access = "owner"
 	} else if g, err := s.deps.Store.Grants.Get(ctx, c.ID, user.ID); err == nil {
@@ -114,7 +114,7 @@ func (s *Server) decorateConnectionAccess(ctx context.Context, user models.User,
 		dto.SharedWithMe = true
 		dto.OwnerName = s.displayName(ctx, c.OwnerID, names)
 	}
-	dto.CanManage = s.canManageConnection(ctx, user, c)
+	dto.CanManage = s.canAdminConnection(user, c)
 	dto.CanShare = dto.Owned
 	if dto.Owned {
 		grants, err := s.deps.Store.Grants.ListByConnection(ctx, c.ID)

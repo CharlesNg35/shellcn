@@ -59,6 +59,8 @@ func (g *grpcPlugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plu
 	client, broker := g.ref.get()
 	req := &pluginv1.ConnectRequest{
 		ConnectionId: cfg.ConnectionID,
+		UserId:       cfg.UserID,
+		ActorScope:   cfg.ActorScope,
 		Transport:    string(cfg.Transport),
 		ConfigJson:   config,
 	}

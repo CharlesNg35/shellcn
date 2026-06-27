@@ -2,16 +2,18 @@ import type { Icon, Transport } from "./core";
 import type { CredentialKind } from "./schema";
 
 export const GrantAccess = {
-  Use: "use",
+  View: "view",
   Manage: "manage",
+  Privileged: "privileged",
 } as const;
 export type GrantAccess = (typeof GrantAccess)[keyof typeof GrantAccess];
 
 export const ConnectionAccess = {
   Owner: "owner",
   Admin: "admin",
-  Use: GrantAccess.Use,
+  View: GrantAccess.View,
   Manage: GrantAccess.Manage,
+  Privileged: GrantAccess.Privileged,
 } as const;
 export type ConnectionAccess =
   (typeof ConnectionAccess)[keyof typeof ConnectionAccess];

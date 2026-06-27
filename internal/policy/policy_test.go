@@ -67,7 +67,7 @@ func TestViewerBlockedFromDestructiveEvenAsOwner(t *testing.T) {
 
 func TestConnectionAccessGate(t *testing.T) {
 	en := newEnforcer(t)
-	base := policy.AccessInput{Risk: plugin.RiskWrite, ConnectionID: "c1", OwnerID: "owner"}
+	base := policy.AccessInput{Risk: plugin.RiskSafe, ConnectionID: "c1", OwnerID: "owner"}
 
 	// Operator who is neither owner nor grantee: denied (deny-by-default).
 	stranger := base
@@ -79,7 +79,7 @@ func TestConnectionAccessGate(t *testing.T) {
 	// Same operator, now with a grant: allowed.
 	granted := stranger
 	granted.HasGrant = true
-	granted.GrantAccess = models.AccessUse
+	granted.GrantAccess = models.AccessView
 	if err := en.Authorize(granted); err != nil {
 		t.Errorf("granted operator should be allowed: %v", err)
 	}
@@ -97,6 +97,38 @@ func TestConnectionAccessGate(t *testing.T) {
 	admin.User = user("root", models.RoleAdmin)
 	if err := en.Authorize(admin); err == nil {
 		t.Error("admin should be denied on another's connection (no ownership/grant)")
+	}
+}
+
+func TestConnectionGrantRiskTiers(t *testing.T) {
+	en := newEnforcer(t)
+	risks := []plugin.RiskLevel{plugin.RiskSafe, plugin.RiskWrite, plugin.RiskDestructive, plugin.RiskPrivileged}
+	cases := []struct {
+		access models.Access
+		allow  map[plugin.RiskLevel]bool
+	}{
+		{models.AccessView, map[plugin.RiskLevel]bool{plugin.RiskSafe: true}},
+		{models.AccessManage, map[plugin.RiskLevel]bool{
+			plugin.RiskSafe: true, plugin.RiskWrite: true, plugin.RiskDestructive: true,
+		}},
+		{models.AccessPrivileged, map[plugin.RiskLevel]bool{
+			plugin.RiskSafe: true, plugin.RiskWrite: true, plugin.RiskDestructive: true, plugin.RiskPrivileged: true,
+		}},
+	}
+
+	for _, tc := range cases {
+		for _, risk := range risks {
+			in := policy.AccessInput{
+				User: user("grantee", models.RoleViewer), Risk: risk,
+				ConnectionID: "c1", OwnerID: "owner",
+				HasGrant: true, GrantAccess: tc.access,
+			}
+			err := en.Authorize(in)
+			allowed := err == nil
+			if allowed != tc.allow[risk] {
+				t.Errorf("access=%s risk=%s: allowed=%v want=%v (err=%v)", tc.access, risk, allowed, tc.allow[risk], err)
+			}
+		}
 	}
 }
 

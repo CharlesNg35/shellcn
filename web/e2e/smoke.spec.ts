@@ -24,6 +24,11 @@ test("SSH (tabs): terminal stream, home files, snippets", async ({ page }) => {
   await expect(page.locator("main")).toContainText(
     "Connected to mock shell. Type and press enter.",
   );
+  await page.getByRole("button", { name: "Show terminal controls" }).click();
+  await page.getByRole("button", { name: "Search terminal" }).click();
+  await page.getByLabel("Find in terminal").fill("mock");
+  await expect(page.getByText("1/1")).toBeVisible();
+  await page.getByRole("button", { name: "Close search" }).click();
 
   await page.getByRole("tab", { name: "Files" }).click();
   await expect(page.locator("main")).toContainText("app.json");

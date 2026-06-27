@@ -158,6 +158,8 @@ type Plugin interface {
 // the connection's mode. The plugin picks the layer its client needs.
 type ConnectConfig struct {
     ConnectionID string      // stable connection id, for plugin-owned caches/log labels
+    UserID       string      // acting user id; metadata only, not an authz input
+    ActorScope   string      // opaque session-sharing/cache scope for the actor
     Transport    Transport   // "direct" | "agent"
     Config      map[string]any      // decrypted connection config (typed via Schema)
     Credentials ResolvedCredentials // decrypted reusable credentials by credential_ref field
@@ -1748,13 +1750,16 @@ type Session interface {
 //
 // The proxy subtree is CSRF-exempt (a proxied third-party app can't carry our
 // token; SameSite=Lax already blocks cross-site cookie use on non-GET). Generic
-// HTML/CSS/redirect/cookie rewriting + the in-scope service worker live in the
-// shared `plugins/shared/webproxy`; a plugin only resolves how to reach the
-// upstream: Docker/Swarm/Podman dial the container/service port (over the agent
-// when applicable); Kubernetes proxies via the pod **port-forward** subresource —
-// an L4 tunnel, so the app's own Authorization/cookies survive (the API server's
-// HTTP proxy strips them). Web ports are picked best-effort (no hardcoded lists);
-// HTTPS is inferred from a "443" suffix or a port name.
+// HTML/CSS/redirect/cookie rewriting, WebSocket upgrade normalization, and the
+// in-scope service worker live in `sdk/plugin/webproxy`; a plugin only resolves
+// how to reach the upstream: Docker/Swarm/Podman dial the container/service port
+// (over the agent when applicable); Kubernetes proxies via the pod
+// **port-forward** subresource — an L4 tunnel, so the app's own
+// Authorization/cookies survive (the API server's HTTP proxy strips them). Web
+// ports are picked best-effort (no hardcoded lists); HTTPS is inferred from a
+// "443" suffix or a port name. Strict apps that validate WebSocket Origin or
+// reject forwarded proxy headers opt into the SDK's WebSocketOptions rather than
+// carrying plugin-local proxy mutations.
 type HTTPProxy interface {
     ServeHTTPProxy(w http.ResponseWriter, r *http.Request)
 }

@@ -26,24 +26,76 @@ type streamConn struct {
 	onClose   func()
 	closeOnce sync.Once
 
-	rmu sync.Mutex
-	buf []byte
-	wmu sync.Mutex
+	rmu      sync.Mutex
+	readOnce sync.Once
+	readCh   chan readResult
+	buf      []byte
+	readErr  error
+
+	deadlineMu sync.Mutex
+	readUntil  time.Time
+	writeUntil time.Time
+	readWake   chan struct{}
+	wmu        sync.Mutex
 }
 
 func newStreamConn(stream chunkStream, onClose func()) *streamConn {
-	return &streamConn{stream: stream, onClose: onClose}
+	return &streamConn{stream: stream, onClose: onClose, readCh: make(chan readResult, 1), readWake: make(chan struct{})}
 }
 
 func (c *streamConn) Read(p []byte) (int, error) {
 	c.rmu.Lock()
 	defer c.rmu.Unlock()
 	if len(c.buf) == 0 {
-		chunk, err := c.stream.Recv()
-		if err != nil {
-			return 0, err
+		if c.readErr != nil {
+			return 0, c.readErr
 		}
-		c.buf = chunk.GetData()
+		c.readOnce.Do(func() {
+			go c.recvLoop()
+		})
+		for len(c.buf) == 0 {
+			deadline, wake := c.readDeadline()
+			if timeout := deadlineTimeout(deadline); timeout <= 0 && !deadline.IsZero() {
+				return 0, timeoutError{}
+			} else if deadline.IsZero() {
+				select {
+				case got := <-c.readCh:
+					if got.err != nil {
+						c.readErr = got.err
+						return 0, got.err
+					}
+					c.buf = got.data
+				case <-wake:
+					continue
+				}
+			} else {
+				timer := time.NewTimer(timeout)
+				select {
+				case got := <-c.readCh:
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
+						}
+					}
+					if got.err != nil {
+						c.readErr = got.err
+						return 0, got.err
+					}
+					c.buf = got.data
+				case <-timer.C:
+					return 0, timeoutError{}
+				case <-wake:
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
+						}
+					}
+					continue
+				}
+			}
+		}
 	}
 	n := copy(p, c.buf)
 	c.buf = c.buf[n:]
@@ -53,6 +105,9 @@ func (c *streamConn) Read(p []byte) (int, error) {
 func (c *streamConn) Write(p []byte) (int, error) {
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
+	if deadline, ok := c.writeDeadline(); ok && !deadline.After(time.Now()) {
+		return 0, timeoutError{}
+	}
 	if err := c.stream.Send(&pluginv1.Chunk{Data: append([]byte(nil), p...)}); err != nil {
 		return 0, err
 	}
@@ -71,11 +126,78 @@ func (c *streamConn) Close() error {
 	return nil
 }
 
-func (*streamConn) LocalAddr() net.Addr              { return pipeAddr{} }
-func (*streamConn) RemoteAddr() net.Addr             { return pipeAddr{} }
-func (*streamConn) SetDeadline(time.Time) error      { return nil }
-func (*streamConn) SetReadDeadline(time.Time) error  { return nil }
-func (*streamConn) SetWriteDeadline(time.Time) error { return nil }
+func (*streamConn) LocalAddr() net.Addr  { return pipeAddr{} }
+func (*streamConn) RemoteAddr() net.Addr { return pipeAddr{} }
+func (c *streamConn) SetDeadline(t time.Time) error {
+	c.setReadDeadline(t)
+	c.setWriteDeadline(t)
+	return nil
+}
+
+func (c *streamConn) SetReadDeadline(t time.Time) error {
+	c.setReadDeadline(t)
+	return nil
+}
+
+func (c *streamConn) SetWriteDeadline(t time.Time) error {
+	c.setWriteDeadline(t)
+	return nil
+}
+
+type readResult struct {
+	data []byte
+	err  error
+}
+
+type timeoutError struct{}
+
+func (timeoutError) Error() string   { return "i/o timeout" }
+func (timeoutError) Timeout() bool   { return true }
+func (timeoutError) Temporary() bool { return true }
+
+func (c *streamConn) recvLoop() {
+	for {
+		chunk, err := c.stream.Recv()
+		if err != nil {
+			c.readCh <- readResult{err: err}
+			return
+		}
+		c.readCh <- readResult{data: chunk.GetData()}
+	}
+}
+
+func (c *streamConn) readDeadline() (time.Time, <-chan struct{}) {
+	c.deadlineMu.Lock()
+	defer c.deadlineMu.Unlock()
+	return c.readUntil, c.readWake
+}
+
+func (c *streamConn) writeDeadline() (time.Time, bool) {
+	c.deadlineMu.Lock()
+	defer c.deadlineMu.Unlock()
+	return c.writeUntil, !c.writeUntil.IsZero()
+}
+
+func (c *streamConn) setReadDeadline(t time.Time) {
+	c.deadlineMu.Lock()
+	defer c.deadlineMu.Unlock()
+	c.readUntil = t
+	close(c.readWake)
+	c.readWake = make(chan struct{})
+}
+
+func (c *streamConn) setWriteDeadline(t time.Time) {
+	c.deadlineMu.Lock()
+	defer c.deadlineMu.Unlock()
+	c.writeUntil = t
+}
+
+func deadlineTimeout(deadline time.Time) time.Duration {
+	if deadline.IsZero() {
+		return 0
+	}
+	return time.Until(deadline)
+}
 
 type pipeAddr struct{}
 

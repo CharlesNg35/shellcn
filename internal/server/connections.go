@@ -154,7 +154,7 @@ func (s *Server) handleConnectionDetail(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if !s.canManageConnection(ctx, user, conn) {
+	if !s.canAdminConnection(user, conn) {
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
 	}
@@ -169,7 +169,7 @@ func (s *Server) handleUpdateConnection(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if !s.canManageConnection(ctx, user, conn) {
+	if !s.canAdminConnection(user, conn) {
 		s.auditConnEvent(ctx, user, conn.ID, connUpdateEvent, plugin.RiskWrite, models.AuditDenied, plugin.ErrForbidden)
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
@@ -204,7 +204,7 @@ func (s *Server) handleDeleteConnection(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if !s.canManageConnection(ctx, user, conn) {
+	if !s.canAdminConnection(user, conn) {
 		s.auditConnEvent(ctx, user, conn.ID, connDeleteEvent, plugin.RiskDestructive, models.AuditDenied, plugin.ErrForbidden)
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return

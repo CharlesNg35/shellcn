@@ -79,7 +79,12 @@ func (s *server) GetManifest(context.Context, *pluginv1.Empty) (*pluginv1.Manife
 }
 
 func (s *server) Connect(ctx context.Context, req *pluginv1.ConnectRequest) (*pluginv1.SessionHandle, error) {
-	cfg := plugin.ConnectConfig{ConnectionID: req.GetConnectionId(), Transport: plugin.Transport(req.GetTransport())}
+	cfg := plugin.ConnectConfig{
+		ConnectionID: req.GetConnectionId(),
+		UserID:       req.GetUserId(),
+		ActorScope:   req.GetActorScope(),
+		Transport:    plugin.Transport(req.GetTransport()),
+	}
 	if raw := req.GetConfigJson(); len(raw) > 0 {
 		if err := json.Unmarshal(raw, &cfg.Config); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())

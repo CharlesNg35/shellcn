@@ -16,8 +16,8 @@ import (
 	dockerclient "github.com/moby/moby/client"
 
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
-	"github.com/charlesng35/shellcn/plugins/shared/webproxy"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugin/webproxy"
 )
 
 const stackNamespaceLabel = "com.docker.stack.namespace"

@@ -130,9 +130,9 @@ type AccessInput struct {
 	GrantAccess  models.Access
 }
 
-// Authorize applies both gates (deny-by-default):
-//  1. the user's role must permit the route's permission/risk, and
-//  2. for connection routes, the user must own it or hold a grant.
+// Authorize applies the route gate and, for shared connections, the grant tier.
+// Owners are constrained by their role. Grantees are constrained by the grant
+// they received, while still needing an active account with at least one role.
 //
 // Admin is a user-management role, not a super-user: it grants no implicit access
 // to other users' connections.
@@ -140,18 +140,55 @@ func (en *Enforcer) Authorize(in AccessInput) error {
 	if in.User.Disabled {
 		return fmt.Errorf("%w: account disabled", ErrForbidden)
 	}
-	if !en.roleAllows(in.User.Roles, in.Permission, in.Risk) {
+	if !hasAnyRole(in.User.Roles) {
 		return fmt.Errorf("%w: role may not perform %q/%q actions", ErrForbidden, in.Permission, in.Risk)
 	}
-	if in.ConnectionID != "" && !en.canAccessConnection(in) {
+	if in.ConnectionID == "" {
+		if !en.roleAllows(in.User.Roles, in.Permission, in.Risk) {
+			return fmt.Errorf("%w: role may not perform %q/%q actions", ErrForbidden, in.Permission, in.Risk)
+		}
+		return nil
+	}
+	if in.OwnerID != "" && in.OwnerID == in.User.ID {
+		if !en.roleAllows(in.User.Roles, in.Permission, in.Risk) {
+			return fmt.Errorf("%w: role may not perform %q/%q actions", ErrForbidden, in.Permission, in.Risk)
+		}
+		return nil
+	}
+	if !in.HasGrant {
 		return fmt.Errorf("%w: no access to connection %q", ErrForbidden, in.ConnectionID)
+	}
+	if !grantAllows(in.GrantAccess, in.Risk) {
+		return fmt.Errorf("%w: grant %q may not perform %q/%q actions", ErrForbidden, in.GrantAccess, in.Permission, in.Risk)
 	}
 	return nil
 }
 
-func (en *Enforcer) canAccessConnection(in AccessInput) bool {
-	if in.OwnerID != "" && in.OwnerID == in.User.ID {
-		return true
+func hasAnyRole(roles []models.Role) bool {
+	return len(roles) > 0
+}
+
+var grantRiskLevel = map[models.Access]int{
+	models.AccessView:       1,
+	models.AccessManage:     3,
+	models.AccessPrivileged: 4,
+}
+
+var routeRiskLevel = map[plugin.RiskLevel]int{
+	plugin.RiskSafe:        1,
+	plugin.RiskWrite:       2,
+	plugin.RiskDestructive: 3,
+	plugin.RiskPrivileged:  4,
+}
+
+func grantAllows(access models.Access, risk plugin.RiskLevel) bool {
+	grantCeiling, ok := grantRiskLevel[access]
+	if !ok {
+		return false
 	}
-	return in.HasGrant
+	level, ok := routeRiskLevel[risk]
+	if !ok {
+		return false
+	}
+	return level <= grantCeiling
 }

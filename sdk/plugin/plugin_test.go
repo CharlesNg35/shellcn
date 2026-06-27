@@ -658,6 +658,64 @@ func TestValidateRejectsBadWasmPanel(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsBadWebProxyPanel(t *testing.T) {
+	base := func() plugin.Manifest {
+		return plugin.Manifest{
+			APIVersion: plugin.CurrentAPIVersion,
+			Name:       "web",
+			Title:      "Web",
+			Category:   plugin.CategoryOther,
+			Layout:     plugin.LayoutTabs,
+			SupportedTransports: []plugin.Transport{
+				plugin.TransportAgent,
+			},
+			Agent: &plugin.AgentProfile{},
+			Tabs: []plugin.Panel{{
+				Key:    "surface",
+				Label:  "Surface",
+				Type:   plugin.PanelWebProxy,
+				Config: plugin.WebProxyConfig{Path: "/"},
+			}},
+		}
+	}
+	tests := []struct {
+		name string
+		want string
+		mut  func(*plugin.WebProxyConfig)
+	}{
+		{"absolute URL rejected", "path", func(c *plugin.WebProxyConfig) {
+			c.Path = "https://example.test/"
+		}},
+		{"protocol-relative URL rejected", "path", func(c *plugin.WebProxyConfig) {
+			c.Path = "//example.test/"
+		}},
+		{"capability unsupported", "capabilities[0]", func(c *plugin.WebProxyConfig) {
+			c.Capabilities = []plugin.WebProxyCapability{"camera"}
+		}},
+		{"capability duplicated", "duplicated", func(c *plugin.WebProxyConfig) {
+			c.Capabilities = []plugin.WebProxyCapability{
+				plugin.WebProxyCapabilityClipboard,
+				plugin.WebProxyCapabilityClipboard,
+			}
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m := base()
+			cfg := m.Tabs[0].Config.(plugin.WebProxyConfig)
+			tc.mut(&cfg)
+			m.Tabs[0].Config = cfg
+			err := plugin.Validate(m, nil)
+			if err == nil {
+				t.Fatalf("expected validation error containing %q", tc.want)
+			}
+			if !contains(err.Error(), tc.want) {
+				t.Errorf("error %q does not contain %q", err.Error(), tc.want)
+			}
+		})
+	}
+}
+
 // TestPanelConfigWireFormat locks the JSON the browser receives for a panel
 // config: typed structs serialize to the same camelCase keys the renderer reads,
 // and zero-value fields are omitted.

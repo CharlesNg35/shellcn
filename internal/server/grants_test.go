@@ -9,22 +9,22 @@ import (
 	"github.com/charlesng35/shellcn/internal/models"
 )
 
-func TestConnectionGrantUseVsManage(t *testing.T) {
+func TestConnectionGrantTiers(t *testing.T) {
 	h := newHarness(t)
 
 	resp := h.do(t, http.MethodPost, "/api/connections/c-op/grants", "op",
-		strings.NewReader(`{"subjectId":"viewer","access":"use"}`))
+		strings.NewReader(`{"subjectId":"viewer","access":"view"}`))
 	if resp.Status != http.StatusCreated {
-		t.Fatalf("grant use: want 201, got %d (%s)", resp.Status, resp.Body)
+		t.Fatalf("grant view: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
 	grantID := createConnID(t, resp)
 
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "viewer", nil); resp.Status != http.StatusOK {
-		t.Errorf("use grant should allow opening: got %d", resp.Status)
+		t.Errorf("view grant should allow safe routes: got %d", resp.Status)
 	}
 	if resp := h.do(t, http.MethodGet, "/api/connections", "viewer", nil); resp.Status != http.StatusOK ||
 		!strings.Contains(string(resp.Body), `"sharedWithMe":true`) ||
-		!strings.Contains(string(resp.Body), `"access":"use"`) ||
+		!strings.Contains(string(resp.Body), `"access":"view"`) ||
 		!strings.Contains(string(resp.Body), `"canShare":false`) ||
 		!strings.Contains(string(resp.Body), `"ownerName":`) {
 		t.Fatalf("shared connection list should mark grant access + owner: status=%d body=%s", resp.Status, resp.Body)
@@ -37,7 +37,10 @@ func TestConnectionGrantUseVsManage(t *testing.T) {
 	}
 	if resp := h.do(t, http.MethodPut, "/api/connections/c-op", "viewer",
 		strings.NewReader(`{"name":"hax","config":{"host":"h"}}`)); resp.Status != http.StatusForbidden {
-		t.Errorf("use grant must not allow edit: got %d", resp.Status)
+		t.Errorf("view grant must not allow edit: got %d", resp.Status)
+	}
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/proxy/app", "viewer", nil); resp.Status != http.StatusForbidden {
+		t.Errorf("view grant must not allow proxy: got %d", resp.Status)
 	}
 
 	if resp := h.do(t, http.MethodDelete, "/api/connections/c-op/grants/"+grantID, "op", nil); resp.Status != http.StatusOK {
@@ -52,18 +55,51 @@ func TestConnectionGrantUseVsManage(t *testing.T) {
 	if resp.Status != http.StatusCreated {
 		t.Fatalf("grant manage: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
-	if resp := h.do(t, http.MethodPut, "/api/connections/c-op", "viewer",
-		strings.NewReader(`{"name":"managed","config":{"host":"h"}}`)); resp.Status != http.StatusOK {
-		t.Errorf("manage grant should allow edit: got %d (%s)", resp.Status, resp.Body)
+	manageGrantID := createConnID(t, resp)
+	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/x/tester.input", "viewer",
+		strings.NewReader(`{"name":"managed"}`)); resp.Status != http.StatusOK {
+		t.Errorf("manage grant should allow write routes: got %d (%s)", resp.Status, resp.Body)
 	}
-	// Only the owner may share, never a manage-grantee or admin.
+	if resp := h.do(t, http.MethodDelete, "/api/connections/c-op/x/tester.danger", "viewer", nil); resp.Status != http.StatusOK {
+		t.Errorf("manage grant should allow destructive routes: got %d (%s)", resp.Status, resp.Body)
+	}
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/proxy/app", "viewer", nil); resp.Status != http.StatusForbidden {
+		t.Errorf("manage grant must not allow proxy: got %d", resp.Status)
+	}
+	if resp := h.do(t, http.MethodGet, "/api/connections", "viewer", nil); resp.Status != http.StatusOK ||
+		!strings.Contains(string(resp.Body), `"access":"manage"`) ||
+		!strings.Contains(string(resp.Body), `"canManage":false`) {
+		t.Fatalf("manage grant should not project connection administration: status=%d body=%s", resp.Status, resp.Body)
+	}
+	if resp := h.do(t, http.MethodPut, "/api/connections/c-op", "viewer",
+		strings.NewReader(`{"name":"managed","config":{"host":"h"}}`)); resp.Status != http.StatusForbidden {
+		t.Errorf("manage grant must not allow connection edit: got %d (%s)", resp.Status, resp.Body)
+	}
+	// Only the owner may share, never a grantee or admin.
 	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/grants", "viewer",
-		strings.NewReader(`{"subjectId":"admin","access":"use"}`)); resp.Status != http.StatusForbidden {
+		strings.NewReader(`{"subjectId":"admin","access":"view"}`)); resp.Status != http.StatusForbidden {
 		t.Errorf("manage grant must not allow re-sharing: got %d", resp.Status)
 	}
 	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/grants", "admin",
-		strings.NewReader(`{"subjectId":"admin","access":"use"}`)); resp.Status != http.StatusForbidden {
+		strings.NewReader(`{"subjectId":"admin","access":"view"}`)); resp.Status != http.StatusForbidden {
 		t.Errorf("admin must not share another's connection: got %d", resp.Status)
+	}
+	if resp := h.do(t, http.MethodDelete, "/api/connections/c-op/grants/"+manageGrantID, "op", nil); resp.Status != http.StatusOK {
+		t.Fatalf("revoke manage: want 200, got %d", resp.Status)
+	}
+
+	resp = h.do(t, http.MethodPost, "/api/connections/c-op/grants", "op",
+		strings.NewReader(`{"subjectId":"viewer","access":"privileged"}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("grant privileged: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/proxy/app", "viewer", nil); resp.Status != http.StatusOK ||
+		!strings.Contains(string(resp.Body), "proxied:/app") {
+		t.Errorf("privileged grant should allow proxy: status=%d body=%s", resp.Status, resp.Body)
+	}
+	if resp := h.do(t, http.MethodPut, "/api/connections/c-op", "viewer",
+		strings.NewReader(`{"name":"privileged","config":{"host":"h"}}`)); resp.Status != http.StatusForbidden {
+		t.Errorf("privileged grant must not allow connection edit: got %d (%s)", resp.Status, resp.Body)
 	}
 }
 
@@ -71,7 +107,7 @@ func TestGrantDeleteIsScopedToResource(t *testing.T) {
 	h := newHarness(t)
 
 	resp := h.do(t, http.MethodPost, "/api/connections/c-op/grants", "op",
-		strings.NewReader(`{"subjectId":"viewer","access":"use"}`))
+		strings.NewReader(`{"subjectId":"viewer","access":"view"}`))
 	if resp.Status != http.StatusCreated {
 		t.Fatalf("grant connection: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
@@ -86,7 +122,7 @@ func TestGrantDeleteIsScopedToResource(t *testing.T) {
 
 	credID := createCredID(t, h, "op", `{"name":"scoped","kind":"db_password","values":{"username":"app","password":"v"}}`)
 	resp = h.do(t, http.MethodPost, "/api/credentials/"+credID+"/grants", "op",
-		strings.NewReader(`{"subjectId":"op2","access":"use"}`))
+		strings.NewReader(`{"subjectId":"op2","access":"view"}`))
 	if resp.Status != http.StatusCreated {
 		t.Fatalf("grant credential: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
@@ -112,7 +148,7 @@ func TestCredentialGrantUse(t *testing.T) {
 	}
 
 	if resp := h.do(t, http.MethodPost, "/api/credentials/"+credID+"/grants", "op2",
-		strings.NewReader(`{"subjectId":"op2","access":"use"}`)); resp.Status != http.StatusForbidden {
+		strings.NewReader(`{"subjectId":"op2","access":"view"}`)); resp.Status != http.StatusForbidden {
 		t.Errorf("non-owner grant: want 403, got %d", resp.Status)
 	}
 	if resp := h.do(t, http.MethodPost, "/api/credentials/"+credID+"/grants", "op",
@@ -121,11 +157,11 @@ func TestCredentialGrantUse(t *testing.T) {
 	}
 
 	if resp := h.do(t, http.MethodPost, "/api/credentials/"+credID+"/grants", "op",
-		strings.NewReader(`{"subjectId":"op2","access":"use"}`)); resp.Status != http.StatusCreated {
-		t.Fatalf("grant use: want 201, got %d (%s)", resp.Status, resp.Body)
+		strings.NewReader(`{"subjectId":"op2","access":"view"}`)); resp.Status != http.StatusCreated {
+		t.Fatalf("grant view: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
 	if resp := h.do(t, http.MethodPost, "/api/connections", "op2", strings.NewReader(refBody)); resp.Status != http.StatusCreated {
-		t.Fatalf("reference with use grant: want 201, got %d (%s)", resp.Status, resp.Body)
+		t.Fatalf("reference with view grant: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
 }
 
@@ -149,14 +185,14 @@ func TestShareByEmail(t *testing.T) {
 	_ = h.store.Users.Update(ctx, &models.User{ID: "viewer", Username: "viewer", Email: "viewer@example.com", Roles: []models.Role{models.RoleViewer}})
 
 	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/grants", "op",
-		strings.NewReader(`{"email":"viewer@example.com","access":"use"}`)); resp.Status != http.StatusCreated {
+		strings.NewReader(`{"email":"viewer@example.com","access":"view"}`)); resp.Status != http.StatusCreated {
 		t.Fatalf("share by email: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/tester.list", "viewer", nil); resp.Status != http.StatusOK {
 		t.Errorf("grantee open after email share: want 200, got %d", resp.Status)
 	}
 	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/grants", "op",
-		strings.NewReader(`{"email":"nobody@example.com","access":"use"}`)); resp.Status != http.StatusNotFound {
+		strings.NewReader(`{"email":"nobody@example.com","access":"view"}`)); resp.Status != http.StatusNotFound {
 		t.Errorf("share to unknown email: want 404, got %d", resp.Status)
 	}
 }

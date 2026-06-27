@@ -18,6 +18,8 @@ type NetTransport interface {
 // ConnectConfig is the decrypted config plus core-built transport.
 type ConnectConfig struct {
 	ConnectionID string
+	UserID       string
+	ActorScope   string
 	Transport    Transport
 	Config       map[string]any
 	Credentials  ResolvedCredentials

@@ -220,6 +220,7 @@ func (s *Server) acquireSession(ctx context.Context, res resolved) (*session.Han
 		if err != nil {
 			return nil, err
 		}
+		cfg.ActorScope = key.ActorScope
 		cfg.Storage = s.pluginStorage(res)
 		return plg.Connect(ctx, cfg)
 	})

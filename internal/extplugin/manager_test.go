@@ -1,6 +1,7 @@
 package extplugin_test
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"io"
@@ -477,6 +478,82 @@ func TestPluginHTTPProxy(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "upstream:/page" {
 		t.Fatalf("proxied body got %q (want upstream:/page)", body)
+	}
+}
+
+func TestPluginHTTPProxyUpgrade(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("upstream response writer is not hijackable")
+			return
+		}
+		conn, brw, err := hj.Hijack()
+		if err != nil {
+			t.Errorf("upstream hijack: %v", err)
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		_, _ = brw.WriteString("HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n\r\n")
+		if err := brw.Flush(); err != nil {
+			t.Errorf("upstream flush: %v", err)
+			return
+		}
+		_, _ = io.Copy(conn, brw)
+	}))
+	t.Cleanup(upstream.Close)
+
+	reg := pluginregistry.New()
+	m := extplugin.NewManager(buildDemo(t))
+	t.Cleanup(m.Close)
+	if err := m.LoadAll(context.Background(), reg); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	p, _ := reg.Get("demo")
+	sess, err := p.Connect(context.Background(), plugin.ConnectConfig{
+		ConnectionID: "c1", Transport: plugin.TransportDirect,
+		Config: map[string]any{"upstream": upstream.URL, "proxyMode": "local"},
+		Net:    plugintest.DirectTransport(),
+	})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+
+	proxier, ok := sess.(plugin.HTTPProxy)
+	if !ok {
+		t.Fatal("grpcSession should implement plugin.HTTPProxy")
+	}
+	front := httptest.NewServer(http.HandlerFunc(proxier.ServeHTTPProxy))
+	t.Cleanup(front.Close)
+
+	conn, err := net.Dial("tcp", front.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("dial front: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatalf("set deadline: %v", err)
+	}
+	br := bufio.NewReader(conn)
+	_, _ = io.WriteString(conn, "GET /socket HTTP/1.1\r\nHost: example.test\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n")
+	resp, err := http.ReadResponse(br, nil)
+	if err != nil {
+		t.Fatalf("read upgrade response: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusSwitchingProtocols {
+		t.Fatalf("upgrade status = %d, want %d", resp.StatusCode, http.StatusSwitchingProtocols)
+	}
+	if _, err := conn.Write([]byte("ping")); err != nil {
+		t.Fatalf("write upgraded bytes: %v", err)
+	}
+	buf := make([]byte, 4)
+	if _, err := io.ReadFull(br, buf); err != nil {
+		t.Fatalf("read upgraded echo: %v", err)
+	}
+	if string(buf) != "ping" {
+		t.Fatalf("upgraded echo got %q", buf)
 	}
 }
 

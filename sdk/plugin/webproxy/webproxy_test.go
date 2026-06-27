@@ -1,14 +1,17 @@
 package webproxy_test
 
 import (
+	"bufio"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/charlesng35/shellcn/plugins/shared/webproxy"
+	"github.com/charlesng35/shellcn/sdk/plugin/webproxy"
 )
 
 func TestIsTLSPort(t *testing.T) {
@@ -68,6 +71,9 @@ func TestServeRewritesHTMLUnderPrefix(t *testing.T) {
 	}
 	if !strings.Contains(body, "HTMLAnchorElement.prototype") {
 		t.Fatalf("shim does not rewrite JS-set anchor navigations: %s", body)
+	}
+	if !strings.Contains(body, `location.protocol==="https:"?"wss://":"ws://"`) {
+		t.Fatalf("shim does not rewrite absolute WebSocket URLs for the public host: %s", body)
 	}
 }
 
@@ -318,6 +324,87 @@ func TestServeForwardsProxyContextHeaders(t *testing.T) {
 	}
 	if got := h.Get("Forwarded"); !strings.Contains(got, `host="gateway.local"`) || !strings.Contains(got, `proto="http"`) || !strings.Contains(got, `for="192.0.2.10"`) {
 		t.Fatalf("Forwarded = %q", got)
+	}
+}
+
+func TestServeNormalizesStrictWebSocketUpgrade(t *testing.T) {
+	var base *url.URL
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Origin"); got != base.String() {
+			http.Error(w, "bad origin "+got, http.StatusForbidden)
+			return
+		}
+		if r.Host != base.Host {
+			http.Error(w, "bad host "+r.Host, http.StatusForbidden)
+			return
+		}
+		for _, name := range []string{
+			"Forwarded",
+			"X-Forwarded-For",
+			"X-Forwarded-Host",
+			"X-Forwarded-Prefix",
+			"X-Forwarded-Proto",
+			"X-Forwarded-Uri",
+		} {
+			if got := r.Header.Get(name); got != "" {
+				http.Error(w, name+" leaked", http.StatusForbidden)
+				return
+			}
+		}
+		if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+			http.Error(w, "missing websocket upgrade", http.StatusBadRequest)
+			return
+		}
+		conn, rw, err := http.NewResponseController(w).Hijack()
+		if err != nil {
+			t.Errorf("hijack upstream: %v", err)
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		_, _ = rw.WriteString("HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n")
+		_ = rw.Flush()
+	}))
+	defer upstream.Close()
+	base, _ = url.Parse(upstream.URL)
+
+	front := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		webproxy.Serve(w, r, webproxy.Options{
+			Base:         base,
+			Transport:    http.DefaultTransport,
+			UpstreamPath: "/ws",
+			PublicPrefix: "/proxy/x",
+			WebSocket: webproxy.WebSocketOptions{
+				RewriteOrigin:         true,
+				StripForwardedHeaders: true,
+			},
+		})
+	}))
+	defer front.Close()
+	frontURL, _ := url.Parse(front.URL)
+
+	conn, err := net.DialTimeout("tcp", frontURL.Host, 2*time.Second)
+	if err != nil {
+		t.Fatalf("dial front proxy: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+	_, err = io.WriteString(conn, "GET /proxy/x/ws HTTP/1.1\r\n"+
+		"Host: gateway.local\r\n"+
+		"Origin: http://gateway.local\r\n"+
+		"Connection: Upgrade\r\n"+
+		"Upgrade: websocket\r\n"+
+		"Sec-WebSocket-Version: 13\r\n"+
+		"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n")
+	if err != nil {
+		t.Fatalf("write upgrade request: %v", err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	if err != nil {
+		t.Fatalf("read upgrade response: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusSwitchingProtocols {
+		t.Fatalf("status = %s, want 101", resp.Status)
 	}
 }
 

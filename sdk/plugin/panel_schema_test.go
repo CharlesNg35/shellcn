@@ -35,6 +35,7 @@ func TestPanelConfigSchemasCoverConfigJSONFields(t *testing.T) {
 		{plugin.PanelSplit, reflect.TypeOf(plugin.SplitConfig{})},
 		{plugin.PanelCanvas, reflect.TypeOf(plugin.CanvasConfig{})},
 		{plugin.PanelWasm, reflect.TypeOf(plugin.WasmConfig{})},
+		{plugin.PanelWebProxy, reflect.TypeOf(plugin.WebProxyConfig{})},
 	}
 
 	schemas := plugin.PanelConfigSchemas()

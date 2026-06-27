@@ -647,16 +647,16 @@ func testCredentials(t *testing.T, s *store.Store) {
 
 func testGrants(t *testing.T, s *store.Store) {
 	ctx := context.Background()
-	g := &models.Grant{ID: "g1", ConnectionID: "c1", SubjectID: "u2", Access: models.AccessUse}
+	g := &models.Grant{ID: "g1", ConnectionID: "c1", SubjectID: "u2", Access: models.AccessView}
 	if err := s.Grants.Create(ctx, g); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	// Duplicate (same connection + subject) rejected by the unique index.
-	if err := s.Grants.Create(ctx, &models.Grant{ID: "g2", ConnectionID: "c1", SubjectID: "u2", Access: models.AccessUse}); err == nil {
+	if err := s.Grants.Create(ctx, &models.Grant{ID: "g2", ConnectionID: "c1", SubjectID: "u2", Access: models.AccessView}); err == nil {
 		t.Error("duplicate grant should be rejected")
 	}
 	got, err := s.Grants.Get(ctx, "c1", "u2")
-	if err != nil || got.Access != models.AccessUse {
+	if err != nil || got.Access != models.AccessView {
 		t.Fatalf("get: %+v err=%v", got, err)
 	}
 	if byConn, _ := s.Grants.ListByConnection(ctx, "c1"); len(byConn) != 1 {
@@ -671,7 +671,7 @@ func testGrants(t *testing.T, s *store.Store) {
 }
 
 // testCredentialReference proves a connection can point at a reusable credential
-// (use-grant present) without duplicating the secret material.
+// (view-grant present) without duplicating the secret material.
 func testCredentialReference(t *testing.T, s *store.Store) {
 	ctx := context.Background()
 	cr := &models.Credential{ID: "cr-shared", Name: "shared", Kind: "ssh_password", OwnerID: "owner", EncryptedValues: []byte("enc")}
@@ -694,14 +694,14 @@ func testCredentialReference(t *testing.T, s *store.Store) {
 		t.Errorf("referencing connection should carry no inline secret, got %v", got.Secrets)
 	}
 
-	// A use-grant lets "other" connect through it; readback of the value is never
+	// A view-grant lets "other" connect through it; readback of the value is never
 	// offered by the store API (only Get returns ciphertext to the service layer).
-	if err := s.CredentialGrants.Create(ctx, &models.CredentialGrant{ID: "cg1", CredentialID: "cr-shared", SubjectID: "other", Access: models.AccessUse}); err != nil {
+	if err := s.CredentialGrants.Create(ctx, &models.CredentialGrant{ID: "cg1", CredentialID: "cr-shared", SubjectID: "other", Access: models.AccessView}); err != nil {
 		t.Fatalf("create credential grant: %v", err)
 	}
 	has, _ := s.CredentialGrants.Has(ctx, "cr-shared", "other")
 	if !has {
-		t.Error("expected credential use-grant for subject")
+		t.Error("expected credential view-grant for subject")
 	}
 }
 

@@ -135,7 +135,7 @@ func TestCredentialResolveOwnerAndGrant(t *testing.T) {
 		t.Fatalf("forbidden resolve should not count secret access, got %d", secretAccesses)
 	}
 
-	_ = st.CredentialGrants.Create(ctx, &models.CredentialGrant{ID: "cg1", CredentialID: cred.ID, SubjectID: "stranger", Access: models.AccessUse})
+	_ = st.CredentialGrants.Create(ctx, &models.CredentialGrant{ID: "cg1", CredentialID: cred.ID, SubjectID: "stranger", Access: models.AccessView})
 	_, values, err = svc.ResolveWithMetadata(ctx, "stranger", cred.ID)
 	if err != nil || values["password"] != "topsecret" {
 		t.Errorf("granted resolve: values=%+v err=%v", values, err)

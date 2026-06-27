@@ -204,6 +204,21 @@ const searchDecorations = computed(() => ({
   activeMatchBackground: "#f59e0b",
 }));
 
+async function ensureSearchAddon(): Promise<void> {
+  if (!term || searchAddon || !searchEnabled.value) return;
+  const { SearchAddon } = await import("@xterm/addon-search");
+  searchAddon = new SearchAddon();
+  term.loadAddon(searchAddon);
+  searchDisposable = searchAddon.onDidChangeResults(
+    ({ resultIndex, resultCount }) => {
+      matches.value = {
+        current: resultIndex >= 0 ? resultIndex + 1 : 0,
+        total: resultCount,
+      };
+    },
+  );
+}
+
 function runFind(forward: boolean, incremental = false): void {
   if (!searchAddon) return;
   if (!searchTerm.value) {
@@ -218,6 +233,8 @@ function runFind(forward: boolean, incremental = false): void {
 
 async function openSearch(): Promise<void> {
   if (!searchEnabled.value) return;
+  await ensureSearchAddon();
+  if (!searchAddon) return;
   controlsExpanded.value = true;
   searchOpen.value = true;
   await nextTick();
@@ -236,6 +253,10 @@ function closeSearch(): void {
 
 watch(searchTerm, () => {
   if (searchOpen.value) runFind(true, true);
+});
+watch(searchEnabled, (enabled) => {
+  if (enabled) void ensureSearchAddon();
+  else if (searchOpen.value) closeSearch();
 });
 
 const { status, error, send, reconnect } = useStream(
@@ -312,6 +333,7 @@ async function mountTerminal(): Promise<void> {
       import("@xterm/xterm/css/xterm.css"),
     ]);
     term = new Terminal({
+      allowProposedApi: true,
       convertEol: true,
       cursorBlink: true,
       fontSize: fontSize.value,
@@ -325,44 +347,30 @@ async function mountTerminal(): Promise<void> {
     term.loadAddon(new WebLinksAddon());
     term.open(container.value);
 
-    if (searchEnabled.value) {
-      const { SearchAddon } = await import("@xterm/addon-search");
-      searchAddon = new SearchAddon();
-      term.loadAddon(searchAddon);
-      searchDisposable = searchAddon.onDidChangeResults(
-        ({ resultIndex, resultCount }) => {
-          matches.value = {
-            current: resultIndex >= 0 ? resultIndex + 1 : 0,
-            total: resultCount,
-          };
-        },
-      );
-    }
+    await ensureSearchAddon();
 
     // Intercept zoom/search shortcuts before the PTY so they don't reach the
     // shell. Only active when the plugin enabled the matching control.
-    if (hasControls.value) {
-      term.attachCustomKeyEventHandler((e) => {
-        if (e.type !== "keydown" || !(e.ctrlKey || e.metaKey)) return true;
-        if (searchEnabled.value && (e.key === "f" || e.key === "F")) {
-          void openSearch();
-          return false;
-        }
-        if (zoomEnabled.value && (e.key === "=" || e.key === "+")) {
-          zoomBy(1);
-          return false;
-        }
-        if (zoomEnabled.value && e.key === "-") {
-          zoomBy(-1);
-          return false;
-        }
-        if (zoomEnabled.value && e.key === "0") {
-          resetZoom();
-          return false;
-        }
-        return true;
-      });
-    }
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== "keydown" || !(e.ctrlKey || e.metaKey)) return true;
+      if (searchEnabled.value && (e.key === "f" || e.key === "F")) {
+        void openSearch();
+        return false;
+      }
+      if (zoomEnabled.value && (e.key === "=" || e.key === "+")) {
+        zoomBy(1);
+        return false;
+      }
+      if (zoomEnabled.value && e.key === "-") {
+        zoomBy(-1);
+        return false;
+      }
+      if (zoomEnabled.value && e.key === "0") {
+        resetZoom();
+        return false;
+      }
+      return true;
+    });
 
     // WebGL renderer for fast large-output scrolling; fall back to the DOM
     // renderer (and never throw) if the GPU context is lost or unavailable.

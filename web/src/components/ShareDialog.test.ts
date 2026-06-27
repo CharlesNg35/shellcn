@@ -3,6 +3,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import { defineComponent, h, type PropType } from "vue";
 import AutoComplete from "primevue/autocomplete";
+import Select from "primevue/select";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
 import ConfirmDialog from "primevue/confirmdialog";
@@ -22,6 +23,7 @@ const Harness = defineComponent({
     },
     resourceId: { type: String, required: true },
     resourceName: { type: String, required: true },
+    allowManage: { type: Boolean, default: false },
   },
   setup(props) {
     return () => h("div", [h(ShareDialog, props), h(ConfirmDialog)]);
@@ -51,7 +53,7 @@ describe("ShareDialog", () => {
           id: "g1",
           subjectId: "u-bob",
           username: "bob",
-          access: "use",
+          access: "view",
         };
         grants = [g];
         return { status: 201, body: g };
@@ -136,7 +138,7 @@ describe("ShareDialog", () => {
       if (url.includes("/grants") && init?.method === "POST") {
         return {
           status: 201,
-          body: { id: "g1", subjectId: "u-z", username: "z", access: "use" },
+          body: { id: "g1", subjectId: "u-z", username: "z", access: "view" },
         };
       }
       return { body: [] };
@@ -175,6 +177,70 @@ describe("ShareDialog", () => {
     expect(JSON.parse(String((posted?.[1] as RequestInit).body))).toMatchObject(
       {
         email: "z@example.com",
+      },
+    );
+
+    wrapper.unmount();
+  });
+
+  it("can grant privileged connection access", async () => {
+    useAuthStore().user = {
+      id: "admin",
+      username: "admin",
+      roles: [Role.Admin],
+    };
+    const fetchFn = installFetch((url, init) => {
+      if (String(url).includes("/api/admin/users/search")) {
+        return { body: [{ id: "u-alice", username: "alice" }] };
+      }
+      if (url.includes("/grants") && init?.method === "POST") {
+        return {
+          status: 201,
+          body: {
+            id: "g1",
+            subjectId: "u-alice",
+            username: "alice",
+            access: "privileged",
+          },
+        };
+      }
+      return { body: [] };
+    });
+
+    const wrapper = mount(Harness, {
+      props: {
+        visible: true,
+        resource: "connections",
+        resourceId: "c1",
+        resourceName: "shell",
+        allowManage: true,
+      },
+    });
+    await flushPromises();
+
+    await wrapper.findComponent(AutoComplete).vm.$emit("update:modelValue", {
+      id: "u-alice",
+      username: "alice",
+      label: "alice",
+    });
+    await wrapper
+      .findComponent(Select)
+      .vm.$emit("update:modelValue", "privileged");
+    await wrapper
+      .findAllComponents(Button)
+      .find((b) => b.text().trim() === "Add")
+      ?.trigger("click");
+    await flushPromises();
+
+    const posted = fetchFn.mock.calls.find(
+      ([u, i]) =>
+        String(u).includes("/connections/c1/grants") &&
+        (i as RequestInit | undefined)?.method === "POST",
+    );
+    expect(JSON.parse(String((posted?.[1] as RequestInit).body))).toMatchObject(
+      {
+        subjectId: "u-alice",
+        access: "privileged",
       },
     );
 
