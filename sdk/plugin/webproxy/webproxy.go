@@ -52,6 +52,18 @@ type Options struct {
 	// and that must be mapped back to PublicPrefix. Empty when proxying straight
 	// to an app that emits its own root-relative paths.
 	SourcePrefix string
+	// WebSocket controls optional request normalization for upstreams that apply
+	// strict browser-origin checks during WebSocket upgrades.
+	WebSocket WebSocketOptions
+}
+
+type WebSocketOptions struct {
+	// RewriteOrigin maps the browser's Origin to the upstream origin for WebSocket
+	// upgrades. This is needed by apps that reject gateway-origin upgrades.
+	RewriteOrigin bool
+	// StripForwardedHeaders removes gateway Forwarded/X-Forwarded-* context from
+	// WebSocket upgrades. Some upstream apps reject upgrades when these are present.
+	StripForwardedHeaders bool
 }
 
 // Serve reverse-proxies r to the upstream and rewrites the response so the app's
@@ -70,6 +82,7 @@ func Serve(w http.ResponseWriter, r *http.Request, o Options) {
 			req.Header.Set("X-Forwarded-Proto", forwardedProto(r))
 			req.Header.Set("X-Forwarded-Uri", r.URL.RequestURI())
 			req.Header.Set("Forwarded", forwardedHeader(r))
+			applyWebSocketOptions(req, o.WebSocket)
 		},
 		Transport:     o.Transport,
 		FlushInterval: -1,
@@ -77,6 +90,30 @@ func Serve(w http.ResponseWriter, r *http.Request, o Options) {
 		ModifyResponse: rewriteResponse(o.Base, o.SourcePrefix, o.PublicPrefix, r.Host),
 	}
 	proxy.ServeHTTP(w, r)
+}
+
+func applyWebSocketOptions(req *http.Request, opts WebSocketOptions) {
+	if !strings.EqualFold(req.Header.Get("Upgrade"), "websocket") || req.URL == nil || req.URL.Host == "" {
+		return
+	}
+	if opts.RewriteOrigin {
+		scheme := req.URL.Scheme
+		if scheme == "" {
+			scheme = "http"
+		}
+		if req.Header.Get("Origin") != "" {
+			req.Header.Set("Origin", scheme+"://"+req.URL.Host)
+		}
+		req.Host = req.URL.Host
+	}
+	if opts.StripForwardedHeaders {
+		req.Header.Del("Forwarded")
+		req.Header["X-Forwarded-For"] = nil
+		req.Header.Del("X-Forwarded-Host")
+		req.Header.Del("X-Forwarded-Prefix")
+		req.Header.Del("X-Forwarded-Proto")
+		req.Header.Del("X-Forwarded-Uri")
+	}
 }
 
 // URL-bearing HTML attributes whose root-relative value (incl. a bare "/") needs
