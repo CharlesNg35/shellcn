@@ -11,6 +11,15 @@ import { cleanupConnection } from "@/stores/connectionCleanup";
 import { useStreamChannelsStore } from "@/stores/streamChannels";
 import { useStream } from "@/composables/useStream";
 
+const mockSearch = vi.hoisted(() => ({
+  instances: [] as Array<{
+    findNext: ReturnType<typeof vi.fn>;
+    findPrevious: ReturnType<typeof vi.fn>;
+    clearDecorations: ReturnType<typeof vi.fn>;
+    onDidChangeResults: ReturnType<typeof vi.fn>;
+  }>,
+}));
+
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     cols = 80;
@@ -33,11 +42,13 @@ vi.mock("@xterm/addon-fit", () => ({
 }));
 vi.mock("@xterm/addon-search", () => ({
   SearchAddon: class {
-    findNext() {}
-    findPrevious() {}
-    clearDecorations() {}
-    onDidChangeResults() {
-      return { dispose() {} };
+    findNext = vi.fn();
+    findPrevious = vi.fn();
+    clearDecorations = vi.fn();
+    onDidChangeResults = vi.fn(() => ({ dispose() {} }));
+
+    constructor() {
+      mockSearch.instances.push(this);
     }
   },
 }));
@@ -279,6 +290,7 @@ beforeEach(() => {
     return { body: { content: "config: true", columns: [], rows: [] } };
   });
   mockNoVnc.instances = [];
+  mockSearch.instances = [];
 });
 afterEach(() => {
   useStreamChannelsStore().closeForConnection("c1");
@@ -1709,6 +1721,54 @@ describe("streaming stub panels", () => {
 
     await w.find('[aria-label="Search terminal"]').trigger("click");
     expect(w.find('[aria-label="Find in terminal"]').exists()).toBe(true);
+    w.unmount();
+  });
+
+  it("runs terminal search through the xterm search addon", async () => {
+    const w = mount(TerminalPanel, {
+      props: { ...props, config: { search: true } },
+    });
+    await flushPromises();
+
+    await w.find('[aria-label="Show terminal controls"]').trigger("click");
+    await w.find('[aria-label="Search terminal"]').trigger("click");
+    await flushPromises();
+    await w.get('[aria-label="Find in terminal"]').setValue("nginx");
+
+    const search = mockSearch.instances.at(-1)!;
+    expect(search.findNext).toHaveBeenCalledWith(
+      "nginx",
+      expect.objectContaining({ incremental: true }),
+    );
+
+    await w.find('[aria-label="Previous match"]').trigger("click");
+    expect(search.findPrevious).toHaveBeenCalledWith(
+      "nginx",
+      expect.objectContaining({ incremental: false }),
+    );
+    w.unmount();
+  });
+
+  it("loads terminal search when manifest config arrives after mount", async () => {
+    const w = mount(TerminalPanel, {
+      props: { ...props, config: {} },
+    });
+    await flushPromises();
+    expect(mockSearch.instances).toHaveLength(0);
+
+    await w.setProps({ config: { search: true } });
+    await flushPromises();
+    expect(mockSearch.instances).toHaveLength(1);
+
+    await w.find('[aria-label="Show terminal controls"]').trigger("click");
+    await w.find('[aria-label="Search terminal"]').trigger("click");
+    await flushPromises();
+    await w.get('[aria-label="Find in terminal"]').setValue("docker");
+
+    expect(mockSearch.instances[0].findNext).toHaveBeenCalledWith(
+      "docker",
+      expect.objectContaining({ incremental: true }),
+    );
     w.unmount();
   });
 
