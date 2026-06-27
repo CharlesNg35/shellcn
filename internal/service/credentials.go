@@ -221,7 +221,7 @@ func (s *CredentialService) Delete(ctx context.Context, id string) error {
 	return s.creds.Delete(ctx, id)
 }
 
-// canUse reports whether userID owns the credential or holds a use-grant.
+// canUse reports whether userID owns the credential or holds a view-grant.
 func (s *CredentialService) canUse(ctx context.Context, userID string, cred models.Credential) (bool, error) {
 	if cred.OwnerID == userID {
 		return true, nil

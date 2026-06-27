@@ -1055,7 +1055,7 @@ function handleHTTP(
           subjectId: body.subjectId,
           username: user?.username,
           displayName: user?.displayName,
-          access: body.access ?? "use",
+          access: body.access ?? "view",
         };
         grantsState[key].push(grant);
         send(res, 201, grant);

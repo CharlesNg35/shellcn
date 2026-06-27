@@ -112,7 +112,7 @@ func (s *Server) handleCreateConnectionGrant(w http.ResponseWriter, r *http.Requ
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
 	}
-	req, access, ok := s.decodeGrant(w, r, models.AccessUse, models.AccessManage)
+	req, access, ok := s.decodeGrant(w, r, models.ConnectionGrantAccesses()...)
 	if !ok {
 		return
 	}
@@ -198,8 +198,8 @@ func (s *Server) handleCreateCredentialGrant(w http.ResponseWriter, r *http.Requ
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
 	}
-	// Credentials confer use only — they never grant secret readback.
-	req, access, ok := s.decodeGrant(w, r, models.AccessUse)
+	// Credentials confer view only — they never grant secret readback.
+	req, access, ok := s.decodeGrant(w, r, models.CredentialGrantAccesses()...)
 	if !ok {
 		return
 	}

@@ -35,14 +35,10 @@ const (
 
 var errAgentHandshakeRequired = errors.New("agent handshake required")
 
-// canManageConnection reports whether the user may edit/operate a connection:
-// its owner or a holder of a manage grant. Admin confers no implicit access.
-func (s *Server) canManageConnection(ctx context.Context, user models.User, conn models.Connection) bool {
-	if conn.OwnerID == user.ID {
-		return true
-	}
-	g, err := s.deps.Store.Grants.Get(ctx, conn.ID, user.ID)
-	return err == nil && g.Access == models.AccessManage
+// canAdminConnection reports whether the user may mutate the saved connection
+// record or its control-plane lifecycle. Admin confers no implicit access.
+func (s *Server) canAdminConnection(user models.User, conn models.Connection) bool {
+	return conn.OwnerID == user.ID
 }
 
 func (s *Server) agentConnectURL(r *http.Request) string {
@@ -126,7 +122,7 @@ func (s *Server) handleCreateEnrollment(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if !s.canManageConnection(ctx, user, conn) {
+	if !s.canAdminConnection(user, conn) {
 		s.auditAgentEvent(ctx, user, conn.ID, agentEnrollEvent, models.AuditDenied, plugin.ErrForbidden)
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
@@ -149,7 +145,7 @@ func (s *Server) handleAgentState(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if !s.canManageConnection(ctx, user, conn) {
+	if !s.canAdminConnection(user, conn) {
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
 	}

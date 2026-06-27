@@ -74,7 +74,7 @@ const dotTitle = computed(() => {
 function shareTitle(c: ConnectionSummary): string {
   if (c.sharedWithMe) {
     const by = c.ownerName ? `Shared by ${c.ownerName}` : "Shared with you";
-    return `${by} · ${c.access ?? "use"}`;
+    return `${by} · ${c.access ?? "view"}`;
   }
   if (c.sharedByMe) return "Shared by you";
   return "";

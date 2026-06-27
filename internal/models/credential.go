@@ -54,7 +54,7 @@ type CredentialGrant struct {
 	ID           string `gorm:"primaryKey"`
 	CredentialID string `gorm:"index;uniqueIndex:idx_credgrant_cred_subject"`
 	SubjectID    string `gorm:"index;uniqueIndex:idx_credgrant_cred_subject"`
-	Access       Access // typically AccessUse
+	Access       Access // typically AccessView
 	CreatedAt    time.Time
 }
 
