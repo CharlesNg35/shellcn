@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { KEEP_ALIVE_WORKBENCH_TABS_MAX } from "./sessionLimits";
-import { useWorkspaceStore } from "./workspace";
+import {
+  DEFAULT_TREE_SIDEBAR_WIDTH,
+  MAX_TREE_SIDEBAR_WIDTH,
+  MIN_TREE_SIDEBAR_WIDTH,
+  useWorkspaceStore,
+} from "./workspace";
 
 beforeEach(() => {
   setActivePinia(createPinia());
@@ -148,6 +153,28 @@ describe("workspace store", () => {
     expect(ws.view("b").views).toHaveLength(0);
     expect(ws.view("a").activeTab).toBe("logs");
     expect(ws.view("a").views).toHaveLength(1);
+  });
+
+  it("keeps tree sidebar layout in memory per connection", () => {
+    const ws = useWorkspaceStore();
+
+    expect(ws.layout("a").treeSidebarWidth).toBe(DEFAULT_TREE_SIDEBAR_WIDTH);
+    ws.setTreeSidebarWidth("a", DEFAULT_TREE_SIDEBAR_WIDTH + 40);
+
+    expect(ws.layout("a").treeSidebarWidth).toBe(
+      DEFAULT_TREE_SIDEBAR_WIDTH + 40,
+    );
+    expect(ws.layout("b").treeSidebarWidth).toBe(DEFAULT_TREE_SIDEBAR_WIDTH);
+  });
+
+  it("clamps tree sidebar width", () => {
+    const ws = useWorkspaceStore();
+
+    ws.setTreeSidebarWidth("a", 1);
+    expect(ws.layout("a").treeSidebarWidth).toBe(MIN_TREE_SIDEBAR_WIDTH);
+
+    ws.setTreeSidebarWidth("a", 9999);
+    expect(ws.layout("a").treeSidebarWidth).toBe(MAX_TREE_SIDEBAR_WIDTH);
   });
 
   it("keeps table query state by stable table identity", () => {

@@ -3,7 +3,11 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import TreeWorkspace from "./TreeWorkspace.vue";
-import { useWorkspaceStore } from "@/stores/workspace";
+import {
+  DEFAULT_TREE_SIDEBAR_WIDTH,
+  MAX_TREE_SIDEBAR_WIDTH,
+  useWorkspaceStore,
+} from "@/stores/workspace";
 import { useScopeStore } from "@/stores/scope";
 
 describe("TreeWorkspace", () => {
@@ -101,9 +105,47 @@ describe("TreeWorkspace", () => {
   it("lets the resource tree fill the available sidebar height", () => {
     const wrapper = mountWorkspace();
     const root = wrapper.get(".flex.h-full.min-h-0");
-    const sidebar = root.get(".h-full.min-h-0.w-64");
+    const sidebar = root.get("[data-test='resource-sidebar']");
 
     expect(sidebar.classes()).toContain("overflow-hidden");
+    expect(sidebar.attributes("style")).toContain(
+      `width: ${DEFAULT_TREE_SIDEBAR_WIDTH}px`,
+    );
+  });
+
+  it("resizes the resource sidebar in per-connection workspace state", async () => {
+    const wrapper = mountWorkspace();
+    const ws = useWorkspaceStore();
+    const handle = wrapper.get("[data-test='resource-sidebar-resizer']");
+
+    handle.element.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: 100, bubbles: true }),
+    );
+    window.dispatchEvent(new MouseEvent("pointermove", { clientX: 180 }));
+    await nextTick();
+
+    expect(ws.layout("c1").treeSidebarWidth).toBe(
+      DEFAULT_TREE_SIDEBAR_WIDTH + 80,
+    );
+    expect(
+      wrapper.get("[data-test='resource-sidebar']").attributes("style"),
+    ).toContain(`width: ${DEFAULT_TREE_SIDEBAR_WIDTH + 80}px`);
+
+    window.dispatchEvent(new MouseEvent("pointerup"));
+  });
+
+  it("supports keyboard resizing and clamps the resource sidebar", async () => {
+    const wrapper = mountWorkspace();
+    const ws = useWorkspaceStore();
+    const handle = wrapper.get("[data-test='resource-sidebar-resizer']");
+
+    await handle.trigger("keydown", { key: "ArrowRight" });
+    expect(ws.layout("c1").treeSidebarWidth).toBe(
+      DEFAULT_TREE_SIDEBAR_WIDTH + 24,
+    );
+
+    await handle.trigger("keydown", { key: "End" });
+    expect(ws.layout("c1").treeSidebarWidth).toBe(MAX_TREE_SIDEBAR_WIDTH);
   });
 
   it("keeps a resource's actionIds out of row actions (rows are selectable only when RowActionIDs is declared)", async () => {

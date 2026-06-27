@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import Button from "primevue/button";
 import { VueDraggable } from "vue-draggable-plus";
 import { KEEP_ALIVE_WORKBENCH_TABS_MAX } from "@/stores/sessionLimits";
-import { useWorkspaceStore, type OpenView } from "@/stores/workspace";
+import {
+  MAX_TREE_SIDEBAR_WIDTH,
+  MIN_TREE_SIDEBAR_WIDTH,
+  useWorkspaceStore,
+  type OpenView,
+} from "@/stores/workspace";
 import { useScopeStore } from "@/stores/scope";
 import ResourceTree from "./ResourceTree.vue";
 import DetailView from "../detail/DetailView.vue";
@@ -33,6 +38,7 @@ const ws = useWorkspaceStore();
 const scope = useScopeStore();
 const view = computed(() => ws.view(props.connectionId));
 const activeView = computed(() => ws.activeView(props.connectionId));
+const layout = computed(() => ws.layout(props.connectionId));
 const tabStrip = ref<HTMLElement | null>(null);
 const scopeKey = computed(() => scope.key(props.connectionId));
 const treeRefreshNonce = ref(0);
@@ -196,12 +202,66 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
     params,
   });
 }
+
+let sidebarStartX = 0;
+let sidebarStartWidth = 0;
+
+function stopSidebarResize(): void {
+  window.removeEventListener("pointermove", onSidebarResizeMove);
+  window.removeEventListener("pointerup", stopSidebarResize);
+}
+
+function onSidebarResizeMove(event: PointerEvent): void {
+  ws.setTreeSidebarWidth(
+    props.connectionId,
+    sidebarStartWidth + event.clientX - sidebarStartX,
+  );
+}
+
+function startSidebarResize(event: PointerEvent): void {
+  sidebarStartX = event.clientX;
+  sidebarStartWidth = layout.value.treeSidebarWidth;
+  window.addEventListener("pointermove", onSidebarResizeMove);
+  window.addEventListener("pointerup", stopSidebarResize);
+}
+
+function onSidebarResizeKeydown(event: KeyboardEvent): void {
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    ws.setTreeSidebarWidth(
+      props.connectionId,
+      layout.value.treeSidebarWidth - 24,
+    );
+    return;
+  }
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    ws.setTreeSidebarWidth(
+      props.connectionId,
+      layout.value.treeSidebarWidth + 24,
+    );
+    return;
+  }
+  if (event.key === "Home") {
+    event.preventDefault();
+    ws.setTreeSidebarWidth(props.connectionId, MIN_TREE_SIDEBAR_WIDTH);
+    return;
+  }
+  if (event.key === "End") {
+    event.preventDefault();
+    ws.setTreeSidebarWidth(props.connectionId, MAX_TREE_SIDEBAR_WIDTH);
+  }
+}
+
+onBeforeUnmount(stopSidebarResize);
 </script>
 
 <template>
   <div class="flex h-full min-h-0">
     <div
-      class="h-full min-h-0 w-64 shrink-0 overflow-hidden border-r border-surface-200 dark:border-surface-800"
+      data-test="resource-sidebar"
+      class="relative h-full min-h-0 shrink-0 overflow-hidden border-r border-surface-200 dark:border-surface-800"
+      :style="{ width: `${layout.treeSidebarWidth}px` }"
     >
       <ResourceTree
         :refresh-key="treeRefreshKey"
@@ -212,6 +272,19 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
         @select-group="onSelectGroup"
         @select-node="openDetail"
         @select-list="onSelectList"
+      />
+      <div
+        data-test="resource-sidebar-resizer"
+        role="separator"
+        tabindex="0"
+        aria-label="Resize resource sidebar"
+        aria-orientation="vertical"
+        :aria-valuemin="MIN_TREE_SIDEBAR_WIDTH"
+        :aria-valuemax="MAX_TREE_SIDEBAR_WIDTH"
+        :aria-valuenow="layout.treeSidebarWidth"
+        class="absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize transition-colors hover:bg-primary-500/40 focus-visible:bg-primary-500/50 focus-visible:outline-none"
+        @pointerdown="startSidebarResize"
+        @keydown="onSidebarResizeKeydown"
       />
     </div>
     <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
