@@ -2125,6 +2125,9 @@
         "instructions": {
           "type": "string"
         },
+        "inlineToolbar": {
+          "type": "boolean"
+        },
         "openExternal": {
           "type": "boolean"
         },
