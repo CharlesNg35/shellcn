@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -478,6 +479,58 @@ func TestPluginHTTPProxy(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "upstream:/page" {
 		t.Fatalf("proxied body got %q (want upstream:/page)", body)
+	}
+}
+
+func TestPluginHTTPProxyRequestBody(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read body: %v", err)
+			http.Error(w, "read body", http.StatusInternalServerError)
+			return
+		}
+		_, _ = io.WriteString(w, r.Method+":"+r.URL.Path+":"+string(body))
+	}))
+	t.Cleanup(upstream.Close)
+
+	reg := pluginregistry.New()
+	m := extplugin.NewManager(buildDemo(t))
+	t.Cleanup(m.Close)
+	if err := m.LoadAll(context.Background(), reg); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	p, _ := reg.Get("demo")
+	sess, err := p.Connect(context.Background(), plugin.ConnectConfig{
+		ConnectionID: "c1", Transport: plugin.TransportDirect,
+		Config: map[string]any{"upstream": upstream.URL},
+		Net:    plugintest.DirectTransport(),
+	})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+
+	proxier, ok := sess.(plugin.HTTPProxy)
+	if !ok {
+		t.Fatal("grpcSession should implement plugin.HTTPProxy")
+	}
+	front := httptest.NewServer(http.HandlerFunc(proxier.ServeHTTPProxy))
+	t.Cleanup(front.Close)
+
+	req, err := http.NewRequest(http.MethodPut, front.URL+"/lab/api/workspaces/default", strings.NewReader(`{"layout":"x"}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := front.Client().Do(req)
+	if err != nil {
+		t.Fatalf("proxy put: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	want := `PUT:/lab/api/workspaces/default:{"layout":"x"}`
+	if string(body) != want {
+		t.Fatalf("proxied body got %q (want %q)", body, want)
 	}
 }
 

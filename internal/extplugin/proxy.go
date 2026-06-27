@@ -25,6 +25,12 @@ func (s *grpcSession) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = conn.Close() }()
 
+	r.RequestURI = ""
+	if err := r.Write(conn); err != nil {
+		http.Error(w, "plugin proxy unavailable", http.StatusBadGateway)
+		return
+	}
+
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		http.Error(w, "proxy requires a hijackable connection", http.StatusInternalServerError)
@@ -36,10 +42,6 @@ func (s *grpcSession) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = browser.Close() }()
 
-	r.RequestURI = ""
-	if err := r.Write(conn); err != nil {
-		return
-	}
 	// Pipe raw bytes both ways (brw may hold bytes read past the request line).
 	done := make(chan struct{}, 2)
 	go func() { _, _ = io.Copy(conn, brw); done <- struct{}{} }()
