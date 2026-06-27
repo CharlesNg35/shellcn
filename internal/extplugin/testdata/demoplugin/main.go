@@ -154,13 +154,14 @@ func storage(rc *plugin.RequestContext) (any, error) {
 }
 
 func (demo) Connect(_ context.Context, cfg plugin.ConnectConfig) (plugin.Session, error) {
-	return &demoSession{transport: cfg.Net, target: cfg.String("target"), upstream: cfg.String("upstream")}, nil
+	return &demoSession{transport: cfg.Net, target: cfg.String("target"), upstream: cfg.String("upstream"), proxyMode: cfg.String("proxyMode")}, nil
 }
 
 type demoSession struct {
 	transport plugin.NetTransport
 	target    string
 	upstream  string
+	proxyMode string
 }
 
 // ServeHTTPProxy reverse-proxies to the configured upstream through the core's
@@ -172,7 +173,9 @@ func (s *demoSession) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rp := httputil.NewSingleHostReverseProxy(u)
-	rp.Transport = &http.Transport{DialContext: s.transport.DialContext}
+	if s.proxyMode != "local" {
+		rp.Transport = &http.Transport{DialContext: s.transport.DialContext}
+	}
 	rp.ServeHTTP(w, r)
 }
 
