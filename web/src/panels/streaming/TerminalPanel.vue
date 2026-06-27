@@ -333,6 +333,7 @@ async function mountTerminal(): Promise<void> {
       import("@xterm/xterm/css/xterm.css"),
     ]);
     term = new Terminal({
+      allowProposedApi: true,
       convertEol: true,
       cursorBlink: true,
       fontSize: fontSize.value,

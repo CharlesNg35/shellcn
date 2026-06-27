@@ -19,12 +19,19 @@ const mockSearch = vi.hoisted(() => ({
     onDidChangeResults: ReturnType<typeof vi.fn>;
   }>,
 }));
+const mockTerminal = vi.hoisted(() => ({
+  options: [] as Array<Record<string, unknown>>,
+}));
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     cols = 80;
     rows = 24;
     options = {};
+    constructor(options: Record<string, unknown>) {
+      this.options = options;
+      mockTerminal.options.push(options);
+    }
     open() {}
     write() {}
     onData() {}
@@ -291,6 +298,7 @@ beforeEach(() => {
   });
   mockNoVnc.instances = [];
   mockSearch.instances = [];
+  mockTerminal.options = [];
 });
 afterEach(() => {
   useStreamChannelsStore().closeForConnection("c1");
@@ -1729,6 +1737,9 @@ describe("streaming stub panels", () => {
       props: { ...props, config: { search: true } },
     });
     await flushPromises();
+    expect(mockTerminal.options.at(-1)).toMatchObject({
+      allowProposedApi: true,
+    });
 
     await w.find('[aria-label="Show terminal controls"]').trigger("click");
     await w.find('[aria-label="Search terminal"]').trigger("click");
