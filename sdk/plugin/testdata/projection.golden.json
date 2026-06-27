@@ -2122,11 +2122,11 @@
             ]
           }
         },
-        "instructions": {
-          "type": "string"
-        },
         "inlineToolbar": {
           "type": "boolean"
+        },
+        "instructions": {
+          "type": "string"
         },
         "openExternal": {
           "type": "boolean"
