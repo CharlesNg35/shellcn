@@ -115,11 +115,6 @@ function shareTitle(c: ConnectionSummary): string {
         {{ connection.protocol }}
       </span>
     </button>
-    <span
-      class="h-2 w-2 shrink-0 rounded-full"
-      :class="dotClass"
-      :title="dotTitle"
-    />
     <AppIcon
       v-if="connection.sharedWithMe || connection.sharedByMe"
       :icon="{
@@ -129,6 +124,11 @@ function shareTitle(c: ConnectionSummary): string {
       :size="14"
       class="shrink-0 text-surface-400"
       :title="shareTitle(connection)"
+    />
+    <span
+      class="h-2 w-2 shrink-0 rounded-full"
+      :class="dotClass"
+      :title="dotTitle"
     />
   </div>
 </template>
