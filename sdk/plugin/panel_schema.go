@@ -1,5 +1,11 @@
 package plugin
 
+import (
+	"bytes"
+	"encoding/json"
+	"sort"
+)
+
 type PanelConfigProperty struct {
 	Type       string                         `json:"type"`
 	Items      *PanelConfigProperty           `json:"items,omitempty"`
@@ -14,8 +20,127 @@ type PanelConfigSchema struct {
 	Required   []string                       `json:"required,omitempty"`
 }
 
-func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
-	return map[PanelType]PanelConfigSchema{
+type PanelConfigSchemaMap map[PanelType]PanelConfigSchema
+
+func (schemas PanelConfigSchemaMap) MarshalJSON() ([]byte, error) {
+	keys := make([]string, 0, len(schemas))
+	for key := range schemas {
+		keys = append(keys, string(key))
+	}
+	sort.Strings(keys)
+
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	for i, key := range keys {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		writeJSONString(&buf, key)
+		buf.WriteByte(':')
+		raw, err := json.Marshal(schemas[PanelType(key)])
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(raw)
+	}
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+func (schema PanelConfigSchema) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteString(`{"type":`)
+	writeJSONString(&buf, schema.Type)
+	buf.WriteString(`,"properties":`)
+	raw, err := marshalPanelConfigProperties(schema.Properties)
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(raw)
+	if len(schema.Required) > 0 {
+		buf.WriteString(`,"required":`)
+		raw, err := json.Marshal(schema.Required)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(raw)
+	}
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+func (prop PanelConfigProperty) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteString(`{"type":`)
+	writeJSONString(&buf, prop.Type)
+	if prop.Items != nil {
+		buf.WriteString(`,"items":`)
+		raw, err := json.Marshal(prop.Items)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(raw)
+	}
+	if prop.Properties != nil {
+		buf.WriteString(`,"properties":`)
+		raw, err := marshalPanelConfigProperties(prop.Properties)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(raw)
+	}
+	if len(prop.Enum) > 0 {
+		buf.WriteString(`,"enum":`)
+		raw, err := json.Marshal(prop.Enum)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(raw)
+	}
+	if len(prop.Required) > 0 {
+		buf.WriteString(`,"required":`)
+		raw, err := json.Marshal(prop.Required)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(raw)
+	}
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+func marshalPanelConfigProperties(properties map[string]PanelConfigProperty) ([]byte, error) {
+	keys := make([]string, 0, len(properties))
+	for key := range properties {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	for i, key := range keys {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		writeJSONString(&buf, key)
+		buf.WriteByte(':')
+		raw, err := json.Marshal(properties[key])
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(raw)
+	}
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+func writeJSONString(buf *bytes.Buffer, value string) {
+	raw, _ := json.Marshal(value)
+	buf.Write(raw)
+}
+
+func PanelConfigSchemas() PanelConfigSchemaMap {
+	return PanelConfigSchemaMap{
 		PanelTable: {
 			Type: "object",
 			Properties: props(

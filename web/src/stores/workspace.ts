@@ -23,6 +23,10 @@ interface ConnectionView {
   activeViewId?: string;
 }
 
+interface ConnectionLayout {
+  treeSidebarWidth: number;
+}
+
 export interface TableViewState {
   filterText: string;
   sortField?: string;
@@ -31,10 +35,18 @@ export interface TableViewState {
   pageSize: number;
 }
 
+export const DEFAULT_TREE_SIDEBAR_WIDTH = 256;
+export const MIN_TREE_SIDEBAR_WIDTH = 192;
+export const MAX_TREE_SIDEBAR_WIDTH = 520;
+export const TREE_SIDEBAR_COLLAPSE_THRESHOLD = Math.floor(
+  MIN_TREE_SIDEBAR_WIDTH / 2,
+);
+
 export const useWorkspaceStore = defineStore("workspace", () => {
   const activeConnectionId = ref<string | null>(null);
   const recent = ref<string[]>([]);
   const views = ref<Record<string, ConnectionView>>({});
+  const layouts = ref<Record<string, ConnectionLayout>>({});
   const tableStates = ref<Record<string, TableViewState>>({});
   const connected = ref<Record<string, boolean>>({});
   const connectedOrder = ref<string[]>([]);
@@ -42,6 +54,27 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   function view(id: string): ConnectionView {
     if (!views.value[id]) views.value[id] = { views: [] };
     return views.value[id];
+  }
+
+  function layout(id: string): ConnectionLayout {
+    if (!layouts.value[id]) {
+      layouts.value[id] = {
+        treeSidebarWidth: DEFAULT_TREE_SIDEBAR_WIDTH,
+      };
+    }
+    return layouts.value[id];
+  }
+
+  function setTreeSidebarWidth(id: string, width: number): void {
+    const next = Math.round(width);
+    if (next <= TREE_SIDEBAR_COLLAPSE_THRESHOLD) {
+      layout(id).treeSidebarWidth = 0;
+      return;
+    }
+    layout(id).treeSidebarWidth =
+      next < MIN_TREE_SIDEBAR_WIDTH
+        ? MIN_TREE_SIDEBAR_WIDTH
+        : Math.min(MAX_TREE_SIDEBAR_WIDTH, next);
   }
 
   function setConnected(id: string, on: boolean): void {
@@ -160,10 +193,13 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     activeConnectionId,
     recent,
     views,
+    layouts,
     tableStates,
     connected,
     connectedOrder,
     view,
+    layout,
+    setTreeSidebarWidth,
     open,
     setConnected,
     isConnected,
