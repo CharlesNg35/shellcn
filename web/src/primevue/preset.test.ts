@@ -186,8 +186,12 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.dialog.root).toContain("flex-col");
     expect(primeVuePassthrough.dialog.header).toContain("shrink-0");
     expect(primeVuePassthrough.dialog.footer).toContain("shrink-0");
-    expect(primeVuePassthrough.dialog.content).toContain("min-h-0");
-    expect(primeVuePassthrough.dialog.content).toContain("overflow-auto");
+    expect(primeVuePassthrough.dialog.content.class).toContain("min-h-0");
+    expect(primeVuePassthrough.dialog.content.class).toContain("overflow-auto");
+    expect(primeVuePassthrough.dialog.content.tabindex).toBe("-1");
+    expect(
+      primeVuePassthrough.dialog.content["data-shell-dialog-content"],
+    ).toBe("");
     expect(primeVuePassthrough.dialog.pcMaximizeButton.root).toContain(
       "rounded-md",
     );
@@ -236,6 +240,25 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.dialog.transition.leaveActiveClass).toBe(
       "shell-dialog-leave-active",
     );
+  });
+
+  it("moves initial dialog focus from the header icon to the content region", () => {
+    const root = document.createElement("div");
+    const close = document.createElement("button");
+    const content = document.createElement("div");
+    close.setAttribute("data-pc-group-section", "headericon");
+    content.setAttribute("data-shell-dialog-content", "");
+    content.setAttribute("tabindex", "-1");
+    root.append(close, content);
+    document.body.append(root);
+
+    close.focus();
+    expect(document.activeElement).toBe(close);
+
+    primeVuePassthrough.dialog.transition.onAfterEnter(root);
+    expect(document.activeElement).toBe(content);
+
+    root.remove();
   });
 
   it("styles drawers in unstyled mode", () => {

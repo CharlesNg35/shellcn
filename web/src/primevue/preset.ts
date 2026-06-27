@@ -245,8 +245,26 @@ const dialogHeader =
   "flex shrink-0 items-center justify-between border-b border-surface-200 px-5 py-3.5 dark:border-surface-800";
 const dialogTitle =
   "text-base font-semibold tracking-tight text-surface-900 dark:text-surface-0";
+const dialogContent = {
+  class: "min-h-0 overflow-auto p-5",
+  tabindex: "-1",
+  "data-shell-dialog-content": "",
+};
 const dialogFooter =
   "flex shrink-0 items-center justify-end gap-2 border-t border-surface-200 px-5 py-3.5 dark:border-surface-800";
+function focusDialogContentWhenHeaderIconFocused(el: Element): void {
+  const active = document.activeElement as HTMLElement | null;
+  if (
+    !active ||
+    !el.contains(active) ||
+    active.getAttribute("data-pc-group-section") !== "headericon"
+  ) {
+    return;
+  }
+  el.querySelector<HTMLElement>("[data-shell-dialog-content]")?.focus({
+    preventScroll: true,
+  });
+}
 const dialogTransition = {
   onBeforeEnter(el: Element) {
     const mask = el.parentElement;
@@ -256,6 +274,7 @@ const dialogTransition = {
   onAfterEnter(el: Element) {
     const mask = el.parentElement;
     mask?.classList.remove("shell-dialog-mask-enter-active");
+    focusDialogContentWhenHeaderIconFocused(el);
   },
   onBeforeLeave(el: Element) {
     const mask = el.parentElement;
@@ -609,7 +628,7 @@ export const primeVuePassthrough = {
     root: dialogRoot(),
     header: dialogHeader,
     title: dialogTitle,
-    content: "min-h-0 overflow-auto p-5",
+    content: dialogContent,
     footer: dialogFooter,
     pcMaximizeButton: {
       root: "rounded-md p-1 text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-200",
