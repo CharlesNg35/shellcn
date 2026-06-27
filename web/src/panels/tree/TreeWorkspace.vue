@@ -246,14 +246,10 @@ function startSidebarResize(event: PointerEvent): void {
 function onSidebarResizeKeydown(event: KeyboardEvent): void {
   if (event.key === "ArrowLeft") {
     event.preventDefault();
-    if (layout.value.treeSidebarWidth <= MIN_TREE_SIDEBAR_WIDTH) {
-      ws.setTreeSidebarWidth(props.connectionId, 0);
-    } else {
-      ws.setTreeSidebarWidth(
-        props.connectionId,
-        layout.value.treeSidebarWidth - 24,
-      );
-    }
+    ws.setTreeSidebarWidth(
+      props.connectionId,
+      layout.value.treeSidebarWidth - 24,
+    );
     return;
   }
   if (event.key === "ArrowRight") {

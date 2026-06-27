@@ -145,6 +145,15 @@ describe("TreeWorkspace", () => {
     handle.element.dispatchEvent(
       new MouseEvent("pointerdown", { clientX: 300, bubbles: true }),
     );
+    window.dispatchEvent(
+      new MouseEvent("pointermove", {
+        clientX: 300 + MIN_TREE_SIDEBAR_WIDTH - 1 - DEFAULT_TREE_SIDEBAR_WIDTH,
+      }),
+    );
+    await nextTick();
+
+    expect(ws.layout("c1").treeSidebarWidth).toBe(MIN_TREE_SIDEBAR_WIDTH);
+
     window.dispatchEvent(new MouseEvent("pointermove", { clientX: 100 }));
     await nextTick();
 
@@ -191,6 +200,11 @@ describe("TreeWorkspace", () => {
 
     await handle.trigger("keydown", { key: "End" });
     expect(ws.layout("c1").treeSidebarWidth).toBe(MAX_TREE_SIDEBAR_WIDTH);
+
+    await handle.trigger("keydown", { key: "Home" });
+    await handle.trigger("keydown", { key: "ArrowRight" });
+    await handle.trigger("keydown", { key: "ArrowLeft" });
+    expect(ws.layout("c1").treeSidebarWidth).toBe(MIN_TREE_SIDEBAR_WIDTH);
 
     await handle.trigger("keydown", { key: "Home" });
     expect(ws.layout("c1").treeSidebarWidth).toBe(0);

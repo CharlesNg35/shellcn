@@ -177,6 +177,9 @@ describe("workspace store", () => {
     ws.setTreeSidebarWidth("a", TREE_SIDEBAR_COLLAPSE_THRESHOLD + 1);
     expect(ws.layout("a").treeSidebarWidth).toBe(MIN_TREE_SIDEBAR_WIDTH);
 
+    ws.setTreeSidebarWidth("a", MIN_TREE_SIDEBAR_WIDTH - 1);
+    expect(ws.layout("a").treeSidebarWidth).toBe(MIN_TREE_SIDEBAR_WIDTH);
+
     ws.setTreeSidebarWidth("a", MIN_TREE_SIDEBAR_WIDTH);
     expect(ws.layout("a").treeSidebarWidth).toBe(MIN_TREE_SIDEBAR_WIDTH);
 
