@@ -454,11 +454,12 @@ const (
 
 // WebProxyConfig embeds the connection-scoped HTTP proxy as a panel.
 type WebProxyConfig struct {
-	Path         string               `json:"path,omitempty"`
-	Capabilities []WebProxyCapability `json:"capabilities,omitempty"`
-	OpenExternal bool                 `json:"openExternal,omitempty"`
-	AriaLabel    string               `json:"ariaLabel,omitempty"`
-	Instructions string               `json:"instructions,omitempty"`
+	Path          string               `json:"path,omitempty"`
+	Capabilities  []WebProxyCapability `json:"capabilities,omitempty"`
+	OpenExternal  bool                 `json:"openExternal,omitempty"`
+	InlineToolbar *bool                `json:"inlineToolbar,omitempty"`
+	AriaLabel     string               `json:"ariaLabel,omitempty"`
+	Instructions  string               `json:"instructions,omitempty"`
 }
 
 // MetricStat is one KPI number card in the metrics panel.

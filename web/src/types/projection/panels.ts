@@ -511,6 +511,7 @@ export interface WebProxyPanelConfig {
   path?: string;
   capabilities?: WebProxyCapability[];
   openExternal?: boolean;
+  inlineToolbar?: boolean;
   ariaLabel?: string;
   instructions?: string;
 }

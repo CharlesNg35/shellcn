@@ -262,6 +262,7 @@ func PanelConfigSchemas() map[PanelType]PanelConfigSchema {
 				prop("path", stringProp()),
 				prop("capabilities", array(enum("clipboard", "downloads", "fullscreen", "popups", "same_origin"))),
 				prop("openExternal", boolProp()),
+				prop("inlineToolbar", boolProp()),
 				prop("ariaLabel", stringProp()),
 				prop("instructions", stringProp()),
 			),

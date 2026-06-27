@@ -38,6 +38,7 @@ const entry = computed(() =>
 const configError = computed(() =>
   config.value ? null : "Web proxy panel config is required.",
 );
+const showInlineToolbar = computed(() => config.value?.inlineToolbar !== false);
 const handle = computed(() =>
   config.value
     ? {
@@ -89,6 +90,7 @@ function openExternal(): void {
     class="flex h-full min-h-0 flex-col bg-surface-0 dark:bg-surface-950"
   >
     <div
+      v-if="showInlineToolbar"
       class="flex h-10 shrink-0 items-center justify-end gap-1 border-b border-surface-200 bg-surface-50 px-2 dark:border-surface-800 dark:bg-surface-900"
     >
       <Button

@@ -102,6 +102,17 @@ describe("WebProxyPanel", () => {
     open.mockRestore();
   });
 
+  it("hides the inline toolbar when disabled by panel config", async () => {
+    mount(WebProxyStage);
+    const wrapper = mountPanel({ path: "/app", inlineToolbar: false });
+    await nextTick();
+
+    expect(wrapper.find("button[aria-label='Reload']").exists()).toBe(false);
+    expect(
+      wrapper.get('[data-test="web-proxy-panel-placeholder"]').exists(),
+    ).toBe(true);
+  });
+
   it("keeps the same iframe mounted when KeepAlive deactivates the panel", async () => {
     const Harness = defineComponent({
       setup() {
