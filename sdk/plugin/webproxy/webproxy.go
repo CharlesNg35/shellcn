@@ -330,7 +330,7 @@ func rewriteCookiePath(cookie, prefix string) string {
 // worker.
 func injectShim(html, prefix string) string {
 	shim := `<script>(function(){var p=` + jsString(prefix) + `;
-function fix(u){if(typeof u!=="string")return u;if(u.charAt(0)==="/"&&u.charAt(1)!=="/"&&u.indexOf(p)!==0)return p+u;var o=location.origin;if(u.indexOf(o+"/")===0&&u.slice(o.length).indexOf(p)!==0)return o+p+u.slice(o.length);return u;}
+function fix(u){if(typeof u!=="string")return u;if(u.charAt(0)==="/"&&u.charAt(1)!=="/"&&u.indexOf(p)!==0)return p+u;var o=location.origin;if(u.indexOf(o+"/")===0&&u.slice(o.length).indexOf(p)!==0)return o+p+u.slice(o.length);var wo=(location.protocol==="https:"?"wss://":"ws://")+location.host;if(u.indexOf(wo+"/")===0&&u.slice(wo.length).indexOf(p)!==0)return wo+p+u.slice(wo.length);return u;}
 var of=window.fetch;if(of){window.fetch=function(i,o){try{if(typeof i==="string")i=fix(i);else if(i&&i.url)i=new Request(fix(i.url),i);}catch(e){}return of.call(this,i,o);};}
 var ox=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){return ox.apply(this,[m,fix(u)].concat([].slice.call(arguments,2)));};
 function wrap(C){if(!C)return C;function W(){var a=[].slice.call(arguments);if(a.length)a[0]=fix(a[0]);return new (Function.prototype.bind.apply(C,[null].concat(a)))();}W.prototype=C.prototype;["CONNECTING","OPEN","CLOSING","CLOSED"].forEach(function(k){if(k in C)W[k]=C[k];});return W;}

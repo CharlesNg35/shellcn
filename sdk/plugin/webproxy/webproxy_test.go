@@ -69,6 +69,9 @@ func TestServeRewritesHTMLUnderPrefix(t *testing.T) {
 	if !strings.Contains(body, "HTMLAnchorElement.prototype") {
 		t.Fatalf("shim does not rewrite JS-set anchor navigations: %s", body)
 	}
+	if !strings.Contains(body, `location.protocol==="https:"?"wss://":"ws://"`) {
+		t.Fatalf("shim does not rewrite absolute WebSocket URLs for the public host: %s", body)
+	}
 }
 
 // A redirect Location is mapped back under the prefix whether it is root-relative
