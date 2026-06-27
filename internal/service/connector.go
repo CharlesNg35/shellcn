@@ -39,7 +39,7 @@ func (c *Connector) Plugin(conn models.Connection) (plugin.Plugin, bool) {
 }
 
 // Build produces the ConnectConfig + plugin for a connection on behalf of user.
-func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connection) (plugin.ConnectConfig, plugin.Plugin, error) {
+func (c *Connector) Build(ctx context.Context, user models.User, conn models.Connection) (plugin.ConnectConfig, plugin.Plugin, error) {
 	plg, ok := c.plugins.Get(conn.Protocol)
 	if !ok {
 		return plugin.ConnectConfig{}, nil, fmt.Errorf("%w: protocol %q", plugin.ErrNotFound, conn.Protocol)
@@ -129,6 +129,7 @@ func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connec
 
 	return plugin.ConnectConfig{
 		ConnectionID: conn.ID,
+		UserID:       user.ID,
 		Transport:    plugin.Transport(conn.Transport),
 		Config:       cfg,
 		Credentials:  plugin.NewResolvedCredentials(credentialBindings...),

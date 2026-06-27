@@ -50,13 +50,15 @@ func fixture() (plugin.Manifest, []plugin.Route) {
 type stubServer struct {
 	pluginv1.UnimplementedPluginServer
 	manifest []byte
+	connect  *pluginv1.ConnectRequest
 }
 
 func (s *stubServer) GetManifest(context.Context, *pluginv1.Empty) (*pluginv1.Manifest, error) {
 	return &pluginv1.Manifest{Json: s.manifest}, nil
 }
 
-func (s *stubServer) Connect(context.Context, *pluginv1.ConnectRequest) (*pluginv1.SessionHandle, error) {
+func (s *stubServer) Connect(_ context.Context, req *pluginv1.ConnectRequest) (*pluginv1.SessionHandle, error) {
+	s.connect = req
 	return &pluginv1.SessionHandle{SessionId: "sess-1"}, nil
 }
 
@@ -147,6 +149,30 @@ func TestInvokeRoundTrip(t *testing.T) {
 	got := res.(map[string]any)
 	if got["route"] != "demo.list" || got["session"] != "sess-1" || got["param"] != "v" {
 		t.Fatalf("unexpected result: %v", got)
+	}
+}
+
+func TestConnectForwardsIdentityScope(t *testing.T) {
+	ctx := context.Background()
+	manifest, _ := fixture()
+	bundle, _ := grpcplugin.EncodeManifest(manifest, nil)
+	srv := &stubServer{manifest: bundle}
+	p, err := extplugin.New(ctx, dialStub(t, srv))
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+
+	_, err = p.Connect(ctx, plugin.ConnectConfig{
+		ConnectionID: "c1",
+		UserID:       "u1",
+		ActorScope:   "actor-u1",
+		Transport:    plugin.TransportDirect,
+	})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	if srv.connect.GetUserId() != "u1" || srv.connect.GetActorScope() != "actor-u1" {
+		t.Fatalf("identity scope not forwarded: %+v", srv.connect)
 	}
 }
 

@@ -153,6 +153,8 @@ type ConnectRequest struct {
 	Transport     string                 `protobuf:"bytes,2,opt,name=transport,proto3" json:"transport,omitempty"`                              // "direct" | "agent"
 	ConfigJson    []byte                 `protobuf:"bytes,3,opt,name=config_json,json=configJson,proto3" json:"config_json,omitempty"`          // decrypted config map, JSON-encoded
 	HostBrokerId  uint32                 `protobuf:"varint,4,opt,name=host_broker_id,json=hostBrokerId,proto3" json:"host_broker_id,omitempty"` // brokered id of the per-connection Host service (0 = none)
+	UserId        string                 `protobuf:"bytes,5,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	ActorScope    string                 `protobuf:"bytes,6,opt,name=actor_scope,json=actorScope,proto3" json:"actor_scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -213,6 +215,20 @@ func (x *ConnectRequest) GetHostBrokerId() uint32 {
 		return x.HostBrokerId
 	}
 	return 0
+}
+
+func (x *ConnectRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *ConnectRequest) GetActorScope() string {
+	if x != nil {
+		return x.ActorScope
+	}
+	return ""
 }
 
 type SessionHandle struct {
@@ -1613,13 +1629,16 @@ const file_pluginv1_plugin_proto_rawDesc = "" +
 	"\x04data\x18\x01 \x01(\fR\x04data\"\a\n" +
 	"\x05Empty\"\x1e\n" +
 	"\bManifest\x12\x12\n" +
-	"\x04json\x18\x01 \x01(\fR\x04json\"\x9a\x01\n" +
+	"\x04json\x18\x01 \x01(\fR\x04json\"\xd4\x01\n" +
 	"\x0eConnectRequest\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12\x1c\n" +
 	"\ttransport\x18\x02 \x01(\tR\ttransport\x12\x1f\n" +
 	"\vconfig_json\x18\x03 \x01(\fR\n" +
 	"configJson\x12$\n" +
-	"\x0ehost_broker_id\x18\x04 \x01(\rR\fhostBrokerId\".\n" +
+	"\x0ehost_broker_id\x18\x04 \x01(\rR\fhostBrokerId\x12\x17\n" +
+	"\auser_id\x18\x05 \x01(\tR\x06userId\x12\x1f\n" +
+	"\vactor_scope\x18\x06 \x01(\tR\n" +
+	"actorScope\".\n" +
 	"\rSessionHandle\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\"q\n" +

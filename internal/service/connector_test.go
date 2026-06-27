@@ -75,6 +75,9 @@ func TestConnectorResolvesCredentialRefFieldsFromSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build config: %v", err)
 	}
+	if cfg.UserID != "u1" {
+		t.Fatalf("user id = %q, want u1", cfg.UserID)
+	}
 	credValues, ok := cfg.CredentialFor("api_credential")
 	if !ok {
 		t.Fatalf("resolved credential missing: %+v", cfg.Credentials)

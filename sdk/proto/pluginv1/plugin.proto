@@ -74,6 +74,8 @@ message ConnectRequest {
   string transport = 2;       // "direct" | "agent"
   bytes config_json = 3;      // decrypted config map, JSON-encoded
   uint32 host_broker_id = 4;  // brokered id of the per-connection Host service (0 = none)
+  string user_id = 5;
+  string actor_scope = 6;
 }
 
 message SessionHandle {

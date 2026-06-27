@@ -158,6 +158,8 @@ type Plugin interface {
 // the connection's mode. The plugin picks the layer its client needs.
 type ConnectConfig struct {
     ConnectionID string      // stable connection id, for plugin-owned caches/log labels
+    UserID       string      // acting user id; metadata only, not an authz input
+    ActorScope   string      // opaque session-sharing/cache scope for the actor
     Transport    Transport   // "direct" | "agent"
     Config      map[string]any      // decrypted connection config (typed via Schema)
     Credentials ResolvedCredentials // decrypted reusable credentials by credential_ref field
