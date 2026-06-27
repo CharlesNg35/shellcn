@@ -83,7 +83,7 @@ describe("WebProxyPanel", () => {
     );
     expect(iframe?.getAttribute("title")).toBe("Workspace");
     expect(iframe?.getAttribute("referrerpolicy")).toBe("no-referrer");
-    expect(iframe?.hasAttribute("allowfullscreen")).toBe(true);
+    expect(iframe?.hasAttribute("allowfullscreen")).toBe(false);
   });
 
   it("opens the proxied URL in a new tab when enabled", async () => {

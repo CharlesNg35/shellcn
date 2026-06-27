@@ -49,9 +49,6 @@ onUnmounted(() => {
           :aria-label="webProxyAriaLabel(entry.config)"
           :sandbox="webProxySandboxPolicy(entry.config)"
           :allow="webProxyAllowPolicy(entry.config)"
-          :allowfullscreen="
-            entry.config.capabilities?.includes('fullscreen') || undefined
-          "
           referrerpolicy="no-referrer"
           @load="markWebProxyPanelLoaded(entry.key)"
         />
