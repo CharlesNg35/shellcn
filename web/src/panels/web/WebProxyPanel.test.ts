@@ -109,7 +109,7 @@ describe("WebProxyPanel", () => {
 
     expect(wrapper.find("button[aria-label='Reload']").exists()).toBe(false);
     expect(
-      wrapper.get('[data-test="web-proxy-panel-placeholder"]').exists(),
+      wrapper.find('[data-test="web-proxy-panel-placeholder"]').exists(),
     ).toBe(true);
   });
 
