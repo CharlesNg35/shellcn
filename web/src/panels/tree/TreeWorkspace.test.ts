@@ -6,6 +6,8 @@ import TreeWorkspace from "./TreeWorkspace.vue";
 import {
   DEFAULT_TREE_SIDEBAR_WIDTH,
   MAX_TREE_SIDEBAR_WIDTH,
+  MIN_TREE_SIDEBAR_WIDTH,
+  TREE_SIDEBAR_COLLAPSE_THRESHOLD,
   useWorkspaceStore,
 } from "@/stores/workspace";
 import { useScopeStore } from "@/stores/scope";
@@ -105,10 +107,11 @@ describe("TreeWorkspace", () => {
   it("lets the resource tree fill the available sidebar height", () => {
     const wrapper = mountWorkspace();
     const root = wrapper.get(".flex.h-full.min-h-0");
+    const shell = root.get("[data-test='resource-sidebar-shell']");
     const sidebar = root.get("[data-test='resource-sidebar']");
 
     expect(sidebar.classes()).toContain("overflow-hidden");
-    expect(sidebar.attributes("style")).toContain(
+    expect(shell.attributes("style")).toContain(
       `width: ${DEFAULT_TREE_SIDEBAR_WIDTH}px`,
     );
   });
@@ -128,13 +131,55 @@ describe("TreeWorkspace", () => {
       DEFAULT_TREE_SIDEBAR_WIDTH + 80,
     );
     expect(
-      wrapper.get("[data-test='resource-sidebar']").attributes("style"),
+      wrapper.get("[data-test='resource-sidebar-shell']").attributes("style"),
     ).toContain(`width: ${DEFAULT_TREE_SIDEBAR_WIDTH + 80}px`);
 
     window.dispatchEvent(new MouseEvent("pointerup"));
   });
 
-  it("supports keyboard resizing and clamps the resource sidebar", async () => {
+  it("collapses and expands the sidebar using a midpoint threshold", async () => {
+    const wrapper = mountWorkspace();
+    const ws = useWorkspaceStore();
+    const handle = wrapper.get("[data-test='resource-sidebar-resizer']");
+
+    handle.element.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: 300, bubbles: true }),
+    );
+    window.dispatchEvent(new MouseEvent("pointermove", { clientX: 100 }));
+    await nextTick();
+
+    expect(ws.layout("c1").treeSidebarWidth).toBe(0);
+    expect(
+      wrapper.get("[data-test='resource-sidebar-shell']").attributes("style"),
+    ).toContain("width: 0px");
+
+    window.dispatchEvent(new MouseEvent("pointerup"));
+
+    handle.element.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: 100, bubbles: true }),
+    );
+    window.dispatchEvent(
+      new MouseEvent("pointermove", {
+        clientX: 100 + TREE_SIDEBAR_COLLAPSE_THRESHOLD,
+      }),
+    );
+    await nextTick();
+
+    expect(ws.layout("c1").treeSidebarWidth).toBe(0);
+
+    window.dispatchEvent(
+      new MouseEvent("pointermove", {
+        clientX: 101 + TREE_SIDEBAR_COLLAPSE_THRESHOLD,
+      }),
+    );
+    await nextTick();
+
+    expect(ws.layout("c1").treeSidebarWidth).toBe(MIN_TREE_SIDEBAR_WIDTH);
+
+    window.dispatchEvent(new MouseEvent("pointerup"));
+  });
+
+  it("supports keyboard resizing, collapse, and clamping", async () => {
     const wrapper = mountWorkspace();
     const ws = useWorkspaceStore();
     const handle = wrapper.get("[data-test='resource-sidebar-resizer']");
@@ -146,6 +191,12 @@ describe("TreeWorkspace", () => {
 
     await handle.trigger("keydown", { key: "End" });
     expect(ws.layout("c1").treeSidebarWidth).toBe(MAX_TREE_SIDEBAR_WIDTH);
+
+    await handle.trigger("keydown", { key: "Home" });
+    expect(ws.layout("c1").treeSidebarWidth).toBe(0);
+
+    await handle.trigger("keydown", { key: "ArrowRight" });
+    expect(ws.layout("c1").treeSidebarWidth).toBe(MIN_TREE_SIDEBAR_WIDTH);
   });
 
   it("keeps a resource's actionIds out of row actions (rows are selectable only when RowActionIDs is declared)", async () => {

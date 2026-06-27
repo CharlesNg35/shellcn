@@ -38,6 +38,9 @@ export interface TableViewState {
 export const DEFAULT_TREE_SIDEBAR_WIDTH = 256;
 export const MIN_TREE_SIDEBAR_WIDTH = 192;
 export const MAX_TREE_SIDEBAR_WIDTH = 520;
+export const TREE_SIDEBAR_COLLAPSE_THRESHOLD = Math.floor(
+  MIN_TREE_SIDEBAR_WIDTH / 2,
+);
 
 export const useWorkspaceStore = defineStore("workspace", () => {
   const activeConnectionId = ref<string | null>(null);
@@ -63,10 +66,15 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   }
 
   function setTreeSidebarWidth(id: string, width: number): void {
-    layout(id).treeSidebarWidth = Math.min(
-      MAX_TREE_SIDEBAR_WIDTH,
-      Math.max(MIN_TREE_SIDEBAR_WIDTH, Math.round(width)),
-    );
+    const next = Math.round(width);
+    if (next <= TREE_SIDEBAR_COLLAPSE_THRESHOLD) {
+      layout(id).treeSidebarWidth = 0;
+      return;
+    }
+    layout(id).treeSidebarWidth =
+      next < MIN_TREE_SIDEBAR_WIDTH
+        ? MIN_TREE_SIDEBAR_WIDTH
+        : Math.min(MAX_TREE_SIDEBAR_WIDTH, next);
   }
 
   function setConnected(id: string, on: boolean): void {

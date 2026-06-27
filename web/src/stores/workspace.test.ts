@@ -5,6 +5,7 @@ import {
   DEFAULT_TREE_SIDEBAR_WIDTH,
   MAX_TREE_SIDEBAR_WIDTH,
   MIN_TREE_SIDEBAR_WIDTH,
+  TREE_SIDEBAR_COLLAPSE_THRESHOLD,
   useWorkspaceStore,
 } from "./workspace";
 
@@ -167,10 +168,16 @@ describe("workspace store", () => {
     expect(ws.layout("b").treeSidebarWidth).toBe(DEFAULT_TREE_SIDEBAR_WIDTH);
   });
 
-  it("clamps tree sidebar width", () => {
+  it("collapses tree sidebar width at the midpoint threshold and clamps the maximum", () => {
     const ws = useWorkspaceStore();
 
-    ws.setTreeSidebarWidth("a", 1);
+    ws.setTreeSidebarWidth("a", TREE_SIDEBAR_COLLAPSE_THRESHOLD);
+    expect(ws.layout("a").treeSidebarWidth).toBe(0);
+
+    ws.setTreeSidebarWidth("a", TREE_SIDEBAR_COLLAPSE_THRESHOLD + 1);
+    expect(ws.layout("a").treeSidebarWidth).toBe(MIN_TREE_SIDEBAR_WIDTH);
+
+    ws.setTreeSidebarWidth("a", MIN_TREE_SIDEBAR_WIDTH);
     expect(ws.layout("a").treeSidebarWidth).toBe(MIN_TREE_SIDEBAR_WIDTH);
 
     ws.setTreeSidebarWidth("a", 9999);
