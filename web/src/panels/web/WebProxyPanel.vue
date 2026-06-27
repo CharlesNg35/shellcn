@@ -1,91 +1,89 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed } from "vue";
 import Button from "primevue/button";
 import AppIcon from "@/components/AppIcon.vue";
-import PanelError from "@/panels/shared/PanelError.vue";
 import type { PanelProps } from "@/panels/core/types";
-import type {
-  WebProxyCapability,
-  WebProxyPanelConfig,
-} from "@/types/projection";
+import PanelError from "@/panels/shared/PanelError.vue";
+import { usePersistentStagePanel } from "@/panels/shared/usePersistentStagePanel";
+import type { WebProxyPanelConfig } from "@/types/projection";
+import {
+  activateWebProxyPanel,
+  deactivateWebProxyPanel,
+  registerWebProxyPanel,
+  reloadWebProxyPanel,
+  unregisterWebProxyPanel,
+  updateWebProxyPanelRect,
+  webProxyFrameURL,
+  webProxyStageEntries,
+} from "./webProxyStage";
 
 const props = defineProps<PanelProps>();
 
-const loaded = ref(false);
-const reloadToken = ref(0);
-
 const config = computed(() => props.config as WebProxyPanelConfig | undefined);
-
-const proxyPath = computed(() => normalizeProxyPath(config.value?.path));
-const frameSrc = computed(() => {
-  if (!proxyPath.value) return "";
-  return `/api/connections/${encodeURIComponent(props.connectionId)}/proxy${proxyPath.value}`;
-});
-const frameKey = computed(() => `${frameSrc.value}:${reloadToken.value}`);
-const ariaLabel = computed(
-  () => config.value?.ariaLabel?.trim() || "Proxied web surface",
+const stageKey = computed(
+  () =>
+    props.panelKey ??
+    JSON.stringify({
+      panel: "web_proxy",
+      connectionId: props.connectionId,
+      source: props.source,
+      resource: props.resource?.uid,
+      record: props.record,
+      config: props.config,
+    }),
 );
-const capabilitySet = computed(() => new Set(config.value?.capabilities ?? []));
-const sandboxPolicy = computed(() => {
-  const tokens = ["allow-scripts", "allow-forms", "allow-modals"];
-  if (hasCapability("downloads")) tokens.push("allow-downloads");
-  if (hasCapability("popups")) {
-    tokens.push("allow-popups", "allow-popups-to-escape-sandbox");
-  }
-  if (hasCapability("same_origin")) tokens.push("allow-same-origin");
-  return tokens.join(" ");
-});
-const allowPolicy = computed(() => {
-  const policies: string[] = [];
-  if (hasCapability("clipboard")) {
-    policies.push("clipboard-read", "clipboard-write");
-  }
-  if (hasCapability("fullscreen")) policies.push("fullscreen");
-  return policies.join("; ");
-});
-
-watch(
-  frameSrc,
-  () => {
-    loaded.value = false;
-  },
-  { immediate: true },
+const entry = computed(() =>
+  webProxyStageEntries.value.find((item) => item.key === stageKey.value),
+);
+const configError = computed(() =>
+  config.value ? null : "Web proxy panel config is required.",
+);
+const handle = computed(() =>
+  config.value
+    ? {
+        key: stageKey.value,
+        connectionId: props.connectionId,
+        config: config.value,
+        resource: props.resource,
+        record: props.record,
+      }
+    : null,
 );
 
-function hasCapability(capability: WebProxyCapability): boolean {
-  return capabilitySet.value.has(capability);
-}
+const { setPlaceholder } = usePersistentStagePanel({
+  stageKey,
+  handle,
+  watchSource: () => [
+    stageKey.value,
+    props.connectionId,
+    props.resource,
+    props.record,
+    props.config,
+  ],
+  deep: true,
+  register: registerWebProxyPanel,
+  activate: activateWebProxyPanel,
+  deactivate: deactivateWebProxyPanel,
+  unregister: unregisterWebProxyPanel,
+  updateRect: updateWebProxyPanelRect,
+});
 
 function reload(): void {
-  loaded.value = false;
-  reloadToken.value += 1;
+  reloadWebProxyPanel(stageKey.value);
 }
 
 function openExternal(): void {
-  if (!frameSrc.value) return;
-  window.open(frameSrc.value, "_blank", "noopener,noreferrer");
-}
-
-function normalizeProxyPath(path?: string): string | null {
-  const raw = path?.trim() || "/";
-  if (!raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) {
-    return null;
-  }
-  try {
-    const parsed = new URL(raw, "https://shellcn.local");
-    if (parsed.origin !== "https://shellcn.local") return null;
-    return `${parsed.pathname}${parsed.search}${parsed.hash}` || "/";
-  } catch {
-    return null;
-  }
+  const src =
+    entry.value?.src ||
+    (config.value ? webProxyFrameURL(props.connectionId, config.value) : null);
+  if (!src) return;
+  window.open(src, "_blank", "noopener,noreferrer");
 }
 </script>
 
 <template>
-  <PanelError
-    v-if="!proxyPath"
-    message="This panel declares an invalid proxy path."
-  />
+  <PanelError v-if="configError" :message="configError" />
+  <PanelError v-else-if="entry?.error" :message="entry.error" />
   <section
     v-else
     class="flex h-full min-h-0 flex-col bg-surface-0 dark:bg-surface-950"
@@ -101,6 +99,7 @@ function normalizeProxyPath(path?: string): string | null {
         aria-label="Reload"
         title="Reload"
         class="h-8 w-8"
+        :disabled="!entry?.src"
         @click="reload"
       >
         <AppIcon :icon="{ type: 'lucide', value: 'refresh-cw' }" :size="16" />
@@ -114,6 +113,7 @@ function normalizeProxyPath(path?: string): string | null {
         aria-label="Open in new tab"
         title="Open in new tab"
         class="h-8 w-8"
+        :disabled="!entry?.src"
         @click="openExternal"
       >
         <AppIcon
@@ -122,26 +122,24 @@ function normalizeProxyPath(path?: string): string | null {
         />
       </Button>
     </div>
-    <div class="relative min-h-0 flex-1 bg-surface-0 dark:bg-surface-950">
+    <div
+      :ref="setPlaceholder"
+      class="relative min-h-0 flex-1 bg-surface-0 dark:bg-surface-950"
+      data-test="web-proxy-panel-placeholder"
+    >
       <div
-        v-if="!loaded"
+        v-if="!entry?.loaded"
         class="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-surface-200 dark:bg-surface-800"
         aria-hidden="true"
       >
         <span class="block h-full w-1/3 animate-pulse bg-primary-500" />
       </div>
-      <iframe
-        :key="frameKey"
-        class="h-full w-full border-0 bg-white dark:bg-surface-950"
-        :src="frameSrc"
-        :title="ariaLabel"
-        :aria-label="ariaLabel"
-        :sandbox="sandboxPolicy"
-        :allow="allowPolicy || undefined"
-        :allowfullscreen="hasCapability('fullscreen') || undefined"
-        referrerpolicy="no-referrer"
-        @load="loaded = true"
-      />
+      <p class="sr-only">
+        {{
+          config?.instructions ||
+          "This panel embeds a connection-scoped web surface through the gateway proxy."
+        }}
+      </p>
     </div>
   </section>
 </template>

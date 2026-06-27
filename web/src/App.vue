@@ -9,6 +9,7 @@ import AppToast from "./components/AppToast.vue";
 import AppIcon from "./components/AppIcon.vue";
 import AppRouteLoader from "./components/AppRouteLoader.vue";
 import WasmStage from "./panels/wasm/WasmStage.vue";
+import WebProxyStage from "./panels/web/WebProxyStage.vue";
 import { encodeRedirectTarget } from "./router/redirect";
 
 const toast = useToast();
@@ -119,6 +120,7 @@ onUnmounted(() => {
   </template>
   <AppToast />
   <WasmStage />
+  <WebProxyStage />
   <ConfirmDialog>
     <template #message="{ message }">
       <div class="flex items-start gap-3">
