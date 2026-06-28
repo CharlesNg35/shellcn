@@ -9,10 +9,15 @@ import {
   type AiStoredMessage,
   type AiStreamEvent,
   type AiTurnStreamEvent,
+  type AiWorkspaceContext,
 } from "../api/ai";
 import { useAiProvidersStore } from "./aiProviders";
+import { registerSessionCleanup } from "./session";
+import { RiskLevel } from "../types/projection";
 
 export type AiRunState = "idle" | "starting" | "streaming" | "stopping";
+
+const defaultConversationTitle = "New conversation";
 
 export interface AiToolCall {
   id: string;
@@ -57,6 +62,8 @@ interface ChatState {
   queue: string[];
   hasMore: boolean;
   loadingOlder: boolean;
+  loadingConversation: boolean;
+  loadSeq: number;
 }
 
 function newState(): ChatState {
@@ -74,6 +81,8 @@ function newState(): ChatState {
     queue: [],
     hasMore: false,
     loadingOlder: false,
+    loadingConversation: false,
+    loadSeq: 0,
   };
 }
 
@@ -103,10 +112,19 @@ export const useAiChatStore = defineStore("aiChat", () => {
     "shellcn:ai:selected-provider",
     {},
   );
+  const rememberedConfirmations = useStorage<Record<string, string[]>>(
+    "shellcn:ai:auto-confirm-write-routes",
+    {},
+  );
   const byConn = reactive<Record<string, ChatState>>({});
   const providers = computed(() => aiProviders.providers);
   const global = computed(() => aiProviders.global);
   const providersReady = computed(() => aiProviders.ready);
+  const globalUsable = computed(() =>
+    Boolean(
+      aiProviders.global?.configured && (aiProviders.global.usable ?? true),
+    ),
+  );
 
   async function loadProviders(force = false): Promise<void> {
     try {
@@ -157,11 +175,11 @@ export const useAiChatStore = defineStore("aiChat", () => {
       rememberProvider(connId, st.providerId);
       return;
     }
-    if (st.providerId === "" && aiProviders.global?.configured) {
+    if (st.providerId === "" && globalUsable.value) {
       rememberProvider(connId, "");
       return;
     }
-    if (aiProviders.global?.configured) {
+    if (globalUsable.value) {
       st.providerId = "";
       rememberProvider(connId, "");
       return;
@@ -173,6 +191,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
   watch(
     () => [
       aiProviders.global?.configured ?? false,
+      aiProviders.global?.usable ?? true,
       aiProviders.providers.map((provider) => provider.id).join("\u0000"),
     ],
     () =>
@@ -181,7 +200,11 @@ export const useAiChatStore = defineStore("aiChat", () => {
       ),
   );
 
-  function send(connId: string, content: string): void {
+  function send(
+    connId: string,
+    content: string,
+    workspaceContext?: AiWorkspaceContext,
+  ): void {
     const text = content.trim();
     if (!text) return;
     const st = state(connId);
@@ -212,7 +235,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.runState = "starting";
     st.turnId = "";
     st.abort = new AbortController();
-    void runTurn(connId, text, assistant, st.abort);
+    void runTurn(connId, text, assistant, st.abort, workspaceContext);
   }
 
   async function runTurn(
@@ -220,6 +243,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     content: string,
     assistant: AiMessage,
     controller: AbortController,
+    workspaceContext?: AiWorkspaceContext,
   ): Promise<void> {
     const st = state(connId);
     let completed = false;
@@ -230,6 +254,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
           content,
           providerId: st.providerId,
           conversationId: st.activeId ?? "",
+          ...(workspaceContext ? { workspaceContext } : {}),
         },
         {
           signal: controller.signal,
@@ -238,7 +263,11 @@ export const useAiChatStore = defineStore("aiChat", () => {
           },
           onEvent: (event) => {
             if (event.type === "done") completed = true;
-            if (state(connId).current?.id !== assistant.id) return;
+            if (
+              !isTurnMetaEvent(event) &&
+              state(connId).current?.id !== assistant.id
+            )
+              return;
             applyStreamEvent(connId, event);
           },
         },
@@ -260,7 +289,10 @@ export const useAiChatStore = defineStore("aiChat", () => {
   async function loadConversations(connId: string): Promise<void> {
     const st = state(connId);
     try {
-      st.conversations = await aiApi.listConversations(connId);
+      st.conversations = mergeConversations(
+        st,
+        await aiApi.listConversations(connId),
+      );
     } catch {
       return;
     }
@@ -276,6 +308,8 @@ export const useAiChatStore = defineStore("aiChat", () => {
       return;
     }
     if (st.runState !== "idle") return;
+    st.loadingConversation = true;
+    st.error = null;
     try {
       const { conversation, page } = await aiApi.getConversation(connId, cid);
       st.activeId = cid;
@@ -284,8 +318,13 @@ export const useAiChatStore = defineStore("aiChat", () => {
       st.messages = page.messages.map(mapStored);
       st.hasMore = page.hasMore;
       st.current = null;
+      // Force the message list to remount so its scroll engine re-attaches and
+      // positions instantly (no smooth animation) on the freshly loaded page.
+      st.loadSeq++;
     } catch {
       st.error = "Failed to load conversation";
+    } finally {
+      st.loadingConversation = false;
     }
   }
 
@@ -373,13 +412,20 @@ export const useAiChatStore = defineStore("aiChat", () => {
     finalize(connId, false);
   }
 
-  function resolveConfirm(connId: string, approve: boolean): void {
+  function resolveConfirm(
+    connId: string,
+    approve: boolean,
+    options: { remember?: boolean } = {},
+  ): void {
     const st = state(connId);
     const pending = st.pendingConfirm;
     if (!pending) return;
     if (!st.turnId) {
       st.error = "Assistant turn is no longer active.";
       return;
+    }
+    if (approve && options.remember) {
+      rememberConfirmation(connId, pending);
     }
     st.pendingConfirm = null;
     void aiApi.turnControl(connId, st.turnId, {
@@ -397,6 +443,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     if (ev.type === "conversation") {
       if (!ev.conversationId) return;
       st.activeId = ev.conversationId;
+      applyConversationTitle(st, connId, ev.conversationId, ev.title);
       void loadConversations(connId);
       return;
     }
@@ -404,10 +451,21 @@ export const useAiChatStore = defineStore("aiChat", () => {
       const { type: _type, turnId, ...rest } = ev;
       void _type;
       st.turnId = turnId || st.turnId;
+      if (st.turnId && shouldAutoConfirm(connId, rest)) {
+        void aiApi.turnControl(connId, st.turnId, {
+          type: "confirm",
+          toolId: rest.toolId,
+        });
+        return;
+      }
       st.pendingConfirm = rest;
       return;
     }
     apply(connId, ev);
+  }
+
+  function isTurnMetaEvent(ev: AiTurnStreamEvent): boolean {
+    return ev.type === "turn" || ev.type === "conversation";
   }
 
   function apply(connId: string, ev: AiStreamEvent): void {
@@ -491,10 +549,128 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.hasMore = false;
   }
 
+  function resetAll(): void {
+    for (const connId of Object.keys(byConn)) {
+      byConn[connId].abort?.abort();
+      delete byConn[connId];
+    }
+    selectedProviders.value = {};
+    rememberedConfirmations.value = {};
+  }
+
+  registerSessionCleanup("aiChat", resetAll);
+
+  function applyConversationTitle(
+    st: ChatState,
+    connId: string,
+    conversationId: string,
+    title?: string,
+  ): void {
+    const next = title?.trim();
+    if (!next) return;
+    const existing = st.conversations.find((c) => c.id === conversationId);
+    if (existing) {
+      existing.title = next;
+      existing.titleResolved = true;
+      existing.updatedAt = new Date().toISOString();
+      return;
+    }
+    const now = new Date().toISOString();
+    st.conversations = [
+      {
+        id: conversationId,
+        ownerId: "",
+        connectionId: connId,
+        title: next,
+        titleResolved: true,
+        providerId: "",
+        model: "",
+        createdAt: now,
+        updatedAt: now,
+      },
+      ...st.conversations,
+    ];
+  }
+
+  function mergeConversations(
+    st: ChatState,
+    loaded: AiConversation[],
+  ): AiConversation[] {
+    const local = new Map(st.conversations.map((c) => [c.id, c]));
+    const seen = new Set<string>();
+    const merged = loaded.map((conversation) => {
+      seen.add(conversation.id);
+      const cached = local.get(conversation.id);
+      if (
+        cached?.titleResolved &&
+        cached.title &&
+        isUnresolvedDefaultTitle(conversation) &&
+        isCachedTitleNewer(cached, conversation)
+      ) {
+        return {
+          ...conversation,
+          title: cached.title,
+          titleResolved: true,
+          updatedAt: cached.updatedAt,
+        };
+      }
+      return conversation;
+    });
+    for (const conversation of st.conversations) {
+      if (
+        conversation.titleResolved &&
+        conversation.id === st.activeId &&
+        !seen.has(conversation.id)
+      ) {
+        merged.unshift(conversation);
+      }
+    }
+    return merged;
+  }
+
+  function isCachedTitleNewer(
+    cached: AiConversation,
+    conversation: AiConversation,
+  ): boolean {
+    if (!cached.updatedAt || !conversation.updatedAt) return true;
+    return cached.updatedAt >= conversation.updatedAt;
+  }
+
+  function isUnresolvedDefaultTitle(conversation: AiConversation): boolean {
+    if (conversation.title !== defaultConversationTitle) return false;
+    return !conversation.titleResolved;
+  }
+
+  function canRememberConfirmation(pending: PendingConfirm): boolean {
+    return !pending.destructive && pending.risk === RiskLevel.Write;
+  }
+
+  function rememberedRoutes(connId: string): string[] {
+    return rememberedConfirmations.value[connId] ?? [];
+  }
+
+  function shouldAutoConfirm(connId: string, pending: PendingConfirm): boolean {
+    return (
+      canRememberConfirmation(pending) &&
+      rememberedRoutes(connId).includes(pending.routeId)
+    );
+  }
+
+  function rememberConfirmation(connId: string, pending: PendingConfirm): void {
+    if (!canRememberConfirmation(pending)) return;
+    const routes = new Set(rememberedRoutes(connId));
+    routes.add(pending.routeId);
+    rememberedConfirmations.value = {
+      ...rememberedConfirmations.value,
+      [connId]: [...routes].sort(),
+    };
+  }
+
   return {
     byConn,
     providers,
     global,
+    globalUsable,
     providersReady,
     loadProviders,
     setProvider,
@@ -504,6 +680,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     resolveConfirm,
     dequeue,
     reset,
+    resetAll,
     apply,
     loadConversations,
     selectConversation,

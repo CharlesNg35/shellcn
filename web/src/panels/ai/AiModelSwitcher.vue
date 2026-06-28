@@ -35,6 +35,7 @@ const activeChoice = computed(
     providerChoices.value.find((choice) => choice.value === props.providerId) ??
     providerChoices.value[0],
 );
+const selectedProviderId = computed(() => activeChoice.value?.value ?? "");
 
 const canSwitch = computed(() => providerChoices.value.length > 1);
 const activeTitle = computed(() => choiceTitle(activeChoice.value));
@@ -59,7 +60,7 @@ function pickProvider(id: string): void {
   <div v-if="activeChoice" class="min-w-0">
     <Select
       v-if="canSwitch"
-      :model-value="providerId"
+      :model-value="selectedProviderId"
       :options="providerChoices"
       option-label="label"
       option-value="value"

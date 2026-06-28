@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { toRef, type VNodeRef } from "vue";
+import { onMounted, toRef, type VNodeRef } from "vue";
 import Button from "primevue/button";
 import AiMessageItem from "./AiMessage.vue";
+import AiMessageSkeleton from "./AiMessageSkeleton.vue";
 import AppIcon from "@/components/AppIcon.vue";
 import { useAiMessageScroll } from "./useAiMessageScroll";
 import type { AiMessage } from "@/stores/aiChat";
@@ -12,6 +13,7 @@ const props = defineProps<{
   streaming: boolean;
   hasMore: boolean;
   loadingOlder: boolean;
+  loading?: boolean;
   disabled?: boolean;
 }>();
 const emit = defineEmits<{ quickStart: [prompt: string]; loadOlder: [] }>();
@@ -27,6 +29,14 @@ const setContentRef: VNodeRef = (el) => {
   contentRef.value = el instanceof HTMLElement ? el : null;
 };
 
+onMounted(() => {
+  // Pin to the bottom synchronously (before first paint) so a freshly loaded
+  // long conversation never flashes from top to bottom before the scroll
+  // engine's rAF settles.
+  const el = scrollRef.value;
+  if (el) el.scrollTop = el.scrollHeight;
+});
+
 const quickStarts = [
   "What resources are available on this connection?",
   "Summarize the current state.",
@@ -36,7 +46,17 @@ const quickStarts = [
 
 <template>
   <div
-    v-if="messages.length === 0"
+    v-if="loading"
+    class="min-h-0 flex-1 overflow-hidden"
+    role="status"
+    aria-busy="true"
+    aria-label="Loading conversation"
+  >
+    <AiMessageSkeleton />
+  </div>
+
+  <div
+    v-else-if="messages.length === 0"
     class="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-4 text-center"
   >
     <AppIcon

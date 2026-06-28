@@ -17,7 +17,7 @@ import ProtocolPicker from "./ProtocolPicker.vue";
 import AppIcon from "./AppIcon.vue";
 import RoleGate from "./RoleGate.vue";
 import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
-import { TRANSPORT_DIRECT } from "../types/projection";
+import { RecordingFormat, TRANSPORT_DIRECT } from "../types/projection";
 import type {
   ConnectionDetail,
   PluginProjection,
@@ -63,7 +63,8 @@ const aiModeChoices = [
 onMounted(async () => {
   try {
     const [global, list] = await Promise.all([aiApi.global(), aiApi.list()]);
-    aiConfigured.value = global.configured || list.length > 0;
+    aiConfigured.value =
+      (global.configured && (global.usable ?? true)) || list.length > 0;
   } catch {
     aiConfigured.value = false;
   }
@@ -375,7 +376,10 @@ async function onConfig(
                 recordingLabel(cap.class)
               }}</span>
               <span
-                v-if="!cap.authoritative"
+                v-if="
+                  cap.formats.includes(RecordingFormat.WebmCanvas) &&
+                  !cap.authoritative
+                "
                 class="text-xs text-amber-600 dark:text-amber-400"
               >
                 Browser capture. Not compliance-grade.

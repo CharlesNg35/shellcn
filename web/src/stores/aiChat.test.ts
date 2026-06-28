@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { nextTick } from "vue";
-import type { AiTurnRequest, StreamAiTurnOptions } from "../api/ai";
+import type {
+  AiGlobalStatus,
+  AiTurnRequest,
+  StreamAiTurnOptions,
+} from "../api/ai";
 import { RiskLevel } from "../types/projection";
 
 const listConversations = vi.fn(async () => [] as unknown[]);
@@ -10,7 +14,11 @@ const messages = vi.fn();
 const renameConversation = vi.fn();
 const deleteConversation = vi.fn();
 const turnControl = vi.fn();
-const global = vi.fn(async () => ({ configured: false }));
+const global = vi.fn(
+  async (): Promise<AiGlobalStatus> => ({
+    configured: false,
+  }),
+);
 const listProviders = vi.fn(async () => [] as unknown[]);
 
 interface StreamCall {
@@ -87,6 +95,18 @@ const storedMsg = (id: string, content: string) => ({
   createdAt: "",
 });
 
+const conversation = (id: string, title = "New conversation") => ({
+  id,
+  ownerId: "u1",
+  connectionId: CONN,
+  title,
+  titleResolved: title !== "New conversation",
+  providerId: "",
+  model: "gpt-4o",
+  createdAt: "",
+  updatedAt: "",
+});
+
 describe("aiChat store", () => {
   it("creates user + assistant messages on send and streams text", () => {
     const store = useAiChatStore();
@@ -103,6 +123,19 @@ describe("aiChat store", () => {
     streamCalls[0].options.onEvent({ type: "text_delta", text: "world" });
     expect(st.messages[1].content).toBe("Hello world");
     expect(st.runState).toBe("streaming");
+  });
+
+  it("sends workspace context with the turn payload", () => {
+    const store = useAiChatStore();
+    store.send(CONN, "explain this pod", {
+      query:
+        "?v=detail:pod:7f1e0127-cbc5-4432-aca2-59ab0476e33c:n=kube-controller-manager-kind-control-plane,ns=kube-system",
+    });
+
+    expect(streamCalls[0].body.workspaceContext).toEqual({
+      query:
+        "?v=detail:pod:7f1e0127-cbc5-4432-aca2-59ab0476e33c:n=kube-controller-manager-kind-control-plane,ns=kube-system",
+    });
   });
 
   it("tracks tool calls and their results", () => {
@@ -235,12 +268,125 @@ describe("aiChat store", () => {
     });
   });
 
+  it("remembers non-destructive write approvals by connection and route", () => {
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+    st.turnId = "turn-1";
+    st.pendingConfirm = {
+      toolId: "t1",
+      toolName: "demo_create",
+      routeId: "demo.create",
+      risk: RiskLevel.Write,
+      destructive: false,
+      params: {},
+      body: {},
+    };
+
+    store.resolveConfirm(CONN, true, { remember: true });
+    expect(turnControl).toHaveBeenLastCalledWith(CONN, "turn-1", {
+      type: "confirm",
+      toolId: "t1",
+    });
+
+    store.send(CONN, "create another");
+    streamCalls[0].options.onEvent({
+      type: "needs_confirmation",
+      turnId: "turn-2",
+      toolId: "t2",
+      toolName: "demo_create",
+      routeId: "demo.create",
+      risk: RiskLevel.Write,
+      destructive: false,
+      params: {},
+      body: {},
+    });
+
+    expect(st.pendingConfirm).toBeNull();
+    expect(turnControl).toHaveBeenLastCalledWith(CONN, "turn-2", {
+      type: "confirm",
+      toolId: "t2",
+    });
+  });
+
+  it("does not auto-confirm remembered destructive actions", () => {
+    localStorage.setItem(
+      "shellcn:ai:auto-confirm-write-routes",
+      JSON.stringify({ [CONN]: ["demo.delete"] }),
+    );
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+
+    store.send(CONN, "delete");
+    streamCalls[0].options.onEvent({
+      type: "needs_confirmation",
+      turnId: "turn-1",
+      toolId: "t1",
+      toolName: "demo_delete",
+      routeId: "demo.delete",
+      risk: RiskLevel.Destructive,
+      destructive: true,
+      params: {},
+      body: {},
+    });
+
+    expect(st.pendingConfirm).toMatchObject({
+      routeId: "demo.delete",
+      destructive: true,
+    });
+    expect(turnControl).not.toHaveBeenCalled();
+  });
+
   it("sends the active conversation id with the message", () => {
     const store = useAiChatStore();
     const st = store.state(CONN);
     st.activeId = "conv-9";
     store.send(CONN, "hello");
     expect(streamCalls[0].body.conversationId).toBe("conv-9");
+  });
+
+  it("applies generated conversation titles from stream events immediately", async () => {
+    listConversations.mockResolvedValue([
+      conversation("conv-1", "New conversation"),
+    ]);
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+
+    store.send(CONN, "why did backup fail");
+    streamCalls[0].options.onEvent({
+      type: "conversation",
+      conversationId: "conv-1",
+      title: "Database Backup Failure",
+    });
+    await nextTick();
+
+    expect(st.activeId).toBe("conv-1");
+    expect(st.conversations.find((c) => c.id === "conv-1")?.title).toBe(
+      "Database Backup Failure",
+    );
+  });
+
+  it("applies generated conversation titles that arrive after done", async () => {
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+
+    store.send(CONN, "why did backup fail");
+    streamCalls[0].options.onEvent({
+      type: "conversation",
+      conversationId: "conv-1",
+    });
+    streamCalls[0].options.onEvent({ type: "text_delta", text: "Check disk." });
+    streamCalls[0].options.onEvent({ type: "done" });
+    streamCalls[0].options.onEvent({
+      type: "conversation",
+      conversationId: "conv-1",
+      title: "Database Backup Failure",
+    });
+    await nextTick();
+
+    expect(st.runState).toBe("idle");
+    expect(st.conversations.find((c) => c.id === "conv-1")?.title).toBe(
+      "Database Backup Failure",
+    );
   });
 
   it("loads a conversation page and prepends older messages", async () => {
@@ -258,6 +404,9 @@ describe("aiChat store", () => {
     expect(st.providerId).toBe("p1");
     expect(st.messages.map((m) => m.content)).toEqual(["second"]);
     expect(st.hasMore).toBe(true);
+    // Selecting a conversation bumps loadSeq so the list remounts (instant scroll).
+    const seqAfterSelect = st.loadSeq;
+    expect(seqAfterSelect).toBeGreaterThan(0);
 
     messages.mockResolvedValue({
       messages: [storedMsg("m1", "first")],
@@ -268,6 +417,28 @@ describe("aiChat store", () => {
     expect(messages).toHaveBeenCalledWith(CONN, "cv", 1);
     expect(st.messages.map((m) => m.content)).toEqual(["first", "second"]);
     expect(st.hasMore).toBe(false);
+    // Loading older messages must NOT remount (would lose scroll position).
+    expect(st.loadSeq).toBe(seqAfterSelect);
+  });
+
+  it("flags loadingConversation while a conversation page is in flight", async () => {
+    const store = useAiChatStore();
+    let resolvePage: (value: unknown) => void = () => {};
+    getConversation.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePage = resolve;
+      }),
+    );
+    const st = store.state(CONN);
+    const pending = store.selectConversation(CONN, "cv");
+    expect(st.loadingConversation).toBe(true);
+
+    resolvePage({
+      conversation: { id: "cv", providerId: "p1", model: "m" },
+      page: { messages: [], hasMore: false },
+    });
+    await pending;
+    expect(st.loadingConversation).toBe(false);
   });
 
   it("queues messages typed mid-stream and flushes on completion", () => {
@@ -393,6 +564,37 @@ describe("aiChat store", () => {
       providerId: "p-local",
     });
     expect(streamCalls.at(-1)?.body).not.toHaveProperty("model");
+  });
+
+  it("defaults to the first personal provider when the shared provider is unusable", async () => {
+    global.mockResolvedValue({
+      configured: true,
+      usable: false,
+      provider: "Shared AI",
+      kind: "AI",
+      model: "gpt-4o",
+    });
+    listProviders.mockResolvedValue([
+      {
+        id: "p-local",
+        kind: "openrouter",
+        name: "OpenRouter",
+        models: ["openai/gpt-4o"],
+        model: "openai/gpt-4o",
+        hasKey: true,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+    const store = useAiChatStore();
+
+    await store.loadProviders();
+    store.send(CONN, "hi");
+
+    expect(store.global?.configured).toBe(true);
+    expect(streamCalls.at(-1)?.body).toMatchObject({
+      providerId: "p-local",
+    });
   });
 
   it("can force-refresh providers after settings change", async () => {

@@ -38,7 +38,7 @@ type connectionWriteRequest struct {
 	Config              map[string]any    `json:"config"`
 	PreserveCredentials []string          `json:"preserveCredentials"`
 	Recording           map[string]string `json:"recording"`
-	AIMode              string            `json:"aiMode"`
+	AIMode              models.AIMode     `json:"aiMode"`
 	AIAllowDestructive  bool              `json:"aiAllowDestructive"`
 }
 

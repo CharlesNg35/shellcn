@@ -45,12 +45,12 @@ type ConnectionInput struct {
 	Recording map[string]string
 	// AIMode gates the AI agent (disabled|read_only|read_write); AIAllowDestructive
 	// is honored only with read_write.
-	AIMode             string
+	AIMode             models.AIMode
 	AIAllowDestructive bool
 }
 
 // normalizeAIMode clears destructive opt-in unless the mode is read_write.
-func normalizeAIMode(mode string, allowDestructive bool) (string, bool, error) {
+func normalizeAIMode(mode models.AIMode, allowDestructive bool) (models.AIMode, bool, error) {
 	switch mode {
 	case "", models.AIModeDisabled, models.AIModeReadOnly:
 		return mode, false, nil
@@ -102,7 +102,7 @@ type ConnectionDetail struct {
 	Secrets            map[string]string             `json:"secrets"`
 	Credentials        map[string]CredentialRefState `json:"credentials,omitempty"`
 	Recording          map[string]string             `json:"recording"`
-	AIMode             string                        `json:"aiMode"`
+	AIMode             models.AIMode                 `json:"aiMode"`
 	AIAllowDestructive bool                          `json:"aiAllowDestructive"`
 }
 

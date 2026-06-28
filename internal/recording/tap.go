@@ -102,8 +102,13 @@ func resizeControl(frame []byte) (cols, rows int, ok bool) {
 func (t *tap) Write(p []byte) (int, error) {
 	if lr := t.live.Load(); lr != nil {
 		lr.output(p)
+		return t.inner.Write(p)
 	}
-	return t.inner.Write(p)
+	n, err := t.inner.Write(p)
+	if n > 0 && t.sess != nil {
+		t.sess.recordOrBufferPreStartOutput(p[:n])
+	}
+	return n, err
 }
 
 func (t *tap) Context() context.Context { return t.inner.Context() }

@@ -87,6 +87,7 @@ func (testPlugin) Manifest() plugin.Manifest {
 		Streams: []plugin.Stream{
 			{ID: "tester.ws", Kind: plugin.StreamTerminal, RouteID: "tester.ws"},
 			{ID: "tester.desk", Kind: plugin.StreamDesktop, RouteID: "tester.desk"},
+			{ID: "tester.logs", Kind: plugin.StreamLogs, RouteID: "tester.logs"},
 		},
 		Recording: []plugin.RecordingCapability{
 			{Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2}, StreamIDs: []string{"tester.ws"}, Authoritative: true},
@@ -163,6 +164,25 @@ func (testPlugin) Routes() []plugin.Route {
 				n, _ := c.Read(buf)
 				_, _ = c.Write(buf[:n])
 				return nil
+			},
+		},
+		{
+			ID: "tester.logs", Method: plugin.MethodWS, Permission: "tester.read", Risk: plugin.RiskSafe, AuditEvent: "tester.logs",
+			Input: &plugin.Schema{Groups: []plugin.Group{{Name: "Logs", Fields: []plugin.Field{
+				{Key: "tail", Label: "Tail", Type: plugin.FieldNumber},
+			}}}},
+			Stream: func(rc *plugin.RequestContext, c plugin.ClientStream) error {
+				tail := rc.Param("tail")
+				if tail == "" {
+					tail = "default"
+				}
+				for _, line := range []string{"first", "second"} {
+					if _, err := c.Write([]byte("tail=" + tail + " " + line + "\n")); err != nil {
+						return err
+					}
+				}
+				<-c.Context().Done()
+				return c.Context().Err()
 			},
 		},
 		{
@@ -370,6 +390,7 @@ func newHarness(t *testing.T, opts ...func(*server.Deps)) *harness {
 type apiResp struct {
 	Status int
 	Body   []byte
+	Header http.Header
 }
 
 func (h *harness) do(t *testing.T, method, path, userID string, body io.Reader) apiResp {
@@ -391,7 +412,7 @@ func (h *harness) do(t *testing.T, method, path, userID string, body io.Reader) 
 	}
 	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
-	return apiResp{Status: resp.StatusCode, Body: b}
+	return apiResp{Status: resp.StatusCode, Body: b, Header: resp.Header.Clone()}
 }
 
 func (h *harness) doReq(t *testing.T, req *http.Request, userID string) apiResp {
@@ -409,7 +430,7 @@ func (h *harness) doReq(t *testing.T, req *http.Request, userID string) apiResp 
 	}
 	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
-	return apiResp{Status: resp.StatusCode, Body: b}
+	return apiResp{Status: resp.StatusCode, Body: b, Header: resp.Header.Clone()}
 }
 
 func TestLeaseProxyForwardsRemoteOwner(t *testing.T) {

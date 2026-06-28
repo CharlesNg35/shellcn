@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { KEEP_ALIVE_WORKBENCH_TABS_MAX } from "./sessionLimits";
+import { registerSessionCleanup } from "./session";
 import type { Icon, ResourceIdentity, Row } from "../types/projection";
 
 export interface OpenView {
@@ -189,6 +190,18 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     tableStates.value[key] = { ...state };
   }
 
+  function reset(): void {
+    activeConnectionId.value = null;
+    recent.value = [];
+    views.value = {};
+    layouts.value = {};
+    tableStates.value = {};
+    connected.value = {};
+    connectedOrder.value = [];
+  }
+
+  registerSessionCleanup("workspace", reset);
+
   return {
     activeConnectionId,
     recent,
@@ -197,6 +210,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     tableStates,
     connected,
     connectedOrder,
+    reset,
     view,
     layout,
     setTreeSidebarWidth,

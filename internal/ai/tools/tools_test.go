@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
 
 	"github.com/charlesng35/shellcn/internal/ai/engine"
 	"github.com/charlesng35/shellcn/internal/ai/tools"
@@ -27,6 +29,16 @@ func (demoPlugin) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		APIVersion: plugin.CurrentAPIVersion, Name: "demo", Version: "0", Title: "Demo",
 		Category: plugin.CategoryOther, Layout: plugin.LayoutTabs,
+		Tabs: []plugin.Panel{{
+			Key:    "items",
+			Label:  "Items",
+			Type:   plugin.PanelTable,
+			Source: &plugin.DataSource{RouteID: "demo.list", Params: map[string]string{"database": "${resource.uid}", "schema": "${resource.name}"}},
+		}},
+		Streams: []plugin.Stream{
+			{ID: "demo.stream", Kind: plugin.StreamQuery, RouteID: "demo.stream"},
+			{ID: "demo.terminal", Kind: plugin.StreamTerminal, RouteID: "demo.terminal"},
+		},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 	}
 }
@@ -45,7 +57,8 @@ func (demoPlugin) Routes() []plugin.Route {
 		{
 			ID: "demo.create", Method: plugin.MethodPost, Risk: plugin.RiskWrite, Permission: "demo.write", AuditEvent: "demo.create",
 			Input: &plugin.Schema{Groups: []plugin.Group{{Name: "i", Fields: []plugin.Field{
-				{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
+				{Key: "name", Label: "Name", Help: "Human-readable item name.", Type: plugin.FieldText, Required: true, Default: "default-name"},
+				{Key: "count", Label: "Count", Type: plugin.FieldNumber, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 100}}},
 				{Key: "token", Label: "Token", Type: plugin.FieldPassword, Secret: true},
 				{Key: "password", Label: "Password", Type: plugin.FieldPassword},
 				{
@@ -71,6 +84,11 @@ func (demoPlugin) Routes() []plugin.Route {
 		},
 		{
 			ID: "demo.stream", Method: plugin.MethodWS, Risk: plugin.RiskSafe, Permission: "demo.read", AuditEvent: "demo.stream",
+			Input:  &plugin.Schema{Groups: []plugin.Group{{Name: "i", Fields: []plugin.Field{{Key: "tail", Label: "Tail", Type: plugin.FieldNumber}}}}},
+			Stream: func(*plugin.RequestContext, plugin.ClientStream) error { return nil },
+		},
+		{
+			ID: "demo.terminal", Method: plugin.MethodWS, Risk: plugin.RiskSafe, Permission: "demo.read", AuditEvent: "demo.terminal",
 			Stream: func(*plugin.RequestContext, plugin.ClientStream) error { return nil },
 		},
 	}
@@ -93,6 +111,20 @@ func (r *recordingInvoker) InvokeRoute(_ context.Context, _ models.User, _, rout
 	r.lastParams = params
 	r.lastBody = body
 	return r.result, r.err
+}
+
+type recordingStreamInvoker struct {
+	recordingInvoker
+	lastStreamRoute  string
+	lastStreamParams map[string]string
+	lastStreamOpts   engine.StreamSampleOptions
+}
+
+func (r *recordingStreamInvoker) InvokeStream(_ context.Context, _ models.User, _, routeID string, params map[string]string, opts engine.StreamSampleOptions) (any, error) {
+	r.lastStreamRoute = routeID
+	r.lastStreamParams = params
+	r.lastStreamOpts = opts
+	return engine.StreamSample{RouteID: routeID, Data: "line 1\n"}, nil
 }
 
 func registry(t *testing.T) *pluginregistry.Registry {
@@ -120,6 +152,59 @@ func TestBuildReadOnlyExposesOnlySafeNonStream(t *testing.T) {
 			t.Fatalf("read-only set leaked %q: %v", forbidden, names)
 		}
 	}
+	if names["observe_demo_stream"] {
+		t.Fatalf("stream observer should require a stream-capable invoker: %v", names)
+	}
+}
+
+func TestBuildExposesSafeStreamObserverWhenSupported(t *testing.T) {
+	reg := registry(t)
+	inv := &recordingStreamInvoker{}
+	ts, err := tools.Build(reg, "demo", map[plugin.RiskLevel]bool{plugin.RiskSafe: true}, inv, models.User{ID: "u"}, "c1")
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if ts.Has("demo_stream") || ts.Has("demo_terminal") {
+		t.Fatal("raw websocket route must not be exposed")
+	}
+	if !ts.Has("observe_demo_stream") {
+		t.Fatalf("safe stream observer missing: %v", ts.Specs())
+	}
+	if ts.Has("observe_demo_terminal") {
+		t.Fatal("terminal streams must not be exposed as text observers")
+	}
+
+	specs := map[string]engine.ToolSpec{}
+	for _, s := range ts.Specs() {
+		specs[s.Name] = s
+	}
+	props := specs["observe_demo_stream"].Parameters["properties"].(map[string]any)
+	for _, key := range []string{"tail", "duration_ms", "max_bytes", "max_events"} {
+		if _, ok := props[key]; !ok {
+			t.Fatalf("observer schema missing %s: %+v", key, props)
+		}
+	}
+
+	out, err := ts.Execute(context.Background(), engine.ToolCall{
+		Name:  "observe_demo_stream",
+		Input: map[string]any{"tail": 25, "duration_ms": 250, "max_bytes": 1024, "max_events": 3},
+	})
+	if err != nil {
+		t.Fatalf("execute observer: %v", err)
+	}
+	if inv.lastStreamRoute != "demo.stream" {
+		t.Fatalf("wrong stream route: %q", inv.lastStreamRoute)
+	}
+	if inv.lastStreamParams["tail"] != "25" {
+		t.Fatalf("stream input should be routed as params: %+v", inv.lastStreamParams)
+	}
+	if inv.lastStreamOpts.Duration != 250*time.Millisecond || inv.lastStreamOpts.MaxBytes != 1024 || inv.lastStreamOpts.MaxEvents != 3 {
+		t.Fatalf("stream opts not routed: %+v", inv.lastStreamOpts)
+	}
+	sample, ok := out.(map[string]any)
+	if !ok || sample["routeId"] != "demo.stream" || sample["data"] != "line 1\n" {
+		t.Fatalf("unexpected observer result: %#v", out)
+	}
 }
 
 func TestWriteTierExposesWriteNotDestructiveOrPrivileged(t *testing.T) {
@@ -145,6 +230,17 @@ func TestToolSchemaExcludesSensitiveFieldsAndIncludesPathParams(t *testing.T) {
 	create := specs["demo_create"].Parameters["properties"].(map[string]any)
 	if _, ok := create["name"]; !ok {
 		t.Fatal("create tool missing name property")
+	}
+	if specs["demo_create"].Parameters["additionalProperties"] != false {
+		t.Fatalf("tool schema should reject unknown args: %+v", specs["demo_create"].Parameters)
+	}
+	name := create["name"].(map[string]any)
+	if !strings.Contains(name["description"].(string), "Human-readable item name") || name["default"] != "default-name" {
+		t.Fatalf("field metadata missing from schema: %+v", name)
+	}
+	count := create["count"].(map[string]any)
+	if count["minimum"] != 1 || count["maximum"] != 100 {
+		t.Fatalf("numeric validators missing from schema: %+v", count)
 	}
 	if _, ok := create["token"]; ok {
 		t.Fatal("secret field must not be exposed to the model")
@@ -174,6 +270,17 @@ func TestToolSchemaExcludesSensitiveFieldsAndIncludesPathParams(t *testing.T) {
 	if len(required) != 1 || required[0] != "name" {
 		t.Fatalf("path param should be required: %v", get["required"])
 	}
+
+	list := specs["demo_list"].Parameters["properties"].(map[string]any)
+	if _, ok := list["database"]; !ok {
+		t.Fatalf("manifest data-source route param should be exposed: %+v", list)
+	}
+	if _, ok := list["schema"]; !ok {
+		t.Fatalf("manifest data-source route param should be exposed: %+v", list)
+	}
+	if !strings.Contains(specs["demo_list"].Description, "Route params:") {
+		t.Fatalf("route param hint missing from description: %q", specs["demo_list"].Description)
+	}
 }
 
 func TestExecuteSplitsPathParamsFromBody(t *testing.T) {
@@ -190,6 +297,16 @@ func TestExecuteSplitsPathParamsFromBody(t *testing.T) {
 	}
 	if len(inv.lastBody) != 0 {
 		t.Fatalf("path-only call should have empty body, got %s", inv.lastBody)
+	}
+
+	if _, err := ts.Execute(context.Background(), engine.ToolCall{Name: "demo_list", Input: map[string]any{"database": "shellcn", "schema": "public"}}); err != nil {
+		t.Fatalf("execute list: %v", err)
+	}
+	if inv.lastRoute != "demo.list" || inv.lastParams["database"] != "shellcn" || inv.lastParams["schema"] != "public" {
+		t.Fatalf("manifest params not routed: route=%s params=%v", inv.lastRoute, inv.lastParams)
+	}
+	if len(inv.lastBody) != 0 {
+		t.Fatalf("manifest-param call should have empty body, got %s", inv.lastBody)
 	}
 
 	ts.WithConfirmer(&recordingConfirmer{approve: true})
@@ -282,5 +399,11 @@ func TestExecuteTruncatesLargeResult(t *testing.T) {
 	m, ok := out.(map[string]any)
 	if !ok || m["truncated"] != true {
 		t.Fatalf("large result should be marked truncated: %#v", out)
+	}
+	if _, ok := m["data"]; !ok {
+		t.Fatalf("structured truncated result should keep data when possible: %#v", out)
+	}
+	if preview, ok := m["preview"].(string); ok && !utf8.ValidString(preview) {
+		t.Fatalf("preview must be valid utf8: %q", preview)
 	}
 }

@@ -51,11 +51,11 @@ type AIProviderSummary struct {
 // AIConversation is one chat thread, scoped to a user + connection. Summary holds
 // the rolling compaction of older turns kept within the model's context window.
 type AIConversation struct {
-	ID           string `gorm:"primaryKey" json:"id"`
-	OwnerID      string `gorm:"index" json:"ownerId"`
-	ConnectionID string `gorm:"index" json:"connectionId"`
-	Title        string `json:"title"`
-	AutoTitled   bool   `json:"autoTitled"`
+	ID            string `gorm:"primaryKey" json:"id"`
+	OwnerID       string `gorm:"index" json:"ownerId"`
+	ConnectionID  string `gorm:"index" json:"connectionId"`
+	Title         string `json:"title"`
+	TitleResolved bool   `json:"titleResolved"`
 	// ProviderID is the user provider used (empty = shared/global). Model records
 	// which model served the thread.
 	ProviderID string `json:"providerId"`
@@ -81,8 +81,8 @@ type AIToolCallRecord struct {
 // activity; Reasoning is optional model thinking.
 type AIMessage struct {
 	ID             string             `gorm:"primaryKey" json:"id"`
-	ConversationID string             `gorm:"index" json:"conversationId"`
-	Seq            int                `gorm:"index" json:"seq"`
+	ConversationID string             `gorm:"index;uniqueIndex:idx_ai_messages_conversation_seq" json:"conversationId"`
+	Seq            int                `gorm:"index;uniqueIndex:idx_ai_messages_conversation_seq" json:"seq"`
 	Role           string             `json:"role"` // user | assistant
 	Content        string             `json:"content"`
 	ToolCalls      []AIToolCallRecord `gorm:"serializer:json" json:"toolCalls"`

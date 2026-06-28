@@ -5,8 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/charlesng35/shellcn/internal/ai/engine"
 	"github.com/charlesng35/shellcn/internal/models"
@@ -14,11 +17,23 @@ import (
 )
 
 // maxToolResultBytes caps tool output before it enters model context.
-const maxToolResultBytes = 8 << 10
+const (
+	maxToolResultBytes  = 8 << 10
+	maxToolStringBytes  = 2 << 10
+	maxToolArrayItems   = 50
+	routeToolTimeout    = 60 * time.Second
+	streamToolTimeout   = 8 * time.Second
+	truncatedResultNote = "result was truncated before being shown to the model; narrow the query for full data"
+)
 
 // Invoker runs a route as the user through the secure pipeline.
 type Invoker interface {
 	InvokeRoute(ctx context.Context, user models.User, connID, routeID string, params map[string]string, body []byte) (any, error)
+}
+
+// StreamInvoker observes a read-only stream route through the secure backend.
+type StreamInvoker interface {
+	InvokeStream(ctx context.Context, user models.User, connID, routeID string, params map[string]string, opts engine.StreamSampleOptions) (any, error)
 }
 
 // ConfirmRequest describes a pending write/destructive tool call awaiting the
@@ -46,9 +61,10 @@ type RouteSource interface {
 
 // binding records how to call a route from a sanitized tool name.
 type binding struct {
-	routeID    string
-	risk       plugin.RiskLevel
-	pathParams []string
+	routeID string
+	risk    plugin.RiskLevel
+	params  map[string]bool
+	stream  bool
 }
 
 // ToolSet is the risk-gated tool catalogue for one connection. It implements
@@ -75,8 +91,30 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 		return nil, fmt.Errorf("tools: unknown protocol %q", protocol)
 	}
 	ts := &ToolSet{byName: map[string]binding{}, invoker: invoker, user: user, connID: connID}
+	manifest := plg.Manifest()
+	manifestParams := routeParamIndex(manifest)
+	streams := textObservableStreams(manifest)
+	_, canObserveStreams := invoker.(StreamInvoker)
 	for _, r := range plg.Routes() {
-		if r.IsStream() || !allowed[r.Risk] {
+		if r.IsStream() {
+			if !canObserveStreams || !allowed[r.Risk] || r.Risk != plugin.RiskSafe || !streams[r.ID] {
+				continue
+			}
+			name := "observe_" + sanitizeName(r.ID)
+			if _, dup := ts.byName[name]; dup {
+				continue
+			}
+			params := templateParamNames(r.Path)
+			routeParams := mergeRouteParams(params, manifestParams[r.ID])
+			ts.byName[name] = binding{routeID: r.ID, risk: r.Risk, params: routeParamSet(routeParams), stream: true}
+			ts.specs = append(ts.specs, engine.ToolSpec{
+				Name:        name,
+				Description: describeStream(r, routeParams),
+				Parameters:  toStreamJSONSchema(r, params, routeParams),
+			})
+			continue
+		}
+		if !allowed[r.Risk] {
 			continue
 		}
 		name := sanitizeName(r.ID)
@@ -84,11 +122,12 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 			continue
 		}
 		params := templateParamNames(r.Path)
-		ts.byName[name] = binding{routeID: r.ID, risk: r.Risk, pathParams: params}
+		routeParams := mergeRouteParams(params, manifestParams[r.ID])
+		ts.byName[name] = binding{routeID: r.ID, risk: r.Risk, params: routeParamSet(routeParams)}
 		ts.specs = append(ts.specs, engine.ToolSpec{
 			Name:        name,
-			Description: describe(r),
-			Parameters:  toJSONSchema(r, params),
+			Description: describe(r, routeParams),
+			Parameters:  toJSONSchema(r, params, routeParams),
 		})
 	}
 	sort.Slice(ts.specs, func(i, j int) bool { return ts.specs[i].Name < ts.specs[j].Name })
@@ -109,16 +148,22 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 	}
 	params := map[string]string{}
 	body := map[string]any{}
-	pathSet := map[string]bool{}
-	for _, p := range b.pathParams {
-		pathSet[p] = true
-	}
 	for k, v := range call.Input {
-		if pathSet[k] {
+		if b.params[k] || (b.stream && !streamControlParam(k)) {
 			params[k] = fmt.Sprint(v)
 			continue
 		}
 		body[k] = v
+	}
+	if b.stream {
+		opts := streamOptions(body)
+		routeCtx, cancel := context.WithTimeout(ctx, streamToolTimeout)
+		defer cancel()
+		result, err := ts.invoker.(StreamInvoker).InvokeStream(routeCtx, ts.user, ts.connID, b.routeID, params, opts)
+		if err != nil {
+			return nil, err
+		}
+		return clean(result), nil
 	}
 	if b.risk == plugin.RiskWrite || b.risk == plugin.RiskDestructive {
 		if ts.confirmer == nil {
@@ -148,7 +193,9 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 			return nil, err
 		}
 	}
-	result, err := ts.invoker.InvokeRoute(ctx, ts.user, ts.connID, b.routeID, params, raw)
+	routeCtx, cancel := context.WithTimeout(ctx, routeToolTimeout)
+	defer cancel()
+	result, err := ts.invoker.InvokeRoute(routeCtx, ts.user, ts.connID, b.routeID, params, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -157,19 +204,109 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 
 // clean marks and truncates oversized tool output.
 func clean(result any) any {
+	result, changed := compactValue(result)
 	encoded, err := json.Marshal(result)
 	if err != nil || len(encoded) <= maxToolResultBytes {
+		if changed {
+			return map[string]any{
+				"truncated": true,
+				"note":      truncatedResultNote,
+				"data":      result,
+			}
+		}
 		return result
 	}
 	return map[string]any{
 		"truncated": true,
-		"note":      fmt.Sprintf("result truncated to %d bytes; narrow the query for full data", maxToolResultBytes),
-		"preview":   string(encoded[:maxToolResultBytes]),
+		"note":      truncatedResultNote,
+		"preview":   safeTruncate(string(encoded), maxToolResultBytes),
 	}
 }
 
+func compactValue(v any) (any, bool) {
+	switch x := v.(type) {
+	case nil, bool, float64, float32, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return v, false
+	case string:
+		if len(x) <= maxToolStringBytes {
+			return x, false
+		}
+		return safeTruncate(x, maxToolStringBytes), true
+	case []any:
+		return compactSlice(x)
+	case map[string]any:
+		return compactMap(x)
+	default:
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return v, false
+		}
+		var normalized any
+		if err := json.Unmarshal(raw, &normalized); err != nil {
+			return v, false
+		}
+		switch normalized.(type) {
+		case string, []any, map[string]any:
+			return compactValue(normalized)
+		default:
+			return v, false
+		}
+	}
+}
+
+func compactMap(in map[string]any) (map[string]any, bool) {
+	out := make(map[string]any, len(in))
+	changed := false
+	for k, v := range in {
+		next, ok := compactValue(v)
+		if ok {
+			changed = true
+		}
+		out[k] = next
+	}
+	return out, changed
+}
+
+func compactSlice(in []any) ([]any, bool) {
+	limit := len(in)
+	changed := false
+	if limit > maxToolArrayItems {
+		limit = maxToolArrayItems
+		changed = true
+	}
+	out := make([]any, 0, limit+1)
+	for _, v := range in[:limit] {
+		next, ok := compactValue(v)
+		if ok {
+			changed = true
+		}
+		out = append(out, next)
+	}
+	if len(in) > limit {
+		out = append(out, map[string]any{
+			"truncated":      true,
+			"remainingItems": len(in) - limit,
+		})
+	}
+	return out, changed
+}
+
+func safeTruncate(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	if limit <= 0 {
+		return "…"
+	}
+	next := s[:limit]
+	for !utf8.ValidString(next) && len(next) > 0 {
+		next = next[:len(next)-1]
+	}
+	return next + "…"
+}
+
 // describe builds a model-facing description from route metadata.
-func describe(r plugin.Route) string {
+func describe(r plugin.Route, routeParams []string) string {
 	action := humanize(r.ID)
 	verb := map[plugin.Method]string{
 		plugin.MethodGet:    "Read",
@@ -181,7 +318,19 @@ func describe(r plugin.Route) string {
 	if verb == "" {
 		verb = "Invoke"
 	}
-	return fmt.Sprintf("%s: %s (%s, %s)", verb, action, r.Method, r.Risk)
+	desc := fmt.Sprintf("%s: %s (%s, %s). Route: %s. Permission: %s.", verb, action, r.Method, r.Risk, r.ID, r.Permission)
+	if len(routeParams) > 0 {
+		desc += " Route params: " + strings.Join(routeParams, ", ") + ". Use these to preserve the same database/schema/resource scope as the user's request."
+	}
+	return desc
+}
+
+func describeStream(r plugin.Route, routeParams []string) string {
+	desc := fmt.Sprintf("Observe a bounded read-only sample of %s (%s stream, %s). Route: %s. Permission: %s. The backend opens the stream, collects a short sample, and closes it automatically.", humanize(r.ID), r.Method, r.Risk, r.ID, r.Permission)
+	if len(routeParams) > 0 {
+		desc += " Route params: " + strings.Join(routeParams, ", ") + ". Use these to preserve the same resource scope as the user's request."
+	}
+	return desc
 }
 
 func humanize(id string) string {
@@ -202,14 +351,21 @@ func sanitizeName(id string) string {
 	return b.String()
 }
 
-// toJSONSchema flattens route input and path params for the model.
-func toJSONSchema(r plugin.Route, pathParams []string) map[string]any {
+// toJSONSchema flattens route input and route params for the model.
+func toJSONSchema(r plugin.Route, pathParams, routeParams []string) map[string]any {
 	props := map[string]any{}
 	var required []string
 
 	for _, p := range pathParams {
 		props[p] = map[string]any{"type": "string", "description": "path parameter"}
 		required = append(required, p)
+	}
+	pathSet := routeParamSet(pathParams)
+	for _, p := range routeParams {
+		if pathSet[p] {
+			continue
+		}
+		props[p] = map[string]any{"type": "string", "description": "route scope parameter from the plugin manifest"}
 	}
 
 	if r.Input != nil {
@@ -227,11 +383,202 @@ func toJSONSchema(r plugin.Route, pathParams []string) map[string]any {
 		}
 	}
 
-	schema := map[string]any{"type": "object", "properties": props}
+	schema := map[string]any{"type": "object", "properties": props, "additionalProperties": false}
 	if len(required) > 0 {
 		schema["required"] = required
 	}
 	return schema
+}
+
+func toStreamJSONSchema(r plugin.Route, pathParams, routeParams []string) map[string]any {
+	schema := toJSONSchema(r, pathParams, routeParams)
+	props, _ := schema["properties"].(map[string]any)
+	if props == nil {
+		props = map[string]any{}
+		schema["properties"] = props
+	}
+	props["duration_ms"] = map[string]any{
+		"type":        "number",
+		"description": "sample duration in milliseconds",
+		"default":     1200,
+		"minimum":     100,
+		"maximum":     5000,
+	}
+	props["max_bytes"] = map[string]any{
+		"type":        "number",
+		"description": "maximum stream bytes to return",
+		"default":     16384,
+		"minimum":     256,
+		"maximum":     65536,
+	}
+	props["max_events"] = map[string]any{
+		"type":        "number",
+		"description": "maximum stream write events to return",
+		"default":     100,
+		"minimum":     1,
+		"maximum":     500,
+	}
+	return schema
+}
+
+func streamOptions(input map[string]any) engine.StreamSampleOptions {
+	return engine.StreamSampleOptions{
+		Duration:  time.Duration(number(input["duration_ms"])) * time.Millisecond,
+		MaxBytes:  int(number(input["max_bytes"])),
+		MaxEvents: int(number(input["max_events"])),
+	}
+}
+
+func streamControlParam(key string) bool {
+	switch key {
+	case "duration_ms", "max_bytes", "max_events":
+		return true
+	default:
+		return false
+	}
+}
+
+func number(v any) float64 {
+	switch x := v.(type) {
+	case float64:
+		return x
+	case float32:
+		return float64(x)
+	case int:
+		return float64(x)
+	case int8:
+		return float64(x)
+	case int16:
+		return float64(x)
+	case int32:
+		return float64(x)
+	case int64:
+		return float64(x)
+	case uint:
+		return float64(x)
+	case uint8:
+		return float64(x)
+	case uint16:
+		return float64(x)
+	case uint32:
+		return float64(x)
+	case uint64:
+		return float64(x)
+	case json.Number:
+		n, _ := x.Float64()
+		return n
+	default:
+		return 0
+	}
+}
+
+func textObservableStreams(m plugin.Manifest) map[string]bool {
+	out := map[string]bool{}
+	for _, s := range m.Streams {
+		if textObservableStreamKind(s.Kind) {
+			out[s.RouteID] = true
+		}
+	}
+	return out
+}
+
+func textObservableStreamKind(kind plugin.StreamKind) bool {
+	switch kind {
+	case plugin.StreamLogs, plugin.StreamMetrics, plugin.StreamTask, plugin.StreamResource, plugin.StreamQuery:
+		return true
+	default:
+		return false
+	}
+}
+
+func routeParamIndex(m plugin.Manifest) map[string]map[string]bool {
+	out := map[string]map[string]bool{}
+	add := func(routeID string, params map[string]string) {
+		if strings.TrimSpace(routeID) == "" {
+			return
+		}
+		for key := range params {
+			if strings.TrimSpace(key) == "" {
+				continue
+			}
+			if out[routeID] == nil {
+				out[routeID] = map[string]bool{}
+			}
+			out[routeID][key] = true
+		}
+	}
+
+	dataSourceType := reflect.TypeOf(plugin.DataSource{})
+	actionType := reflect.TypeOf(plugin.Action{})
+	var walk func(reflect.Value)
+	walk = func(v reflect.Value) {
+		if !v.IsValid() {
+			return
+		}
+		for v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer {
+			if v.IsNil() {
+				return
+			}
+			v = v.Elem()
+		}
+		if v.Type() == dataSourceType {
+			ds := v.Interface().(plugin.DataSource)
+			add(ds.RouteID, ds.Params)
+			return
+		}
+		if v.Type() == actionType {
+			a := v.Interface().(plugin.Action)
+			add(a.RouteID, a.Params)
+		}
+		switch v.Kind() {
+		case reflect.Struct:
+			for i := 0; i < v.NumField(); i++ {
+				if v.Type().Field(i).PkgPath != "" {
+					continue
+				}
+				walk(v.Field(i))
+			}
+		case reflect.Slice, reflect.Array:
+			for i := 0; i < v.Len(); i++ {
+				walk(v.Index(i))
+			}
+		case reflect.Map:
+			iter := v.MapRange()
+			for iter.Next() {
+				walk(iter.Value())
+			}
+		}
+	}
+	walk(reflect.ValueOf(m))
+	return out
+}
+
+func mergeRouteParams(pathParams []string, manifestParams map[string]bool) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(pathParams)+len(manifestParams))
+	for _, p := range pathParams {
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	extra := make([]string, 0, len(manifestParams))
+	for p := range manifestParams {
+		if !seen[p] {
+			extra = append(extra, p)
+		}
+	}
+	sort.Strings(extra)
+	return append(out, extra...)
+}
+
+func routeParamSet(params []string) map[string]bool {
+	out := make(map[string]bool, len(params))
+	for _, p := range params {
+		out[p] = true
+	}
+	return out
 }
 
 func fieldSchema(f plugin.Field) (map[string]any, bool) {
@@ -239,10 +586,8 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 		return nil, false
 	}
 	out := map[string]any{}
-	if d := strings.TrimSpace(f.Label); d != "" {
+	if d := fieldDescription(f); d != "" {
 		out["description"] = d
-	} else if h := strings.TrimSpace(f.Help); h != "" {
-		out["description"] = h
 	}
 	switch f.Type {
 	case plugin.FieldNumber, plugin.FieldStepper, plugin.FieldSlider:
@@ -279,6 +624,7 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 		}
 		if len(props) > 0 {
 			out["properties"] = props
+			out["additionalProperties"] = false
 		}
 		if len(required) > 0 {
 			out["required"] = required
@@ -304,7 +650,48 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 		}
 		out["enum"] = vals
 	}
+	if f.Default != nil {
+		out["default"] = f.Default
+	}
+	if f.MinItems > 0 {
+		out["minItems"] = f.MinItems
+	}
+	if f.MaxItems > 0 {
+		out["maxItems"] = f.MaxItems
+	}
+	for _, v := range f.Validators {
+		applyValidator(out, v)
+	}
 	return out, true
+}
+
+func fieldDescription(f plugin.Field) string {
+	var parts []string
+	if label := strings.TrimSpace(f.Label); label != "" {
+		parts = append(parts, label)
+	}
+	if help := strings.TrimSpace(f.Help); help != "" && help != strings.TrimSpace(f.Label) {
+		parts = append(parts, help)
+	}
+	if f.OptionsSource != nil && strings.TrimSpace(f.OptionsSource.RouteID) != "" {
+		parts = append(parts, "Options are loaded dynamically from route "+f.OptionsSource.RouteID+".")
+	}
+	return strings.Join(parts, " ")
+}
+
+func applyValidator(out map[string]any, v plugin.Validator) {
+	switch v.Type {
+	case plugin.ValidatorMin:
+		out["minimum"] = v.Value
+	case plugin.ValidatorMax:
+		out["maximum"] = v.Value
+	case plugin.ValidatorRegex:
+		if s, ok := v.Value.(string); ok && s != "" {
+			out["pattern"] = s
+		}
+	case plugin.ValidatorOneOf:
+		out["enum"] = v.Value
+	}
 }
 
 func sensitiveField(f plugin.Field) bool {

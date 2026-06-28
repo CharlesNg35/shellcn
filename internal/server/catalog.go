@@ -65,7 +65,7 @@ type connectionDTO struct {
 	SharedWithMe       bool              `json:"sharedWithMe"`
 	SharedByMe         bool              `json:"sharedByMe"`
 	Recording          map[string]string `json:"recording,omitempty"`
-	AIMode             string            `json:"aiMode,omitempty"`
+	AIMode             models.AIMode     `json:"aiMode,omitempty"`
 	AIAllowDestructive bool              `json:"aiAllowDestructive,omitempty"`
 	FolderID           string            `json:"folderId,omitempty"`
 	SortOrder          int               `json:"sortOrder"`

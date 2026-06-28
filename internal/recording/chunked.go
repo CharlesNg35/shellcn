@@ -73,6 +73,17 @@ func (e *Engine) BeginChunked(ctx context.Context, info StreamInfo, format plugi
 
 // AppendChunk appends one ordered chunk to a chunked recording.
 func (e *Engine) AppendChunk(ctx context.Context, recordingID, userID string, index int, data []byte) error {
+	return e.appendChunk(ctx, recordingID, userID, index, data, false)
+}
+
+// ReplaceChunk resets a chunked recording at index 0 and then appends replacement
+// chunks in order. It is used to swap a browser WebM capture with a metadata-fixed
+// version before finalization.
+func (e *Engine) ReplaceChunk(ctx context.Context, recordingID, userID string, index int, data []byte) error {
+	return e.appendChunk(ctx, recordingID, userID, index, data, index == 0)
+}
+
+func (e *Engine) appendChunk(ctx context.Context, recordingID, userID string, index int, data []byte, reset bool) error {
 	cr, err := e.chunkedFor(recordingID, userID)
 	if err != nil {
 		return err
@@ -81,6 +92,28 @@ func (e *Engine) AppendChunk(ctx context.Context, recordingID, userID string, in
 	defer cr.mu.Unlock()
 	if cr.done {
 		return fmt.Errorf("%w: recording already finalized", plugin.ErrConflict)
+	}
+	if reset {
+		if index != 0 {
+			return fmt.Errorf("%w: replacement must start at chunk 0", plugin.ErrInvalidInput)
+		}
+		w, err := e.blobs.Create(ctx, cr.rec.StorageKey)
+		if err != nil {
+			return err
+		}
+		if _, err := w.Write(data); err != nil {
+			_ = w.Close()
+			return err
+		}
+		if err := w.Close(); err != nil {
+			return err
+		}
+		cr.nextIndex = 1
+		cr.size = int64(len(data))
+		cr.hash = sha256.New()
+		_, _ = cr.hash.Write(data)
+		e.metrics.AddRecordingBytes(len(data))
+		return nil
 	}
 	if index != cr.nextIndex {
 		return fmt.Errorf("%w: chunk %d out of order (expected %d)", plugin.ErrInvalidInput, index, cr.nextIndex)

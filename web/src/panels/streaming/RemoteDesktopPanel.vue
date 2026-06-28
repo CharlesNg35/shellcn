@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import Button from "primevue/button";
 import { prepareStream, resolveParams } from "@/api/dataSource";
 import { registerConnectionCleanup } from "@/stores/connectionCleanup";
@@ -68,8 +68,25 @@ function findCanvas():
   );
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function waitForCanvas(
+  timeoutMs = 2000,
+): Promise<(HTMLCanvasElement & { captureStream(): MediaStream }) | null> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await nextTick();
+    const canvas = findCanvas();
+    if (canvas && canvas.width > 0 && canvas.height > 0) return canvas;
+    await wait(50);
+  }
+  return findCanvas();
+}
+
 async function beginCapture(): Promise<boolean> {
-  const canvas = findCanvas();
+  const canvas = await waitForCanvas();
   if (!canvas) return false;
   return recorder.start(canvas);
 }
@@ -108,8 +125,10 @@ async function handleEngineStatus(
       if (!recordingStarted && forced.value && run === activeRun) {
         status.value = "recording-failed";
         loaded.value = false;
-        remoteSession?.disconnect();
+        const current = remoteSession;
         remoteSession = null;
+        activeRun += 1;
+        current?.disconnect();
       }
     }
     return;

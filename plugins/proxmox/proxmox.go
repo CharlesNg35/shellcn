@@ -63,7 +63,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		},
 		Recording: []plugin.RecordingCapability{
 			{Class: plugin.RecordingDesktop, Formats: []plugin.RecordingFormat{plugin.FormatWebMCanvas}, StreamIDs: []string{"proxmox.qemu.console"}},
-			{Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2}, StreamIDs: []string{"proxmox.lxc.console", "proxmox.node.shell"}},
+			{Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2}, StreamIDs: []string{"proxmox.lxc.console", "proxmox.node.shell"}, Authoritative: true},
 		},
 	}
 }

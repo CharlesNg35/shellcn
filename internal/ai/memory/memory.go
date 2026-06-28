@@ -25,7 +25,6 @@ const (
 	compactedAssistCharLimit = 500
 	toolResultCharLimit      = 600
 	toolResultCountLimit     = 6
-	titleWords               = 8
 	defaultMessagePageSize   = 30
 )
 
@@ -85,14 +84,14 @@ func (s *Store) Messages(ctx context.Context, ownerID, id string) ([]models.AIMe
 	return s.msg.List(ctx, id)
 }
 
-// Rename sets a user-provided title (clearing the auto-titled flag).
+// Rename sets a user-provided title.
 func (s *Store) Rename(ctx context.Context, ownerID, id, title string) (models.AIConversation, error) {
 	c, err := s.Get(ctx, ownerID, id)
 	if err != nil {
 		return models.AIConversation{}, err
 	}
 	c.Title = strings.TrimSpace(title)
-	c.AutoTitled = false
+	c.TitleResolved = true
 	c.UpdatedAt = s.now()
 	if err := s.conv.Update(ctx, &c); err != nil {
 		return models.AIConversation{}, err
@@ -111,17 +110,13 @@ func (s *Store) Delete(ctx context.Context, ownerID, id string) error {
 	return s.conv.Delete(ctx, id)
 }
 
-// DefaultTitle marks an untitled conversation; auto-titling only replaces it.
+// DefaultTitle is shown until the first successful automatic or manual title.
 const DefaultTitle = "New conversation"
 
 // AppendUser stores a user message.
 func (s *Store) AppendUser(ctx context.Context, convID, content string) error {
-	existing, err := s.msg.List(ctx, convID)
-	if err != nil {
-		return err
-	}
 	return s.msg.Append(ctx, &models.AIMessage{
-		ID: uuid.NewString(), ConversationID: convID, Seq: len(existing),
+		ID: uuid.NewString(), ConversationID: convID, Seq: -1,
 		Role: string(engine.RoleUser), Content: content, CreatedAt: s.now(),
 	})
 }
@@ -142,26 +137,24 @@ func (s *Store) SetAutoTitle(ctx context.Context, convID, title string) {
 		return
 	}
 	c, err := s.conv.Get(ctx, convID)
-	if err != nil || c.Title != DefaultTitle {
+	if err != nil || !CanAutoTitle(c) {
 		return
 	}
 	c.Title = title
-	c.AutoTitled = true
+	c.TitleResolved = true
 	c.UpdatedAt = s.now()
 	_ = s.conv.Update(ctx, &c)
 }
 
-// TitleFrom derives a short fallback title from a message.
-func TitleFrom(msg string) string { return titleFrom(msg) }
+// CanAutoTitle reports whether the conversation still owns the initial title slot.
+func CanAutoTitle(c models.AIConversation) bool {
+	return !c.TitleResolved
+}
 
 // AppendAssistant stores a finalized assistant message.
 func (s *Store) AppendAssistant(ctx context.Context, convID, content, reasoning string, calls []models.AIToolCallRecord, truncated bool) error {
-	existing, err := s.msg.List(ctx, convID)
-	if err != nil {
-		return err
-	}
 	if err := s.msg.Append(ctx, &models.AIMessage{
-		ID: uuid.NewString(), ConversationID: convID, Seq: len(existing),
+		ID: uuid.NewString(), ConversationID: convID, Seq: -1,
 		Role: string(engine.RoleAssistant), Content: content, Reasoning: reasoning,
 		ToolCalls: calls, Truncated: truncated, CreatedAt: s.now(),
 	}); err != nil {
@@ -382,21 +375,6 @@ func (s *Store) touch(ctx context.Context, convID string) {
 	}
 	c.UpdatedAt = s.now()
 	_ = s.conv.Update(ctx, &c)
-}
-
-func titleFrom(msg string) string {
-	words := strings.Fields(strings.TrimSpace(msg))
-	if len(words) == 0 {
-		return "New conversation"
-	}
-	if len(words) > titleWords {
-		words = words[:titleWords]
-	}
-	t := strings.Join(words, " ")
-	if len(t) > 60 {
-		t = t[:60]
-	}
-	return t
 }
 
 func truncate(s string, limit int) string {

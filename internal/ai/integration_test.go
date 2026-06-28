@@ -2,6 +2,7 @@ package ai_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 
@@ -22,12 +23,14 @@ import (
 // answers — simulating a model that lists resources via a tool.
 type scriptedProvider struct {
 	gotTools []engine.ToolSpec
+	system   string
 }
 
 func (p *scriptedProvider) Models(context.Context) ([]engine.ModelInfo, error) { return nil, nil }
 
 func (p *scriptedProvider) Stream(ctx context.Context, req engine.ChatRequest, exec engine.ToolExecutor) (<-chan engine.StreamEvent, error) {
 	p.gotTools = req.Tools
+	p.system = req.System
 	out := make(chan engine.StreamEvent, 8)
 	go func() {
 		defer close(out)
@@ -50,6 +53,19 @@ func errStr(err error) string {
 	return err.Error()
 }
 
+type errorProvider struct{}
+
+func (errorProvider) Models(context.Context) ([]engine.ModelInfo, error) { return nil, nil }
+
+func (errorProvider) Stream(context.Context, engine.ChatRequest, engine.ToolExecutor) (<-chan engine.StreamEvent, error) {
+	out := make(chan engine.StreamEvent, 2)
+	go func() {
+		defer close(out)
+		out <- engine.StreamEvent{Type: engine.EventError, Err: "provider failed"}
+	}()
+	return out, nil
+}
+
 // demoPlugin mirrors the tools-package fake but lives here to keep the test
 // self-contained.
 type demoPlugin struct{}
@@ -57,7 +73,8 @@ type demoPlugin struct{}
 func (demoPlugin) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		APIVersion: plugin.CurrentAPIVersion, Name: "demo", Version: "0", Title: "Demo",
-		Category: plugin.CategoryOther, Layout: plugin.LayoutTabs,
+		Description: "Manage demo infrastructure resources.",
+		Category:    plugin.CategoryOther, Layout: plugin.LayoutTabs,
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 	}
 }
@@ -114,7 +131,7 @@ func TestAgentListsResourcesViaTools(t *testing.T) {
 	var events []engine.StreamEvent
 	err := svc.Run(context.Background(), ai.RunInput{
 		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
-		ConnectionTitle: "prod", AIMode: "read_only", UserMessage: "list resources",
+		ConnectionTitle: "prod", AIMode: models.AIModeReadOnly, UserMessage: "list resources",
 	}, func(ev engine.StreamEvent) { events = append(events, ev) })
 	if err != nil {
 		t.Fatalf("run: %v", err)
@@ -131,6 +148,9 @@ func TestAgentListsResourcesViaTools(t *testing.T) {
 	}
 	if offered["demo_delete"] {
 		t.Fatalf("read-only must not expose the destructive tool: %+v", prov.gotTools)
+	}
+	if !strings.Contains(prov.system, "Demo") || !strings.Contains(prov.system, "Manage demo infrastructure resources.") {
+		t.Fatalf("system prompt should include compact protocol context:\n%s", prov.system)
 	}
 
 	// The tool call ran through the invoker as the signed-in user.
@@ -180,7 +200,7 @@ func TestTurnPersistsConversationHistory(t *testing.T) {
 
 	err = svc.Run(context.Background(), ai.RunInput{
 		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
-		AIMode: "read_only", ConversationID: conv.ID, UserMessage: "list resources",
+		AIMode: models.AIModeReadOnly, ConversationID: conv.ID, UserMessage: "list resources",
 	}, func(engine.StreamEvent) {})
 	if err != nil {
 		t.Fatalf("run: %v", err)
@@ -200,9 +220,62 @@ func TestTurnPersistsConversationHistory(t *testing.T) {
 		t.Fatalf("assistant message/tool calls not persisted: %+v", msgs[1])
 	}
 
-	// Auto-title fired on the first exchange.
 	got, _ := mem.Get(context.Background(), "u1", conv.ID)
-	if !got.AutoTitled {
-		t.Fatal("conversation should be auto-titled after first message")
+	if got.TitleResolved {
+		t.Fatal("conversation should not be auto-titled after the first exchange")
+	}
+
+	err = svc.Run(context.Background(), ai.RunInput{
+		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
+		AIMode: models.AIModeReadOnly, ConversationID: conv.ID, UserMessage: "show more detail",
+	}, func(engine.StreamEvent) {})
+	if err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	got, _ = mem.Get(context.Background(), "u1", conv.ID)
+	if !got.TitleResolved {
+		t.Fatal("conversation should be auto-titled once there is enough context")
+	}
+}
+
+func TestProviderStreamErrorDoesNotPersistEmptyAssistant(t *testing.T) {
+	key, _ := secrets.GenerateMasterKey()
+	vault, _ := secrets.NewVault(key)
+	st := store.NewMemory()
+	global := config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", Model: "gpt-4o"}
+	providers := aiconfig.New(st.AIProviders, vault, global)
+	mem := memory.New(st.AIConversations, st.AIMessages)
+
+	reg := pluginregistry.New()
+	reg.MustRegister(demoPlugin{})
+
+	svc := ai.New(providers, global, reg, &recordingInvoker{}, mem, modelreg.New(modelreg.WithoutRegistryFetch())).WithProviderFactory(
+		func(context.Context, models.AIProviderKind, string, string, string) (engine.Provider, error) {
+			return errorProvider{}, nil
+		},
+	)
+
+	conv, err := mem.Create(context.Background(), "u1", "c1", "", "gpt-4o")
+	if err != nil {
+		t.Fatalf("create conv: %v", err)
+	}
+
+	var events []engine.StreamEvent
+	err = svc.Run(context.Background(), ai.RunInput{
+		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
+		AIMode: models.AIModeReadOnly, ConversationID: conv.ID, UserMessage: "list resources",
+	}, func(ev engine.StreamEvent) { events = append(events, ev) })
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(events) < 2 || events[0].Type != engine.EventError || events[len(events)-1].Type != engine.EventDone {
+		t.Fatalf("stream error should be followed by done: %+v", events)
+	}
+	msgs, err := mem.Messages(context.Background(), "u1", conv.ID)
+	if err != nil {
+		t.Fatalf("messages: %v", err)
+	}
+	if len(msgs) != 1 || msgs[0].Role != "user" {
+		t.Fatalf("failed turn should persist only the user message, got %+v", msgs)
 	}
 }

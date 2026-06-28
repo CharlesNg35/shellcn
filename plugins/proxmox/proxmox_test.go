@@ -18,6 +18,19 @@ func TestManifestValidates(t *testing.T) {
 	}
 }
 
+func TestTerminalRecordingIsAuthoritative(t *testing.T) {
+	for _, cap := range New().Manifest().Recording {
+		if cap.Class != plugin.RecordingTerminal {
+			continue
+		}
+		if !cap.Authoritative {
+			t.Fatalf("terminal recording must be authoritative: %+v", cap)
+		}
+		return
+	}
+	t.Fatal("terminal recording capability missing")
+}
+
 func TestNodeStorageTabIsNodeScoped(t *testing.T) {
 	var storageTab *plugin.Panel
 	for _, r := range New().Manifest().Resources {

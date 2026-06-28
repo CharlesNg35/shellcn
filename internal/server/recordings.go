@@ -143,7 +143,11 @@ func (s *Server) handleRecordingContent(w http.ResponseWriter, r *http.Request) 
 	s.auditRecordingEvent(ctx, user, rec, recReadEvent, models.AuditAllowed, nil)
 	w.Header().Set("Content-Type", recording.ContentType(plugin.RecordingFormat(rec.Format)))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Disposition", "inline; filename=\""+rec.ID+contentExt(rec.Format)+"\"")
+	disposition := "inline"
+	if r.URL.Query().Get("download") == "1" {
+		disposition = "attachment"
+	}
+	w.Header().Set("Content-Disposition", disposition+"; filename=\""+rec.ID+contentExt(rec.Format)+"\"")
 
 	name := rec.ID + contentExt(rec.Format)
 	modTime := rec.StartedAt
@@ -320,7 +324,13 @@ func (s *Server) handleUploadChunk(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
 		return
 	}
-	if err := s.deps.Recording.AppendChunk(ctx, chi.URLParam(r, "id"), user.ID, index, data); err != nil {
+	replace := r.URL.Query().Get("replace") == "1"
+	if replace {
+		err = s.deps.Recording.ReplaceChunk(ctx, chi.URLParam(r, "id"), user.ID, index, data)
+	} else {
+		err = s.deps.Recording.AppendChunk(ctx, chi.URLParam(r, "id"), user.ID, index, data)
+	}
+	if err != nil {
 		writeError(w, s.deps.Logger, err)
 		return
 	}

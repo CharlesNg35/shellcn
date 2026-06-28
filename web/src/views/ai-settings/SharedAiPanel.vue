@@ -1,10 +1,22 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import Tag from "primevue/tag";
 import type { AiGlobalStatus } from "@/api/ai";
 import AppIcon from "@/components/AppIcon.vue";
 import { providerKindLabel } from "./providerKinds";
 
-defineProps<{ global: AiGlobalStatus | null }>();
+const props = defineProps<{ global: AiGlobalStatus | null }>();
+
+const configured = computed(() => Boolean(props.global?.configured));
+const usable = computed(
+  () => configured.value && (props.global?.usable ?? true),
+);
+const status = computed(() => {
+  if (!configured.value)
+    return { label: "Not configured", severity: "secondary" };
+  if (!usable.value) return { label: "Unsupported kind", severity: "warn" };
+  return { label: "Configured", severity: "success" };
+});
 </script>
 
 <template>
@@ -32,14 +44,11 @@ defineProps<{ global: AiGlobalStatus | null }>();
             <p class="font-medium text-surface-900 dark:text-surface-0">
               {{ global?.provider || "Shared AI" }}
             </p>
-            <Tag
-              :value="global?.configured ? 'Configured' : 'Not configured'"
-              :severity="global?.configured ? 'success' : 'secondary'"
-            />
+            <Tag :value="status.label" :severity="status.severity" />
           </div>
           <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
-            <template v-if="global?.configured">
-              {{ providerKindLabel(global.kind || "") }} · {{ global.model }}
+            <template v-if="configured">
+              {{ providerKindLabel(global?.kind || "") }} · {{ global?.model }}
             </template>
             <template v-else>
               A shared workspace provider is not available.

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/charlesng35/shellcn/internal/ai/agent"
 	"github.com/charlesng35/shellcn/internal/ai/budget"
@@ -21,11 +22,15 @@ import (
 
 const defaultMaxSteps = 12
 
+var titleGenerationTimeout = 8 * time.Second
+
 var (
 	// ErrNotConfigured means neither a user provider nor the shared config is usable.
 	ErrNotConfigured = errors.New("ai: no provider configured")
 	// ErrProviderUnsupported means the resolved provider kind has no adapter yet.
 	ErrProviderUnsupported = errors.New("ai: provider kind not supported")
+	// ErrDisabled means AI is disabled for this connection.
+	ErrDisabled = errors.New("ai: disabled for this connection")
 )
 
 // ProviderFactory builds an engine.Provider for a resolved config.
@@ -71,12 +76,13 @@ type RunInput struct {
 	ConnID           string
 	Protocol         string
 	ConnectionTitle  string
-	AIMode           string // disabled | read_only | read_write
+	AIMode           models.AIMode
 	AllowDestructive bool
 	Scope            Scope
 	ConversationID   string // when set (with memory wired), history is persisted
 	History          []engine.Message
 	UserMessage      string
+	WorkspaceQuery   string
 	RecentOps        []string
 	Confirm          tools.Confirmer
 }
@@ -84,6 +90,10 @@ type RunInput struct {
 // Run executes one turn and relays every event to sink. The caller cancels ctx
 // to stop the turn cleanly.
 func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamEvent)) error {
+	if in.AIMode == models.AIModeDisabled {
+		return ErrDisabled
+	}
+
 	provider, model, kind, err := s.resolveProvider(ctx, in.User, in.Scope)
 	if err != nil {
 		return err
@@ -112,13 +122,17 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 	for _, sp := range specs {
 		names = append(names, sp.Name)
 	}
+	protocolTitle, protocolDescription := s.protocolInfo(in.Protocol)
 	system := agent.SystemPrompt(agent.PromptInput{
-		ConnectionTitle: in.ConnectionTitle,
-		Protocol:        in.Protocol,
-		AIMode:          in.AIMode,
-		Tools:           names,
-		RecentOps:       in.RecentOps,
-		HasSubagent:     hasSubagent,
+		ConnectionTitle:     in.ConnectionTitle,
+		Protocol:            in.Protocol,
+		ProtocolTitle:       protocolTitle,
+		ProtocolDescription: protocolDescription,
+		AIMode:              in.AIMode,
+		Tools:               names,
+		WorkspaceQuery:      in.WorkspaceQuery,
+		RecentOps:           in.RecentOps,
+		HasSubagent:         hasSubagent,
 	})
 
 	limits := budget.Limits{ContextWindow: s.models.ContextWindow(ctx, model, registryProvider(kind))}
@@ -160,34 +174,82 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 	}
 
 	acc := &accumulator{}
-	relaySink := sink
-	if persist {
-		relaySink = func(ev engine.StreamEvent) {
-			acc.add(ev)
-			sink(ev)
-		}
+	relaySink := func(ev engine.StreamEvent) {
+		acc.add(ev)
+		sink(ev)
 	}
 	agent.Relay(ctx, ch, relaySink)
+	if acc.err != "" && !acc.done {
+		sink(engine.StreamEvent{Type: engine.EventDone})
+	}
 
-	if persist {
+	if persist && acc.err == "" {
 		_ = s.mem.AppendAssistant(ctx, in.ConversationID, acc.content.String(), acc.reasoning.String(), acc.calls, acc.truncated)
-		s.autoTitle(ctx, provider, model, in.User.ID, in.ConversationID, in.UserMessage, acc.content.String())
+		s.autoTitle(ctx, provider, model, in.User.ID, in.ConversationID)
 	}
 	return nil
 }
 
-// autoTitle names a conversation after its first exchange, using the model when
-// possible and a heuristic otherwise. It is a no-op once the title is set.
-func (s *Service) autoTitle(ctx context.Context, provider engine.Provider, model, ownerID, convID, userMessage, assistantReply string) {
+func (s *Service) protocolInfo(protocol string) (string, string) {
+	if s.routes == nil {
+		return "", ""
+	}
+	plg, ok := s.routes.Get(protocol)
+	if !ok {
+		return "", ""
+	}
+	m := plg.Manifest()
+	return strings.TrimSpace(m.Title), strings.TrimSpace(m.Description)
+}
+
+// autoTitle tries to resolve the placeholder title once there is enough context.
+func (s *Service) autoTitle(ctx context.Context, provider engine.Provider, model, ownerID, convID string) {
 	conv, err := s.mem.Get(ctx, ownerID, convID)
-	if err != nil || conv.Title != memory.DefaultTitle || s.mem.MessageCount(ctx, convID) < 2 {
+	if err != nil || !memory.CanAutoTitle(conv) || s.mem.MessageCount(ctx, convID) <= 2 {
 		return
 	}
-	title := agent.GenerateTitle(ctx, provider, model, userMessage, assistantReply)
-	if title == "" {
-		title = memory.TitleFrom(userMessage)
+	messages, err := s.mem.Messages(ctx, ownerID, convID)
+	if err != nil {
+		return
 	}
-	s.mem.SetAutoTitle(ctx, convID, title)
+	if title := generateTitle(ctx, provider, model, titleContext(messages)); title != "" {
+		s.mem.SetAutoTitle(ctx, convID, title)
+	}
+}
+
+func generateTitle(ctx context.Context, provider engine.Provider, model, conversation string) string {
+	titleCtx, cancel := context.WithTimeout(ctx, titleGenerationTimeout)
+	defer cancel()
+
+	done := make(chan string, 1)
+	go func() {
+		done <- agent.GenerateTitle(titleCtx, provider, model, conversation)
+	}()
+
+	select {
+	case title := <-done:
+		return title
+	case <-titleCtx.Done():
+		return ""
+	}
+}
+
+func titleContext(messages []models.AIMessage) string {
+	var b strings.Builder
+	for _, msg := range messages {
+		role := strings.TrimSpace(msg.Role)
+		content := strings.TrimSpace(msg.Content)
+		if content == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(role)
+		b.WriteString(": ")
+		b.WriteString(content)
+	}
+	return b.String()
 }
 
 // accumulator captures a turn's assistant output to persist after streaming.
@@ -196,6 +258,8 @@ type accumulator struct {
 	reasoning strings.Builder
 	calls     []models.AIToolCallRecord
 	truncated bool
+	done      bool
+	err       string
 }
 
 func (a *accumulator) add(ev engine.StreamEvent) {
@@ -218,11 +282,14 @@ func (a *accumulator) add(ev engine.StreamEvent) {
 		if ev.Truncated {
 			a.truncated = true
 		}
+		a.done = true
+	case engine.EventError:
+		a.err = ev.Err
 	}
 }
 
 // AllowedRisks maps a connection's AI mode + destructive opt-in to allowed tool risks.
-func AllowedRisks(mode string, allowDestructive bool) map[plugin.RiskLevel]bool {
+func AllowedRisks(mode models.AIMode, allowDestructive bool) map[plugin.RiskLevel]bool {
 	switch mode {
 	case "", models.AIModeReadOnly:
 		return map[plugin.RiskLevel]bool{plugin.RiskSafe: true}
@@ -247,7 +314,10 @@ func (s *Service) resolveProvider(ctx context.Context, user models.User, scope S
 		return p, cfg.Model, cfg.Kind, err
 	}
 	if s.global.Configured() {
-		kind := models.AIProviderKind(s.global.Kind)
+		kind, ok := aiconfig.SupportedKind(s.global.Kind)
+		if !ok {
+			return nil, "", "", ErrNotConfigured
+		}
 		p, err := s.factory(ctx, kind, s.global.APIKey, s.global.BaseURL, s.global.Model)
 		return p, s.global.Model, kind, err
 	}
@@ -292,7 +362,7 @@ func buildProvider(ctx context.Context, kind models.AIProviderKind, key, baseURL
 // Configured reports whether any provider (user or global) could serve a turn for
 // the user. Used by transport to gate the chat endpoint.
 func (s *Service) Configured(ctx context.Context, userID string) bool {
-	if s.global.Configured() {
+	if _, ok := aiconfig.SupportedKind(s.global.Kind); s.global.Configured() && ok {
 		return true
 	}
 	list, err := s.providers.List(ctx, userID)

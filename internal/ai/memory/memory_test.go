@@ -33,7 +33,7 @@ func TestCreateListGetRenameDelete(t *testing.T) {
 	}
 
 	renamed, err := m.Rename(ctx, "u1", c.ID, "My thread")
-	if err != nil || renamed.Title != "My thread" || renamed.AutoTitled {
+	if err != nil || renamed.Title != "My thread" || !renamed.TitleResolved {
 		t.Fatalf("rename failed: %+v err=%v", renamed, err)
 	}
 
@@ -52,10 +52,13 @@ func TestSetAutoTitleOnlyReplacesDefault(t *testing.T) {
 	if c.Title != memory.DefaultTitle {
 		t.Fatalf("new conversation should start with the default title, got %q", c.Title)
 	}
+	if !memory.CanAutoTitle(c) {
+		t.Fatalf("new conversation should be eligible for auto-title: %+v", c)
+	}
 
 	m.SetAutoTitle(ctx, c.ID, "Running containers")
 	got, _ := m.Get(ctx, "u1", c.ID)
-	if !got.AutoTitled || got.Title != "Running containers" {
+	if !got.TitleResolved || got.Title != "Running containers" {
 		t.Fatalf("auto-title should set a system title: %+v", got)
 	}
 
@@ -64,15 +67,24 @@ func TestSetAutoTitleOnlyReplacesDefault(t *testing.T) {
 	}
 	m.SetAutoTitle(ctx, c.ID, "Something else")
 	got, _ = m.Get(ctx, "u1", c.ID)
-	if got.Title != "My thread" || got.AutoTitled {
+	if got.Title != "My thread" || !got.TitleResolved {
 		t.Fatalf("user title must survive auto-title: %+v", got)
 	}
 }
 
-func TestTitleFromHeuristic(t *testing.T) {
-	title := memory.TitleFrom("show me all the running containers please right now immediately")
-	if title == "" || len(strings.Fields(title)) > 8 {
-		t.Fatalf("heuristic title should be <= 8 words: %q", title)
+func TestSetAutoTitleDoesNotReplaceManualDefaultTitle(t *testing.T) {
+	m := newStore()
+	ctx := context.Background()
+	c, _ := m.Create(ctx, "u1", "c1", "", "gpt-4o")
+
+	if _, err := m.Rename(ctx, "u1", c.ID, memory.DefaultTitle); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	m.SetAutoTitle(ctx, c.ID, "Generated title")
+
+	got, _ := m.Get(ctx, "u1", c.ID)
+	if got.Title != memory.DefaultTitle || !got.TitleResolved || memory.CanAutoTitle(got) {
+		t.Fatalf("manual default title must survive auto-title: %+v", got)
 	}
 }
 
@@ -102,6 +114,26 @@ func TestHistoryKeepsRecentAndCompactsOlder(t *testing.T) {
 	}
 	if len(msgs) >= 24 {
 		t.Fatalf("history not bounded: kept %d of 24", len(msgs))
+	}
+}
+
+func TestAppendAssignsSequentialMessageSeq(t *testing.T) {
+	m := newStore()
+	ctx := context.Background()
+	c, _ := m.Create(ctx, "u1", "c1", "", "gpt-4o")
+
+	if err := m.AppendUser(ctx, c.ID, "first"); err != nil {
+		t.Fatalf("append user: %v", err)
+	}
+	if err := m.AppendAssistant(ctx, c.ID, "second", "", nil, false); err != nil {
+		t.Fatalf("append assistant: %v", err)
+	}
+	msgs, err := m.Messages(ctx, "u1", c.ID)
+	if err != nil {
+		t.Fatalf("messages: %v", err)
+	}
+	if len(msgs) != 2 || msgs[0].Seq != 0 || msgs[1].Seq != 1 {
+		t.Fatalf("message seq not assigned by store: %+v", msgs)
 	}
 }
 

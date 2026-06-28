@@ -33,6 +33,7 @@ export interface AiProviderSummary {
 
 export interface AiGlobalStatus {
   configured: boolean;
+  usable?: boolean;
   provider?: string;
   kind?: string;
   model?: string;
@@ -97,6 +98,11 @@ export interface AiTurnRequest {
   content: string;
   providerId: string;
   conversationId: string;
+  workspaceContext?: AiWorkspaceContext;
+}
+
+export interface AiWorkspaceContext {
+  query: string;
 }
 
 export interface AiTurnControlRequest {
@@ -109,7 +115,7 @@ export interface AiConversation {
   ownerId: string;
   connectionId: string;
   title: string;
-  autoTitled: boolean;
+  titleResolved: boolean;
   providerId: string;
   model: string;
   createdAt: string;

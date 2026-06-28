@@ -33,7 +33,7 @@ func newService(t *testing.T, global config.AIConfig) *ai.Service {
 }
 
 func TestAllowedRisks(t *testing.T) {
-	ro := ai.AllowedRisks("read_only", true)
+	ro := ai.AllowedRisks(models.AIModeReadOnly, true)
 	if !ro[plugin.RiskSafe] || ro[plugin.RiskWrite] || ro[plugin.RiskDestructive] {
 		t.Fatalf("read_only should expose only safe: %v", ro)
 	}
@@ -41,20 +41,20 @@ func TestAllowedRisks(t *testing.T) {
 	if !unset[plugin.RiskSafe] || unset[plugin.RiskWrite] || unset[plugin.RiskDestructive] {
 		t.Fatalf("unset mode should default to safe only: %v", unset)
 	}
-	disabled := ai.AllowedRisks("disabled", true)
+	disabled := ai.AllowedRisks(models.AIModeDisabled, true)
 	if disabled[plugin.RiskSafe] || disabled[plugin.RiskWrite] || disabled[plugin.RiskDestructive] {
 		t.Fatalf("disabled mode should expose no tools: %v", disabled)
 	}
-	rw := ai.AllowedRisks("read_write", false)
+	rw := ai.AllowedRisks(models.AIModeReadWrite, false)
 	if !rw[plugin.RiskSafe] || !rw[plugin.RiskWrite] || rw[plugin.RiskDestructive] {
 		t.Fatalf("read_write w/o destructive: %v", rw)
 	}
-	rwd := ai.AllowedRisks("read_write", true)
+	rwd := ai.AllowedRisks(models.AIModeReadWrite, true)
 	if !rwd[plugin.RiskDestructive] {
 		t.Fatal("read_write + allowDestructive should expose destructive")
 	}
 	// Privileged is never exposed.
-	for _, m := range []string{"read_only", "read_write"} {
+	for _, m := range []models.AIMode{models.AIModeReadOnly, models.AIModeReadWrite} {
 		if ai.AllowedRisks(m, true)[plugin.RiskPrivileged] {
 			t.Fatalf("privileged must never be allowed (%s)", m)
 		}
@@ -68,10 +68,26 @@ func TestRunWithoutProviderErrors(t *testing.T) {
 	}
 	err := svc.Run(context.Background(), ai.RunInput{
 		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
-		AIMode: "read_only", UserMessage: "hi",
+		AIMode: models.AIModeReadOnly, UserMessage: "hi",
 	}, func(engine.StreamEvent) {})
 	if !errors.Is(err, ai.ErrNotConfigured) {
 		t.Fatalf("want ErrNotConfigured, got %v", err)
+	}
+}
+
+func TestRunDisabledDoesNotResolveProvider(t *testing.T) {
+	svc := newService(t, config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", Model: "gpt-4o"}).
+		WithProviderFactory(func(context.Context, models.AIProviderKind, string, string, string) (engine.Provider, error) {
+			t.Fatal("disabled AI should not resolve a provider")
+			return nil, nil
+		})
+
+	err := svc.Run(context.Background(), ai.RunInput{
+		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
+		AIMode: models.AIModeDisabled, UserMessage: "hi",
+	}, func(engine.StreamEvent) {})
+	if !errors.Is(err, ai.ErrDisabled) {
+		t.Fatalf("want ErrDisabled, got %v", err)
 	}
 }
 
@@ -79,6 +95,40 @@ func TestConfiguredViaGlobal(t *testing.T) {
 	svc := newService(t, config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", Model: "gpt-4o"})
 	if !svc.Configured(context.Background(), "u1") {
 		t.Fatal("global config should report configured")
+	}
+}
+
+func TestUnsupportedGlobalKindIsNotConfigured(t *testing.T) {
+	svc := newService(t, config.AIConfig{Kind: "AI", Name: "Shared", APIKey: "k", Model: "gpt-4o"}).
+		WithProviderFactory(func(context.Context, models.AIProviderKind, string, string, string) (engine.Provider, error) {
+			t.Fatal("unsupported global kind should not reach provider factory")
+			return nil, nil
+		})
+	if svc.Configured(context.Background(), "u1") {
+		t.Fatal("unsupported global kind should not report configured")
+	}
+	err := svc.Run(context.Background(), ai.RunInput{
+		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
+		AIMode: models.AIModeReadOnly, UserMessage: "hi",
+	}, func(engine.StreamEvent) {})
+	if !errors.Is(err, ai.ErrNotConfigured) {
+		t.Fatalf("want ErrNotConfigured, got %v", err)
+	}
+}
+
+func TestGlobalKindIsNormalized(t *testing.T) {
+	var got models.AIProviderKind
+	svc := newService(t, config.AIConfig{Kind: "OpenAI", Name: "Shared", APIKey: "k", Model: "gpt-4o"}).
+		WithProviderFactory(func(_ context.Context, kind models.AIProviderKind, _, _, _ string) (engine.Provider, error) {
+			got = kind
+			return nil, nil
+		})
+	_ = svc.Run(context.Background(), ai.RunInput{
+		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "missing",
+		AIMode: models.AIModeReadOnly, UserMessage: "hi",
+	}, func(engine.StreamEvent) {})
+	if got != models.AIProviderOpenAI {
+		t.Fatalf("global kind = %q, want openai", got)
 	}
 }
 
@@ -91,7 +141,7 @@ func TestGlobalProviderPinsConfiguredModel(t *testing.T) {
 		})
 	_ = svc.Run(context.Background(), ai.RunInput{
 		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "missing",
-		AIMode: "read_only", UserMessage: "hi",
+		AIMode: models.AIModeReadOnly, UserMessage: "hi",
 	}, func(engine.StreamEvent) {})
 	if got != "gpt-4o" {
 		t.Fatalf("shared model = %q, want pinned gpt-4o", got)

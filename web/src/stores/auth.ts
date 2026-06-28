@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { setCsrfToken } from "../api/client";
 import { authApi, type AuthUser, type SessionDTO } from "../api/auth";
 import { Role } from "../constants/roles";
+import { resetSession } from "./session";
 
 export type { AuthUser };
 
@@ -103,6 +104,7 @@ export const useAuthStore = defineStore("auth", () => {
       await authApi.logout();
     } finally {
       clear();
+      resetSession();
     }
   }
 

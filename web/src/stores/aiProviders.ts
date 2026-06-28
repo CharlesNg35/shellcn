@@ -1,6 +1,7 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { aiApi, type AiGlobalStatus, type AiProviderSummary } from "../api/ai";
+import { registerSessionCleanup } from "./session";
 
 export const useAiProvidersStore = defineStore("aiProviders", () => {
   const providers = ref<AiProviderSummary[]>([]);
@@ -13,7 +14,9 @@ export const useAiProvidersStore = defineStore("aiProviders", () => {
   let requestSeq = 0;
 
   const available = computed(
-    () => Boolean(global.value?.configured) || providers.value.length > 0,
+    () =>
+      Boolean(global.value?.configured && (global.value.usable ?? true)) ||
+      providers.value.length > 0,
   );
 
   async function load(force = false): Promise<void> {
@@ -53,6 +56,19 @@ export const useAiProvidersStore = defineStore("aiProviders", () => {
     return load(true);
   }
 
+  function reset(): void {
+    providers.value = [];
+    global.value = null;
+    ready.value = false;
+    loading.value = false;
+    error.value = null;
+    loaded = false;
+    inFlight = null;
+    requestSeq++;
+  }
+
+  registerSessionCleanup("aiProviders", reset);
+
   return {
     providers,
     global,
@@ -62,5 +78,6 @@ export const useAiProvidersStore = defineStore("aiProviders", () => {
     available,
     load,
     refresh,
+    reset,
   };
 });

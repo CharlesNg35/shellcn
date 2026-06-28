@@ -47,4 +47,29 @@ describe("AiMessage", () => {
     expect(shortClasses).toContain("max-w-[88%]");
     expect(shortClasses).not.toContain("w-[88%]");
   });
+
+  it("renders streaming assistant content through markdown", () => {
+    const wrapper = mount(AiMessage, {
+      props: {
+        message: message("**Live** response"),
+        streaming: true,
+      },
+      global: {
+        stubs: {
+          AiMarkdown: {
+            props: ["source"],
+            template: '<div data-testid="markdown">{{ source }}</div>',
+          },
+          AiReasoning: true,
+          AiToolBadges: true,
+          AppIcon: true,
+          Button: true,
+          Message: true,
+        },
+      },
+    });
+
+    expect(wrapper.find('[data-testid="markdown"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain("**Live** response");
+  });
 });

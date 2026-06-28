@@ -13,6 +13,7 @@ import { cleanupConnection } from "./connectionCleanup";
 import { useConnectionStatusStore } from "./connectionStatus";
 import { useStreamChannelsStore } from "./streamChannels";
 import { useWorkspaceStore } from "./workspace";
+import { registerSessionCleanup } from "./session";
 
 export const useConnectionSessionsStore = defineStore(
   "connectionSessions",
@@ -177,6 +178,13 @@ export const useConnectionSessionsStore = defineStore(
       window.removeEventListener("pagehide", closeAllOnPageHide);
     }
 
+    function reset(): void {
+      stop();
+      inFlight.clear();
+    }
+
+    registerSessionCleanup("connectionSessions", reset);
+
     return {
       connect,
       disconnect,
@@ -184,6 +192,7 @@ export const useConnectionSessionsStore = defineStore(
       keepAlive,
       start,
       stop,
+      reset,
     };
   },
 );

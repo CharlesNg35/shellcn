@@ -36,8 +36,12 @@ function play(r: RecordingSummary): void {
   showPlayer.value = true;
 }
 
-function download(r: RecordingSummary): void {
-  window.open(recordingsApi.contentUrl(r.id), "_blank");
+function downloadUrl(r: RecordingSummary): string {
+  return recordingsApi.contentUrl(r.id, { download: true });
+}
+
+function downloadName(r: RecordingSummary): string {
+  return `${r.connectionName || r.protocol || r.id}-${r.id}.${r.format === "webm_canvas" ? "webm" : "cast"}`;
 }
 
 function openDelete(r: RecordingSummary): void {
@@ -167,18 +171,16 @@ function formatTime(iso: string): string {
           >
             <AppIcon :icon="{ type: 'lucide', value: 'play' }" :size="16" />
           </Button>
-          <Button
+          <a
             v-if="playable(data as RecordingSummary)"
-            text
-            rounded
-            severity="secondary"
-            size="small"
+            :href="downloadUrl(data as RecordingSummary)"
+            :download="downloadName(data as RecordingSummary)"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-full text-surface-500 transition-colors hover:bg-surface-100 hover:text-surface-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 dark:text-surface-400 dark:hover:bg-surface-800 dark:hover:text-surface-100"
             title="Download"
             aria-label="Download recording"
-            @click="download(data as RecordingSummary)"
           >
             <AppIcon :icon="{ type: 'lucide', value: 'download' }" :size="16" />
-          </Button>
+          </a>
           <Button
             v-if="canDelete(data as RecordingSummary)"
             text

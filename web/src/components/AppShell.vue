@@ -31,9 +31,16 @@ const userLabel = computed(
   () => auth.user?.displayName || auth.user?.username || "",
 );
 
+const loggingOut = ref(false);
 async function onLogout(): Promise<void> {
-  await auth.logout();
-  await router.push({ name: "login" });
+  if (loggingOut.value) return;
+  loggingOut.value = true;
+  try {
+    await auth.logout();
+    await router.push({ name: "login" });
+  } finally {
+    loggingOut.value = false;
+  }
 }
 
 const query = ref("");
@@ -244,11 +251,21 @@ async function onConnectionSaved(payload: {
             severity="secondary"
             size="small"
             class="shrink-0"
-            title="Sign out"
-            aria-label="Sign out"
+            :title="loggingOut ? 'Signing out…' : 'Sign out'"
+            :aria-label="loggingOut ? 'Signing out' : 'Sign out'"
+            :disabled="loggingOut"
             @click="onLogout"
           >
-            <AppIcon :icon="{ type: 'lucide', value: 'log-out' }" :size="16" />
+            <AppIcon
+              :icon="{
+                type: 'lucide',
+                value: loggingOut ? 'loader-circle' : 'log-out',
+              }"
+              :size="16"
+              :class="
+                loggingOut ? 'animate-spin motion-reduce:animate-none' : ''
+              "
+            />
           </Button>
         </div>
       </div>

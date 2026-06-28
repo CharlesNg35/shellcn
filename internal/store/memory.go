@@ -171,7 +171,7 @@ func (s *memAIConversationStore) Update(_ context.Context, c *models.AIConversat
 		return ErrNotFound
 	}
 	prev.Title = c.Title
-	prev.AutoTitled = c.AutoTitled
+	prev.TitleResolved = c.TitleResolved
 	prev.ProviderID = c.ProviderID
 	prev.Model = c.Model
 	prev.Summary = c.Summary
@@ -195,6 +195,9 @@ type memAIMessageStore struct {
 func (s *memAIMessageStore) Append(_ context.Context, m *models.AIMessage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if m.Seq < 0 {
+		m.Seq = len(s.m[m.ConversationID])
+	}
 	s.m[m.ConversationID] = append(s.m[m.ConversationID], *m)
 	return nil
 }
