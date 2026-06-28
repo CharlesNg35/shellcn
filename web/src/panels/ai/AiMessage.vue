@@ -36,7 +36,7 @@ async function copy(): Promise<void> {
       <AppIcon :icon="{ type: 'lucide', value: 'sparkles' }" :size="13" />
     </span>
     <div
-      class="min-w-0 px-3 py-2 text-sm shadow-sm"
+      class="relative min-w-0 px-3 py-2 text-sm shadow-sm"
       :class="
         isUser()
           ? 'max-w-[82%] rounded-2xl rounded-br-md bg-primary-600 text-white'
@@ -86,17 +86,17 @@ async function copy(): Promise<void> {
           v-if="message.content && !streaming"
           type="button"
           text
+          rounded
           severity="secondary"
           size="small"
-          class="mt-1 flex items-center gap-1 text-xs text-surface-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-surface-700 focus-visible:opacity-100 dark:hover:text-surface-100"
+          class="absolute top-1 right-1 size-7 p-0 text-surface-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-surface-700 focus-visible:opacity-100 dark:hover:text-surface-100"
           :aria-label="copied ? 'Copied' : 'Copy message'"
           @click="copy"
         >
           <AppIcon
             :icon="{ type: 'lucide', value: copied ? 'check' : 'copy' }"
-            :size="12"
+            :size="13"
           />
-          {{ copied ? "Copied" : "Copy" }}
         </Button>
       </template>
     </div>
