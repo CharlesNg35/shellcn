@@ -7,6 +7,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/ai/agent"
 	"github.com/charlesng35/shellcn/internal/ai/engine"
+	"github.com/charlesng35/shellcn/internal/models"
 )
 
 // fakeProvider scripts a nested subagent run: it calls the first read tool, then
@@ -106,7 +107,7 @@ func TestCompositeRoutesToSubagentOrBase(t *testing.T) {
 
 func TestSystemPromptIncludesRecentOpsAndSubagent(t *testing.T) {
 	prompt := agent.SystemPrompt(agent.PromptInput{
-		ConnectionTitle: "prod", Protocol: "docker", AIMode: "read_only",
+		ConnectionTitle: "prod", Protocol: "docker", AIMode: models.AIModeReadOnly,
 		Tools:       []string{"list_containers"},
 		HasSubagent: true,
 		RecentOps:   []string{"error docker.container.delete: permission denied"},

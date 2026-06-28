@@ -24,7 +24,7 @@ const aiChatRouteID = "ai.chat"
 
 var aiAccessRoute = plugin.Route{ID: aiChatRouteID, Permission: "connection.ai", Risk: plugin.RiskSafe, AuditEvent: aiChatRouteID}
 
-func connectionAIMode(conn models.Connection) string {
+func connectionAIMode(conn models.Connection) models.AIMode {
 	if conn.AIMode == "" {
 		return models.AIModeReadOnly
 	}
@@ -198,7 +198,7 @@ func (s *Server) handleAITurn(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if connectionAIMode(conn) == "disabled" || !s.chat.Configured(ctx, user.ID) {
+	if connectionAIMode(conn) == models.AIModeDisabled || !s.chat.Configured(ctx, user.ID) {
 		writeError(w, s.deps.Logger, plugin.ErrNotFound)
 		return
 	}

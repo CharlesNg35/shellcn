@@ -73,7 +73,7 @@ type RunInput struct {
 	ConnID           string
 	Protocol         string
 	ConnectionTitle  string
-	AIMode           string // disabled | read_only | read_write
+	AIMode           models.AIMode
 	AllowDestructive bool
 	Scope            Scope
 	ConversationID   string // when set (with memory wired), history is persisted
@@ -248,7 +248,7 @@ func (a *accumulator) add(ev engine.StreamEvent) {
 }
 
 // AllowedRisks maps a connection's AI mode + destructive opt-in to allowed tool risks.
-func AllowedRisks(mode string, allowDestructive bool) map[plugin.RiskLevel]bool {
+func AllowedRisks(mode models.AIMode, allowDestructive bool) map[plugin.RiskLevel]bool {
 	switch mode {
 	case "", models.AIModeReadOnly:
 		return map[plugin.RiskLevel]bool{plugin.RiskSafe: true}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/ai/engine"
+	"github.com/charlesng35/shellcn/internal/models"
 )
 
 // Buffering thresholds: flush accumulated text every ~40ms or once it reaches
@@ -27,7 +28,7 @@ type PromptInput struct {
 	Protocol            string
 	ProtocolTitle       string
 	ProtocolDescription string
-	AIMode              string
+	AIMode              models.AIMode
 	Tools               []string
 	// RecentOps are pre-formatted recent audit lines for the user on this
 	// connection, so the agent can explain a just-failed action.
@@ -52,7 +53,7 @@ func SystemPrompt(in PromptInput) string {
 	b.WriteString("authorization, validation, and audit a manual request would, so you can never exceed the user's permissions.\n\n")
 
 	switch in.AIMode {
-	case "read_write":
+	case models.AIModeReadWrite:
 		b.WriteString("This connection allows read and write operations. Write actions pause for the user's explicit confirmation before executing.\n")
 	default:
 		b.WriteString("This connection is read-only. You may inspect resources but cannot modify anything.\n")

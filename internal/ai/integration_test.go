@@ -131,7 +131,7 @@ func TestAgentListsResourcesViaTools(t *testing.T) {
 	var events []engine.StreamEvent
 	err := svc.Run(context.Background(), ai.RunInput{
 		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
-		ConnectionTitle: "prod", AIMode: "read_only", UserMessage: "list resources",
+		ConnectionTitle: "prod", AIMode: models.AIModeReadOnly, UserMessage: "list resources",
 	}, func(ev engine.StreamEvent) { events = append(events, ev) })
 	if err != nil {
 		t.Fatalf("run: %v", err)
@@ -200,7 +200,7 @@ func TestTurnPersistsConversationHistory(t *testing.T) {
 
 	err = svc.Run(context.Background(), ai.RunInput{
 		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
-		AIMode: "read_only", ConversationID: conv.ID, UserMessage: "list resources",
+		AIMode: models.AIModeReadOnly, ConversationID: conv.ID, UserMessage: "list resources",
 	}, func(engine.StreamEvent) {})
 	if err != nil {
 		t.Fatalf("run: %v", err)
@@ -252,7 +252,7 @@ func TestProviderStreamErrorDoesNotPersistEmptyAssistant(t *testing.T) {
 	var events []engine.StreamEvent
 	err = svc.Run(context.Background(), ai.RunInput{
 		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
-		AIMode: "read_only", ConversationID: conv.ID, UserMessage: "list resources",
+		AIMode: models.AIModeReadOnly, ConversationID: conv.ID, UserMessage: "list resources",
 	}, func(ev engine.StreamEvent) { events = append(events, ev) })
 	if err != nil {
 		t.Fatalf("run: %v", err)
