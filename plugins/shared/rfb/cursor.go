@@ -45,7 +45,8 @@ func encodeCursorRect(pf PixelFormat) []byte {
 	binary.BigEndian.PutUint16(hdr[6:], uint16(h))
 	enc := int32(encCursor)
 	binary.BigEndian.PutUint32(hdr[8:], uint32(enc))
-	out := hdr
+	out := make([]byte, 0, len(hdr)+w*h*bpp+((w+7)/8)*h)
+	out = append(out, hdr...)
 
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
@@ -53,7 +54,7 @@ func encodeCursorRect(pf PixelFormat) []byte {
 			if cursorAt(x, y) == 'X' {
 				rgb = [3]uint8{255, 255, 255}
 			}
-			out = append(out, packPixel(pf, rgb, bpp)...)
+			out = appendPixel(out, pf, rgb, bpp)
 		}
 	}
 
