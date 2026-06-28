@@ -10,6 +10,8 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
+const preStartTerminalOutputLimit = 256 << 10
+
 // recSession ties one stream's tap to its recording: metadata row, blob writer,
 // format recorder, and the drain goroutine. A session may be idle (manual policy
 // before Start) — only `live` sessions own a recorder + drain loop.
@@ -28,6 +30,9 @@ type recSession struct {
 	counter   *countingWriter
 	lr        *liveRecording
 	drainDone chan struct{}
+
+	preStartOutput      [][]byte
+	preStartOutputBytes int
 
 	mu   sync.Mutex
 	live atomic.Bool
@@ -133,13 +138,66 @@ func (s *recSession) shouldStartOnInteraction() bool {
 	return s.forced && s.capability.Class == plugin.RecordingTerminal && !s.live.Load()
 }
 
+func (s *recSession) shouldBufferPreStartOutput() bool {
+	return s.forced && s.capability.Class == plugin.RecordingTerminal && !s.live.Load()
+}
+
+func (s *recSession) recordOrBufferPreStartOutput(p []byte) {
+	if len(p) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.live.Load() {
+		if s.lr != nil {
+			s.lr.output(p)
+		}
+		return
+	}
+	if !s.shouldBufferPreStartOutput() {
+		return
+	}
+	chunk := append([]byte(nil), p...)
+	if len(chunk) > preStartTerminalOutputLimit {
+		chunk = chunk[len(chunk)-preStartTerminalOutputLimit:]
+		s.preStartOutput = s.preStartOutput[:0]
+		s.preStartOutputBytes = 0
+	}
+	s.preStartOutput = append(s.preStartOutput, chunk)
+	s.preStartOutputBytes += len(chunk)
+	for s.preStartOutputBytes > preStartTerminalOutputLimit && len(s.preStartOutput) > 0 {
+		s.preStartOutputBytes -= len(s.preStartOutput[0])
+		copy(s.preStartOutput, s.preStartOutput[1:])
+		s.preStartOutput[len(s.preStartOutput)-1] = nil
+		s.preStartOutput = s.preStartOutput[:len(s.preStartOutput)-1]
+	}
+}
+
+func (s *recSession) flushPreStartOutputLocked() {
+	if s.lr == nil || len(s.preStartOutput) == 0 {
+		return
+	}
+	for _, chunk := range s.preStartOutput {
+		s.lr.output(chunk)
+	}
+	for i := range s.preStartOutput {
+		s.preStartOutput[i] = nil
+	}
+	s.preStartOutput = nil
+	s.preStartOutputBytes = 0
+}
+
 func (s *recSession) startOnInteraction(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.shouldStartOnInteraction() {
 		return nil
 	}
-	return s.engine.startSessionLocked(ctx, s)
+	if err := s.engine.startSessionLocked(ctx, s); err != nil {
+		return err
+	}
+	s.flushPreStartOutputLocked()
+	return nil
 }
 
 // Resize records a terminal resize for the live recording identified by key (the

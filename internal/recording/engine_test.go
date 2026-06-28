@@ -190,8 +190,11 @@ func TestEngineAutoRecordsOutputWithMonotonicTimestamps(t *testing.T) {
 	}
 	finalize()
 
-	if len(rec.out) != 3 {
-		t.Fatalf("want 3 output events, got %d", len(rec.out))
+	if len(rec.out) != 4 {
+		t.Fatalf("want 4 output events, got %d", len(rec.out))
+	}
+	if string(rec.out[0]) != "banner before interaction\n" {
+		t.Fatalf("pre-interaction terminal output missing from recording: %q", rec.out[0])
 	}
 	for i := 1; i < len(rec.ts); i++ {
 		if rec.ts[i] < rec.ts[i-1] {
