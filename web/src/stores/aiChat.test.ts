@@ -125,6 +125,19 @@ describe("aiChat store", () => {
     expect(st.runState).toBe("streaming");
   });
 
+  it("sends workspace context with the turn payload", () => {
+    const store = useAiChatStore();
+    store.send(CONN, "explain this pod", {
+      query:
+        "?v=detail:pod:7f1e0127-cbc5-4432-aca2-59ab0476e33c:n=kube-controller-manager-kind-control-plane,ns=kube-system",
+    });
+
+    expect(streamCalls[0].body.workspaceContext).toEqual({
+      query:
+        "?v=detail:pod:7f1e0127-cbc5-4432-aca2-59ab0476e33c:n=kube-controller-manager-kind-control-plane,ns=kube-system",
+    });
+  });
+
   it("tracks tool calls and their results", () => {
     const store = useAiChatStore();
     store.send(CONN, "go");

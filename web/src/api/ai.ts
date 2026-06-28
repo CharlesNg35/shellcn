@@ -98,6 +98,11 @@ export interface AiTurnRequest {
   content: string;
   providerId: string;
   conversationId: string;
+  workspaceContext?: AiWorkspaceContext;
+}
+
+export interface AiWorkspaceContext {
+  query: string;
 }
 
 export interface AiTurnControlRequest {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 import Button from "primevue/button";
 import AiMessageList from "./AiMessageList.vue";
 import AiComposer from "./AiComposer.vue";
@@ -13,6 +14,7 @@ import { useAiChatStore } from "@/stores/aiChat";
 const props = defineProps<{ connectionId: string }>();
 const emit = defineEmits<{ close: [] }>();
 
+const route = useRoute();
 const store = useAiChatStore();
 const st = computed(() => store.state(props.connectionId));
 const busy = computed(() => st.value.runState !== "idle");
@@ -34,7 +36,8 @@ const statusLabel = computed(() => {
 const showHistory = ref(false);
 
 function send(text: string): void {
-  store.send(props.connectionId, text);
+  const workspaceContext = currentWorkspaceContext();
+  store.send(props.connectionId, text, workspaceContext);
 }
 function stop(): void {
   store.stop(props.connectionId);
@@ -51,6 +54,24 @@ onMounted(() => {
   void store.loadProviders();
   void store.loadConversations(props.connectionId);
 });
+
+function currentWorkspaceContext(): { query: string } | undefined {
+  const queryStart = route.fullPath.indexOf("?");
+  if (queryStart < 0) return undefined;
+  const hashStart = route.fullPath.indexOf("#", queryStart);
+  const rawQuery = route.fullPath.slice(
+    queryStart + 1,
+    hashStart < 0 ? undefined : hashStart,
+  );
+  const parts = rawQuery.split("&").filter((part) => {
+    const key = part.split("=", 1)[0] ?? "";
+    return key !== "vc" && part !== "";
+  });
+  if (!parts.length) {
+    return undefined;
+  }
+  return { query: `?${parts.join("&")}` };
+}
 </script>
 
 <template>

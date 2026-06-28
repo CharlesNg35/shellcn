@@ -82,6 +82,7 @@ type RunInput struct {
 	ConversationID   string // when set (with memory wired), history is persisted
 	History          []engine.Message
 	UserMessage      string
+	WorkspaceQuery   string
 	RecentOps        []string
 	Confirm          tools.Confirmer
 }
@@ -129,6 +130,7 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 		ProtocolDescription: protocolDescription,
 		AIMode:              in.AIMode,
 		Tools:               names,
+		WorkspaceQuery:      in.WorkspaceQuery,
 		RecentOps:           in.RecentOps,
 		HasSubagent:         hasSubagent,
 	})

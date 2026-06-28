@@ -133,9 +133,14 @@ func (cf *aiTurnConfirmer) deliver(toolID string, ok bool) {
 }
 
 type aiTurnRequest struct {
-	Content        string `json:"content"`
-	ProviderID     string `json:"providerId"`
-	ConversationID string `json:"conversationId"`
+	Content          string             `json:"content"`
+	ProviderID       string             `json:"providerId"`
+	ConversationID   string             `json:"conversationId"`
+	WorkspaceContext aiWorkspaceContext `json:"workspaceContext"`
+}
+
+type aiWorkspaceContext struct {
+	Query string `json:"query"`
 }
 
 type aiTurnControlRequest struct {
@@ -252,6 +257,7 @@ func (s *Server) handleAITurn(w http.ResponseWriter, r *http.Request) {
 		Scope:            ai.Scope{ProviderID: providerID},
 		ConversationID:   convID,
 		UserMessage:      req.Content,
+		WorkspaceQuery:   cleanWorkspaceQuery(req.WorkspaceContext.Query),
 		RecentOps:        s.recentAuditLines(turnCtx, user.ID, conn.ID),
 		Confirm:          confirmer,
 	}
@@ -267,6 +273,23 @@ func (s *Server) handleAITurn(w http.ResponseWriter, r *http.Request) {
 			writeFrame(aiMetaFrame{Type: "conversation", ConversationID: cv.ID, Title: cv.Title})
 		}
 	}
+}
+
+func cleanWorkspaceQuery(query string) string {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return ""
+	}
+	query = strings.ReplaceAll(query, "\r", "")
+	query = strings.ReplaceAll(query, "\n", "")
+	if !strings.HasPrefix(query, "?") {
+		query = "?" + strings.TrimLeft(query, "?")
+	}
+	const maxWorkspaceQueryBytes = 2048
+	if len(query) > maxWorkspaceQueryBytes {
+		query = query[:maxWorkspaceQueryBytes]
+	}
+	return query
 }
 
 func (s *Server) prepareAITurn(ctx context.Context, user models.User, conn models.Connection, req aiTurnRequest, emit func(any) bool) (string, string, bool) {

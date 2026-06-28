@@ -9,6 +9,7 @@ import {
   type AiStoredMessage,
   type AiStreamEvent,
   type AiTurnStreamEvent,
+  type AiWorkspaceContext,
 } from "../api/ai";
 import { useAiProvidersStore } from "./aiProviders";
 import { registerSessionCleanup } from "./session";
@@ -199,7 +200,11 @@ export const useAiChatStore = defineStore("aiChat", () => {
       ),
   );
 
-  function send(connId: string, content: string): void {
+  function send(
+    connId: string,
+    content: string,
+    workspaceContext?: AiWorkspaceContext,
+  ): void {
     const text = content.trim();
     if (!text) return;
     const st = state(connId);
@@ -230,7 +235,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.runState = "starting";
     st.turnId = "";
     st.abort = new AbortController();
-    void runTurn(connId, text, assistant, st.abort);
+    void runTurn(connId, text, assistant, st.abort, workspaceContext);
   }
 
   async function runTurn(
@@ -238,6 +243,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     content: string,
     assistant: AiMessage,
     controller: AbortController,
+    workspaceContext?: AiWorkspaceContext,
   ): Promise<void> {
     const st = state(connId);
     let completed = false;
@@ -248,6 +254,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
           content,
           providerId: st.providerId,
           conversationId: st.activeId ?? "",
+          ...(workspaceContext ? { workspaceContext } : {}),
         },
         {
           signal: controller.signal,
