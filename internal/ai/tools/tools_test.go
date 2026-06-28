@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/charlesng35/shellcn/internal/ai/engine"
 	"github.com/charlesng35/shellcn/internal/ai/tools"
@@ -45,7 +46,8 @@ func (demoPlugin) Routes() []plugin.Route {
 		{
 			ID: "demo.create", Method: plugin.MethodPost, Risk: plugin.RiskWrite, Permission: "demo.write", AuditEvent: "demo.create",
 			Input: &plugin.Schema{Groups: []plugin.Group{{Name: "i", Fields: []plugin.Field{
-				{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
+				{Key: "name", Label: "Name", Help: "Human-readable item name.", Type: plugin.FieldText, Required: true, Default: "default-name"},
+				{Key: "count", Label: "Count", Type: plugin.FieldNumber, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 100}}},
 				{Key: "token", Label: "Token", Type: plugin.FieldPassword, Secret: true},
 				{Key: "password", Label: "Password", Type: plugin.FieldPassword},
 				{
@@ -145,6 +147,17 @@ func TestToolSchemaExcludesSensitiveFieldsAndIncludesPathParams(t *testing.T) {
 	create := specs["demo_create"].Parameters["properties"].(map[string]any)
 	if _, ok := create["name"]; !ok {
 		t.Fatal("create tool missing name property")
+	}
+	if specs["demo_create"].Parameters["additionalProperties"] != false {
+		t.Fatalf("tool schema should reject unknown args: %+v", specs["demo_create"].Parameters)
+	}
+	name := create["name"].(map[string]any)
+	if !strings.Contains(name["description"].(string), "Human-readable item name") || name["default"] != "default-name" {
+		t.Fatalf("field metadata missing from schema: %+v", name)
+	}
+	count := create["count"].(map[string]any)
+	if count["minimum"] != 1 || count["maximum"] != 100 {
+		t.Fatalf("numeric validators missing from schema: %+v", count)
 	}
 	if _, ok := create["token"]; ok {
 		t.Fatal("secret field must not be exposed to the model")
@@ -282,5 +295,11 @@ func TestExecuteTruncatesLargeResult(t *testing.T) {
 	m, ok := out.(map[string]any)
 	if !ok || m["truncated"] != true {
 		t.Fatalf("large result should be marked truncated: %#v", out)
+	}
+	if _, ok := m["data"]; !ok {
+		t.Fatalf("structured truncated result should keep data when possible: %#v", out)
+	}
+	if preview, ok := m["preview"].(string); ok && !utf8.ValidString(preview) {
+		t.Fatalf("preview must be valid utf8: %q", preview)
 	}
 }

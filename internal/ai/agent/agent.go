@@ -23,10 +23,12 @@ const (
 
 // PromptInput is the dynamic context the system prompt is built from.
 type PromptInput struct {
-	ConnectionTitle string
-	Protocol        string
-	AIMode          string
-	Tools           []string
+	ConnectionTitle     string
+	Protocol            string
+	ProtocolTitle       string
+	ProtocolDescription string
+	AIMode              string
+	Tools               []string
 	// RecentOps are pre-formatted recent audit lines for the user on this
 	// connection, so the agent can explain a just-failed action.
 	RecentOps []string
@@ -38,7 +40,14 @@ type PromptInput struct {
 func SystemPrompt(in PromptInput) string {
 	var b strings.Builder
 	b.WriteString("You are ShellCN's infrastructure assistant, embedded in a secure access gateway.\n")
-	fmt.Fprintf(&b, "You are operating on a %s connection titled %q.\n", in.Protocol, in.ConnectionTitle)
+	protocolLabel := strings.TrimSpace(in.ProtocolTitle)
+	if protocolLabel == "" {
+		protocolLabel = in.Protocol
+	}
+	fmt.Fprintf(&b, "You are operating on a %s connection titled %q.\n", protocolLabel, in.ConnectionTitle)
+	if desc := strings.TrimSpace(in.ProtocolDescription); desc != "" {
+		fmt.Fprintf(&b, "Protocol context: %s\n", desc)
+	}
 	b.WriteString("You act strictly as the signed-in user: every tool call runs through the same ")
 	b.WriteString("authorization, validation, and audit a manual request would, so you can never exceed the user's permissions.\n\n")
 

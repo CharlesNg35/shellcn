@@ -75,6 +75,22 @@ func TestRunWithoutProviderErrors(t *testing.T) {
 	}
 }
 
+func TestRunDisabledDoesNotResolveProvider(t *testing.T) {
+	svc := newService(t, config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", Model: "gpt-4o"}).
+		WithProviderFactory(func(context.Context, models.AIProviderKind, string, string, string) (engine.Provider, error) {
+			t.Fatal("disabled AI should not resolve a provider")
+			return nil, nil
+		})
+
+	err := svc.Run(context.Background(), ai.RunInput{
+		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
+		AIMode: models.AIModeDisabled, UserMessage: "hi",
+	}, func(engine.StreamEvent) {})
+	if !errors.Is(err, ai.ErrDisabled) {
+		t.Fatalf("want ErrDisabled, got %v", err)
+	}
+}
+
 func TestConfiguredViaGlobal(t *testing.T) {
 	svc := newService(t, config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", Model: "gpt-4o"})
 	if !svc.Configured(context.Background(), "u1") {

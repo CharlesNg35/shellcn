@@ -195,6 +195,9 @@ type memAIMessageStore struct {
 func (s *memAIMessageStore) Append(_ context.Context, m *models.AIMessage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if m.Seq < 0 {
+		m.Seq = len(s.m[m.ConversationID])
+	}
 	s.m[m.ConversationID] = append(s.m[m.ConversationID], *m)
 	return nil
 }

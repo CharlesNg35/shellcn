@@ -116,12 +116,8 @@ const DefaultTitle = "New conversation"
 
 // AppendUser stores a user message.
 func (s *Store) AppendUser(ctx context.Context, convID, content string) error {
-	existing, err := s.msg.List(ctx, convID)
-	if err != nil {
-		return err
-	}
 	return s.msg.Append(ctx, &models.AIMessage{
-		ID: uuid.NewString(), ConversationID: convID, Seq: len(existing),
+		ID: uuid.NewString(), ConversationID: convID, Seq: -1,
 		Role: string(engine.RoleUser), Content: content, CreatedAt: s.now(),
 	})
 }
@@ -156,12 +152,8 @@ func TitleFrom(msg string) string { return titleFrom(msg) }
 
 // AppendAssistant stores a finalized assistant message.
 func (s *Store) AppendAssistant(ctx context.Context, convID, content, reasoning string, calls []models.AIToolCallRecord, truncated bool) error {
-	existing, err := s.msg.List(ctx, convID)
-	if err != nil {
-		return err
-	}
 	if err := s.msg.Append(ctx, &models.AIMessage{
-		ID: uuid.NewString(), ConversationID: convID, Seq: len(existing),
+		ID: uuid.NewString(), ConversationID: convID, Seq: -1,
 		Role: string(engine.RoleAssistant), Content: content, Reasoning: reasoning,
 		ToolCalls: calls, Truncated: truncated, CreatedAt: s.now(),
 	}); err != nil {

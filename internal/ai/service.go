@@ -26,6 +26,8 @@ var (
 	ErrNotConfigured = errors.New("ai: no provider configured")
 	// ErrProviderUnsupported means the resolved provider kind has no adapter yet.
 	ErrProviderUnsupported = errors.New("ai: provider kind not supported")
+	// ErrDisabled means AI is disabled for this connection.
+	ErrDisabled = errors.New("ai: disabled for this connection")
 )
 
 // ProviderFactory builds an engine.Provider for a resolved config.
@@ -84,6 +86,10 @@ type RunInput struct {
 // Run executes one turn and relays every event to sink. The caller cancels ctx
 // to stop the turn cleanly.
 func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamEvent)) error {
+	if in.AIMode == models.AIModeDisabled {
+		return ErrDisabled
+	}
+
 	provider, model, kind, err := s.resolveProvider(ctx, in.User, in.Scope)
 	if err != nil {
 		return err
@@ -112,13 +118,16 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 	for _, sp := range specs {
 		names = append(names, sp.Name)
 	}
+	protocolTitle, protocolDescription := s.protocolInfo(in.Protocol)
 	system := agent.SystemPrompt(agent.PromptInput{
-		ConnectionTitle: in.ConnectionTitle,
-		Protocol:        in.Protocol,
-		AIMode:          in.AIMode,
-		Tools:           names,
-		RecentOps:       in.RecentOps,
-		HasSubagent:     hasSubagent,
+		ConnectionTitle:     in.ConnectionTitle,
+		Protocol:            in.Protocol,
+		ProtocolTitle:       protocolTitle,
+		ProtocolDescription: protocolDescription,
+		AIMode:              in.AIMode,
+		Tools:               names,
+		RecentOps:           in.RecentOps,
+		HasSubagent:         hasSubagent,
 	})
 
 	limits := budget.Limits{ContextWindow: s.models.ContextWindow(ctx, model, registryProvider(kind))}
@@ -160,20 +169,32 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 	}
 
 	acc := &accumulator{}
-	relaySink := sink
-	if persist {
-		relaySink = func(ev engine.StreamEvent) {
-			acc.add(ev)
-			sink(ev)
-		}
+	relaySink := func(ev engine.StreamEvent) {
+		acc.add(ev)
+		sink(ev)
 	}
 	agent.Relay(ctx, ch, relaySink)
+	if acc.err != "" && !acc.done {
+		sink(engine.StreamEvent{Type: engine.EventDone})
+	}
 
-	if persist {
+	if persist && acc.err == "" {
 		_ = s.mem.AppendAssistant(ctx, in.ConversationID, acc.content.String(), acc.reasoning.String(), acc.calls, acc.truncated)
 		s.autoTitle(ctx, provider, model, in.User.ID, in.ConversationID, in.UserMessage, acc.content.String())
 	}
 	return nil
+}
+
+func (s *Service) protocolInfo(protocol string) (string, string) {
+	if s.routes == nil {
+		return "", ""
+	}
+	plg, ok := s.routes.Get(protocol)
+	if !ok {
+		return "", ""
+	}
+	m := plg.Manifest()
+	return strings.TrimSpace(m.Title), strings.TrimSpace(m.Description)
 }
 
 // autoTitle names a conversation after its first exchange, using the model when
@@ -196,6 +217,8 @@ type accumulator struct {
 	reasoning strings.Builder
 	calls     []models.AIToolCallRecord
 	truncated bool
+	done      bool
+	err       string
 }
 
 func (a *accumulator) add(ev engine.StreamEvent) {
@@ -218,6 +241,9 @@ func (a *accumulator) add(ev engine.StreamEvent) {
 		if ev.Truncated {
 			a.truncated = true
 		}
+		a.done = true
+	case engine.EventError:
+		a.err = ev.Err
 	}
 }
 

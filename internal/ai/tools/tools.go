@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/charlesng35/shellcn/internal/ai/engine"
 	"github.com/charlesng35/shellcn/internal/models"
@@ -14,7 +16,13 @@ import (
 )
 
 // maxToolResultBytes caps tool output before it enters model context.
-const maxToolResultBytes = 8 << 10
+const (
+	maxToolResultBytes  = 8 << 10
+	maxToolStringBytes  = 2 << 10
+	maxToolArrayItems   = 50
+	routeToolTimeout    = 60 * time.Second
+	truncatedResultNote = "result was truncated before being shown to the model; narrow the query for full data"
+)
 
 // Invoker runs a route as the user through the secure pipeline.
 type Invoker interface {
@@ -148,7 +156,9 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 			return nil, err
 		}
 	}
-	result, err := ts.invoker.InvokeRoute(ctx, ts.user, ts.connID, b.routeID, params, raw)
+	routeCtx, cancel := context.WithTimeout(ctx, routeToolTimeout)
+	defer cancel()
+	result, err := ts.invoker.InvokeRoute(routeCtx, ts.user, ts.connID, b.routeID, params, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -157,15 +167,105 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 
 // clean marks and truncates oversized tool output.
 func clean(result any) any {
+	result, changed := compactValue(result)
 	encoded, err := json.Marshal(result)
 	if err != nil || len(encoded) <= maxToolResultBytes {
+		if changed {
+			return map[string]any{
+				"truncated": true,
+				"note":      truncatedResultNote,
+				"data":      result,
+			}
+		}
 		return result
 	}
 	return map[string]any{
 		"truncated": true,
-		"note":      fmt.Sprintf("result truncated to %d bytes; narrow the query for full data", maxToolResultBytes),
-		"preview":   string(encoded[:maxToolResultBytes]),
+		"note":      truncatedResultNote,
+		"preview":   safeTruncate(string(encoded), maxToolResultBytes),
 	}
+}
+
+func compactValue(v any) (any, bool) {
+	switch x := v.(type) {
+	case nil, bool, float64, float32, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return v, false
+	case string:
+		if len(x) <= maxToolStringBytes {
+			return x, false
+		}
+		return safeTruncate(x, maxToolStringBytes), true
+	case []any:
+		return compactSlice(x)
+	case map[string]any:
+		return compactMap(x)
+	default:
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return v, false
+		}
+		var normalized any
+		if err := json.Unmarshal(raw, &normalized); err != nil {
+			return v, false
+		}
+		switch normalized.(type) {
+		case string, []any, map[string]any:
+			return compactValue(normalized)
+		default:
+			return v, false
+		}
+	}
+}
+
+func compactMap(in map[string]any) (map[string]any, bool) {
+	out := make(map[string]any, len(in))
+	changed := false
+	for k, v := range in {
+		next, ok := compactValue(v)
+		if ok {
+			changed = true
+		}
+		out[k] = next
+	}
+	return out, changed
+}
+
+func compactSlice(in []any) ([]any, bool) {
+	limit := len(in)
+	changed := false
+	if limit > maxToolArrayItems {
+		limit = maxToolArrayItems
+		changed = true
+	}
+	out := make([]any, 0, limit+1)
+	for _, v := range in[:limit] {
+		next, ok := compactValue(v)
+		if ok {
+			changed = true
+		}
+		out = append(out, next)
+	}
+	if len(in) > limit {
+		out = append(out, map[string]any{
+			"truncated":      true,
+			"remainingItems": len(in) - limit,
+		})
+	}
+	return out, changed
+}
+
+func safeTruncate(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	if limit <= 0 {
+		return "…"
+	}
+	next := s[:limit]
+	for !utf8.ValidString(next) && len(next) > 0 {
+		next = next[:len(next)-1]
+	}
+	return next + "…"
 }
 
 // describe builds a model-facing description from route metadata.
@@ -181,7 +281,7 @@ func describe(r plugin.Route) string {
 	if verb == "" {
 		verb = "Invoke"
 	}
-	return fmt.Sprintf("%s: %s (%s, %s)", verb, action, r.Method, r.Risk)
+	return fmt.Sprintf("%s: %s (%s, %s). Route: %s. Permission: %s.", verb, action, r.Method, r.Risk, r.ID, r.Permission)
 }
 
 func humanize(id string) string {
@@ -227,7 +327,7 @@ func toJSONSchema(r plugin.Route, pathParams []string) map[string]any {
 		}
 	}
 
-	schema := map[string]any{"type": "object", "properties": props}
+	schema := map[string]any{"type": "object", "properties": props, "additionalProperties": false}
 	if len(required) > 0 {
 		schema["required"] = required
 	}
@@ -239,10 +339,8 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 		return nil, false
 	}
 	out := map[string]any{}
-	if d := strings.TrimSpace(f.Label); d != "" {
+	if d := fieldDescription(f); d != "" {
 		out["description"] = d
-	} else if h := strings.TrimSpace(f.Help); h != "" {
-		out["description"] = h
 	}
 	switch f.Type {
 	case plugin.FieldNumber, plugin.FieldStepper, plugin.FieldSlider:
@@ -279,6 +377,7 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 		}
 		if len(props) > 0 {
 			out["properties"] = props
+			out["additionalProperties"] = false
 		}
 		if len(required) > 0 {
 			out["required"] = required
@@ -304,7 +403,48 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 		}
 		out["enum"] = vals
 	}
+	if f.Default != nil {
+		out["default"] = f.Default
+	}
+	if f.MinItems > 0 {
+		out["minItems"] = f.MinItems
+	}
+	if f.MaxItems > 0 {
+		out["maxItems"] = f.MaxItems
+	}
+	for _, v := range f.Validators {
+		applyValidator(out, v)
+	}
 	return out, true
+}
+
+func fieldDescription(f plugin.Field) string {
+	var parts []string
+	if label := strings.TrimSpace(f.Label); label != "" {
+		parts = append(parts, label)
+	}
+	if help := strings.TrimSpace(f.Help); help != "" && help != strings.TrimSpace(f.Label) {
+		parts = append(parts, help)
+	}
+	if f.OptionsSource != nil && strings.TrimSpace(f.OptionsSource.RouteID) != "" {
+		parts = append(parts, "Options are loaded dynamically from route "+f.OptionsSource.RouteID+".")
+	}
+	return strings.Join(parts, " ")
+}
+
+func applyValidator(out map[string]any, v plugin.Validator) {
+	switch v.Type {
+	case plugin.ValidatorMin:
+		out["minimum"] = v.Value
+	case plugin.ValidatorMax:
+		out["maximum"] = v.Value
+	case plugin.ValidatorRegex:
+		if s, ok := v.Value.(string); ok && s != "" {
+			out["pattern"] = s
+		}
+	case plugin.ValidatorOneOf:
+		out["enum"] = v.Value
+	}
 }
 
 func sensitiveField(f plugin.Field) bool {

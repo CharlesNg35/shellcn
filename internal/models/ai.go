@@ -81,8 +81,8 @@ type AIToolCallRecord struct {
 // activity; Reasoning is optional model thinking.
 type AIMessage struct {
 	ID             string             `gorm:"primaryKey" json:"id"`
-	ConversationID string             `gorm:"index" json:"conversationId"`
-	Seq            int                `gorm:"index" json:"seq"`
+	ConversationID string             `gorm:"index;uniqueIndex:idx_ai_messages_conversation_seq" json:"conversationId"`
+	Seq            int                `gorm:"index;uniqueIndex:idx_ai_messages_conversation_seq" json:"seq"`
 	Role           string             `json:"role"` // user | assistant
 	Content        string             `json:"content"`
 	ToolCalls      []AIToolCallRecord `gorm:"serializer:json" json:"toolCalls"`

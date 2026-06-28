@@ -105,6 +105,26 @@ func TestHistoryKeepsRecentAndCompactsOlder(t *testing.T) {
 	}
 }
 
+func TestAppendAssignsSequentialMessageSeq(t *testing.T) {
+	m := newStore()
+	ctx := context.Background()
+	c, _ := m.Create(ctx, "u1", "c1", "", "gpt-4o")
+
+	if err := m.AppendUser(ctx, c.ID, "first"); err != nil {
+		t.Fatalf("append user: %v", err)
+	}
+	if err := m.AppendAssistant(ctx, c.ID, "second", "", nil, false); err != nil {
+		t.Fatalf("append assistant: %v", err)
+	}
+	msgs, err := m.Messages(ctx, "u1", c.ID)
+	if err != nil {
+		t.Fatalf("messages: %v", err)
+	}
+	if len(msgs) != 2 || msgs[0].Seq != 0 || msgs[1].Seq != 1 {
+		t.Fatalf("message seq not assigned by store: %+v", msgs)
+	}
+}
+
 func TestMessagesPagePaginatesNewestFirst(t *testing.T) {
 	m := newStore()
 	ctx := context.Background()

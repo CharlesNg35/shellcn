@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -765,13 +766,40 @@ func (s *gormAIConversationStore) Delete(ctx context.Context, id string) error {
 
 type gormAIMessageStore struct{ db *gorm.DB }
 
+var aiMessageSeqLocks sync.Map
+
 func (s *gormAIMessageStore) Append(ctx context.Context, m *models.AIMessage) error {
-	return s.db.WithContext(ctx).Create(m).Error
+	var unlock func()
+	if m.Seq < 0 {
+		unlock = lockAIMessageSeq(m.ConversationID)
+		defer unlock()
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if m.Seq < 0 {
+			var maxSeq int
+			if err := tx.Model(&models.AIMessage{}).
+				Where("conversation_id = ?", m.ConversationID).
+				Select("COALESCE(MAX(seq), -1)").
+				Row().
+				Scan(&maxSeq); err != nil {
+				return err
+			}
+			m.Seq = maxSeq + 1
+		}
+		return tx.Create(m).Error
+	})
+}
+
+func lockAIMessageSeq(conversationID string) func() {
+	raw, _ := aiMessageSeqLocks.LoadOrStore(conversationID, &sync.Mutex{})
+	mu := raw.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }
 
 func (s *gormAIMessageStore) List(ctx context.Context, conversationID string) ([]models.AIMessage, error) {
 	var list []models.AIMessage
-	if err := s.db.WithContext(ctx).Where("conversation_id = ?", conversationID).Order("seq").Find(&list).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("conversation_id = ?", conversationID).Order("seq, created_at").Find(&list).Error; err != nil {
 		return nil, err
 	}
 	return list, nil
@@ -780,7 +808,7 @@ func (s *gormAIMessageStore) List(ctx context.Context, conversationID string) ([
 func (s *gormAIMessageStore) Recent(ctx context.Context, conversationID string, limit int) ([]models.AIMessage, error) {
 	var list []models.AIMessage
 	if err := s.db.WithContext(ctx).Where("conversation_id = ?", conversationID).
-		Order("seq DESC").Limit(limit).Find(&list).Error; err != nil {
+		Order("seq DESC, created_at DESC").Limit(limit).Find(&list).Error; err != nil {
 		return nil, err
 	}
 	for i, j := 0, len(list)-1; i < j; i, j = i+1, j-1 {
@@ -792,7 +820,7 @@ func (s *gormAIMessageStore) Recent(ctx context.Context, conversationID string, 
 func (s *gormAIMessageStore) Range(ctx context.Context, conversationID string, offset, limit int) ([]models.AIMessage, error) {
 	var list []models.AIMessage
 	if err := s.db.WithContext(ctx).Where("conversation_id = ?", conversationID).
-		Order("seq").Offset(offset).Limit(limit).Find(&list).Error; err != nil {
+		Order("seq, created_at").Offset(offset).Limit(limit).Find(&list).Error; err != nil {
 		return nil, err
 	}
 	return list, nil
