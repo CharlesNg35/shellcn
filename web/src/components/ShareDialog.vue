@@ -153,7 +153,7 @@ async function revoke(grant: ShareGrant): Promise<void> {
     modal
     :header="`Share “${resourceName}”`"
     :pt="{
-      root: dialogRoot(),
+      root: dialogRoot('max-w-lg'),
       content: 'min-h-0 max-h-[70vh] overflow-auto p-5',
     }"
     @update:visible="emit('update:visible', $event)"

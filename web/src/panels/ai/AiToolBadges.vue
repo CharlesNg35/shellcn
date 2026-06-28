@@ -84,6 +84,7 @@ function statusColor(status: AiToolCall["status"]): string {
           ]"
         />
         <code
+          class="min-w-0 shrink truncate"
           :class="
             c.subagent
               ? 'text-violet-600 dark:text-violet-300'
@@ -91,7 +92,9 @@ function statusColor(status: AiToolCall["status"]): string {
           "
           >{{ c.name }}</code
         >
-        <span v-if="c.err" class="truncate text-red-500">{{ c.err }}</span>
+        <span v-if="c.err" class="min-w-0 flex-1 truncate text-red-500">{{
+          c.err
+        }}</span>
       </li>
     </ul>
   </div>

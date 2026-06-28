@@ -344,6 +344,30 @@ describe("aiChat store", () => {
     );
   });
 
+  it("applies generated conversation titles that arrive after done", async () => {
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+
+    store.send(CONN, "why did backup fail");
+    streamCalls[0].options.onEvent({
+      type: "conversation",
+      conversationId: "conv-1",
+    });
+    streamCalls[0].options.onEvent({ type: "text_delta", text: "Check disk." });
+    streamCalls[0].options.onEvent({ type: "done" });
+    streamCalls[0].options.onEvent({
+      type: "conversation",
+      conversationId: "conv-1",
+      title: "Database Backup Failure",
+    });
+    await nextTick();
+
+    expect(st.runState).toBe("idle");
+    expect(st.conversations.find((c) => c.id === "conv-1")?.title).toBe(
+      "Database Backup Failure",
+    );
+  });
+
   it("loads a conversation page and prepends older messages", async () => {
     const store = useAiChatStore();
     getConversation.mockResolvedValue({

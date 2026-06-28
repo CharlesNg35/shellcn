@@ -41,8 +41,12 @@ describe("AiConversationList", () => {
 
     await wrapper.get('[aria-label="Rename"]').trigger("click");
     await flushPromises();
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
     expect(wrapper.findComponent(InputText).exists()).toBe(true);
+    expect(
+      wrapper
+        .findAllComponents(Button)
+        .some((b) => b.text().trim() === "Delete"),
+    ).toBe(false);
 
     wrapper.findComponent(InputText).vm.$emit("update:modelValue", "Renamed");
     await flushPromises();

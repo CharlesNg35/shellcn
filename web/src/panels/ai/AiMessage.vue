@@ -83,7 +83,7 @@ async function copy(): Promise<void> {
           rounded
           severity="secondary"
           size="small"
-          class="absolute top-1 right-1 size-7 p-0 text-surface-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-surface-700 focus-visible:opacity-100 dark:hover:text-surface-100"
+          class="absolute top-1 right-1 size-7 p-0 text-surface-400 transition-opacity group-focus-within:opacity-100 hover:text-surface-700 focus-visible:opacity-100 dark:hover:text-surface-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
           :aria-label="copied ? 'Copied' : 'Copy message'"
           @click="copy"
         >

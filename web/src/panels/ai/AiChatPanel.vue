@@ -68,7 +68,7 @@ onMounted(() => {
         :class="showHistory ? 'text-primary-500' : ''"
         @click="showHistory = !showHistory"
       >
-        <AppIcon :icon="{ type: 'lucide', value: 'panel-left' }" :size="15" />
+        <AppIcon :icon="{ type: 'lucide', value: 'history' }" :size="15" />
       </Button>
       <AppIcon
         :icon="{ type: 'lucide', value: 'sparkles' }"
@@ -122,30 +122,23 @@ onMounted(() => {
     </div>
 
     <div class="relative flex min-h-0 flex-1 overflow-hidden">
-      <AiConversationList
-        v-if="showHistory"
-        class="absolute inset-y-0 left-0 z-20"
-        :conversations="st.conversations"
-        :active-id="st.activeId"
-        :streaming-id="busy ? st.activeId : null"
-        :busy="busy"
-        @select="selectConversation"
-        @create="newChat"
-        @rename="
-          (id, title) => store.renameConversation(connectionId, id, title)
-        "
-        @remove="(id) => store.deleteConversation(connectionId, id)"
-        @close="showHistory = false"
-      />
-      <Button
-        v-if="showHistory"
-        type="button"
-        text
-        severity="secondary"
-        class="absolute inset-0 z-10 h-full w-full rounded-none border-0 bg-surface-950/10 p-0 backdrop-blur-[1px] hover:bg-surface-950/10 dark:bg-surface-950/30 dark:hover:bg-surface-950/30"
-        aria-label="Close conversation history"
-        @click="showHistory = false"
-      />
+      <Transition name="ai-history">
+        <AiConversationList
+          v-if="showHistory"
+          class="absolute inset-0 z-20"
+          :conversations="st.conversations"
+          :active-id="st.activeId"
+          :streaming-id="busy ? st.activeId : null"
+          :busy="busy"
+          @select="selectConversation"
+          @create="newChat"
+          @rename="
+            (id, title) => store.renameConversation(connectionId, id, title)
+          "
+          @remove="(id) => store.deleteConversation(connectionId, id)"
+          @close="showHistory = false"
+        />
+      </Transition>
 
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
         <AiMessageList
@@ -181,3 +174,30 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.ai-history-enter-active,
+.ai-history-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.ai-history-enter-from,
+.ai-history-leave-to {
+  opacity: 0;
+  transform: translateX(-1.25rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-history-enter-active,
+  .ai-history-leave-active {
+    transition: none;
+  }
+
+  .ai-history-enter-from,
+  .ai-history-leave-to {
+    transform: none;
+  }
+}
+</style>

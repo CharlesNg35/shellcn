@@ -245,7 +245,11 @@ export const useAiChatStore = defineStore("aiChat", () => {
           },
           onEvent: (event) => {
             if (event.type === "done") completed = true;
-            if (state(connId).current?.id !== assistant.id) return;
+            if (
+              !isTurnMetaEvent(event) &&
+              state(connId).current?.id !== assistant.id
+            )
+              return;
             applyStreamEvent(connId, event);
           },
         },
@@ -433,6 +437,10 @@ export const useAiChatStore = defineStore("aiChat", () => {
       return;
     }
     apply(connId, ev);
+  }
+
+  function isTurnMetaEvent(ev: AiTurnStreamEvent): boolean {
+    return ev.type === "turn" || ev.type === "conversation";
   }
 
   function apply(connId: string, ev: AiStreamEvent): void {
