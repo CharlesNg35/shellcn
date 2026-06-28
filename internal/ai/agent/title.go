@@ -41,7 +41,22 @@ func GenerateTitle(ctx context.Context, provider engine.Provider, model, userMes
 
 func cleanTitle(s string) string {
 	s = strings.TrimSpace(s)
-	s = strings.Trim(s, `."'`)
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			s = line
+			break
+		}
+	}
+	s = strings.TrimLeft(s, "-*# \t")
+	for _, prefix := range []string{"conversation title:", "title:"} {
+		if strings.HasPrefix(strings.ToLower(s), prefix) {
+			s = strings.TrimSpace(s[len(prefix):])
+			break
+		}
+	}
+	s = strings.Join(strings.Fields(s), " ")
+	s = strings.Trim(s, "`\"'. ")
 	runes := []rune(s)
 	if len(runes) < 2 {
 		return ""

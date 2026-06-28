@@ -750,12 +750,12 @@ func (s *gormAIConversationStore) List(ctx context.Context, ownerID, connectionI
 func (s *gormAIConversationStore) Update(ctx context.Context, c *models.AIConversation) error {
 	res := s.db.WithContext(ctx).Model(&models.AIConversation{}).Where("id = ?", c.ID).
 		Updates(map[string]any{
-			"title":       c.Title,
-			"auto_titled": c.AutoTitled,
-			"provider_id": c.ProviderID,
-			"model":       c.Model,
-			"summary":     c.Summary,
-			"updated_at":  c.UpdatedAt,
+			"title":          c.Title,
+			"title_resolved": c.TitleResolved,
+			"provider_id":    c.ProviderID,
+			"model":          c.Model,
+			"summary":        c.Summary,
+			"updated_at":     c.UpdatedAt,
 		})
 	return rowsOrNotFound(res)
 }

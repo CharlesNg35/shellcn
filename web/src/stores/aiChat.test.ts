@@ -87,6 +87,18 @@ const storedMsg = (id: string, content: string) => ({
   createdAt: "",
 });
 
+const conversation = (id: string, title = "New conversation") => ({
+  id,
+  ownerId: "u1",
+  connectionId: CONN,
+  title,
+  titleResolved: title !== "New conversation",
+  providerId: "",
+  model: "gpt-4o",
+  createdAt: "",
+  updatedAt: "",
+});
+
 describe("aiChat store", () => {
   it("creates user + assistant messages on send and streams text", () => {
     const store = useAiChatStore();
@@ -309,6 +321,27 @@ describe("aiChat store", () => {
     st.activeId = "conv-9";
     store.send(CONN, "hello");
     expect(streamCalls[0].body.conversationId).toBe("conv-9");
+  });
+
+  it("applies generated conversation titles from stream events immediately", async () => {
+    listConversations.mockResolvedValue([
+      conversation("conv-1", "New conversation"),
+    ]);
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+
+    store.send(CONN, "why did backup fail");
+    streamCalls[0].options.onEvent({
+      type: "conversation",
+      conversationId: "conv-1",
+      title: "Database Backup Failure",
+    });
+    await nextTick();
+
+    expect(st.activeId).toBe("conv-1");
+    expect(st.conversations.find((c) => c.id === "conv-1")?.title).toBe(
+      "Database Backup Failure",
+    );
   });
 
   it("loads a conversation page and prepends older messages", async () => {

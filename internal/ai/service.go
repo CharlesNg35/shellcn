@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/charlesng35/shellcn/internal/ai/agent"
 	"github.com/charlesng35/shellcn/internal/ai/budget"
@@ -20,6 +21,8 @@ import (
 )
 
 const defaultMaxSteps = 12
+
+var titleGenerationTimeout = 8 * time.Second
 
 var (
 	// ErrNotConfigured means neither a user provider nor the shared config is usable.
@@ -201,14 +204,31 @@ func (s *Service) protocolInfo(protocol string) (string, string) {
 // possible and a heuristic otherwise. It is a no-op once the title is set.
 func (s *Service) autoTitle(ctx context.Context, provider engine.Provider, model, ownerID, convID, userMessage, assistantReply string) {
 	conv, err := s.mem.Get(ctx, ownerID, convID)
-	if err != nil || conv.Title != memory.DefaultTitle || s.mem.MessageCount(ctx, convID) < 2 {
+	if err != nil || !memory.CanAutoTitle(conv) || s.mem.MessageCount(ctx, convID) < 2 {
 		return
 	}
-	title := agent.GenerateTitle(ctx, provider, model, userMessage, assistantReply)
+	title := generateTitle(ctx, provider, model, userMessage, assistantReply)
 	if title == "" {
 		title = memory.TitleFrom(userMessage)
 	}
 	s.mem.SetAutoTitle(ctx, convID, title)
+}
+
+func generateTitle(ctx context.Context, provider engine.Provider, model, userMessage, assistantReply string) string {
+	titleCtx, cancel := context.WithTimeout(ctx, titleGenerationTimeout)
+	defer cancel()
+
+	done := make(chan string, 1)
+	go func() {
+		done <- agent.GenerateTitle(titleCtx, provider, model, userMessage, assistantReply)
+	}()
+
+	select {
+	case title := <-done:
+		return title
+	case <-titleCtx.Done():
+		return ""
+	}
 }
 
 // accumulator captures a turn's assistant output to persist after streaming.

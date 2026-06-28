@@ -33,7 +33,7 @@ func TestCreateListGetRenameDelete(t *testing.T) {
 	}
 
 	renamed, err := m.Rename(ctx, "u1", c.ID, "My thread")
-	if err != nil || renamed.Title != "My thread" || renamed.AutoTitled {
+	if err != nil || renamed.Title != "My thread" || !renamed.TitleResolved {
 		t.Fatalf("rename failed: %+v err=%v", renamed, err)
 	}
 
@@ -52,10 +52,13 @@ func TestSetAutoTitleOnlyReplacesDefault(t *testing.T) {
 	if c.Title != memory.DefaultTitle {
 		t.Fatalf("new conversation should start with the default title, got %q", c.Title)
 	}
+	if !memory.CanAutoTitle(c) {
+		t.Fatalf("new conversation should be eligible for auto-title: %+v", c)
+	}
 
 	m.SetAutoTitle(ctx, c.ID, "Running containers")
 	got, _ := m.Get(ctx, "u1", c.ID)
-	if !got.AutoTitled || got.Title != "Running containers" {
+	if !got.TitleResolved || got.Title != "Running containers" {
 		t.Fatalf("auto-title should set a system title: %+v", got)
 	}
 
@@ -64,8 +67,24 @@ func TestSetAutoTitleOnlyReplacesDefault(t *testing.T) {
 	}
 	m.SetAutoTitle(ctx, c.ID, "Something else")
 	got, _ = m.Get(ctx, "u1", c.ID)
-	if got.Title != "My thread" || got.AutoTitled {
+	if got.Title != "My thread" || !got.TitleResolved {
 		t.Fatalf("user title must survive auto-title: %+v", got)
+	}
+}
+
+func TestSetAutoTitleDoesNotReplaceManualDefaultTitle(t *testing.T) {
+	m := newStore()
+	ctx := context.Background()
+	c, _ := m.Create(ctx, "u1", "c1", "", "gpt-4o")
+
+	if _, err := m.Rename(ctx, "u1", c.ID, memory.DefaultTitle); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	m.SetAutoTitle(ctx, c.ID, "Generated title")
+
+	got, _ := m.Get(ctx, "u1", c.ID)
+	if got.Title != memory.DefaultTitle || !got.TitleResolved || memory.CanAutoTitle(got) {
+		t.Fatalf("manual default title must survive auto-title: %+v", got)
 	}
 }
 

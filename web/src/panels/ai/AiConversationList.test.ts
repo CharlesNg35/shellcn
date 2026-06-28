@@ -12,7 +12,7 @@ const conversation = (over: Partial<AiConversation> = {}): AiConversation => ({
   ownerId: "u1",
   connectionId: "conn-1",
   title: "Current title",
-  autoTitled: false,
+  titleResolved: false,
   providerId: "",
   model: "gpt-4o",
   createdAt: "",

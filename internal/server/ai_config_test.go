@@ -239,7 +239,7 @@ func TestAIConversationResponsesUseClientJSONShape(t *testing.T) {
 	}
 	convID := createConnID(t, resp)
 	body := string(resp.Body)
-	for _, want := range []string{`"id":"`, `"connectionId":"c-op"`, `"title":"New conversation"`, `"providerId":""`, `"model":"gpt-4o"`} {
+	for _, want := range []string{`"id":"`, `"connectionId":"c-op"`, `"title":"New conversation"`, `"titleResolved":false`, `"providerId":""`, `"model":"gpt-4o"`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("conversation response missing %s: %s", want, body)
 		}

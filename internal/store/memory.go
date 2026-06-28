@@ -171,7 +171,7 @@ func (s *memAIConversationStore) Update(_ context.Context, c *models.AIConversat
 		return ErrNotFound
 	}
 	prev.Title = c.Title
-	prev.AutoTitled = c.AutoTitled
+	prev.TitleResolved = c.TitleResolved
 	prev.ProviderID = c.ProviderID
 	prev.Model = c.Model
 	prev.Summary = c.Summary

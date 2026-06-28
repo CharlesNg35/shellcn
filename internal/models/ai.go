@@ -51,11 +51,11 @@ type AIProviderSummary struct {
 // AIConversation is one chat thread, scoped to a user + connection. Summary holds
 // the rolling compaction of older turns kept within the model's context window.
 type AIConversation struct {
-	ID           string `gorm:"primaryKey" json:"id"`
-	OwnerID      string `gorm:"index" json:"ownerId"`
-	ConnectionID string `gorm:"index" json:"connectionId"`
-	Title        string `json:"title"`
-	AutoTitled   bool   `json:"autoTitled"`
+	ID            string `gorm:"primaryKey" json:"id"`
+	OwnerID       string `gorm:"index" json:"ownerId"`
+	ConnectionID  string `gorm:"index" json:"connectionId"`
+	Title         string `json:"title"`
+	TitleResolved bool   `json:"titleResolved"`
 	// ProviderID is the user provider used (empty = shared/global). Model records
 	// which model served the thread.
 	ProviderID string `json:"providerId"`

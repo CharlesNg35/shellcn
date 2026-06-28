@@ -15,6 +15,8 @@ import { RiskLevel } from "../types/projection";
 
 export type AiRunState = "idle" | "starting" | "streaming" | "stopping";
 
+const defaultConversationTitle = "New conversation";
+
 export interface AiToolCall {
   id: string;
   name: string;
@@ -265,7 +267,10 @@ export const useAiChatStore = defineStore("aiChat", () => {
   async function loadConversations(connId: string): Promise<void> {
     const st = state(connId);
     try {
-      st.conversations = await aiApi.listConversations(connId);
+      st.conversations = mergeConversations(
+        st,
+        await aiApi.listConversations(connId),
+      );
     } catch {
       return;
     }
@@ -409,6 +414,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     if (ev.type === "conversation") {
       if (!ev.conversationId) return;
       st.activeId = ev.conversationId;
+      applyConversationTitle(st, connId, ev.conversationId, ev.title);
       void loadConversations(connId);
       return;
     }
@@ -508,6 +514,87 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.pendingConfirm = null;
     st.queue = [];
     st.hasMore = false;
+  }
+
+  function applyConversationTitle(
+    st: ChatState,
+    connId: string,
+    conversationId: string,
+    title?: string,
+  ): void {
+    const next = title?.trim();
+    if (!next) return;
+    const existing = st.conversations.find((c) => c.id === conversationId);
+    if (existing) {
+      existing.title = next;
+      existing.titleResolved = true;
+      existing.updatedAt = new Date().toISOString();
+      return;
+    }
+    const now = new Date().toISOString();
+    st.conversations = [
+      {
+        id: conversationId,
+        ownerId: "",
+        connectionId: connId,
+        title: next,
+        titleResolved: true,
+        providerId: "",
+        model: "",
+        createdAt: now,
+        updatedAt: now,
+      },
+      ...st.conversations,
+    ];
+  }
+
+  function mergeConversations(
+    st: ChatState,
+    loaded: AiConversation[],
+  ): AiConversation[] {
+    const local = new Map(st.conversations.map((c) => [c.id, c]));
+    const seen = new Set<string>();
+    const merged = loaded.map((conversation) => {
+      seen.add(conversation.id);
+      const cached = local.get(conversation.id);
+      if (
+        cached?.titleResolved &&
+        cached.title &&
+        isUnresolvedDefaultTitle(conversation) &&
+        isCachedTitleNewer(cached, conversation)
+      ) {
+        return {
+          ...conversation,
+          title: cached.title,
+          titleResolved: true,
+          updatedAt: cached.updatedAt,
+        };
+      }
+      return conversation;
+    });
+    for (const conversation of st.conversations) {
+      if (
+        conversation.titleResolved &&
+        conversation.id === st.activeId &&
+        !seen.has(conversation.id)
+      ) {
+        merged.unshift(conversation);
+      }
+    }
+    return merged;
+  }
+
+  function isCachedTitleNewer(
+    cached: AiConversation,
+    conversation: AiConversation,
+  ): boolean {
+    if (!cached.updatedAt || !conversation.updatedAt) return true;
+    return cached.updatedAt >= conversation.updatedAt;
+  }
+
+  function isUnresolvedDefaultTitle(conversation: AiConversation): boolean {
+    if (conversation.title !== defaultConversationTitle) return false;
+    return !conversation.titleResolved;
   }
 
   function canRememberConfirmation(pending: PendingConfirm): boolean {

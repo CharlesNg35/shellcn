@@ -85,14 +85,14 @@ func (s *Store) Messages(ctx context.Context, ownerID, id string) ([]models.AIMe
 	return s.msg.List(ctx, id)
 }
 
-// Rename sets a user-provided title (clearing the auto-titled flag).
+// Rename sets a user-provided title.
 func (s *Store) Rename(ctx context.Context, ownerID, id, title string) (models.AIConversation, error) {
 	c, err := s.Get(ctx, ownerID, id)
 	if err != nil {
 		return models.AIConversation{}, err
 	}
 	c.Title = strings.TrimSpace(title)
-	c.AutoTitled = false
+	c.TitleResolved = true
 	c.UpdatedAt = s.now()
 	if err := s.conv.Update(ctx, &c); err != nil {
 		return models.AIConversation{}, err
@@ -111,7 +111,7 @@ func (s *Store) Delete(ctx context.Context, ownerID, id string) error {
 	return s.conv.Delete(ctx, id)
 }
 
-// DefaultTitle marks an untitled conversation; auto-titling only replaces it.
+// DefaultTitle is shown until the first successful automatic or manual title.
 const DefaultTitle = "New conversation"
 
 // AppendUser stores a user message.
@@ -138,13 +138,18 @@ func (s *Store) SetAutoTitle(ctx context.Context, convID, title string) {
 		return
 	}
 	c, err := s.conv.Get(ctx, convID)
-	if err != nil || c.Title != DefaultTitle {
+	if err != nil || !CanAutoTitle(c) {
 		return
 	}
 	c.Title = title
-	c.AutoTitled = true
+	c.TitleResolved = true
 	c.UpdatedAt = s.now()
 	_ = s.conv.Update(ctx, &c)
+}
+
+// CanAutoTitle reports whether the conversation still owns the initial title slot.
+func CanAutoTitle(c models.AIConversation) bool {
+	return !c.TitleResolved
 }
 
 // TitleFrom derives a short fallback title from a message.

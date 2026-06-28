@@ -222,7 +222,7 @@ func TestTurnPersistsConversationHistory(t *testing.T) {
 
 	// Auto-title fired on the first exchange.
 	got, _ := mem.Get(context.Background(), "u1", conv.ID)
-	if !got.AutoTitled {
+	if !got.TitleResolved {
 		t.Fatal("conversation should be auto-titled after first message")
 	}
 }

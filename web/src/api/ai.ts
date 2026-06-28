@@ -109,7 +109,7 @@ export interface AiConversation {
   ownerId: string;
   connectionId: string;
   title: string;
-  autoTitled: boolean;
+  titleResolved: boolean;
   providerId: string;
   model: string;
   createdAt: string;

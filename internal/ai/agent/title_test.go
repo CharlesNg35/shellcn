@@ -49,3 +49,10 @@ func TestCleanTitleIsRuneSafe(t *testing.T) {
 		t.Fatalf("title should be trimmed to 80 runes, got %d", len([]rune(title)))
 	}
 }
+
+func TestCleanTitleStripsModelArtifacts(t *testing.T) {
+	title := cleanTitle(" \n- Title:  Database   Backup Failure.\nextra explanation")
+	if title != "Database Backup Failure" {
+		t.Fatalf("unexpected title %q", title)
+	}
+}
