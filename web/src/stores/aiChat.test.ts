@@ -383,6 +383,9 @@ describe("aiChat store", () => {
     expect(st.providerId).toBe("p1");
     expect(st.messages.map((m) => m.content)).toEqual(["second"]);
     expect(st.hasMore).toBe(true);
+    // Selecting a conversation bumps loadSeq so the list remounts (instant scroll).
+    const seqAfterSelect = st.loadSeq;
+    expect(seqAfterSelect).toBeGreaterThan(0);
 
     messages.mockResolvedValue({
       messages: [storedMsg("m1", "first")],
@@ -393,6 +396,28 @@ describe("aiChat store", () => {
     expect(messages).toHaveBeenCalledWith(CONN, "cv", 1);
     expect(st.messages.map((m) => m.content)).toEqual(["first", "second"]);
     expect(st.hasMore).toBe(false);
+    // Loading older messages must NOT remount (would lose scroll position).
+    expect(st.loadSeq).toBe(seqAfterSelect);
+  });
+
+  it("flags loadingConversation while a conversation page is in flight", async () => {
+    const store = useAiChatStore();
+    let resolvePage: (value: unknown) => void = () => {};
+    getConversation.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePage = resolve;
+      }),
+    );
+    const st = store.state(CONN);
+    const pending = store.selectConversation(CONN, "cv");
+    expect(st.loadingConversation).toBe(true);
+
+    resolvePage({
+      conversation: { id: "cv", providerId: "p1", model: "m" },
+      page: { messages: [], hasMore: false },
+    });
+    await pending;
+    expect(st.loadingConversation).toBe(false);
   });
 
   it("queues messages typed mid-stream and flushes on completion", () => {

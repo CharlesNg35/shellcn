@@ -142,11 +142,13 @@ onMounted(() => {
 
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
         <AiMessageList
+          :key="st.loadSeq"
           :messages="st.messages"
           :current-id="st.current?.id ?? null"
           :streaming="busy"
           :has-more="st.hasMore"
           :loading-older="st.loadingOlder"
+          :loading="st.loadingConversation"
           :disabled="composerDisabled"
           @quick-start="send"
           @load-older="store.loadOlder(connectionId)"

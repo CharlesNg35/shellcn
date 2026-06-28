@@ -60,6 +60,8 @@ interface ChatState {
   queue: string[];
   hasMore: boolean;
   loadingOlder: boolean;
+  loadingConversation: boolean;
+  loadSeq: number;
 }
 
 function newState(): ChatState {
@@ -77,6 +79,8 @@ function newState(): ChatState {
     queue: [],
     hasMore: false,
     loadingOlder: false,
+    loadingConversation: false,
+    loadSeq: 0,
   };
 }
 
@@ -290,6 +294,8 @@ export const useAiChatStore = defineStore("aiChat", () => {
       return;
     }
     if (st.runState !== "idle") return;
+    st.loadingConversation = true;
+    st.error = null;
     try {
       const { conversation, page } = await aiApi.getConversation(connId, cid);
       st.activeId = cid;
@@ -298,8 +304,13 @@ export const useAiChatStore = defineStore("aiChat", () => {
       st.messages = page.messages.map(mapStored);
       st.hasMore = page.hasMore;
       st.current = null;
+      // Force the message list to remount so its scroll engine re-attaches and
+      // positions instantly (no smooth animation) on the freshly loaded page.
+      st.loadSeq++;
     } catch {
       st.error = "Failed to load conversation";
+    } finally {
+      st.loadingConversation = false;
     }
   }
 
