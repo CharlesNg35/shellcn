@@ -28,6 +28,12 @@ func (demoPlugin) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		APIVersion: plugin.CurrentAPIVersion, Name: "demo", Version: "0", Title: "Demo",
 		Category: plugin.CategoryOther, Layout: plugin.LayoutTabs,
+		Tabs: []plugin.Panel{{
+			Key:    "items",
+			Label:  "Items",
+			Type:   plugin.PanelTable,
+			Source: &plugin.DataSource{RouteID: "demo.list", Params: map[string]string{"database": "${resource.uid}", "schema": "${resource.name}"}},
+		}},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 	}
 }
@@ -187,6 +193,17 @@ func TestToolSchemaExcludesSensitiveFieldsAndIncludesPathParams(t *testing.T) {
 	if len(required) != 1 || required[0] != "name" {
 		t.Fatalf("path param should be required: %v", get["required"])
 	}
+
+	list := specs["demo_list"].Parameters["properties"].(map[string]any)
+	if _, ok := list["database"]; !ok {
+		t.Fatalf("manifest data-source route param should be exposed: %+v", list)
+	}
+	if _, ok := list["schema"]; !ok {
+		t.Fatalf("manifest data-source route param should be exposed: %+v", list)
+	}
+	if !strings.Contains(specs["demo_list"].Description, "Route params:") {
+		t.Fatalf("route param hint missing from description: %q", specs["demo_list"].Description)
+	}
 }
 
 func TestExecuteSplitsPathParamsFromBody(t *testing.T) {
@@ -203,6 +220,16 @@ func TestExecuteSplitsPathParamsFromBody(t *testing.T) {
 	}
 	if len(inv.lastBody) != 0 {
 		t.Fatalf("path-only call should have empty body, got %s", inv.lastBody)
+	}
+
+	if _, err := ts.Execute(context.Background(), engine.ToolCall{Name: "demo_list", Input: map[string]any{"database": "shellcn", "schema": "public"}}); err != nil {
+		t.Fatalf("execute list: %v", err)
+	}
+	if inv.lastRoute != "demo.list" || inv.lastParams["database"] != "shellcn" || inv.lastParams["schema"] != "public" {
+		t.Fatalf("manifest params not routed: route=%s params=%v", inv.lastRoute, inv.lastParams)
+	}
+	if len(inv.lastBody) != 0 {
+		t.Fatalf("manifest-param call should have empty body, got %s", inv.lastBody)
 	}
 
 	ts.WithConfirmer(&recordingConfirmer{approve: true})

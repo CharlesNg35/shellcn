@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -54,9 +55,9 @@ type RouteSource interface {
 
 // binding records how to call a route from a sanitized tool name.
 type binding struct {
-	routeID    string
-	risk       plugin.RiskLevel
-	pathParams []string
+	routeID string
+	risk    plugin.RiskLevel
+	params  map[string]bool
 }
 
 // ToolSet is the risk-gated tool catalogue for one connection. It implements
@@ -83,6 +84,7 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 		return nil, fmt.Errorf("tools: unknown protocol %q", protocol)
 	}
 	ts := &ToolSet{byName: map[string]binding{}, invoker: invoker, user: user, connID: connID}
+	manifestParams := routeParamIndex(plg.Manifest())
 	for _, r := range plg.Routes() {
 		if r.IsStream() || !allowed[r.Risk] {
 			continue
@@ -92,11 +94,12 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 			continue
 		}
 		params := templateParamNames(r.Path)
-		ts.byName[name] = binding{routeID: r.ID, risk: r.Risk, pathParams: params}
+		routeParams := mergeRouteParams(params, manifestParams[r.ID])
+		ts.byName[name] = binding{routeID: r.ID, risk: r.Risk, params: routeParamSet(routeParams)}
 		ts.specs = append(ts.specs, engine.ToolSpec{
 			Name:        name,
-			Description: describe(r),
-			Parameters:  toJSONSchema(r, params),
+			Description: describe(r, routeParams),
+			Parameters:  toJSONSchema(r, params, routeParams),
 		})
 	}
 	sort.Slice(ts.specs, func(i, j int) bool { return ts.specs[i].Name < ts.specs[j].Name })
@@ -117,12 +120,8 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 	}
 	params := map[string]string{}
 	body := map[string]any{}
-	pathSet := map[string]bool{}
-	for _, p := range b.pathParams {
-		pathSet[p] = true
-	}
 	for k, v := range call.Input {
-		if pathSet[k] {
+		if b.params[k] {
 			params[k] = fmt.Sprint(v)
 			continue
 		}
@@ -269,7 +268,7 @@ func safeTruncate(s string, limit int) string {
 }
 
 // describe builds a model-facing description from route metadata.
-func describe(r plugin.Route) string {
+func describe(r plugin.Route, routeParams []string) string {
 	action := humanize(r.ID)
 	verb := map[plugin.Method]string{
 		plugin.MethodGet:    "Read",
@@ -281,7 +280,11 @@ func describe(r plugin.Route) string {
 	if verb == "" {
 		verb = "Invoke"
 	}
-	return fmt.Sprintf("%s: %s (%s, %s). Route: %s. Permission: %s.", verb, action, r.Method, r.Risk, r.ID, r.Permission)
+	desc := fmt.Sprintf("%s: %s (%s, %s). Route: %s. Permission: %s.", verb, action, r.Method, r.Risk, r.ID, r.Permission)
+	if len(routeParams) > 0 {
+		desc += " Route params: " + strings.Join(routeParams, ", ") + ". Use these to preserve the same database/schema/resource scope as the user's request."
+	}
+	return desc
 }
 
 func humanize(id string) string {
@@ -302,14 +305,21 @@ func sanitizeName(id string) string {
 	return b.String()
 }
 
-// toJSONSchema flattens route input and path params for the model.
-func toJSONSchema(r plugin.Route, pathParams []string) map[string]any {
+// toJSONSchema flattens route input and route params for the model.
+func toJSONSchema(r plugin.Route, pathParams, routeParams []string) map[string]any {
 	props := map[string]any{}
 	var required []string
 
 	for _, p := range pathParams {
 		props[p] = map[string]any{"type": "string", "description": "path parameter"}
 		required = append(required, p)
+	}
+	pathSet := routeParamSet(pathParams)
+	for _, p := range routeParams {
+		if pathSet[p] {
+			continue
+		}
+		props[p] = map[string]any{"type": "string", "description": "route scope parameter from the plugin manifest"}
 	}
 
 	if r.Input != nil {
@@ -332,6 +342,96 @@ func toJSONSchema(r plugin.Route, pathParams []string) map[string]any {
 		schema["required"] = required
 	}
 	return schema
+}
+
+func routeParamIndex(m plugin.Manifest) map[string]map[string]bool {
+	out := map[string]map[string]bool{}
+	add := func(routeID string, params map[string]string) {
+		if strings.TrimSpace(routeID) == "" {
+			return
+		}
+		for key := range params {
+			if strings.TrimSpace(key) == "" {
+				continue
+			}
+			if out[routeID] == nil {
+				out[routeID] = map[string]bool{}
+			}
+			out[routeID][key] = true
+		}
+	}
+
+	dataSourceType := reflect.TypeOf(plugin.DataSource{})
+	actionType := reflect.TypeOf(plugin.Action{})
+	var walk func(reflect.Value)
+	walk = func(v reflect.Value) {
+		if !v.IsValid() {
+			return
+		}
+		for v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer {
+			if v.IsNil() {
+				return
+			}
+			v = v.Elem()
+		}
+		if v.Type() == dataSourceType {
+			ds := v.Interface().(plugin.DataSource)
+			add(ds.RouteID, ds.Params)
+			return
+		}
+		if v.Type() == actionType {
+			a := v.Interface().(plugin.Action)
+			add(a.RouteID, a.Params)
+		}
+		switch v.Kind() {
+		case reflect.Struct:
+			for i := 0; i < v.NumField(); i++ {
+				if v.Type().Field(i).PkgPath != "" {
+					continue
+				}
+				walk(v.Field(i))
+			}
+		case reflect.Slice, reflect.Array:
+			for i := 0; i < v.Len(); i++ {
+				walk(v.Index(i))
+			}
+		case reflect.Map:
+			iter := v.MapRange()
+			for iter.Next() {
+				walk(iter.Value())
+			}
+		}
+	}
+	walk(reflect.ValueOf(m))
+	return out
+}
+
+func mergeRouteParams(pathParams []string, manifestParams map[string]bool) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(pathParams)+len(manifestParams))
+	for _, p := range pathParams {
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	extra := make([]string, 0, len(manifestParams))
+	for p := range manifestParams {
+		if !seen[p] {
+			extra = append(extra, p)
+		}
+	}
+	sort.Strings(extra)
+	return append(out, extra...)
+}
+
+func routeParamSet(params []string) map[string]bool {
+	out := make(map[string]bool, len(params))
+	for _, p := range params {
+		out[p] = true
+	}
+	return out
 }
 
 func fieldSchema(f plugin.Field) (map[string]any, bool) {
