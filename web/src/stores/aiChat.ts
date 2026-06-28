@@ -11,6 +11,7 @@ import {
   type AiTurnStreamEvent,
 } from "../api/ai";
 import { useAiProvidersStore } from "./aiProviders";
+import { RiskLevel } from "../types/projection";
 
 export type AiRunState = "idle" | "starting" | "streaming" | "stopping";
 
@@ -101,6 +102,10 @@ export const useAiChatStore = defineStore("aiChat", () => {
   const aiProviders = useAiProvidersStore();
   const selectedProviders = useStorage<Record<string, string>>(
     "shellcn:ai:selected-provider",
+    {},
+  );
+  const rememberedConfirmations = useStorage<Record<string, string[]>>(
+    "shellcn:ai:auto-confirm-write-routes",
     {},
   );
   const byConn = reactive<Record<string, ChatState>>({});
@@ -373,13 +378,20 @@ export const useAiChatStore = defineStore("aiChat", () => {
     finalize(connId, false);
   }
 
-  function resolveConfirm(connId: string, approve: boolean): void {
+  function resolveConfirm(
+    connId: string,
+    approve: boolean,
+    options: { remember?: boolean } = {},
+  ): void {
     const st = state(connId);
     const pending = st.pendingConfirm;
     if (!pending) return;
     if (!st.turnId) {
       st.error = "Assistant turn is no longer active.";
       return;
+    }
+    if (approve && options.remember) {
+      rememberConfirmation(connId, pending);
     }
     st.pendingConfirm = null;
     void aiApi.turnControl(connId, st.turnId, {
@@ -404,6 +416,13 @@ export const useAiChatStore = defineStore("aiChat", () => {
       const { type: _type, turnId, ...rest } = ev;
       void _type;
       st.turnId = turnId || st.turnId;
+      if (st.turnId && shouldAutoConfirm(connId, rest)) {
+        void aiApi.turnControl(connId, st.turnId, {
+          type: "confirm",
+          toolId: rest.toolId,
+        });
+        return;
+      }
       st.pendingConfirm = rest;
       return;
     }
@@ -489,6 +508,31 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.pendingConfirm = null;
     st.queue = [];
     st.hasMore = false;
+  }
+
+  function canRememberConfirmation(pending: PendingConfirm): boolean {
+    return !pending.destructive && pending.risk === RiskLevel.Write;
+  }
+
+  function rememberedRoutes(connId: string): string[] {
+    return rememberedConfirmations.value[connId] ?? [];
+  }
+
+  function shouldAutoConfirm(connId: string, pending: PendingConfirm): boolean {
+    return (
+      canRememberConfirmation(pending) &&
+      rememberedRoutes(connId).includes(pending.routeId)
+    );
+  }
+
+  function rememberConfirmation(connId: string, pending: PendingConfirm): void {
+    if (!canRememberConfirmation(pending)) return;
+    const routes = new Set(rememberedRoutes(connId));
+    routes.add(pending.routeId);
+    rememberedConfirmations.value = {
+      ...rememberedConfirmations.value,
+      [connId]: [...routes].sort(),
+    };
   }
 
   return {

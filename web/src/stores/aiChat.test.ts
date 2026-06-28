@@ -235,6 +235,74 @@ describe("aiChat store", () => {
     });
   });
 
+  it("remembers non-destructive write approvals by connection and route", () => {
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+    st.turnId = "turn-1";
+    st.pendingConfirm = {
+      toolId: "t1",
+      toolName: "demo_create",
+      routeId: "demo.create",
+      risk: RiskLevel.Write,
+      destructive: false,
+      params: {},
+      body: {},
+    };
+
+    store.resolveConfirm(CONN, true, { remember: true });
+    expect(turnControl).toHaveBeenLastCalledWith(CONN, "turn-1", {
+      type: "confirm",
+      toolId: "t1",
+    });
+
+    store.send(CONN, "create another");
+    streamCalls[0].options.onEvent({
+      type: "needs_confirmation",
+      turnId: "turn-2",
+      toolId: "t2",
+      toolName: "demo_create",
+      routeId: "demo.create",
+      risk: RiskLevel.Write,
+      destructive: false,
+      params: {},
+      body: {},
+    });
+
+    expect(st.pendingConfirm).toBeNull();
+    expect(turnControl).toHaveBeenLastCalledWith(CONN, "turn-2", {
+      type: "confirm",
+      toolId: "t2",
+    });
+  });
+
+  it("does not auto-confirm remembered destructive actions", () => {
+    localStorage.setItem(
+      "shellcn:ai:auto-confirm-write-routes",
+      JSON.stringify({ [CONN]: ["demo.delete"] }),
+    );
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+
+    store.send(CONN, "delete");
+    streamCalls[0].options.onEvent({
+      type: "needs_confirmation",
+      turnId: "turn-1",
+      toolId: "t1",
+      toolName: "demo_delete",
+      routeId: "demo.delete",
+      risk: RiskLevel.Destructive,
+      destructive: true,
+      params: {},
+      body: {},
+    });
+
+    expect(st.pendingConfirm).toMatchObject({
+      routeId: "demo.delete",
+      destructive: true,
+    });
+    expect(turnControl).not.toHaveBeenCalled();
+  });
+
   it("sends the active conversation id with the message", () => {
     const store = useAiChatStore();
     const st = store.state(CONN);

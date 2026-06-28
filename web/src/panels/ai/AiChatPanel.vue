@@ -147,7 +147,7 @@ onMounted(() => {
         @click="showHistory = false"
       />
 
-      <div class="flex min-h-0 flex-1 flex-col">
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
         <AiMessageList
           :messages="st.messages"
           :current-id="st.current?.id ?? null"
@@ -158,13 +158,14 @@ onMounted(() => {
           @quick-start="send"
           @load-older="store.loadOlder(connectionId)"
         />
-        <div v-if="st.pendingConfirm" class="px-3 pt-2">
-          <AiActionConfirm
-            :pending="st.pendingConfirm"
-            @approve="store.resolveConfirm(connectionId, true)"
-            @reject="store.resolveConfirm(connectionId, false)"
-          />
-        </div>
+        <AiActionConfirm
+          v-if="st.pendingConfirm"
+          :pending="st.pendingConfirm"
+          @approve="
+            (remember) => store.resolveConfirm(connectionId, true, { remember })
+          "
+          @reject="store.resolveConfirm(connectionId, false)"
+        />
         <AiQueuedMessages
           :messages="st.queue"
           @remove="(index) => store.dequeue(connectionId, index)"
