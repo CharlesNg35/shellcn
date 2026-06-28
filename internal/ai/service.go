@@ -312,7 +312,10 @@ func (s *Service) resolveProvider(ctx context.Context, user models.User, scope S
 		return p, cfg.Model, cfg.Kind, err
 	}
 	if s.global.Configured() {
-		kind := models.AIProviderKind(s.global.Kind)
+		kind, ok := aiconfig.SupportedKind(s.global.Kind)
+		if !ok {
+			return nil, "", "", ErrNotConfigured
+		}
 		p, err := s.factory(ctx, kind, s.global.APIKey, s.global.BaseURL, s.global.Model)
 		return p, s.global.Model, kind, err
 	}
@@ -357,7 +360,7 @@ func buildProvider(ctx context.Context, kind models.AIProviderKind, key, baseURL
 // Configured reports whether any provider (user or global) could serve a turn for
 // the user. Used by transport to gate the chat endpoint.
 func (s *Service) Configured(ctx context.Context, userID string) bool {
-	if s.global.Configured() {
+	if _, ok := aiconfig.SupportedKind(s.global.Kind); s.global.Configured() && ok {
 		return true
 	}
 	list, err := s.providers.List(ctx, userID)

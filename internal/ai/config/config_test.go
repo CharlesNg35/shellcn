@@ -272,4 +272,18 @@ func TestGlobalStatusProjection(t *testing.T) {
 	if !g.Configured || g.Provider != "Shared" || g.Model != "gpt-4o" {
 		t.Fatalf("unexpected global status %+v", g)
 	}
+
+	bad, _ := newService(t, config.AIConfig{
+		Kind: "AI", Name: "Shared", APIKey: "sk-x", Model: "gpt-4o",
+	})
+	if got := bad.Global(); !got.Configured || got.Usable || got.Kind != "AI" {
+		t.Fatalf("unsupported global kind should stay visible but unusable: %+v", got)
+	}
+
+	upper, _ := newService(t, config.AIConfig{
+		Kind: "OpenAI", Name: "Shared", APIKey: "sk-x", Model: "gpt-4o",
+	})
+	if got := upper.Global(); !got.Configured || !got.Usable || got.Kind != "openai" {
+		t.Fatalf("uppercase global kind was not normalized: %+v", got)
+	}
 }

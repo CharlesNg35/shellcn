@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { nextTick } from "vue";
-import type { AiTurnRequest, StreamAiTurnOptions } from "../api/ai";
+import type {
+  AiGlobalStatus,
+  AiTurnRequest,
+  StreamAiTurnOptions,
+} from "../api/ai";
 import { RiskLevel } from "../types/projection";
 
 const listConversations = vi.fn(async () => [] as unknown[]);
@@ -10,7 +14,11 @@ const messages = vi.fn();
 const renameConversation = vi.fn();
 const deleteConversation = vi.fn();
 const turnControl = vi.fn();
-const global = vi.fn(async () => ({ configured: false }));
+const global = vi.fn(
+  async (): Promise<AiGlobalStatus> => ({
+    configured: false,
+  }),
+);
 const listProviders = vi.fn(async () => [] as unknown[]);
 
 interface StreamCall {
@@ -543,6 +551,37 @@ describe("aiChat store", () => {
       providerId: "p-local",
     });
     expect(streamCalls.at(-1)?.body).not.toHaveProperty("model");
+  });
+
+  it("defaults to the first personal provider when the shared provider is unusable", async () => {
+    global.mockResolvedValue({
+      configured: true,
+      usable: false,
+      provider: "Shared AI",
+      kind: "AI",
+      model: "gpt-4o",
+    });
+    listProviders.mockResolvedValue([
+      {
+        id: "p-local",
+        kind: "openrouter",
+        name: "OpenRouter",
+        models: ["openai/gpt-4o"],
+        model: "openai/gpt-4o",
+        hasKey: true,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+    const store = useAiChatStore();
+
+    await store.loadProviders();
+    store.send(CONN, "hi");
+
+    expect(store.global?.configured).toBe(true);
+    expect(streamCalls.at(-1)?.body).toMatchObject({
+      providerId: "p-local",
+    });
   });
 
   it("can force-refresh providers after settings change", async () => {

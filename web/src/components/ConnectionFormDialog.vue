@@ -63,7 +63,8 @@ const aiModeChoices = [
 onMounted(async () => {
   try {
     const [global, list] = await Promise.all([aiApi.global(), aiApi.list()]);
-    aiConfigured.value = global.configured || list.length > 0;
+    aiConfigured.value =
+      (global.configured && (global.usable ?? true)) || list.length > 0;
   } catch {
     aiConfigured.value = false;
   }

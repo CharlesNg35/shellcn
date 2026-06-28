@@ -18,8 +18,7 @@ const st = computed(() => store.state(props.connectionId));
 const busy = computed(() => st.value.runState !== "idle");
 const providerReady = computed(
   () =>
-    store.providersReady &&
-    (store.providers.length > 0 || Boolean(store.global?.configured)),
+    store.providersReady && (store.providers.length > 0 || store.globalUsable),
 );
 const composerDisabled = computed(() => !providerReady.value);
 const disabledReason = computed(() => {

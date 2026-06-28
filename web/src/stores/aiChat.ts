@@ -119,6 +119,11 @@ export const useAiChatStore = defineStore("aiChat", () => {
   const providers = computed(() => aiProviders.providers);
   const global = computed(() => aiProviders.global);
   const providersReady = computed(() => aiProviders.ready);
+  const globalUsable = computed(() =>
+    Boolean(
+      aiProviders.global?.configured && (aiProviders.global.usable ?? true),
+    ),
+  );
 
   async function loadProviders(force = false): Promise<void> {
     try {
@@ -169,11 +174,11 @@ export const useAiChatStore = defineStore("aiChat", () => {
       rememberProvider(connId, st.providerId);
       return;
     }
-    if (st.providerId === "" && aiProviders.global?.configured) {
+    if (st.providerId === "" && globalUsable.value) {
       rememberProvider(connId, "");
       return;
     }
-    if (aiProviders.global?.configured) {
+    if (globalUsable.value) {
       st.providerId = "";
       rememberProvider(connId, "");
       return;
@@ -185,6 +190,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
   watch(
     () => [
       aiProviders.global?.configured ?? false,
+      aiProviders.global?.usable ?? true,
       aiProviders.providers.map((provider) => provider.id).join("\u0000"),
     ],
     () =>
@@ -657,6 +663,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     byConn,
     providers,
     global,
+    globalUsable,
     providersReady,
     loadProviders,
     setProvider,

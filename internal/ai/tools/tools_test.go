@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/charlesng35/shellcn/internal/ai/engine"
@@ -34,6 +35,10 @@ func (demoPlugin) Manifest() plugin.Manifest {
 			Type:   plugin.PanelTable,
 			Source: &plugin.DataSource{RouteID: "demo.list", Params: map[string]string{"database": "${resource.uid}", "schema": "${resource.name}"}},
 		}},
+		Streams: []plugin.Stream{
+			{ID: "demo.stream", Kind: plugin.StreamQuery, RouteID: "demo.stream"},
+			{ID: "demo.terminal", Kind: plugin.StreamTerminal, RouteID: "demo.terminal"},
+		},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 	}
 }
@@ -79,6 +84,11 @@ func (demoPlugin) Routes() []plugin.Route {
 		},
 		{
 			ID: "demo.stream", Method: plugin.MethodWS, Risk: plugin.RiskSafe, Permission: "demo.read", AuditEvent: "demo.stream",
+			Input:  &plugin.Schema{Groups: []plugin.Group{{Name: "i", Fields: []plugin.Field{{Key: "tail", Label: "Tail", Type: plugin.FieldNumber}}}}},
+			Stream: func(*plugin.RequestContext, plugin.ClientStream) error { return nil },
+		},
+		{
+			ID: "demo.terminal", Method: plugin.MethodWS, Risk: plugin.RiskSafe, Permission: "demo.read", AuditEvent: "demo.terminal",
 			Stream: func(*plugin.RequestContext, plugin.ClientStream) error { return nil },
 		},
 	}
@@ -101,6 +111,20 @@ func (r *recordingInvoker) InvokeRoute(_ context.Context, _ models.User, _, rout
 	r.lastParams = params
 	r.lastBody = body
 	return r.result, r.err
+}
+
+type recordingStreamInvoker struct {
+	recordingInvoker
+	lastStreamRoute  string
+	lastStreamParams map[string]string
+	lastStreamOpts   engine.StreamSampleOptions
+}
+
+func (r *recordingStreamInvoker) InvokeStream(_ context.Context, _ models.User, _, routeID string, params map[string]string, opts engine.StreamSampleOptions) (any, error) {
+	r.lastStreamRoute = routeID
+	r.lastStreamParams = params
+	r.lastStreamOpts = opts
+	return engine.StreamSample{RouteID: routeID, Data: "line 1\n"}, nil
 }
 
 func registry(t *testing.T) *pluginregistry.Registry {
@@ -127,6 +151,59 @@ func TestBuildReadOnlyExposesOnlySafeNonStream(t *testing.T) {
 		if names[forbidden] {
 			t.Fatalf("read-only set leaked %q: %v", forbidden, names)
 		}
+	}
+	if names["observe_demo_stream"] {
+		t.Fatalf("stream observer should require a stream-capable invoker: %v", names)
+	}
+}
+
+func TestBuildExposesSafeStreamObserverWhenSupported(t *testing.T) {
+	reg := registry(t)
+	inv := &recordingStreamInvoker{}
+	ts, err := tools.Build(reg, "demo", map[plugin.RiskLevel]bool{plugin.RiskSafe: true}, inv, models.User{ID: "u"}, "c1")
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if ts.Has("demo_stream") || ts.Has("demo_terminal") {
+		t.Fatal("raw websocket route must not be exposed")
+	}
+	if !ts.Has("observe_demo_stream") {
+		t.Fatalf("safe stream observer missing: %v", ts.Specs())
+	}
+	if ts.Has("observe_demo_terminal") {
+		t.Fatal("terminal streams must not be exposed as text observers")
+	}
+
+	specs := map[string]engine.ToolSpec{}
+	for _, s := range ts.Specs() {
+		specs[s.Name] = s
+	}
+	props := specs["observe_demo_stream"].Parameters["properties"].(map[string]any)
+	for _, key := range []string{"tail", "duration_ms", "max_bytes", "max_events"} {
+		if _, ok := props[key]; !ok {
+			t.Fatalf("observer schema missing %s: %+v", key, props)
+		}
+	}
+
+	out, err := ts.Execute(context.Background(), engine.ToolCall{
+		Name:  "observe_demo_stream",
+		Input: map[string]any{"tail": 25, "duration_ms": 250, "max_bytes": 1024, "max_events": 3},
+	})
+	if err != nil {
+		t.Fatalf("execute observer: %v", err)
+	}
+	if inv.lastStreamRoute != "demo.stream" {
+		t.Fatalf("wrong stream route: %q", inv.lastStreamRoute)
+	}
+	if inv.lastStreamParams["tail"] != "25" {
+		t.Fatalf("stream input should be routed as params: %+v", inv.lastStreamParams)
+	}
+	if inv.lastStreamOpts.Duration != 250*time.Millisecond || inv.lastStreamOpts.MaxBytes != 1024 || inv.lastStreamOpts.MaxEvents != 3 {
+		t.Fatalf("stream opts not routed: %+v", inv.lastStreamOpts)
+	}
+	sample, ok := out.(map[string]any)
+	if !ok || sample["routeId"] != "demo.stream" || sample["data"] != "line 1\n" {
+		t.Fatalf("unexpected observer result: %#v", out)
 	}
 }
 

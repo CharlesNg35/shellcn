@@ -98,6 +98,40 @@ func TestConfiguredViaGlobal(t *testing.T) {
 	}
 }
 
+func TestUnsupportedGlobalKindIsNotConfigured(t *testing.T) {
+	svc := newService(t, config.AIConfig{Kind: "AI", Name: "Shared", APIKey: "k", Model: "gpt-4o"}).
+		WithProviderFactory(func(context.Context, models.AIProviderKind, string, string, string) (engine.Provider, error) {
+			t.Fatal("unsupported global kind should not reach provider factory")
+			return nil, nil
+		})
+	if svc.Configured(context.Background(), "u1") {
+		t.Fatal("unsupported global kind should not report configured")
+	}
+	err := svc.Run(context.Background(), ai.RunInput{
+		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
+		AIMode: models.AIModeReadOnly, UserMessage: "hi",
+	}, func(engine.StreamEvent) {})
+	if !errors.Is(err, ai.ErrNotConfigured) {
+		t.Fatalf("want ErrNotConfigured, got %v", err)
+	}
+}
+
+func TestGlobalKindIsNormalized(t *testing.T) {
+	var got models.AIProviderKind
+	svc := newService(t, config.AIConfig{Kind: "OpenAI", Name: "Shared", APIKey: "k", Model: "gpt-4o"}).
+		WithProviderFactory(func(_ context.Context, kind models.AIProviderKind, _, _, _ string) (engine.Provider, error) {
+			got = kind
+			return nil, nil
+		})
+	_ = svc.Run(context.Background(), ai.RunInput{
+		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "missing",
+		AIMode: models.AIModeReadOnly, UserMessage: "hi",
+	}, func(engine.StreamEvent) {})
+	if got != models.AIProviderOpenAI {
+		t.Fatalf("global kind = %q, want openai", got)
+	}
+}
+
 func TestGlobalProviderPinsConfiguredModel(t *testing.T) {
 	var got string
 	svc := newService(t, config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", Model: "gpt-4o"}).

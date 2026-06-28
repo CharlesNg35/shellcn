@@ -3,8 +3,11 @@ package server_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/charlesng35/shellcn/internal/ai/engine"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/policy"
@@ -139,6 +142,43 @@ func TestInvokeRouteRejectsStreamRoutes(t *testing.T) {
 	h := newHarness(t)
 	if _, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "tester.ws", nil, nil); !errors.Is(err, plugin.ErrNotSupported) {
 		t.Fatalf("stream route: want ErrNotSupported, got %v", err)
+	}
+}
+
+func TestInvokeStreamSamplesSafeObservableStream(t *testing.T) {
+	h := newHarness(t)
+	ctx := audit.WithSource(context.Background(), audit.SourceAI, "turn-stream")
+
+	result, err := h.srv.InvokeStream(ctx, h.user(t, "op"), "c-op", "tester.logs", map[string]string{"tail": "2"}, engine.StreamSampleOptions{
+		Duration: 50 * time.Millisecond, MaxBytes: 1024, MaxEvents: 10,
+	})
+	if err != nil {
+		t.Fatalf("invoke stream: %v", err)
+	}
+	sample, ok := result.(engine.StreamSample)
+	if !ok {
+		t.Fatalf("unexpected result %#v", result)
+	}
+	if sample.RouteID != "tester.logs" || sample.Kind != string(plugin.StreamLogs) || !strings.Contains(sample.Data, "tail=2 first") {
+		t.Fatalf("unexpected sample: %+v", sample)
+	}
+
+	for _, r := range auditRows(t, h, "c-op") {
+		if r.RouteID == "tester.logs" && r.Result == models.AuditAllowed {
+			if r.Source != audit.SourceAI || r.TurnID != "turn-stream" {
+				t.Fatalf("audit source/turn = %q/%q, want ai/turn-stream", r.Source, r.TurnID)
+			}
+			return
+		}
+	}
+	t.Fatal("missing allowed audit row for tester.logs")
+}
+
+func TestInvokeStreamRejectsPrivilegedStream(t *testing.T) {
+	h := newHarness(t)
+	_, err := h.srv.InvokeStream(context.Background(), h.user(t, "op"), "c-op", "tester.desk", nil, engine.StreamSampleOptions{})
+	if !errors.Is(err, policy.ErrForbidden) && !errors.Is(err, plugin.ErrForbidden) {
+		t.Fatalf("privileged stream: want forbidden, got %v", err)
 	}
 }
 

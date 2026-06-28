@@ -33,6 +33,7 @@ export interface AiProviderSummary {
 
 export interface AiGlobalStatus {
   configured: boolean;
+  usable?: boolean;
   provider?: string;
   kind?: string;
   model?: string;

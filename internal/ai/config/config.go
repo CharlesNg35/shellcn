@@ -32,6 +32,12 @@ var builtinKinds = map[models.AIProviderKind]bool{
 	models.AIProviderOpenAICompat: true,
 }
 
+// SupportedKind normalizes a provider kind and reports whether ShellCN can run it.
+func SupportedKind(kind string) (models.AIProviderKind, bool) {
+	normalized := models.AIProviderKind(strings.ToLower(strings.TrimSpace(kind)))
+	return normalized, builtinKinds[normalized]
+}
+
 // vendorModelCatalog is the static model picker fallback.
 var vendorModelCatalog = map[models.AIProviderKind][]string{
 	models.AIProviderOpenAI:     {"gpt-4o", "gpt-4o-mini", "o3-mini"},
@@ -62,6 +68,7 @@ type Input struct {
 // GlobalStatus is the read-only shared AI config projection.
 type GlobalStatus struct {
 	Configured bool   `json:"configured"`
+	Usable     bool   `json:"usable"`
 	Provider   string `json:"provider,omitempty"`
 	Kind       string `json:"kind,omitempty"`
 	Model      string `json:"model,omitempty"`
@@ -91,12 +98,18 @@ func (s *Service) Global() GlobalStatus {
 	if !s.global.Configured() {
 		return GlobalStatus{Configured: false}
 	}
-	return GlobalStatus{
+	kind, ok := SupportedKind(s.global.Kind)
+	out := GlobalStatus{
 		Configured: true,
+		Usable:     ok,
 		Provider:   s.global.DisplayName(),
-		Kind:       s.global.Kind,
+		Kind:       strings.TrimSpace(s.global.Kind),
 		Model:      s.global.Model,
 	}
+	if ok {
+		out.Kind = string(kind)
+	}
+	return out
 }
 
 // List returns the owner's providers as non-secret summaries.
@@ -340,7 +353,9 @@ func (s *Service) validate(ctx context.Context, ownerID, ignoreID string, in Inp
 	in.APIKey = strings.TrimSpace(in.APIKey)
 	in.Model = strings.TrimSpace(in.Model)
 
-	if !builtinKinds[in.Kind] {
+	kind, ok := SupportedKind(string(in.Kind))
+	in.Kind = kind
+	if !ok {
 		return Input{}, fmt.Errorf("%w: unknown kind %q", errInvalid, in.Kind)
 	}
 	if in.Kind == models.AIProviderOpenAICompat && in.BaseURL == "" {

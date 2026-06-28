@@ -14,7 +14,9 @@ export const useAiProvidersStore = defineStore("aiProviders", () => {
   let requestSeq = 0;
 
   const available = computed(
-    () => Boolean(global.value?.configured) || providers.value.length > 0,
+    () =>
+      Boolean(global.value?.configured && (global.value.usable ?? true)) ||
+      providers.value.length > 0,
   );
 
   async function load(force = false): Promise<void> {

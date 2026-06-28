@@ -22,12 +22,18 @@ const (
 	maxToolStringBytes  = 2 << 10
 	maxToolArrayItems   = 50
 	routeToolTimeout    = 60 * time.Second
+	streamToolTimeout   = 8 * time.Second
 	truncatedResultNote = "result was truncated before being shown to the model; narrow the query for full data"
 )
 
 // Invoker runs a route as the user through the secure pipeline.
 type Invoker interface {
 	InvokeRoute(ctx context.Context, user models.User, connID, routeID string, params map[string]string, body []byte) (any, error)
+}
+
+// StreamInvoker observes a read-only stream route through the secure backend.
+type StreamInvoker interface {
+	InvokeStream(ctx context.Context, user models.User, connID, routeID string, params map[string]string, opts engine.StreamSampleOptions) (any, error)
 }
 
 // ConfirmRequest describes a pending write/destructive tool call awaiting the
@@ -58,6 +64,7 @@ type binding struct {
 	routeID string
 	risk    plugin.RiskLevel
 	params  map[string]bool
+	stream  bool
 }
 
 // ToolSet is the risk-gated tool catalogue for one connection. It implements
@@ -84,9 +91,30 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 		return nil, fmt.Errorf("tools: unknown protocol %q", protocol)
 	}
 	ts := &ToolSet{byName: map[string]binding{}, invoker: invoker, user: user, connID: connID}
-	manifestParams := routeParamIndex(plg.Manifest())
+	manifest := plg.Manifest()
+	manifestParams := routeParamIndex(manifest)
+	streams := textObservableStreams(manifest)
+	_, canObserveStreams := invoker.(StreamInvoker)
 	for _, r := range plg.Routes() {
-		if r.IsStream() || !allowed[r.Risk] {
+		if r.IsStream() {
+			if !canObserveStreams || !allowed[r.Risk] || r.Risk != plugin.RiskSafe || !streams[r.ID] {
+				continue
+			}
+			name := "observe_" + sanitizeName(r.ID)
+			if _, dup := ts.byName[name]; dup {
+				continue
+			}
+			params := templateParamNames(r.Path)
+			routeParams := mergeRouteParams(params, manifestParams[r.ID])
+			ts.byName[name] = binding{routeID: r.ID, risk: r.Risk, params: routeParamSet(routeParams), stream: true}
+			ts.specs = append(ts.specs, engine.ToolSpec{
+				Name:        name,
+				Description: describeStream(r, routeParams),
+				Parameters:  toStreamJSONSchema(r, params, routeParams),
+			})
+			continue
+		}
+		if !allowed[r.Risk] {
 			continue
 		}
 		name := sanitizeName(r.ID)
@@ -121,11 +149,21 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 	params := map[string]string{}
 	body := map[string]any{}
 	for k, v := range call.Input {
-		if b.params[k] {
+		if b.params[k] || (b.stream && !streamControlParam(k)) {
 			params[k] = fmt.Sprint(v)
 			continue
 		}
 		body[k] = v
+	}
+	if b.stream {
+		opts := streamOptions(body)
+		routeCtx, cancel := context.WithTimeout(ctx, streamToolTimeout)
+		defer cancel()
+		result, err := ts.invoker.(StreamInvoker).InvokeStream(routeCtx, ts.user, ts.connID, b.routeID, params, opts)
+		if err != nil {
+			return nil, err
+		}
+		return clean(result), nil
 	}
 	if b.risk == plugin.RiskWrite || b.risk == plugin.RiskDestructive {
 		if ts.confirmer == nil {
@@ -287,6 +325,14 @@ func describe(r plugin.Route, routeParams []string) string {
 	return desc
 }
 
+func describeStream(r plugin.Route, routeParams []string) string {
+	desc := fmt.Sprintf("Observe a bounded read-only sample of %s (%s stream, %s). Route: %s. Permission: %s. The backend opens the stream, collects a short sample, and closes it automatically.", humanize(r.ID), r.Method, r.Risk, r.ID, r.Permission)
+	if len(routeParams) > 0 {
+		desc += " Route params: " + strings.Join(routeParams, ", ") + ". Use these to preserve the same resource scope as the user's request."
+	}
+	return desc
+}
+
 func humanize(id string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(id, ".", " "), "_", " ")
 }
@@ -342,6 +388,107 @@ func toJSONSchema(r plugin.Route, pathParams, routeParams []string) map[string]a
 		schema["required"] = required
 	}
 	return schema
+}
+
+func toStreamJSONSchema(r plugin.Route, pathParams, routeParams []string) map[string]any {
+	schema := toJSONSchema(r, pathParams, routeParams)
+	props, _ := schema["properties"].(map[string]any)
+	if props == nil {
+		props = map[string]any{}
+		schema["properties"] = props
+	}
+	props["duration_ms"] = map[string]any{
+		"type":        "number",
+		"description": "sample duration in milliseconds",
+		"default":     1200,
+		"minimum":     100,
+		"maximum":     5000,
+	}
+	props["max_bytes"] = map[string]any{
+		"type":        "number",
+		"description": "maximum stream bytes to return",
+		"default":     16384,
+		"minimum":     256,
+		"maximum":     65536,
+	}
+	props["max_events"] = map[string]any{
+		"type":        "number",
+		"description": "maximum stream write events to return",
+		"default":     100,
+		"minimum":     1,
+		"maximum":     500,
+	}
+	return schema
+}
+
+func streamOptions(input map[string]any) engine.StreamSampleOptions {
+	return engine.StreamSampleOptions{
+		Duration:  time.Duration(number(input["duration_ms"])) * time.Millisecond,
+		MaxBytes:  int(number(input["max_bytes"])),
+		MaxEvents: int(number(input["max_events"])),
+	}
+}
+
+func streamControlParam(key string) bool {
+	switch key {
+	case "duration_ms", "max_bytes", "max_events":
+		return true
+	default:
+		return false
+	}
+}
+
+func number(v any) float64 {
+	switch x := v.(type) {
+	case float64:
+		return x
+	case float32:
+		return float64(x)
+	case int:
+		return float64(x)
+	case int8:
+		return float64(x)
+	case int16:
+		return float64(x)
+	case int32:
+		return float64(x)
+	case int64:
+		return float64(x)
+	case uint:
+		return float64(x)
+	case uint8:
+		return float64(x)
+	case uint16:
+		return float64(x)
+	case uint32:
+		return float64(x)
+	case uint64:
+		return float64(x)
+	case json.Number:
+		n, _ := x.Float64()
+		return n
+	default:
+		return 0
+	}
+}
+
+func textObservableStreams(m plugin.Manifest) map[string]bool {
+	out := map[string]bool{}
+	for _, s := range m.Streams {
+		if textObservableStreamKind(s.Kind) {
+			out[s.RouteID] = true
+		}
+	}
+	return out
+}
+
+func textObservableStreamKind(kind plugin.StreamKind) bool {
+	switch kind {
+	case plugin.StreamLogs, plugin.StreamMetrics, plugin.StreamTask, plugin.StreamResource, plugin.StreamQuery:
+		return true
+	default:
+		return false
+	}
 }
 
 func routeParamIndex(m plugin.Manifest) map[string]map[string]bool {

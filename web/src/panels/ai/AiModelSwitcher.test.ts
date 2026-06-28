@@ -103,4 +103,20 @@ describe("AiModelSwitcher", () => {
 
     expect(wrapper.emitted("select")).toEqual([["p2"]]);
   });
+
+  it("renders the first available provider when the selected provider is stale", () => {
+    const wrapper = mount(AiModelSwitcher, {
+      props: {
+        providers: [
+          provider({ id: "p1", name: "OpenAI" }),
+          provider({ id: "p2", name: "OpenRouter" }),
+        ],
+        global: { configured: false },
+        providerId: "p-missing",
+      },
+    });
+    const select = wrapper.findComponent({ name: "Select" });
+    expect(select.props("modelValue")).toBe("p1");
+    expect(select.attributes("title")).toBe("OpenAI - gpt-4o");
+  });
 });
