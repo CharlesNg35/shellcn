@@ -88,13 +88,6 @@ func TestSetAutoTitleDoesNotReplaceManualDefaultTitle(t *testing.T) {
 	}
 }
 
-func TestTitleFromHeuristic(t *testing.T) {
-	title := memory.TitleFrom("show me all the running containers please right now immediately")
-	if title == "" || len(strings.Fields(title)) > 8 {
-		t.Fatalf("heuristic title should be <= 8 words: %q", title)
-	}
-}
-
 func TestHistoryKeepsRecentAndCompactsOlder(t *testing.T) {
 	m := newStore()
 	ctx := context.Background()

@@ -220,10 +220,21 @@ func TestTurnPersistsConversationHistory(t *testing.T) {
 		t.Fatalf("assistant message/tool calls not persisted: %+v", msgs[1])
 	}
 
-	// Auto-title fired on the first exchange.
 	got, _ := mem.Get(context.Background(), "u1", conv.ID)
+	if got.TitleResolved {
+		t.Fatal("conversation should not be auto-titled after the first exchange")
+	}
+
+	err = svc.Run(context.Background(), ai.RunInput{
+		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
+		AIMode: models.AIModeReadOnly, ConversationID: conv.ID, UserMessage: "show more detail",
+	}, func(engine.StreamEvent) {})
+	if err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	got, _ = mem.Get(context.Background(), "u1", conv.ID)
 	if !got.TitleResolved {
-		t.Fatal("conversation should be auto-titled after first message")
+		t.Fatal("conversation should be auto-titled once there is enough context")
 	}
 }
 

@@ -183,7 +183,7 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 
 	if persist && acc.err == "" {
 		_ = s.mem.AppendAssistant(ctx, in.ConversationID, acc.content.String(), acc.reasoning.String(), acc.calls, acc.truncated)
-		s.autoTitle(ctx, provider, model, in.User.ID, in.ConversationID, in.UserMessage, acc.content.String())
+		s.autoTitle(ctx, provider, model, in.User.ID, in.ConversationID)
 	}
 	return nil
 }
@@ -200,27 +200,28 @@ func (s *Service) protocolInfo(protocol string) (string, string) {
 	return strings.TrimSpace(m.Title), strings.TrimSpace(m.Description)
 }
 
-// autoTitle names a conversation after its first exchange, using the model when
-// possible and a heuristic otherwise. It is a no-op once the title is set.
-func (s *Service) autoTitle(ctx context.Context, provider engine.Provider, model, ownerID, convID, userMessage, assistantReply string) {
+// autoTitle tries to resolve the placeholder title once there is enough context.
+func (s *Service) autoTitle(ctx context.Context, provider engine.Provider, model, ownerID, convID string) {
 	conv, err := s.mem.Get(ctx, ownerID, convID)
-	if err != nil || !memory.CanAutoTitle(conv) || s.mem.MessageCount(ctx, convID) < 2 {
+	if err != nil || !memory.CanAutoTitle(conv) || s.mem.MessageCount(ctx, convID) <= 2 {
 		return
 	}
-	title := generateTitle(ctx, provider, model, userMessage, assistantReply)
-	if title == "" {
-		title = memory.TitleFrom(userMessage)
+	messages, err := s.mem.Messages(ctx, ownerID, convID)
+	if err != nil {
+		return
 	}
-	s.mem.SetAutoTitle(ctx, convID, title)
+	if title := generateTitle(ctx, provider, model, titleContext(messages)); title != "" {
+		s.mem.SetAutoTitle(ctx, convID, title)
+	}
 }
 
-func generateTitle(ctx context.Context, provider engine.Provider, model, userMessage, assistantReply string) string {
+func generateTitle(ctx context.Context, provider engine.Provider, model, conversation string) string {
 	titleCtx, cancel := context.WithTimeout(ctx, titleGenerationTimeout)
 	defer cancel()
 
 	done := make(chan string, 1)
 	go func() {
-		done <- agent.GenerateTitle(titleCtx, provider, model, userMessage, assistantReply)
+		done <- agent.GenerateTitle(titleCtx, provider, model, conversation)
 	}()
 
 	select {
@@ -229,6 +230,24 @@ func generateTitle(ctx context.Context, provider engine.Provider, model, userMes
 	case <-titleCtx.Done():
 		return ""
 	}
+}
+
+func titleContext(messages []models.AIMessage) string {
+	var b strings.Builder
+	for _, msg := range messages {
+		role := strings.TrimSpace(msg.Role)
+		content := strings.TrimSpace(msg.Content)
+		if content == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(role)
+		b.WriteString(": ")
+		b.WriteString(content)
+	}
+	return b.String()
 }
 
 // accumulator captures a turn's assistant output to persist after streaming.

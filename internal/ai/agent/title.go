@@ -9,12 +9,12 @@ import (
 
 const titleMaxOutTokens = 1024
 
-// GenerateTitle asks the model for a short conversation title from the first
-// exchange. It returns "" on any failure so the caller can fall back.
-func GenerateTitle(ctx context.Context, provider engine.Provider, model, userMessage, assistantReply string) string {
+// GenerateTitle asks the model for a short conversation title from conversation
+// context. It returns "" on failure so the caller can retry on a later turn.
+func GenerateTitle(ctx context.Context, provider engine.Provider, model, conversation string) string {
 	system := "Generate a short conversation title (max 8 words) capturing the topic. " +
 		"Reply with ONLY the title — no quotes, no trailing punctuation."
-	prompt := "User: " + truncate(userMessage, 500) + "\nAssistant: " + truncate(assistantReply, 500)
+	prompt := "Conversation:\n" + truncate(conversation, 1200)
 
 	ch, err := provider.Stream(ctx, engine.ChatRequest{
 		Model:        model,

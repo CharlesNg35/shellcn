@@ -25,7 +25,6 @@ const (
 	compactedAssistCharLimit = 500
 	toolResultCharLimit      = 600
 	toolResultCountLimit     = 6
-	titleWords               = 8
 	defaultMessagePageSize   = 30
 )
 
@@ -151,9 +150,6 @@ func (s *Store) SetAutoTitle(ctx context.Context, convID, title string) {
 func CanAutoTitle(c models.AIConversation) bool {
 	return !c.TitleResolved
 }
-
-// TitleFrom derives a short fallback title from a message.
-func TitleFrom(msg string) string { return titleFrom(msg) }
 
 // AppendAssistant stores a finalized assistant message.
 func (s *Store) AppendAssistant(ctx context.Context, convID, content, reasoning string, calls []models.AIToolCallRecord, truncated bool) error {
@@ -379,21 +375,6 @@ func (s *Store) touch(ctx context.Context, convID string) {
 	}
 	c.UpdatedAt = s.now()
 	_ = s.conv.Update(ctx, &c)
-}
-
-func titleFrom(msg string) string {
-	words := strings.Fields(strings.TrimSpace(msg))
-	if len(words) == 0 {
-		return "New conversation"
-	}
-	if len(words) > titleWords {
-		words = words[:titleWords]
-	}
-	t := strings.Join(words, " ")
-	if len(t) > 60 {
-		t = t[:60]
-	}
-	return t
 }
 
 func truncate(s string, limit int) string {

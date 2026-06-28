@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -25,9 +26,11 @@ func (internalNopInvoker) InvokeRoute(context.Context, models.User, string, stri
 }
 
 type blockingTitleProvider struct {
-	mu      sync.Mutex
-	calls   int
-	titleCh chan engine.StreamEvent
+	mu         sync.Mutex
+	titleCall  int
+	titleCh    chan engine.StreamEvent
+	titleText  string
+	gotContext string
 }
 
 type internalDemoPlugin struct{}
@@ -54,14 +57,9 @@ func (internalDemoPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin
 
 func (p *blockingTitleProvider) Models(context.Context) ([]engine.ModelInfo, error) { return nil, nil }
 
-func (p *blockingTitleProvider) Stream(context.Context, engine.ChatRequest, engine.ToolExecutor) (<-chan engine.StreamEvent, error) {
-	p.mu.Lock()
-	p.calls++
-	call := p.calls
-	p.mu.Unlock()
-
+func (p *blockingTitleProvider) Stream(_ context.Context, req engine.ChatRequest, _ engine.ToolExecutor) (<-chan engine.StreamEvent, error) {
 	out := make(chan engine.StreamEvent, 4)
-	if call == 1 {
+	if req.MaxSteps != 1 {
 		go func() {
 			defer close(out)
 			out <- engine.StreamEvent{Type: engine.EventTextDelta, Text: "done"}
@@ -71,8 +69,23 @@ func (p *blockingTitleProvider) Stream(context.Context, engine.ChatRequest, engi
 	}
 
 	p.mu.Lock()
+	p.titleCall++
+	if len(req.Messages) > 0 {
+		p.gotContext = req.Messages[0].Content
+	}
+	title := p.titleText
+	if p.titleCall > 1 {
+		title = "Database Backup Failure"
+	}
 	p.titleCh = out
 	p.mu.Unlock()
+	if title != "" {
+		go func() {
+			defer close(out)
+			out <- engine.StreamEvent{Type: engine.EventTextDelta, Text: title}
+			out <- engine.StreamEvent{Type: engine.EventDone}
+		}()
+	}
 	return out, nil
 }
 
@@ -86,7 +99,7 @@ func (p *blockingTitleProvider) closeTitleStream() {
 	}
 }
 
-func TestAutoTitleFallsBackWhenTitleProviderStalls(t *testing.T) {
+func TestAutoTitleUsesConversationContextAndRetriesUntilResolved(t *testing.T) {
 	oldTimeout := titleGenerationTimeout
 	titleGenerationTimeout = 10 * time.Millisecond
 	t.Cleanup(func() { titleGenerationTimeout = oldTimeout })
@@ -110,25 +123,59 @@ func TestAutoTitleFallsBackWhenTitleProviderStalls(t *testing.T) {
 		t.Fatalf("create conversation: %v", err)
 	}
 
-	start := time.Now()
 	err = svc.Run(context.Background(), RunInput{
 		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
 		AIMode: models.AIModeReadOnly, ConversationID: conv.ID,
 		UserMessage: "why did the database backup fail",
 	}, func(engine.StreamEvent) {})
-	provider.closeTitleStream()
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if time.Since(start) > time.Second {
-		t.Fatal("title generation timeout should not hold the turn open")
-	}
-
 	got, err := mem.Get(context.Background(), "u1", conv.ID)
 	if err != nil {
 		t.Fatalf("get conversation: %v", err)
 	}
-	if got.Title != "why did the database backup fail" || !got.TitleResolved {
-		t.Fatalf("conversation should use fallback title after timeout: %+v", got)
+	if got.TitleResolved {
+		t.Fatalf("first exchange should not resolve title: %+v", got)
+	}
+
+	start := time.Now()
+	err = svc.Run(context.Background(), RunInput{
+		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
+		AIMode: models.AIModeReadOnly, ConversationID: conv.ID,
+		UserMessage: "what should I clean up",
+	}, func(engine.StreamEvent) {})
+	provider.closeTitleStream()
+	if err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if time.Since(start) > time.Second {
+		t.Fatal("title generation timeout should not hold the turn open")
+	}
+	got, err = mem.Get(context.Background(), "u1", conv.ID)
+	if err != nil {
+		t.Fatalf("get conversation: %v", err)
+	}
+	if got.TitleResolved {
+		t.Fatalf("failed title generation should leave title unresolved for retry: %+v", got)
+	}
+
+	err = svc.Run(context.Background(), RunInput{
+		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
+		AIMode: models.AIModeReadOnly, ConversationID: conv.ID,
+		UserMessage: "retry title",
+	}, func(engine.StreamEvent) {})
+	if err != nil {
+		t.Fatalf("third run: %v", err)
+	}
+	got, err = mem.Get(context.Background(), "u1", conv.ID)
+	if err != nil {
+		t.Fatalf("get conversation: %v", err)
+	}
+	if got.Title != "Database Backup Failure" || !got.TitleResolved {
+		t.Fatalf("later title retry should resolve conversation: %+v", got)
+	}
+	if provider.gotContext == "" || !strings.Contains(provider.gotContext, "user: why did the database backup fail") || !strings.Contains(provider.gotContext, "assistant: done") {
+		t.Fatalf("title request should use conversation context, got %q", provider.gotContext)
 	}
 }

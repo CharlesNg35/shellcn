@@ -33,7 +33,7 @@ func (p *titleProvider) Stream(_ context.Context, req engine.ChatRequest, _ engi
 func TestGenerateTitleAllowsReasoningBudget(t *testing.T) {
 	provider := &titleProvider{}
 
-	title := GenerateTitle(context.Background(), provider, "reasoning-model", "why did backup fail?", "The backup failed because the database disk is full.")
+	title := GenerateTitle(context.Background(), provider, "reasoning-model", "user: why did backup fail?\nassistant: The backup failed because the database disk is full.")
 
 	if title != "Database Backup Failure" {
 		t.Fatalf("unexpected title %q", title)
