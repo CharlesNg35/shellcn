@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import { recordingsApi, type StreamRef } from "../api/recordings";
+import { fixWebmDurationMetadata, webmReplacementChunks } from "./webmDuration";
 
 const MIME = "video/webm";
 const TIMESLICE_MS = 2000;
@@ -134,6 +135,8 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
   let resolveStopped: (() => void) | null = null;
   let uploadFailed = false;
   let keepalive = false;
+  let chunks: Blob[] = [];
+  let startedAt = 0;
 
   // Release the captured stream so the browser stops the capture track and the
   // compositor loop; MediaRecorder.stop() alone leaves both live.
@@ -168,6 +171,8 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
       });
       uploadFailed = false;
       keepalive = false;
+      chunks = [];
+      startedAt = performance.now();
       // The compositor's draw loop forces a frame per tick, so an idle desktop
       // still produces chunks.
       const compositor = startCursorCompositor(canvas, fps);
@@ -181,6 +186,7 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
       recorder.ondataavailable = (e: BlobEvent) => {
         if (uploadFailed) return;
         if (e.data && e.data.size > 0) {
+          chunks.push(e.data);
           const i = index++;
           chain = chain
             .then(async () => {
@@ -206,10 +212,11 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
             if (uploadFailed) {
               if (requestOptions) await recordingsApi.abort(id, requestOptions);
               else await recordingsApi.abort(id);
-            } else if (requestOptions) {
-              await recordingsApi.finalize(id, requestOptions);
             } else {
-              await recordingsApi.finalize(id);
+              if (!requestOptions) await replaceWithDurationFixedBlob(id);
+              if (requestOptions)
+                await recordingsApi.finalize(id, requestOptions);
+              else await recordingsApi.finalize(id);
             }
           })
           .catch(async () => {
@@ -227,6 +234,8 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
             if (recordingID === id) recordingID = "";
             recorder = null;
             keepalive = false;
+            chunks = [];
+            startedAt = 0;
             resolveStopped?.();
             resolveStopped = null;
           });
@@ -242,6 +251,29 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
       if (id) await recordingsApi.abort(id).catch(() => undefined);
       failed.value = true;
       return false;
+    }
+  }
+
+  async function replaceWithDurationFixedBlob(recordingId: string) {
+    try {
+      const fixed = await fixWebmDurationMetadata(
+        chunks,
+        Math.max(0, performance.now() - startedAt),
+      );
+      if (!fixed) return;
+      const replacement = webmReplacementChunks(fixed);
+      for (let index = 0; index < replacement.length; index++) {
+        await recordingsApi.uploadChunk(
+          recordingId,
+          index,
+          replacement[index],
+          {
+            replace: index === 0,
+          },
+        );
+      }
+    } catch {
+      // The live chunks are already uploaded; keep them rather than losing the recording.
     }
   }
 

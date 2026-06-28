@@ -154,10 +154,7 @@ func (e *Engine) Prepare(ctx context.Context, info StreamInfo) (*Pending, error)
 		capability: capability,
 		forced:     policy == plugin.PolicyAuto,
 	}
-	if sess.forced && capability.Class == plugin.RecordingDesktop && capability.DefaultFormat() == plugin.FormatWebMCanvas {
-		return nil, fmt.Errorf("%w: required desktop recording cannot be enforced by browser capture", plugin.ErrUnavailable)
-	}
-	if sess.forced && capability.Class != plugin.RecordingTerminal {
+	if sess.forced && capability.Class != plugin.RecordingTerminal && capability.DefaultFormat() != plugin.FormatWebMCanvas {
 		if err := e.startSession(ctx, sess); err != nil {
 			return nil, fmt.Errorf("%w: required recording could not start: %v", plugin.ErrUnavailable, err)
 		}

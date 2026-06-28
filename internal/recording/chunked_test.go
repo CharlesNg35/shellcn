@@ -89,6 +89,42 @@ func TestChunkedLifecycle(t *testing.T) {
 	}
 }
 
+func TestChunkedReplacementResetsBlobBeforeFinalize(t *testing.T) {
+	e, _, blobs := newChunkEngine(t)
+	ctx := context.Background()
+
+	row, err := e.BeginChunked(ctx, desktopInfo(), plugin.FormatWebMCanvas)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	if err := e.AppendChunk(ctx, row.ID, "u1", 0, []byte("live-a")); err != nil {
+		t.Fatalf("live chunk 0: %v", err)
+	}
+	if err := e.AppendChunk(ctx, row.ID, "u1", 1, []byte("live-b")); err != nil {
+		t.Fatalf("live chunk 1: %v", err)
+	}
+	if err := e.ReplaceChunk(ctx, row.ID, "u1", 0, []byte("fixed-a")); err != nil {
+		t.Fatalf("replacement chunk 0: %v", err)
+	}
+	if err := e.ReplaceChunk(ctx, row.ID, "u1", 1, []byte("fixed-b")); err != nil {
+		t.Fatalf("replacement chunk 1: %v", err)
+	}
+
+	fin, err := e.FinalizeChunked(ctx, row.ID, "u1")
+	if err != nil {
+		t.Fatalf("finalize: %v", err)
+	}
+	if fin.Size != int64(len("fixed-afixed-b")) {
+		t.Fatalf("final size = %d", fin.Size)
+	}
+	rc, _ := blobs.Open(ctx, fin.StorageKey)
+	data, _ := io.ReadAll(rc)
+	_ = rc.Close()
+	if string(data) != "fixed-afixed-b" {
+		t.Fatalf("blob content: %q", data)
+	}
+}
+
 func TestChunkedAbortDiscardsBlob(t *testing.T) {
 	e, st, blobs := newChunkEngine(t)
 	ctx := context.Background()

@@ -293,11 +293,15 @@ func TestEngineWebMCanvasDesktopAutoUsesChunkedPath(t *testing.T) {
 	}
 
 	wrapped, finalize, err := e.Wrap(context.Background(), newFakeClient(), info)
-	if !errors.Is(err, plugin.ErrUnavailable) {
-		t.Fatalf("forced webm_canvas desktop: want ErrUnavailable, got wrapped=%T finalizeNil=%v err=%v", wrapped, finalize == nil, err)
+	if err != nil {
+		t.Fatalf("forced webm_canvas desktop: %v", err)
 	}
+	if wrapped == nil || finalize == nil {
+		t.Fatalf("forced webm_canvas desktop wrapper missing: wrapped=%T finalizeNil=%v", wrapped, finalize == nil)
+	}
+	finalize()
 	if recs, _ := st.Recordings.List(context.Background(), store.RecordingFilter{}); len(recs) != 0 {
-		t.Fatalf("denied webm_canvas stream should not create metadata, got %+v", recs)
+		t.Fatalf("browser-captured desktop stream should not create server-side metadata, got %+v", recs)
 	}
 }
 

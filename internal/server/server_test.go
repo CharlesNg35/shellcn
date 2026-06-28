@@ -370,6 +370,7 @@ func newHarness(t *testing.T, opts ...func(*server.Deps)) *harness {
 type apiResp struct {
 	Status int
 	Body   []byte
+	Header http.Header
 }
 
 func (h *harness) do(t *testing.T, method, path, userID string, body io.Reader) apiResp {
@@ -391,7 +392,7 @@ func (h *harness) do(t *testing.T, method, path, userID string, body io.Reader) 
 	}
 	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
-	return apiResp{Status: resp.StatusCode, Body: b}
+	return apiResp{Status: resp.StatusCode, Body: b, Header: resp.Header.Clone()}
 }
 
 func (h *harness) doReq(t *testing.T, req *http.Request, userID string) apiResp {
@@ -409,7 +410,7 @@ func (h *harness) doReq(t *testing.T, req *http.Request, userID string) apiResp 
 	}
 	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
-	return apiResp{Status: resp.StatusCode, Body: b}
+	return apiResp{Status: resp.StatusCode, Body: b, Header: resp.Header.Clone()}
 }
 
 func TestLeaseProxyForwardsRemoteOwner(t *testing.T) {

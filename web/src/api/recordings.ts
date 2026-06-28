@@ -19,6 +19,7 @@ export interface StreamRef {
 
 interface RecordingRequestOptions {
   keepalive?: boolean;
+  replace?: boolean;
 }
 
 async function postBinary(
@@ -60,7 +61,12 @@ export const recordingsApi = {
     api.get<RecordingSummary[]>(`/connections/${id}/recordings${query(f)}`),
   get: (id: string) => api.get<RecordingSummary>(`/recordings/${id}`),
   remove: (id: string) => api.del(`/recordings/${id}`),
-  contentUrl: (id: string) => `${API_BASE}/recordings/${id}/content`,
+  contentUrl: (id: string, options: { download?: boolean } = {}) => {
+    const sp = new URLSearchParams();
+    if (options.download) sp.set("download", "1");
+    const suffix = sp.toString();
+    return `${API_BASE}/recordings/${id}/content${suffix ? `?${suffix}` : ""}`;
+  },
 
   // Manual terminal recording control on a live stream.
   control: (connectionId: string, ref: StreamRef, action: "start" | "stop") =>
@@ -84,12 +90,17 @@ export const recordingsApi = {
     index: number,
     chunk: Blob,
     options: RecordingRequestOptions = {},
-  ) =>
-    postBinary(
-      `/recordings/${recordingId}/chunks?index=${index}`,
+  ) => {
+    const sp = new URLSearchParams({ index: String(index) });
+    if (options.replace) {
+      sp.set("replace", "1");
+    }
+    return postBinary(
+      `/recordings/${recordingId}/chunks?${sp.toString()}`,
       chunk,
       options,
-    ),
+    );
+  },
   finalize: (recordingId: string, options: RecordingRequestOptions = {}) =>
     options.keepalive
       ? postJSON<RecordingSummary>(

@@ -157,6 +157,16 @@ func TestDesktopChunkFlow(t *testing.T) {
 	if resp.Status != http.StatusOK || string(resp.Body) != "chunk-achunk-b" {
 		t.Fatalf("content: status=%d body=%q", resp.Status, resp.Body)
 	}
+	if got := resp.Header.Get("Accept-Ranges"); got != "bytes" {
+		t.Fatalf("content should support range requests, Accept-Ranges=%q", got)
+	}
+	resp = h.do(t, http.MethodGet, "/api/recordings/"+recID+"/content?download=1", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("download content: status=%d body=%q", resp.Status, resp.Body)
+	}
+	if got := resp.Header.Get("Content-Disposition"); !strings.HasPrefix(got, "attachment;") {
+		t.Fatalf("download disposition = %q", got)
+	}
 }
 
 func itoa(i int) string { return string(rune('0' + i)) }
