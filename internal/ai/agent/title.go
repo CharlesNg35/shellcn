@@ -7,7 +7,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/ai/engine"
 )
 
-const titleMaxOutTokens = 64
+const titleMaxOutTokens = 1024
 
 // GenerateTitle asks the model for a short conversation title from the first
 // exchange. It returns "" on any failure so the caller can fall back.
@@ -42,18 +42,20 @@ func GenerateTitle(ctx context.Context, provider engine.Provider, model, userMes
 func cleanTitle(s string) string {
 	s = strings.TrimSpace(s)
 	s = strings.Trim(s, `."'`)
-	if len(s) > 80 {
-		s = s[:80]
-	}
-	if len([]rune(s)) < 2 {
+	runes := []rune(s)
+	if len(runes) < 2 {
 		return ""
+	}
+	if len(runes) > 80 {
+		return string(runes[:80])
 	}
 	return s
 }
 
 func truncate(s string, n int) string {
-	if len(s) <= n {
+	runes := []rune(s)
+	if len(runes) <= n {
 		return s
 	}
-	return s[:n]
+	return string(runes[:n])
 }

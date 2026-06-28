@@ -2,9 +2,8 @@
 import { computed, ref } from "vue";
 import Button from "primevue/button";
 import Checkbox from "primevue/checkbox";
-import Dialog from "primevue/dialog";
 import AppIcon from "@/components/AppIcon.vue";
-import { btnGhost, dialogRoot } from "@/primevue/preset";
+import { btnGhost } from "@/primevue/preset";
 import type { PendingConfirm } from "@/stores/aiChat";
 import { RiskLevel } from "@/types/projection";
 
@@ -12,6 +11,7 @@ const props = defineProps<{ pending: PendingConfirm }>();
 const emit = defineEmits<{ approve: [remember: boolean]; reject: [] }>();
 
 const remember = ref(false);
+const showDetails = ref(false);
 const canRemember = computed(
   () => !props.pending.destructive && props.pending.risk === RiskLevel.Write,
 );
@@ -27,13 +27,6 @@ const rows = computed(() => {
   return out;
 });
 
-const icon = computed(() => ({
-  type: "lucide" as const,
-  value: props.pending.destructive ? "triangle-alert" : "shield-question",
-}));
-const title = computed(() =>
-  props.pending.destructive ? "Approve destructive action" : "Approve action",
-);
 const approveLabel = computed(() =>
   props.pending.destructive ? "Run anyway" : "Approve",
 );
@@ -48,89 +41,85 @@ function formatValue(value: unknown): string {
 function approve(): void {
   emit("approve", canRemember.value && remember.value);
 }
-
-function close(visible: boolean): void {
-  if (!visible) emit("reject");
-}
 </script>
 
 <template>
-  <Dialog
-    :visible="true"
-    modal
-    :closable="true"
-    :pt="{
-      root: dialogRoot('max-w-lg'),
-      header: 'px-5 py-4',
-      content: 'min-h-0 overflow-auto px-5 pb-5 pt-0',
-      footer: 'border-t border-surface-200 px-5 py-3 dark:border-surface-800',
-    }"
-    @update:visible="close"
+  <div
+    class="shrink-0 px-3 pt-2"
+    role="alertdialog"
+    aria-label="Confirm assistant action"
   >
-    <template #header>
-      <div class="flex min-w-0 items-center gap-3">
-        <span
-          class="flex size-9 shrink-0 items-center justify-center rounded-full"
+    <div
+      class="overflow-hidden rounded-lg border"
+      :class="
+        pending.destructive
+          ? 'border-rose-300 bg-rose-50/60 dark:border-rose-900/70 dark:bg-rose-950/30'
+          : 'border-surface-200 bg-surface-50 dark:border-surface-700 dark:bg-surface-900/60'
+      "
+    >
+      <div class="flex min-w-0 items-center gap-2 px-3 py-2">
+        <AppIcon
+          :icon="{
+            type: 'lucide',
+            value: pending.destructive ? 'triangle-alert' : 'shield-question',
+          }"
+          :size="15"
+          class="shrink-0"
           :class="
             pending.destructive
-              ? 'bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-300'
-              : 'bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-300'
+              ? 'text-rose-600 dark:text-rose-400'
+              : 'text-amber-600 dark:text-amber-400'
           "
+        />
+        <span
+          class="shrink-0 text-sm font-medium text-surface-800 dark:text-surface-100"
         >
-          <AppIcon :icon="icon" :size="18" />
+          {{
+            pending.destructive ? "Allow destructive action?" : "Allow action?"
+          }}
         </span>
-        <div class="min-w-0">
-          <h2
-            class="truncate text-base font-semibold text-surface-900 dark:text-surface-50"
-          >
-            {{ title }}
-          </h2>
-          <p class="truncate text-xs text-surface-500 dark:text-surface-400">
-            Assistant requested a tool action
-          </p>
-        </div>
-      </div>
-    </template>
-
-    <div class="flex min-w-0 flex-col gap-4 text-sm">
-      <div
-        class="rounded-lg border border-surface-200 bg-surface-50 p-3 dark:border-surface-800 dark:bg-surface-950/60"
-      >
-        <div class="flex min-w-0 flex-wrap items-center gap-2">
-          <code
-            class="min-w-0 rounded bg-surface-0 px-1.5 py-0.5 text-xs break-all text-surface-900 dark:bg-surface-900 dark:text-surface-100"
-          >
-            {{ pending.routeId }}
-          </code>
-          <span
-            class="rounded-full px-2 py-0.5 text-xs font-medium"
-            :class="
-              pending.destructive
-                ? 'bg-red-100 text-red-700 dark:bg-red-950/70 dark:text-red-300'
-                : 'bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300'
-            "
-          >
-            {{ pending.risk }}
-          </span>
-        </div>
-        <p class="mt-2 text-xs text-surface-600 dark:text-surface-300">
-          Review the request before allowing the assistant to continue.
-          <template v-if="pending.destructive">
-            This action is marked destructive and may not be reversible.
-          </template>
-        </p>
+        <code
+          class="min-w-0 truncate rounded bg-surface-0 px-1.5 py-0.5 text-xs text-surface-600 dark:bg-surface-800 dark:text-surface-300"
+          :title="pending.routeId"
+        >
+          {{ pending.routeId }}
+        </code>
+        <Button
+          v-if="rows.length"
+          type="button"
+          text
+          severity="secondary"
+          size="small"
+          class="ml-auto shrink-0 gap-1 px-1.5 py-0.5 text-xs text-surface-500 dark:text-surface-400"
+          :aria-expanded="showDetails"
+          @click="showDetails = !showDetails"
+        >
+          {{ showDetails ? "Hide" : "Details" }}
+          <AppIcon
+            :icon="{
+              type: 'lucide',
+              value: showDetails ? 'chevron-up' : 'chevron-down',
+            }"
+            :size="13"
+          />
+        </Button>
       </div>
 
       <dl
-        v-if="rows.length"
-        class="grid max-h-52 min-w-0 grid-cols-[minmax(6rem,auto)_1fr] gap-x-3 gap-y-2 overflow-auto rounded-lg border border-surface-200 p-3 text-xs dark:border-surface-800"
+        v-if="rows.length && showDetails"
+        class="grid max-h-40 grid-cols-[minmax(5rem,auto)_1fr] gap-x-3 gap-y-1.5 overflow-auto border-t px-3 py-2 text-xs"
+        :class="
+          pending.destructive
+            ? 'border-rose-200/70 dark:border-rose-900/50'
+            : 'border-surface-200 dark:border-surface-700'
+        "
       >
         <template v-for="row in rows" :key="row.key">
           <dt class="font-medium text-surface-500 dark:text-surface-400">
             {{ row.key }}
           </dt>
           <dd
-            class="min-w-0 break-words text-surface-800 dark:text-surface-100"
+            class="min-w-0 wrap-break-word text-surface-700 dark:text-surface-200"
             :title="row.value"
           >
             {{ row.value }}
@@ -138,41 +127,35 @@ function close(visible: boolean): void {
         </template>
       </dl>
 
-      <label
-        v-if="canRemember"
-        class="flex cursor-pointer items-start gap-3 rounded-lg border border-surface-200 p-3 transition-colors hover:bg-surface-50 dark:border-surface-800 dark:hover:bg-surface-900/60"
+      <div
+        class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t px-3 py-2"
+        :class="
+          pending.destructive
+            ? 'border-rose-200/70 dark:border-rose-900/50'
+            : 'border-surface-200 dark:border-surface-700'
+        "
       >
-        <Checkbox v-model="remember" binary input-id="ai-remember-confirm" />
-        <span class="grid gap-1">
-          <span
-            class="text-sm font-medium text-surface-800 dark:text-surface-100"
-          >
-            Remember this write action for this connection
-          </span>
-          <span
-            class="text-xs leading-5 text-surface-500 dark:text-surface-400"
-          >
-            Future requests to this route will be approved automatically.
-            Destructive actions always require confirmation.
-          </span>
-        </span>
-      </label>
-    </div>
-
-    <template #footer>
-      <div class="flex justify-end gap-2">
-        <Button :pt="{ root: btnGhost }" size="small" @click="emit('reject')">
-          Reject
-        </Button>
-        <Button
-          size="small"
-          :severity="pending.destructive ? 'danger' : 'primary'"
-          autofocus
-          @click="approve"
+        <label
+          v-if="canRemember"
+          class="flex cursor-pointer items-center gap-2 text-xs text-surface-600 dark:text-surface-300"
         >
-          {{ approveLabel }}
-        </Button>
+          <Checkbox v-model="remember" binary input-id="ai-remember-confirm" />
+          Always allow for this connection
+        </label>
+        <div class="ml-auto flex items-center gap-2">
+          <Button :pt="{ root: btnGhost }" size="small" @click="emit('reject')">
+            Reject
+          </Button>
+          <Button
+            size="small"
+            :severity="pending.destructive ? 'danger' : 'primary'"
+            autofocus
+            @click="approve"
+          >
+            {{ approveLabel }}
+          </Button>
+        </div>
       </div>
-    </template>
-  </Dialog>
+    </div>
+  </div>
 </template>
