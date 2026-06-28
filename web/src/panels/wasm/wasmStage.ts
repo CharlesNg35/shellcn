@@ -8,6 +8,7 @@ import {
 } from "@/api/dataSource";
 import { useTheme } from "@/composables/useTheme";
 import { KEEP_ALIVE_WASM_PANELS_MAX } from "@/stores/sessionLimits";
+import { registerSessionCleanup } from "@/stores/session";
 import type {
   DataSource,
   Method,
@@ -210,6 +211,8 @@ export function disposeWasmStage(): void {
   for (const entry of entries.values()) destroyEntry(entry);
   entries.clear();
 }
+
+registerSessionCleanup("wasmStage", disposeWasmStage);
 
 export function disposeWasmConnection(connectionId: string): void {
   for (const entry of Array.from(entries.values())) {

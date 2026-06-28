@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
+import { registerSessionCleanup } from "./session";
 import type {
   DataSource,
   Icon,
@@ -92,6 +93,12 @@ export const useDockStore = defineStore("dock", () => {
     state(id).dialog = null;
   }
 
+  function reset(): void {
+    states.value = {};
+  }
+
+  registerSessionCleanup("dock", reset);
+
   return {
     states,
     state,
@@ -102,5 +109,6 @@ export const useDockStore = defineStore("dock", () => {
     setHeight,
     openDialog,
     closeDialog,
+    reset,
   };
 });

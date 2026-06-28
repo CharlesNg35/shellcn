@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { reactive, ref } from "vue";
 import { STREAM_CHANNEL_BUFFER_LIMIT } from "./sessionLimits";
+import { registerSessionCleanup } from "./session";
 
 export const ChannelStatus = {
   Connecting: "connecting",
@@ -166,6 +167,16 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     closeWhere((key) => key.startsWith(`${connectionId}:`));
   }
 
+  function reset(): void {
+    for (const key of [...channels.keys()]) close(key);
+    for (const key of Object.keys(preferredTerminalTargets)) {
+      delete preferredTerminalTargets[key];
+    }
+    generation.value = 0;
+  }
+
+  registerSessionCleanup("streamChannels", reset);
+
   return {
     statuses,
     generation,
@@ -182,5 +193,6 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     closeForConnection,
     setPreferredTerminalTarget,
     preferredTerminalTarget,
+    reset,
   };
 });

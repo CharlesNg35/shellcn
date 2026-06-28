@@ -1,5 +1,6 @@
 import { computed, reactive } from "vue";
 import { KEEP_ALIVE_WEB_PROXY_PANELS_MAX } from "@/stores/sessionLimits";
+import { registerSessionCleanup } from "@/stores/session";
 import type {
   ResourceIdentity,
   Row,
@@ -118,6 +119,8 @@ export function reloadWebProxyPanel(key: string): void {
 export function disposeWebProxyStage(): void {
   entries.clear();
 }
+
+registerSessionCleanup("webProxyStage", disposeWebProxyStage);
 
 export function disposeWebProxyConnection(connectionId: string): void {
   for (const entry of Array.from(entries.values())) {

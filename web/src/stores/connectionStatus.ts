@@ -4,6 +4,7 @@ import {
   ConnectionSessionState,
   type ConnectionSession,
 } from "../api/connectionSession";
+import { registerSessionCleanup } from "./session";
 
 export const ConnLiveState = {
   Connecting: "connecting",
@@ -64,5 +65,20 @@ export const useConnectionStatusStore = defineStore("connectionStatus", () => {
     return live[id];
   }
 
-  return { live, connecting, connected, failed, applySession, clear, get };
+  function reset(): void {
+    for (const id of Object.keys(live)) delete live[id];
+  }
+
+  registerSessionCleanup("connectionStatus", reset);
+
+  return {
+    live,
+    connecting,
+    connected,
+    failed,
+    applySession,
+    clear,
+    get,
+    reset,
+  };
 });

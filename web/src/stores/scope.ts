@@ -1,6 +1,7 @@
 import { reactive } from "vue";
 import { defineStore } from "pinia";
 import { useStreamChannelsStore } from "./streamChannels";
+import { registerSessionCleanup } from "./session";
 
 export const SCOPE_SEPARATOR = ",";
 
@@ -62,5 +63,12 @@ export const useScopeStore = defineStore("scope", () => {
     delete allowed[connectionId];
   }
 
-  return { byConnection, configure, params, key, set, clear };
+  function reset(): void {
+    for (const id of Object.keys(byConnection)) delete byConnection[id];
+    for (const id of Object.keys(allowed)) delete allowed[id];
+  }
+
+  registerSessionCleanup("scope", reset);
+
+  return { byConnection, configure, params, key, set, clear, reset };
 });

@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  groupConversations,
-  relativeTimeLabel,
-} from "./conversationGroups";
+import { groupConversations, relativeTimeLabel } from "./conversationGroups";
 import type { AiConversation } from "@/api/ai";
 
 const NOW = Date.parse("2026-03-15T12:00:00Z");

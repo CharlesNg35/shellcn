@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { connectionsApi, connectionFoldersApi } from "../api/connections";
 import { pluginsApi } from "../api/plugins";
+import { registerSessionCleanup } from "./session";
 import type { ConnectionCreate, ConnectionUpdate } from "../api/connections";
 import type {
   ConnectionDetail,
@@ -156,12 +157,23 @@ export const useConnectionsStore = defineStore("connections", () => {
       );
   }
 
+  function reset(): void {
+    connections.value = [];
+    folders.value = [];
+    plugins.value = [];
+    projections.value = {};
+    loaded.value = false;
+  }
+
+  registerSessionCleanup("connections", reset);
+
   return {
     connections,
     folders,
     plugins,
     projections,
     loaded,
+    reset,
     load,
     refresh,
     refreshPlugins,

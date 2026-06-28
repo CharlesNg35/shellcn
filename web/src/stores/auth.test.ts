@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { installFetch } from "../test/fetchMock";
 import { useAuthStore } from "./auth";
+import { registerSessionCleanup } from "./session";
 
 const session = {
   user: { id: "u1", username: "alice", roles: ["operator"] },
@@ -51,6 +52,21 @@ describe("auth store", () => {
     expect(auth.isAdmin).toBe(false);
     await auth.logout();
     expect(auth.isAuthenticated).toBe(false);
+  });
+
+  it("wipes session-scoped state on logout", async () => {
+    installFetch((url) => {
+      if (url.endsWith("/api/auth/login"))
+        return { body: { mfaRequired: false, session } };
+      if (url.endsWith("/api/auth/logout")) return { body: { ok: true } };
+      return { status: 404, body: {} };
+    });
+    const wiped = vi.fn();
+    registerSessionCleanup("test:auth-logout", wiped);
+    const auth = useAuthStore();
+    await auth.login("alice", "pw");
+    await auth.logout();
+    expect(wiped).toHaveBeenCalledTimes(1);
   });
 
   it("completes a two-step login when 2FA is required", async () => {

@@ -11,6 +11,7 @@ import {
   type AiTurnStreamEvent,
 } from "../api/ai";
 import { useAiProvidersStore } from "./aiProviders";
+import { registerSessionCleanup } from "./session";
 import { RiskLevel } from "../types/projection";
 
 export type AiRunState = "idle" | "starting" | "streaming" | "stopping";
@@ -535,6 +536,17 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.hasMore = false;
   }
 
+  function resetAll(): void {
+    for (const connId of Object.keys(byConn)) {
+      byConn[connId].abort?.abort();
+      delete byConn[connId];
+    }
+    selectedProviders.value = {};
+    rememberedConfirmations.value = {};
+  }
+
+  registerSessionCleanup("aiChat", resetAll);
+
   function applyConversationTitle(
     st: ChatState,
     connId: string,
@@ -654,6 +666,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     resolveConfirm,
     dequeue,
     reset,
+    resetAll,
     apply,
     loadConversations,
     selectConversation,
