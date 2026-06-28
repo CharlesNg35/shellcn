@@ -23,8 +23,22 @@ function setRate(rate: number): void {
 
 <template>
   <div class="overflow-hidden rounded-lg bg-black">
+    <p v-if="failed" class="p-4 text-sm text-surface-300" role="alert">
+      This recording could not be loaded.
+    </p>
+    <video
+      v-else
+      ref="video"
+      :src="src"
+      controls
+      preload="metadata"
+      class="h-auto w-full"
+      @error="failed = true"
+    >
+      Your browser cannot play this recording.
+    </video>
     <div
-      class="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-surface-950 px-3 py-2"
+      class="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 bg-surface-950 px-3 py-2"
     >
       <div class="flex items-center gap-1">
         <Button
@@ -48,19 +62,5 @@ function setRate(rate: number): void {
         Download
       </a>
     </div>
-    <p v-if="failed" class="p-4 text-sm text-surface-300" role="alert">
-      This recording could not be loaded.
-    </p>
-    <video
-      v-else
-      ref="video"
-      :src="src"
-      controls
-      preload="metadata"
-      class="h-auto w-full"
-      @error="failed = true"
-    >
-      Your browser cannot play this recording.
-    </video>
   </div>
 </template>
