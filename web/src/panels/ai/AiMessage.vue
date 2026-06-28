@@ -50,13 +50,7 @@ async function copy(): Promise<void> {
       <template v-else>
         <AiReasoning v-if="message.reasoning" :reasoning="message.reasoning" />
         <AiToolBadges :calls="message.toolCalls" />
-        <p
-          v-if="streaming && message.content"
-          class="wrap-break-word whitespace-pre-wrap"
-        >
-          {{ message.content }}
-        </p>
-        <AiMarkdown v-else-if="message.content" :source="message.content" />
+        <AiMarkdown v-if="message.content" :source="message.content" />
         <span
           v-if="streaming && !message.content"
           class="inline-flex items-center gap-1 text-xs text-surface-400"
