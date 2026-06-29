@@ -91,6 +91,15 @@ func (demoPlugin) Manifest() plugin.Manifest {
 					CompletionParams:  map[string]string{"database": "${resource.name}"},
 				},
 			},
+			{
+				Key:   "http",
+				Label: "HTTP",
+				Type:  plugin.PanelHTTPClient,
+				Config: plugin.HTTPClientConfig{
+					ExecuteRouteID: "demo.http.execute",
+					DefaultMethod:  "GET",
+				},
+			},
 		},
 		Streams: []plugin.Stream{
 			{ID: "demo.query", Kind: plugin.StreamQuery, RouteID: "demo.query"},
@@ -186,6 +195,10 @@ func (demoPlugin) Routes() []plugin.Route {
 		},
 		{
 			ID: "demo.query.cancel", Method: plugin.MethodPost, Risk: plugin.RiskWrite, Permission: "demo.write", AuditEvent: "demo.query.cancel",
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
+		},
+		{
+			ID: "demo.http.execute", Method: plugin.MethodPost, Risk: plugin.RiskWrite, Permission: "demo.write", AuditEvent: "demo.http.execute",
 			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
 		},
 		{
@@ -447,6 +460,17 @@ func TestToolSchemaExcludesSensitiveFieldsAndIncludesPathParams(t *testing.T) {
 	if _, ok := specs["demo_query_cancel"].Parameters["properties"].(map[string]any)["run_id"]; !ok {
 		t.Fatalf("query cancel params should be exposed: %+v", specs["demo_query_cancel"].Parameters)
 	}
+
+	httpProps := specs["demo_http_execute"].Parameters["properties"].(map[string]any)
+	for _, key := range []string{"method", "url", "headers", "body"} {
+		if _, ok := httpProps[key]; !ok {
+			t.Fatalf("http client execute schema missing %s: %+v", key, httpProps)
+		}
+	}
+	required = specs["demo_http_execute"].Parameters["required"].([]string)
+	if !containsString(required, "method") || !containsString(required, "url") {
+		t.Fatalf("http client required fields missing: %v", required)
+	}
 }
 
 func TestExecuteSplitsPathParamsFromBody(t *testing.T) {
@@ -543,6 +567,24 @@ func TestExecuteSplitsPathParamsFromBody(t *testing.T) {
 	}
 	if _, ok := body["key"]; ok || body["type"] != "string" || body["value"] != "alice" {
 		t.Fatalf("kv write body should contain only mutation fields: %+v", body)
+	}
+
+	if _, err := ts.Execute(context.Background(), engine.ToolCall{Name: "demo_http_execute", Input: map[string]any{
+		"method":  "GET",
+		"url":     "https://example.test",
+		"headers": `[{"key":"Accept","value":"application/json"}]`,
+	}}); err != nil {
+		t.Fatalf("execute http client request: %v", err)
+	}
+	if inv.lastRoute != "demo.http.execute" || len(inv.lastParams) != 0 {
+		t.Fatalf("http client params not routed: route=%s params=%v", inv.lastRoute, inv.lastParams)
+	}
+	if err := json.Unmarshal(inv.lastBody, &body); err != nil {
+		t.Fatalf("http client body not JSON: %s err=%v", inv.lastBody, err)
+	}
+	headers, ok := body["headers"].([]any)
+	if !ok || len(headers) != 1 || body["method"] != "GET" || body["url"] != "https://example.test" {
+		t.Fatalf("http client body not normalized: %+v", body)
 	}
 }
 

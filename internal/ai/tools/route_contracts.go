@@ -58,15 +58,17 @@ func (c *routeContracts) extractRouteRefs(v reflect.Value) {
 }
 
 func (c *routeContracts) extractRendererBodies(v reflect.Value) {
-	for _, spec := range []struct {
-		field  string
-		schema *plugin.Schema
-	}{
-		{field: "Insert", schema: rowMutationInput(false, true)},
-		{field: "Update", schema: rowMutationInput(true, true)},
-		{field: "Delete", schema: rowMutationInput(true, false)},
-	} {
-		c.addInput(routeRefID(v.FieldByName(spec.field)), spec.schema)
+	if editableTableShape(v) {
+		for _, spec := range []struct {
+			field  string
+			schema *plugin.Schema
+		}{
+			{field: "Insert", schema: rowMutationInput(false, true)},
+			{field: "Update", schema: rowMutationInput(true, true)},
+			{field: "Delete", schema: rowMutationInput(true, false)},
+		} {
+			c.addInput(routeRefID(v.FieldByName(spec.field)), spec.schema)
+		}
 	}
 
 	if saveRouteID := stringField(v, "SaveRouteID"); saveRouteID != "" {
@@ -82,6 +84,16 @@ func (c *routeContracts) extractRendererBodies(v reflect.Value) {
 	if executeRouteID := stringField(v, "ExecuteRouteID"); executeRouteID != "" {
 		c.addInput(executeRouteID, httpClientInput())
 	}
+}
+
+func editableTableShape(v reflect.Value) bool {
+	if field := v.FieldByName("Editable"); field.IsValid() && field.Kind() == reflect.Bool {
+		return true
+	}
+	if field := v.FieldByName("RowKey"); field.IsValid() && field.Kind() == reflect.Slice {
+		return true
+	}
+	return false
 }
 
 func (c *routeContracts) addParams(routeID string, params map[string]string) {
