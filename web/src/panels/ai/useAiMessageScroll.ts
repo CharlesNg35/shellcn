@@ -1,10 +1,4 @@
-import {
-  computed,
-  getCurrentScope,
-  onScopeDispose,
-  watch,
-  type Ref,
-} from "vue";
+import { computed, watch, type Ref } from "vue";
 import { useStickToBottom } from "vue-stick-to-bottom";
 import type { AiMessage } from "@/stores/aiChat";
 
@@ -32,32 +26,6 @@ export function useAiMessageScroll(
 
   function jumpToBottom(): void {
     void scrollToBottom({ animation: "smooth", ignoreEscapes: true });
-  }
-
-  // The library watches only content height; a viewport resize (confirm bar /
-  // queue / composer toggling) clamps scrollTop and it misreads that as a
-  // scroll-up. Re-pin across viewport resizes unless the user actually escaped.
-  let viewportObserver: ResizeObserver | null = null;
-  watch(
-    () => scrollRef.value,
-    (el) => {
-      viewportObserver?.disconnect();
-      viewportObserver = null;
-      if (!el || typeof ResizeObserver === "undefined") return;
-      let settled = false;
-      viewportObserver = new ResizeObserver(() => {
-        if (!settled) {
-          settled = true;
-          return;
-        }
-        if (escapedFromLock.value) return;
-        void scrollToBottom({ animation: "instant", ignoreEscapes: true });
-      });
-      viewportObserver.observe(el);
-    },
-  );
-  if (getCurrentScope()) {
-    onScopeDispose(() => viewportObserver?.disconnect());
   }
 
   watch(

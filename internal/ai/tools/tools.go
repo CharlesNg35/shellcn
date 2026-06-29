@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -64,6 +63,7 @@ type binding struct {
 	routeID          string
 	risk             plugin.RiskLevel
 	params           map[string]bool
+	bodyDefaults     map[string]any
 	structuredFields map[string]string
 	requiredBody     map[string]bool
 	stream           bool
@@ -94,8 +94,7 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 	}
 	ts := &ToolSet{byName: map[string]binding{}, invoker: invoker, user: user, connID: connID}
 	manifest := plg.Manifest()
-	manifestParams := routeParamIndex(manifest)
-	inferredInputs := routeInputIndex(manifest)
+	contracts := inferRouteContracts(manifest)
 	streams := textObservableStreams(manifest)
 	_, canObserveStreams := invoker.(StreamInvoker)
 	for _, r := range plg.Routes() {
@@ -108,13 +107,14 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 				continue
 			}
 			params := templateParamNames(r.Path)
-			routeParams := mergeRouteParams(params, manifestParams[r.ID])
-			schema := toStreamJSONSchema(r, params, routeParams, inferredInputs[r.ID])
+			routeParams := mergeRouteParams(params, contracts.params[r.ID])
+			schema := toStreamJSONSchema(r, params, routeParams, contracts.inputs[r.ID])
 			paramsSet := routeParamSet(routeParams)
 			ts.byName[name] = binding{
 				routeID:          r.ID,
 				risk:             r.Risk,
 				params:           paramsSet,
+				bodyDefaults:     contracts.bodyDefaults[r.ID],
 				structuredFields: structuredFields(schema, paramsSet),
 				requiredBody:     requiredBodyFields(schema, paramsSet),
 				stream:           true,
@@ -134,13 +134,14 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 			continue
 		}
 		params := templateParamNames(r.Path)
-		routeParams := mergeRouteParams(params, manifestParams[r.ID])
-		schema := toJSONSchema(r, params, routeParams, inferredInputs[r.ID])
+		routeParams := mergeRouteParams(params, contracts.params[r.ID])
+		schema := toJSONSchema(r, params, routeParams, contracts.inputs[r.ID])
 		paramsSet := routeParamSet(routeParams)
 		ts.byName[name] = binding{
 			routeID:          r.ID,
 			risk:             r.Risk,
 			params:           paramsSet,
+			bodyDefaults:     contracts.bodyDefaults[r.ID],
 			structuredFields: structuredFields(schema, paramsSet),
 			requiredBody:     requiredBodyFields(schema, paramsSet),
 		}
@@ -168,6 +169,9 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 	}
 	params := map[string]string{}
 	body := map[string]any{}
+	for k, v := range b.bodyDefaults {
+		body[k] = v
+	}
 	for k, v := range call.Input {
 		if b.params[k] || (b.stream && !streamControlParam(k)) {
 			params[k] = fmt.Sprint(v)
@@ -618,147 +622,6 @@ func textObservableStreamKind(kind plugin.StreamKind) bool {
 	}
 }
 
-func routeParamIndex(m plugin.Manifest) map[string]map[string]bool {
-	out := map[string]map[string]bool{}
-	add := func(routeID string, params map[string]string) {
-		if strings.TrimSpace(routeID) == "" {
-			return
-		}
-		for key := range params {
-			if strings.TrimSpace(key) == "" {
-				continue
-			}
-			if out[routeID] == nil {
-				out[routeID] = map[string]bool{}
-			}
-			out[routeID][key] = true
-		}
-	}
-
-	dataSourceType := reflect.TypeOf(plugin.DataSource{})
-	actionType := reflect.TypeOf(plugin.Action{})
-	var walk func(reflect.Value)
-	walk = func(v reflect.Value) {
-		if !v.IsValid() {
-			return
-		}
-		for v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer {
-			if v.IsNil() {
-				return
-			}
-			v = v.Elem()
-		}
-		if v.Type() == dataSourceType {
-			ds := v.Interface().(plugin.DataSource)
-			add(ds.RouteID, ds.Params)
-			return
-		}
-		if v.Type() == actionType {
-			a := v.Interface().(plugin.Action)
-			add(a.RouteID, a.Params)
-		}
-		switch v.Kind() {
-		case reflect.Struct:
-			for i := 0; i < v.NumField(); i++ {
-				if v.Type().Field(i).PkgPath != "" {
-					continue
-				}
-				walk(v.Field(i))
-			}
-		case reflect.Slice, reflect.Array:
-			for i := 0; i < v.Len(); i++ {
-				walk(v.Index(i))
-			}
-		case reflect.Map:
-			iter := v.MapRange()
-			for iter.Next() {
-				walk(iter.Value())
-			}
-		}
-	}
-	walk(reflect.ValueOf(m))
-	return out
-}
-
-func routeInputIndex(m plugin.Manifest) map[string]*plugin.Schema {
-	out := map[string]*plugin.Schema{}
-	add := func(routeID string, schema *plugin.Schema) {
-		if strings.TrimSpace(routeID) == "" || schema == nil || out[routeID] != nil {
-			return
-		}
-		out[routeID] = schema
-	}
-
-	tableType := reflect.TypeOf(plugin.TableConfig{})
-	var walk func(reflect.Value)
-	walk = func(v reflect.Value) {
-		if !v.IsValid() {
-			return
-		}
-		for v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer {
-			if v.IsNil() {
-				return
-			}
-			v = v.Elem()
-		}
-		if v.Type() == tableType {
-			cfg := v.Interface().(plugin.TableConfig)
-			if cfg.Insert != nil {
-				add(cfg.Insert.RouteID, rowMutationInput(false, true))
-			}
-			if cfg.Update != nil {
-				add(cfg.Update.RouteID, rowMutationInput(true, true))
-			}
-			if cfg.Delete != nil {
-				add(cfg.Delete.RouteID, rowMutationInput(true, false))
-			}
-		}
-		switch v.Kind() {
-		case reflect.Struct:
-			for i := 0; i < v.NumField(); i++ {
-				if v.Type().Field(i).PkgPath != "" {
-					continue
-				}
-				walk(v.Field(i))
-			}
-		case reflect.Slice, reflect.Array:
-			for i := 0; i < v.Len(); i++ {
-				walk(v.Index(i))
-			}
-		case reflect.Map:
-			iter := v.MapRange()
-			for iter.Next() {
-				walk(iter.Value())
-			}
-		}
-	}
-	walk(reflect.ValueOf(m))
-	return out
-}
-
-func rowMutationInput(key, values bool) *plugin.Schema {
-	fields := make([]plugin.Field, 0, 2)
-	if key {
-		fields = append(fields, plugin.Field{
-			Key:      "key",
-			Label:    "Row key",
-			Type:     plugin.FieldJSON,
-			Required: true,
-			Help:     "JSON object whose keys are identifying column names and values are the row values to match.",
-		})
-	}
-	if values {
-		fields = append(fields, plugin.Field{
-			Key:      "values",
-			Label:    "Column values",
-			Type:     plugin.FieldJSON,
-			Required: true,
-			Help:     "JSON object whose keys are column names and values are the values to write. Send an object, not a JSON string.",
-		})
-	}
-	return &plugin.Schema{Groups: []plugin.Group{{Name: "Row", Fields: fields}}}
-}
-
 func mergeRouteParams(pathParams []string, manifestParams map[string]bool) []string {
 	seen := map[string]bool{}
 	out := make([]string, 0, len(pathParams)+len(manifestParams))
@@ -803,6 +666,7 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 	case plugin.FieldMultiSelect:
 		out["type"] = "array"
 		out["items"] = map[string]any{"type": "string"}
+		appendDescription(out, "Send as a JSON array, not a comma-separated string.")
 	case plugin.FieldArray:
 		out["type"] = "array"
 		if f.Item != nil {
@@ -814,6 +678,7 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 		} else {
 			out["items"] = map[string]any{"type": "string"}
 		}
+		appendDescription(out, "Send as a JSON array, not a SQL fragment or string.")
 	case plugin.FieldObject:
 		out["type"] = "object"
 		props := map[string]any{}
@@ -835,6 +700,7 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 		if len(required) > 0 {
 			out["required"] = required
 		}
+		appendDescription(out, "Send as a JSON object, not a quoted JSON string.")
 	case plugin.FieldMap:
 		out["type"] = "object"
 		if f.Item != nil {
@@ -844,8 +710,10 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 			}
 			out["additionalProperties"] = item
 		}
+		appendDescription(out, "Send as a JSON object with dynamic keys, not a quoted JSON string.")
 	case plugin.FieldJSON:
 		out["type"] = "object"
+		appendDescription(out, "Send parsed JSON, not a quoted JSON string.")
 	default:
 		out["type"] = "string"
 	}
@@ -869,6 +737,17 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 		applyValidator(out, v)
 	}
 	return out, true
+}
+
+func appendDescription(out map[string]any, extra string) {
+	if extra == "" {
+		return
+	}
+	if current, _ := out["description"].(string); strings.TrimSpace(current) != "" {
+		out["description"] = current + " " + extra
+		return
+	}
+	out["description"] = extra
 }
 
 func fieldDescription(f plugin.Field) string {

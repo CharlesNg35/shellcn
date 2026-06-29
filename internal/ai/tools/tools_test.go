@@ -29,21 +29,71 @@ func (demoPlugin) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		APIVersion: plugin.CurrentAPIVersion, Name: "demo", Version: "0", Title: "Demo",
 		Category: plugin.CategoryOther, Layout: plugin.LayoutTabs,
-		Tabs: []plugin.Panel{{
-			Key:    "items",
-			Label:  "Items",
-			Type:   plugin.PanelTable,
-			Source: &plugin.DataSource{RouteID: "demo.list", Params: map[string]string{"database": "${resource.uid}", "schema": "${resource.name}"}},
-			Config: plugin.TableConfig{
-				Editable: true,
-				Insert: &plugin.DataSource{
-					RouteID: "demo.row.insert",
-					Method:  plugin.MethodPost,
-					Params:  map[string]string{"database": "${resource.scope}", "schema": "${resource.namespace}", "table": "${resource.name}"},
+		Tabs: []plugin.Panel{
+			{
+				Key:    "items",
+				Label:  "Items",
+				Type:   plugin.PanelTable,
+				Source: &plugin.DataSource{RouteID: "demo.list", Params: map[string]string{"database": "${resource.uid}", "schema": "${resource.name}"}},
+				Config: plugin.TableConfig{
+					Editable: true,
+					Insert: &plugin.DataSource{
+						RouteID: "demo.row.insert",
+						Method:  plugin.MethodPost,
+						Params:  map[string]string{"database": "${resource.scope}", "schema": "${resource.namespace}", "table": "${resource.name}"},
+					},
 				},
 			},
-		}},
+			{
+				Key:    "editor",
+				Label:  "Editor",
+				Type:   plugin.PanelCodeEditor,
+				Source: &plugin.DataSource{RouteID: "demo.doc.read"},
+				Config: plugin.CodeEditorConfig{
+					Language:    "json",
+					SaveRouteID: "demo.doc.save",
+					SaveMethod:  plugin.MethodPut,
+					SaveParams:  map[string]string{"id": "${resource.uid}"},
+					SaveBodyKey: "document",
+					SaveExtra:   map[string]any{"mode": "replace"},
+				},
+			},
+			{
+				Key:    "kv",
+				Label:  "KV",
+				Type:   plugin.PanelKV,
+				Source: &plugin.DataSource{RouteID: "demo.kv.list"},
+				Config: plugin.KVConfig{
+					CreateRouteID: "demo.kv.write",
+					ReadRouteID:   "demo.kv.read",
+					WriteRouteID:  "demo.kv.write",
+					DeleteRouteID: "demo.kv.delete",
+					KeyParam:      "key",
+					Writable:      true,
+				},
+			},
+			{
+				Key:    "form",
+				Label:  "Form",
+				Type:   plugin.PanelForm,
+				Source: &plugin.DataSource{RouteID: "demo.form.schema", Params: map[string]string{"fallback": "${resource.name}"}},
+				Config: plugin.FormPanelConfig{SubmitRouteID: "demo.form.submit", Params: map[string]string{"scope": "${resource.scope}"}},
+			},
+			{
+				Key:    "query",
+				Label:  "Query",
+				Type:   plugin.PanelQueryEditor,
+				Source: &plugin.DataSource{RouteID: "demo.query", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.name}"}},
+				Config: plugin.QueryEditorConfig{
+					CancelRouteID:     "demo.query.cancel",
+					CancelParams:      map[string]string{"run_id": "${record.id}"},
+					CompletionRouteID: "demo.completion",
+					CompletionParams:  map[string]string{"database": "${resource.name}"},
+				},
+			},
+		},
 		Streams: []plugin.Stream{
+			{ID: "demo.query", Kind: plugin.StreamQuery, RouteID: "demo.query"},
 			{ID: "demo.stream", Kind: plugin.StreamQuery, RouteID: "demo.stream"},
 			{ID: "demo.terminal", Kind: plugin.StreamTerminal, RouteID: "demo.terminal"},
 		},
@@ -79,12 +129,63 @@ func (demoPlugin) Routes() []plugin.Route {
 					{Key: "nested_credential", Label: "Nested credential", Type: plugin.FieldCredentialRef},
 				}},
 				{Key: "recovery_codes", Label: "Recovery codes", Type: plugin.FieldArray, Item: &plugin.Field{Type: plugin.FieldPassword}},
+				{Key: "columns", Label: "Columns", Type: plugin.FieldArray, Item: &plugin.Field{Type: plugin.FieldObject, Fields: []plugin.Field{
+					{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
+					{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true},
+				}}},
 			}}}},
 			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
 		},
 		{
 			ID: "demo.row.insert", Method: plugin.MethodPost, Risk: plugin.RiskWrite, Permission: "demo.write", AuditEvent: "demo.row.insert",
 			Path:   "/tables/{schema}/{table}/rows",
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
+		},
+		{
+			ID: "demo.doc.read", Method: plugin.MethodGet, Risk: plugin.RiskSafe, Permission: "demo.read", AuditEvent: "demo.doc.read",
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
+		},
+		{
+			ID: "demo.doc.save", Method: plugin.MethodPut, Risk: plugin.RiskWrite, Permission: "demo.write", AuditEvent: "demo.doc.save",
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
+		},
+		{
+			ID: "demo.kv.list", Method: plugin.MethodGet, Risk: plugin.RiskSafe, Permission: "demo.read", AuditEvent: "demo.kv.list",
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
+		},
+		{
+			ID: "demo.kv.read", Method: plugin.MethodGet, Risk: plugin.RiskSafe, Permission: "demo.read", AuditEvent: "demo.kv.read",
+			Path:   "/kv/{key}",
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
+		},
+		{
+			ID: "demo.kv.write", Method: plugin.MethodPut, Risk: plugin.RiskWrite, Permission: "demo.write", AuditEvent: "demo.kv.write",
+			Path:   "/kv/{key}",
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
+		},
+		{
+			ID: "demo.kv.delete", Method: plugin.MethodDelete, Risk: plugin.RiskDestructive, Permission: "demo.delete", AuditEvent: "demo.kv.delete",
+			Path:   "/kv/{key}",
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
+		},
+		{
+			ID: "demo.form.schema", Method: plugin.MethodGet, Risk: plugin.RiskSafe, Permission: "demo.read", AuditEvent: "demo.form.schema",
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
+		},
+		{
+			ID: "demo.form.submit", Method: plugin.MethodPatch, Risk: plugin.RiskWrite, Permission: "demo.write", AuditEvent: "demo.form.submit",
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
+		},
+		{
+			ID: "demo.completion", Method: plugin.MethodGet, Risk: plugin.RiskSafe, Permission: "demo.read", AuditEvent: "demo.completion",
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
+		},
+		{
+			ID: "demo.query", Method: plugin.MethodWS, Risk: plugin.RiskSafe, Permission: "demo.read", AuditEvent: "demo.query",
+			Stream: func(*plugin.RequestContext, plugin.ClientStream) error { return nil },
+		},
+		{
+			ID: "demo.query.cancel", Method: plugin.MethodPost, Risk: plugin.RiskWrite, Permission: "demo.write", AuditEvent: "demo.query.cancel",
 			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
 		},
 		{
@@ -277,6 +378,10 @@ func TestToolSchemaExcludesSensitiveFieldsAndIncludesPathParams(t *testing.T) {
 	if _, ok := profile["nested_credential"]; ok {
 		t.Fatal("nested credential_ref field must not be exposed to the model")
 	}
+	columns := create["columns"].(map[string]any)
+	if columns["type"] != "array" || !strings.Contains(columns["description"].(string), "not a SQL fragment or string") {
+		t.Fatalf("array field should guide model away from string payloads: %+v", columns)
+	}
 
 	get := specs["demo_get"].Parameters
 	required, _ := get["required"].([]string)
@@ -304,6 +409,43 @@ func TestToolSchemaExcludesSensitiveFieldsAndIncludesPathParams(t *testing.T) {
 	required = insert["required"].([]string)
 	if !containsString(required, "schema") || !containsString(required, "table") || !containsString(required, "values") {
 		t.Fatalf("editable table insert required fields missing: %v", required)
+	}
+
+	docSave := specs["demo_doc_save"].Parameters
+	docProps := docSave["properties"].(map[string]any)
+	if _, ok := docProps["id"]; !ok {
+		t.Fatalf("code editor save params should be exposed: %+v", docProps)
+	}
+	document := docProps["document"].(map[string]any)
+	if document["type"] != "object" || !strings.Contains(document["description"].(string), "not a quoted string") {
+		t.Fatalf("code editor save body should be a structured document: %+v", document)
+	}
+	required = docSave["required"].([]string)
+	if !containsString(required, "document") {
+		t.Fatalf("code editor document should be required: %v", required)
+	}
+
+	kvWrite := specs["demo_kv_write"].Parameters
+	kvProps := kvWrite["properties"].(map[string]any)
+	if _, ok := kvProps["key"]; !ok {
+		t.Fatalf("kv key route param should be exposed: %+v", kvProps)
+	}
+	if _, ok := kvProps["value"]; !ok {
+		t.Fatalf("kv write value should be exposed: %+v", kvProps)
+	}
+	required = kvWrite["required"].([]string)
+	if !containsString(required, "key") || !containsString(required, "value") {
+		t.Fatalf("kv write required fields missing: %v", required)
+	}
+
+	if _, ok := specs["demo_form_submit"].Parameters["properties"].(map[string]any)["scope"]; !ok {
+		t.Fatalf("form submit params should be exposed: %+v", specs["demo_form_submit"].Parameters)
+	}
+	if _, ok := specs["demo_completion"].Parameters["properties"].(map[string]any)["database"]; !ok {
+		t.Fatalf("query completion params should be exposed: %+v", specs["demo_completion"].Parameters)
+	}
+	if _, ok := specs["demo_query_cancel"].Parameters["properties"].(map[string]any)["run_id"]; !ok {
+		t.Fatalf("query cancel params should be exposed: %+v", specs["demo_query_cancel"].Parameters)
 	}
 }
 
@@ -367,6 +509,40 @@ func TestExecuteSplitsPathParamsFromBody(t *testing.T) {
 	var body map[string]any
 	if err := json.Unmarshal(inv.lastBody, &body); err != nil || body["name"] != "x" {
 		t.Fatalf("body not marshaled: %s err=%v", inv.lastBody, err)
+	}
+
+	if _, err := ts.Execute(context.Background(), engine.ToolCall{Name: "demo_doc_save", Input: map[string]any{
+		"id":       "doc-1",
+		"document": `{"name":"alice"}`,
+	}}); err != nil {
+		t.Fatalf("execute code editor save: %v", err)
+	}
+	if inv.lastRoute != "demo.doc.save" || inv.lastParams["id"] != "doc-1" {
+		t.Fatalf("code editor save params not routed: route=%s params=%v", inv.lastRoute, inv.lastParams)
+	}
+	if err := json.Unmarshal(inv.lastBody, &body); err != nil {
+		t.Fatalf("code editor save body not JSON: %s err=%v", inv.lastBody, err)
+	}
+	doc, ok := body["document"].(map[string]any)
+	if !ok || doc["name"] != "alice" || body["mode"] != "replace" {
+		t.Fatalf("code editor document/defaults not normalized: %+v", body)
+	}
+
+	if _, err := ts.Execute(context.Background(), engine.ToolCall{Name: "demo_kv_write", Input: map[string]any{
+		"key":   "cache:user:1",
+		"type":  "string",
+		"value": "alice",
+	}}); err != nil {
+		t.Fatalf("execute kv write: %v", err)
+	}
+	if inv.lastRoute != "demo.kv.write" || inv.lastParams["key"] != "cache:user:1" {
+		t.Fatalf("kv write key not routed: route=%s params=%v", inv.lastRoute, inv.lastParams)
+	}
+	if err := json.Unmarshal(inv.lastBody, &body); err != nil {
+		t.Fatalf("kv write body not JSON: %s err=%v", inv.lastBody, err)
+	}
+	if _, ok := body["key"]; ok || body["type"] != "string" || body["value"] != "alice" {
+		t.Fatalf("kv write body should contain only mutation fields: %+v", body)
 	}
 }
 

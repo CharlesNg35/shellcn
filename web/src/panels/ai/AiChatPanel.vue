@@ -172,19 +172,28 @@ function currentWorkspaceContext(): { query: string } | undefined {
           :disabled="composerDisabled"
           @quick-start="send"
           @load-older="store.loadOlder(connectionId)"
-        />
-        <AiActionConfirm
-          v-if="st.pendingConfirm"
-          :pending="st.pendingConfirm"
-          @approve="
-            (remember) => store.resolveConfirm(connectionId, true, { remember })
-          "
-          @reject="store.resolveConfirm(connectionId, false)"
-        />
-        <AiQueuedMessages
-          :messages="st.queue"
-          @remove="(index) => store.dequeue(connectionId, index)"
-        />
+        >
+          <template #footer>
+            <div
+              v-if="st.pendingConfirm || st.queue.length"
+              class="sticky bottom-0 z-10 -mx-4 flex flex-col gap-3 bg-surface-0/95 px-4 pt-2 backdrop-blur-sm dark:bg-surface-900/95"
+            >
+              <AiActionConfirm
+                v-if="st.pendingConfirm"
+                :pending="st.pendingConfirm"
+                @approve="
+                  (remember) =>
+                    store.resolveConfirm(connectionId, true, { remember })
+                "
+                @reject="store.resolveConfirm(connectionId, false)"
+              />
+              <AiQueuedMessages
+                :messages="st.queue"
+                @remove="(index) => store.dequeue(connectionId, index)"
+              />
+            </div>
+          </template>
+        </AiMessageList>
         <AiComposer
           :run-state="st.runState"
           :disabled="composerDisabled"
