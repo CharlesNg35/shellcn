@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { nextTick, ref, type Ref } from "vue";
 import { useAiMessageScroll } from "./useAiMessageScroll";
 import type { AiMessage } from "@/stores/aiChat";
@@ -45,6 +45,11 @@ describe("useAiMessageScroll", () => {
     stick.escapedFromLock.value = false;
     stick.scrollToBottom.mockClear();
     stick.stopScroll.mockClear();
+    stick.scrollRef.value = null;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("does not force-scroll when the user has escaped the bottom lock", async () => {
@@ -85,6 +90,41 @@ describe("useAiMessageScroll", () => {
     ];
     await flushScrollWatchers();
 
+    expect(stick.scrollToBottom).not.toHaveBeenCalled();
+  });
+
+  it("re-pins on a viewport resize while following, but not after escape", async () => {
+    const callbacks: Array<() => void> = [];
+    class FakeResizeObserver {
+      constructor(cb: () => void) {
+        callbacks.push(cb);
+      }
+      observe(): void {}
+      disconnect(): void {}
+    }
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+
+    const scrollRef = ref<HTMLElement | null>(null);
+    stick.scrollRef = scrollRef as unknown as typeof stick.scrollRef;
+    setup();
+    scrollRef.value = document.createElement("div");
+    await flushScrollWatchers();
+
+    const fire = callbacks[0];
+    expect(fire).toBeTruthy();
+
+    fire(); // initial observe is ignored
+    expect(stick.scrollToBottom).not.toHaveBeenCalled();
+
+    fire(); // viewport resize while still following → re-pin
+    expect(stick.scrollToBottom).toHaveBeenCalledWith({
+      animation: "instant",
+      ignoreEscapes: true,
+    });
+
+    stick.scrollToBottom.mockClear();
+    stick.escapedFromLock.value = true;
+    fire(); // user has scrolled away → leave it alone
     expect(stick.scrollToBottom).not.toHaveBeenCalled();
   });
 });

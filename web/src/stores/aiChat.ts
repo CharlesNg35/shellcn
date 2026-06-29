@@ -116,6 +116,9 @@ export const useAiChatStore = defineStore("aiChat", () => {
     "shellcn:ai:auto-confirm-write-routes",
     {},
   );
+  // The last provider the user explicitly chose, used as the default for
+  // connections that have no preference of their own.
+  const lastProvider = useStorage<string>("shellcn:ai:last-provider", "");
   const byConn = reactive<Record<string, ChatState>>({});
   const providers = computed(() => aiProviders.providers);
   const global = computed(() => aiProviders.global);
@@ -141,6 +144,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     const st = state(connId);
     st.providerId = providerId;
     rememberProvider(connId, providerId);
+    lastProvider.value = providerId;
   }
 
   function state(connId: string): ChatState {
@@ -156,7 +160,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
   function storedProvider(connId: string): string {
     return Object.prototype.hasOwnProperty.call(selectedProviders.value, connId)
       ? (selectedProviders.value[connId] ?? "")
-      : "";
+      : lastProvider.value;
   }
 
   function rememberProvider(connId: string, providerId: string): void {
@@ -556,6 +560,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     }
     selectedProviders.value = {};
     rememberedConfirmations.value = {};
+    lastProvider.value = "";
   }
 
   registerSessionCleanup("aiChat", resetAll);

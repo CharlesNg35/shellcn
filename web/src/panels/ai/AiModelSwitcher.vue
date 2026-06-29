@@ -15,12 +15,18 @@ const emit = defineEmits<{ select: [providerId: string] }>();
 
 type ProviderChoice = { label: string; value: string; model: string };
 
+// PrimeVue Select treats an empty-string value as "no selection" and renders a
+// blank label, so the shared/global provider (providerId "") needs a sentinel.
+const SHARED = "__shared__";
+const toValue = (id: string): string => (id === "" ? SHARED : id);
+const fromValue = (value: string): string => (value === SHARED ? "" : value);
+
 const providerChoices = computed(() => {
   const out: ProviderChoice[] = [];
   if (props.global?.configured) {
     out.push({
       label: props.global.provider ?? "Shared AI",
-      value: "",
+      value: SHARED,
       model: props.global.model ?? "",
     });
   }
@@ -32,10 +38,11 @@ const providerChoices = computed(() => {
 
 const activeChoice = computed(
   () =>
-    providerChoices.value.find((choice) => choice.value === props.providerId) ??
-    providerChoices.value[0],
+    providerChoices.value.find(
+      (choice) => choice.value === toValue(props.providerId),
+    ) ?? providerChoices.value[0],
 );
-const selectedProviderId = computed(() => activeChoice.value?.value ?? "");
+const selectedProviderId = computed(() => activeChoice.value?.value ?? SHARED);
 
 const canSwitch = computed(() => providerChoices.value.length > 1);
 const activeTitle = computed(() => choiceTitle(activeChoice.value));
@@ -51,8 +58,8 @@ function optionPt({ context }: { context: { option?: ProviderChoice } }): {
   return { title: choiceTitle(context.option) };
 }
 
-function pickProvider(id: string): void {
-  emit("select", id);
+function pickProvider(value: string): void {
+  emit("select", fromValue(value));
 }
 </script>
 

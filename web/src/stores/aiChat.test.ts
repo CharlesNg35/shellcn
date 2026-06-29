@@ -597,6 +597,25 @@ describe("aiChat store", () => {
     });
   });
 
+  it("defaults a new connection to the last chosen provider", async () => {
+    const make = (id: string) => ({
+      id,
+      kind: "openrouter" as const,
+      name: id,
+      models: ["m"],
+      model: "m",
+      hasKey: true,
+      createdAt: "",
+      updatedAt: "",
+    });
+    listProviders.mockResolvedValue([make("p1"), make("p2")]);
+    const store = useAiChatStore();
+    await store.loadProviders();
+
+    store.setProvider("conn-a", "p2");
+    expect(store.state("conn-b").providerId).toBe("p2");
+  });
+
   it("can force-refresh providers after settings change", async () => {
     const store = useAiChatStore();
     const st = store.state(CONN);
