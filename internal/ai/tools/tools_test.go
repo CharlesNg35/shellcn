@@ -34,6 +34,14 @@ func (demoPlugin) Manifest() plugin.Manifest {
 			Label:  "Items",
 			Type:   plugin.PanelTable,
 			Source: &plugin.DataSource{RouteID: "demo.list", Params: map[string]string{"database": "${resource.uid}", "schema": "${resource.name}"}},
+			Config: plugin.TableConfig{
+				Editable: true,
+				Insert: &plugin.DataSource{
+					RouteID: "demo.row.insert",
+					Method:  plugin.MethodPost,
+					Params:  map[string]string{"database": "${resource.scope}", "schema": "${resource.namespace}", "table": "${resource.name}"},
+				},
+			},
 		}},
 		Streams: []plugin.Stream{
 			{ID: "demo.stream", Kind: plugin.StreamQuery, RouteID: "demo.stream"},
@@ -72,6 +80,11 @@ func (demoPlugin) Routes() []plugin.Route {
 				}},
 				{Key: "recovery_codes", Label: "Recovery codes", Type: plugin.FieldArray, Item: &plugin.Field{Type: plugin.FieldPassword}},
 			}}}},
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
+		},
+		{
+			ID: "demo.row.insert", Method: plugin.MethodPost, Risk: plugin.RiskWrite, Permission: "demo.write", AuditEvent: "demo.row.insert",
+			Path:   "/tables/{schema}/{table}/rows",
 			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
 		},
 		{
@@ -281,6 +294,17 @@ func TestToolSchemaExcludesSensitiveFieldsAndIncludesPathParams(t *testing.T) {
 	if !strings.Contains(specs["demo_list"].Description, "Route params:") {
 		t.Fatalf("route param hint missing from description: %q", specs["demo_list"].Description)
 	}
+
+	insert := specs["demo_row_insert"].Parameters
+	insertProps := insert["properties"].(map[string]any)
+	values := insertProps["values"].(map[string]any)
+	if values["type"] != "object" || !strings.Contains(values["description"].(string), "Send an object") {
+		t.Fatalf("editable table insert values schema missing: %+v", values)
+	}
+	required = insert["required"].([]string)
+	if !containsString(required, "schema") || !containsString(required, "table") || !containsString(required, "values") {
+		t.Fatalf("editable table insert required fields missing: %v", required)
+	}
 }
 
 func TestExecuteSplitsPathParamsFromBody(t *testing.T) {
@@ -310,6 +334,33 @@ func TestExecuteSplitsPathParamsFromBody(t *testing.T) {
 	}
 
 	ts.WithConfirmer(&recordingConfirmer{approve: true})
+	if _, err := ts.Execute(context.Background(), engine.ToolCall{Name: "demo_row_insert", Input: map[string]any{
+		"database": "shellcn",
+		"schema":   "public",
+		"table":    "users",
+		"values":   `{"name":"alice","age":30}`,
+	}}); err != nil {
+		t.Fatalf("execute inferred row insert: %v", err)
+	}
+	if inv.lastRoute != "demo.row.insert" || inv.lastParams["database"] != "shellcn" || inv.lastParams["schema"] != "public" || inv.lastParams["table"] != "users" {
+		t.Fatalf("inferred row insert params not routed: route=%s params=%v", inv.lastRoute, inv.lastParams)
+	}
+	var rowBody map[string]any
+	if err := json.Unmarshal(inv.lastBody, &rowBody); err != nil {
+		t.Fatalf("row insert body not JSON: %s err=%v", inv.lastBody, err)
+	}
+	rowValues, ok := rowBody["values"].(map[string]any)
+	if !ok || rowValues["name"] != "alice" || rowValues["age"] != float64(30) {
+		t.Fatalf("row insert values not normalized as object: %+v", rowBody)
+	}
+
+	if _, err := ts.Execute(context.Background(), engine.ToolCall{Name: "demo_row_insert", Input: map[string]any{
+		"schema": "public",
+		"table":  "users",
+	}}); err == nil || !strings.Contains(err.Error(), "values is required") {
+		t.Fatalf("missing values should fail before invoking route, got %v", err)
+	}
+
 	if _, err := ts.Execute(context.Background(), engine.ToolCall{Name: "demo_create", Input: map[string]any{"name": "x"}}); err != nil {
 		t.Fatalf("execute create: %v", err)
 	}
@@ -327,6 +378,15 @@ type recordingConfirmer struct {
 func (c *recordingConfirmer) Confirm(_ context.Context, req tools.ConfirmRequest) (bool, error) {
 	c.calls = append(c.calls, req)
 	return c.approve, nil
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestConfirmerGatesWritesNotReads(t *testing.T) {

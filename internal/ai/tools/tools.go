@@ -61,10 +61,12 @@ type RouteSource interface {
 
 // binding records how to call a route from a sanitized tool name.
 type binding struct {
-	routeID string
-	risk    plugin.RiskLevel
-	params  map[string]bool
-	stream  bool
+	routeID          string
+	risk             plugin.RiskLevel
+	params           map[string]bool
+	structuredFields map[string]string
+	requiredBody     map[string]bool
+	stream           bool
 }
 
 // ToolSet is the risk-gated tool catalogue for one connection. It implements
@@ -93,6 +95,7 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 	ts := &ToolSet{byName: map[string]binding{}, invoker: invoker, user: user, connID: connID}
 	manifest := plg.Manifest()
 	manifestParams := routeParamIndex(manifest)
+	inferredInputs := routeInputIndex(manifest)
 	streams := textObservableStreams(manifest)
 	_, canObserveStreams := invoker.(StreamInvoker)
 	for _, r := range plg.Routes() {
@@ -106,11 +109,20 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 			}
 			params := templateParamNames(r.Path)
 			routeParams := mergeRouteParams(params, manifestParams[r.ID])
-			ts.byName[name] = binding{routeID: r.ID, risk: r.Risk, params: routeParamSet(routeParams), stream: true}
+			schema := toStreamJSONSchema(r, params, routeParams, inferredInputs[r.ID])
+			paramsSet := routeParamSet(routeParams)
+			ts.byName[name] = binding{
+				routeID:          r.ID,
+				risk:             r.Risk,
+				params:           paramsSet,
+				structuredFields: structuredFields(schema, paramsSet),
+				requiredBody:     requiredBodyFields(schema, paramsSet),
+				stream:           true,
+			}
 			ts.specs = append(ts.specs, engine.ToolSpec{
 				Name:        name,
 				Description: describeStream(r, routeParams),
-				Parameters:  toStreamJSONSchema(r, params, routeParams),
+				Parameters:  schema,
 			})
 			continue
 		}
@@ -123,11 +135,19 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 		}
 		params := templateParamNames(r.Path)
 		routeParams := mergeRouteParams(params, manifestParams[r.ID])
-		ts.byName[name] = binding{routeID: r.ID, risk: r.Risk, params: routeParamSet(routeParams)}
+		schema := toJSONSchema(r, params, routeParams, inferredInputs[r.ID])
+		paramsSet := routeParamSet(routeParams)
+		ts.byName[name] = binding{
+			routeID:          r.ID,
+			risk:             r.Risk,
+			params:           paramsSet,
+			structuredFields: structuredFields(schema, paramsSet),
+			requiredBody:     requiredBodyFields(schema, paramsSet),
+		}
 		ts.specs = append(ts.specs, engine.ToolSpec{
 			Name:        name,
 			Description: describe(r, routeParams),
-			Parameters:  toJSONSchema(r, params, routeParams),
+			Parameters:  schema,
 		})
 	}
 	sort.Slice(ts.specs, func(i, j int) bool { return ts.specs[i].Name < ts.specs[j].Name })
@@ -154,6 +174,12 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 			continue
 		}
 		body[k] = v
+	}
+	if err := normalizeStructuredFields(body, b.structuredFields); err != nil {
+		return nil, fmt.Errorf("tool %q: %w", call.Name, err)
+	}
+	if err := requireBodyFields(body, b.requiredBody); err != nil {
+		return nil, fmt.Errorf("tool %q: %w", call.Name, err)
 	}
 	if b.stream {
 		opts := streamOptions(body)
@@ -352,7 +378,7 @@ func sanitizeName(id string) string {
 }
 
 // toJSONSchema flattens route input and route params for the model.
-func toJSONSchema(r plugin.Route, pathParams, routeParams []string) map[string]any {
+func toJSONSchema(r plugin.Route, pathParams, routeParams []string, inferred *plugin.Schema) map[string]any {
 	props := map[string]any{}
 	var required []string
 
@@ -368,8 +394,12 @@ func toJSONSchema(r plugin.Route, pathParams, routeParams []string) map[string]a
 		props[p] = map[string]any{"type": "string", "description": "route scope parameter from the plugin manifest"}
 	}
 
-	if r.Input != nil {
-		for _, g := range r.Input.Groups {
+	input := r.Input
+	if input == nil {
+		input = inferred
+	}
+	if input != nil {
+		for _, g := range input.Groups {
 			for _, f := range g.Fields {
 				schema, ok := fieldSchema(f)
 				if !ok {
@@ -390,8 +420,8 @@ func toJSONSchema(r plugin.Route, pathParams, routeParams []string) map[string]a
 	return schema
 }
 
-func toStreamJSONSchema(r plugin.Route, pathParams, routeParams []string) map[string]any {
-	schema := toJSONSchema(r, pathParams, routeParams)
+func toStreamJSONSchema(r plugin.Route, pathParams, routeParams []string, inferred *plugin.Schema) map[string]any {
+	schema := toJSONSchema(r, pathParams, routeParams, inferred)
 	props, _ := schema["properties"].(map[string]any)
 	if props == nil {
 		props = map[string]any{}
@@ -419,6 +449,103 @@ func toStreamJSONSchema(r plugin.Route, pathParams, routeParams []string) map[st
 		"maximum":     500,
 	}
 	return schema
+}
+
+func structuredFields(schema map[string]any, params map[string]bool) map[string]string {
+	props, _ := schema["properties"].(map[string]any)
+	if len(props) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for key, raw := range props {
+		if params[key] {
+			continue
+		}
+		prop, _ := raw.(map[string]any)
+		typ, _ := prop["type"].(string)
+		switch typ {
+		case "object", "array":
+			out[key] = typ
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func requiredBodyFields(schema map[string]any, params map[string]bool) map[string]bool {
+	raw, _ := schema["required"].([]string)
+	if len(raw) == 0 {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, key := range raw {
+		if !params[key] {
+			out[key] = true
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func normalizeStructuredFields(body map[string]any, fields map[string]string) error {
+	for key, typ := range fields {
+		value, ok := body[key]
+		if !ok {
+			continue
+		}
+		text, ok := value.(string)
+		if !ok {
+			continue
+		}
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
+		var decoded any
+		if err := json.Unmarshal([]byte(text), &decoded); err != nil {
+			return fmt.Errorf("%s must be a JSON %s, not a string", key, typ)
+		}
+		if typ == "object" {
+			if _, ok := decoded.(map[string]any); !ok {
+				return fmt.Errorf("%s must be a JSON object", key)
+			}
+		}
+		if typ == "array" {
+			if _, ok := decoded.([]any); !ok {
+				return fmt.Errorf("%s must be a JSON array", key)
+			}
+		}
+		body[key] = decoded
+	}
+	return nil
+}
+
+func requireBodyFields(body map[string]any, required map[string]bool) error {
+	for key := range required {
+		value, ok := body[key]
+		if !ok || emptyToolValue(value) {
+			return fmt.Errorf("%s is required", key)
+		}
+	}
+	return nil
+}
+
+func emptyToolValue(value any) bool {
+	if value == nil {
+		return true
+	}
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v) == ""
+	case []any:
+		return len(v) == 0
+	default:
+		return false
+	}
 }
 
 func streamOptions(input map[string]any) engine.StreamSampleOptions {
@@ -551,6 +678,85 @@ func routeParamIndex(m plugin.Manifest) map[string]map[string]bool {
 	}
 	walk(reflect.ValueOf(m))
 	return out
+}
+
+func routeInputIndex(m plugin.Manifest) map[string]*plugin.Schema {
+	out := map[string]*plugin.Schema{}
+	add := func(routeID string, schema *plugin.Schema) {
+		if strings.TrimSpace(routeID) == "" || schema == nil || out[routeID] != nil {
+			return
+		}
+		out[routeID] = schema
+	}
+
+	tableType := reflect.TypeOf(plugin.TableConfig{})
+	var walk func(reflect.Value)
+	walk = func(v reflect.Value) {
+		if !v.IsValid() {
+			return
+		}
+		for v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer {
+			if v.IsNil() {
+				return
+			}
+			v = v.Elem()
+		}
+		if v.Type() == tableType {
+			cfg := v.Interface().(plugin.TableConfig)
+			if cfg.Insert != nil {
+				add(cfg.Insert.RouteID, rowMutationInput(false, true))
+			}
+			if cfg.Update != nil {
+				add(cfg.Update.RouteID, rowMutationInput(true, true))
+			}
+			if cfg.Delete != nil {
+				add(cfg.Delete.RouteID, rowMutationInput(true, false))
+			}
+		}
+		switch v.Kind() {
+		case reflect.Struct:
+			for i := 0; i < v.NumField(); i++ {
+				if v.Type().Field(i).PkgPath != "" {
+					continue
+				}
+				walk(v.Field(i))
+			}
+		case reflect.Slice, reflect.Array:
+			for i := 0; i < v.Len(); i++ {
+				walk(v.Index(i))
+			}
+		case reflect.Map:
+			iter := v.MapRange()
+			for iter.Next() {
+				walk(iter.Value())
+			}
+		}
+	}
+	walk(reflect.ValueOf(m))
+	return out
+}
+
+func rowMutationInput(key, values bool) *plugin.Schema {
+	fields := make([]plugin.Field, 0, 2)
+	if key {
+		fields = append(fields, plugin.Field{
+			Key:      "key",
+			Label:    "Row key",
+			Type:     plugin.FieldJSON,
+			Required: true,
+			Help:     "JSON object whose keys are identifying column names and values are the row values to match.",
+		})
+	}
+	if values {
+		fields = append(fields, plugin.Field{
+			Key:      "values",
+			Label:    "Column values",
+			Type:     plugin.FieldJSON,
+			Required: true,
+			Help:     "JSON object whose keys are column names and values are the values to write. Send an object, not a JSON string.",
+		})
+	}
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Row", Fields: fields}}}
 }
 
 func mergeRouteParams(pathParams []string, manifestParams map[string]bool) []string {

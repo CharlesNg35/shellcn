@@ -65,14 +65,12 @@ export function useAiMessageScroll(
     (count, prev) => {
       if (count <= prev) return;
       const added = messages.value.slice(prev);
-      if (
-        !escapedFromLock.value &&
-        (added.some((m) => m.role === "user") || isNearBottom.value)
-      ) {
-        void scrollToBottom({
-          animation: "smooth",
-          wait: true,
-        });
+      // Sending is deliberate intent to see the reply, so it always returns to
+      // the bottom (and re-engages the lock); appends only follow when already
+      // near the bottom and the user hasn't scrolled away.
+      const sentByUser = added.some((m) => m.role === "user");
+      if (sentByUser || (!escapedFromLock.value && isNearBottom.value)) {
+        void scrollToBottom({ animation: "smooth", wait: true });
       }
     },
     { flush: "post" },
