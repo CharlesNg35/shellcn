@@ -20,7 +20,7 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-const defaultMaxSteps = 12
+const defaultMaxSteps = 20
 
 var titleGenerationTimeout = 8 * time.Second
 
