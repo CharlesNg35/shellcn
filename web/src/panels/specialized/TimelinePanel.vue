@@ -59,6 +59,8 @@ const {
   reset,
 } = useRefreshableSource<Row[]>(loadTimeline, {
   initialValue: () => [],
+  connectionId: () => props.connectionId,
+  active,
 });
 
 function text(row: Row, key: string): string {

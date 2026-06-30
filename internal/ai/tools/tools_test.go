@@ -655,6 +655,47 @@ func TestConfirmerGatesWritesNotReads(t *testing.T) {
 	}
 }
 
+func TestSuccessfulWriteEmitsWorkspaceInvalidation(t *testing.T) {
+	reg := registry(t)
+	inv := &recordingInvoker{result: map[string]any{"ok": true}}
+	cf := &recordingConfirmer{approve: true}
+	ts := mustBuild(t, reg, map[plugin.RiskLevel]bool{plugin.RiskSafe: true, plugin.RiskWrite: true}, inv).WithConfirmer(cf)
+	var events []engine.StreamEvent
+	ctx := engine.WithProgress(context.Background(), func(ev engine.StreamEvent) {
+		events = append(events, ev)
+	})
+
+	if _, err := ts.Execute(ctx, engine.ToolCall{ID: "tc1", Name: "demo_create", Input: map[string]any{"name": "created"}}); err != nil {
+		t.Fatalf("execute write: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected one invalidation event, got %+v", events)
+	}
+	ev := events[0]
+	if ev.Type != engine.EventWorkspaceInvalidated || ev.Invalidation == nil {
+		t.Fatalf("unexpected event: %+v", ev)
+	}
+	if ev.Invalidation.ConnectionID != "c1" || ev.Invalidation.RouteID != "demo.create" || ev.Invalidation.Risk != string(plugin.RiskWrite) || ev.Invalidation.ToolID != "tc1" {
+		t.Fatalf("bad invalidation: %+v", ev.Invalidation)
+	}
+
+	events = nil
+	if _, err := ts.Execute(ctx, engine.ToolCall{Name: "demo_list"}); err != nil {
+		t.Fatalf("execute read: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("read should not invalidate workspace: %+v", events)
+	}
+
+	cf.approve = false
+	if _, err := ts.Execute(ctx, engine.ToolCall{ID: "tc2", Name: "demo_create", Input: map[string]any{"name": "declined"}}); err != nil {
+		t.Fatalf("execute declined write: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("declined write should not invalidate workspace: %+v", events)
+	}
+}
+
 func mustBuild(t *testing.T, reg *pluginregistry.Registry, allowed map[plugin.RiskLevel]bool, inv tools.Invoker) *tools.ToolSet {
 	t.Helper()
 	ts, err := tools.Build(reg, "demo", allowed, inv, models.User{ID: "u"}, "c1")

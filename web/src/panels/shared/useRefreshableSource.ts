@@ -1,7 +1,11 @@
 import { computed, ref, type ComputedRef, type Ref } from "vue";
+import { useConnectionInvalidationRefresh } from "./useConnectionInvalidationRefresh";
 
 interface RefreshableSourceOptions<T> {
   initialValue: () => T;
+  connectionId?: () => string;
+  active?: Ref<boolean>;
+  canRefresh?: () => boolean;
 }
 
 export interface RefreshableSource<T> {
@@ -57,6 +61,15 @@ export function useRefreshableSource<T>(
     loadedOnce.value = false;
     refreshing.value = false;
     error.value = null;
+  }
+
+  if (options.connectionId) {
+    useConnectionInvalidationRefresh({
+      connectionId: options.connectionId,
+      refresh: load,
+      active: options.active,
+      canRefresh: options.canRefresh,
+    });
   }
 
   return {

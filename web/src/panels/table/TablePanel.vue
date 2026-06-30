@@ -80,6 +80,7 @@ import PanelError from "../shared/PanelError.vue";
 import FormField from "../form/FormField.vue";
 import AppIcon from "@/components/AppIcon.vue";
 import { useDirtyGuard } from "../shared/useDirtyGuard";
+import { useConnectionInvalidationRefresh } from "../shared/useConnectionInvalidationRefresh";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{
@@ -1208,21 +1209,35 @@ onDeactivated(() => {
   stopResourceWatch();
 });
 
-async function refresh(): Promise<void> {
-  if (!props.source || loading.value || committing.value) return;
-  if (pendingCount.value > 0) return;
+function canAutoRefresh(): boolean {
+  if (!props.source || loading.value || committing.value) return false;
+  if (pendingCount.value > 0) return false;
   if (
     showInsert.value ||
     deleteTarget.value ||
     actionOutput.value ||
     jsonEdit.value
   )
-    return;
-  if (detailRow.value) return;
+    return false;
+  if (detailRow.value) return false;
+  return true;
+}
+
+useConnectionInvalidationRefresh({
+  connectionId: () => props.connectionId,
+  refresh,
+  active,
+  canRefresh: canAutoRefresh,
+});
+
+async function refresh(): Promise<void> {
+  if (!canAutoRefresh()) return;
+  const source = props.source;
+  if (!source) return;
   try {
     const page = await fetchPage<Row>(
       props.connectionId,
-      props.source,
+      source,
       { resource: props.resource, record: props.record },
       {
         cursor: cursorFor(first.value),

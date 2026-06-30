@@ -65,6 +65,7 @@ vi.mock("../api/ai", () => ({
 }));
 
 import { useAiChatStore } from "./aiChat";
+import { useWorkspaceInvalidationStore } from "./workspaceInvalidation";
 
 const CONN = "c1";
 
@@ -162,6 +163,31 @@ describe("aiChat store", () => {
 
     store.apply(CONN, { type: "done" });
     expect(store.state(CONN).runState).toBe("idle");
+  });
+
+  it("publishes workspace invalidations from the AI stream", () => {
+    const store = useAiChatStore();
+    const invalidations = useWorkspaceInvalidationStore();
+
+    store.apply(CONN, {
+      type: "workspace_invalidated",
+      invalidation: {
+        connectionId: CONN,
+        routeId: "demo.create",
+        risk: RiskLevel.Write,
+        params: { name: "created" },
+        toolName: "demo_create",
+        toolId: "t1",
+      },
+    });
+
+    expect(invalidations.version(CONN)).toBe(1);
+    expect(invalidations.last(CONN)).toMatchObject({
+      connectionId: CONN,
+      routeId: "demo.create",
+      risk: RiskLevel.Write,
+      source: "ai",
+    });
   });
 
   it("marks an error and keeps the partial assistant message", () => {

@@ -25,13 +25,14 @@ func Progress(ctx context.Context) func(StreamEvent) {
 type EventType string
 
 const (
-	EventTextDelta      EventType = "text_delta"
-	EventReasoningDelta EventType = "reasoning_delta"
-	EventToolCall       EventType = "tool_call"
-	EventToolResult     EventType = "tool_result"
-	EventStep           EventType = "step"
-	EventError          EventType = "error"
-	EventDone           EventType = "done"
+	EventTextDelta            EventType = "text_delta"
+	EventReasoningDelta       EventType = "reasoning_delta"
+	EventToolCall             EventType = "tool_call"
+	EventToolResult           EventType = "tool_result"
+	EventWorkspaceInvalidated EventType = "workspace_invalidated"
+	EventStep                 EventType = "step"
+	EventError                EventType = "error"
+	EventDone                 EventType = "done"
 )
 
 // Role is a chat message role.
@@ -94,6 +95,16 @@ type Usage struct {
 	OutputTokens int `json:"outputTokens"`
 }
 
+// WorkspaceInvalidation tells the browser that connection-scoped data changed.
+type WorkspaceInvalidation struct {
+	ConnectionID string            `json:"connectionId"`
+	RouteID      string            `json:"routeId"`
+	Risk         string            `json:"risk"`
+	Params       map[string]string `json:"params,omitempty"`
+	ToolName     string            `json:"toolName,omitempty"`
+	ToolID       string            `json:"toolId,omitempty"`
+}
+
 // StreamEvent is one event relayed from a running turn.
 type StreamEvent struct {
 	Type     EventType      `json:"type"`
@@ -106,8 +117,9 @@ type StreamEvent struct {
 	Usage    *Usage         `json:"usage,omitempty"`
 	// Subagent, when set, marks a tool event as nested work performed by a
 	// subagent (the UI prefixes it and styles it distinctly).
-	Subagent  string `json:"subagent,omitempty"`
-	Truncated bool   `json:"truncated,omitempty"`
+	Subagent     string                 `json:"subagent,omitempty"`
+	Truncated    bool                   `json:"truncated,omitempty"`
+	Invalidation *WorkspaceInvalidation `json:"invalidation,omitempty"`
 }
 
 // ChatRequest is one provider turn: system prompt, history, tools, and caps.

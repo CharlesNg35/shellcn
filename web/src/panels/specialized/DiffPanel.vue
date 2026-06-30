@@ -6,6 +6,7 @@ import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "@/components/SkeletonList.vue";
 import CodeDiffView from "../shared/CodeDiffView.vue";
+import { useConnectionInvalidationRefresh } from "../shared/useConnectionInvalidationRefresh";
 
 const props = defineProps<PanelProps>();
 
@@ -56,6 +57,12 @@ async function load(): Promise<void> {
     loading.value = false;
   }
 }
+
+useConnectionInvalidationRefresh({
+  connectionId: () => props.connectionId,
+  refresh: load,
+  canRefresh: () => !loading.value,
+});
 
 watch(
   () => [

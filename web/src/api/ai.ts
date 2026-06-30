@@ -156,6 +156,7 @@ export interface AiStreamEvent {
     | "reasoning_delta"
     | "tool_call"
     | "tool_result"
+    | "workspace_invalidated"
     | "step"
     | "error"
     | "done";
@@ -168,6 +169,16 @@ export interface AiStreamEvent {
   subagent?: string;
   truncated?: boolean;
   usage?: { inputTokens: number; outputTokens: number };
+  invalidation?: AiWorkspaceInvalidation;
+}
+
+export interface AiWorkspaceInvalidation {
+  connectionId: string;
+  routeId: string;
+  risk: string;
+  params?: Record<string, string>;
+  toolName?: string;
+  toolId?: string;
 }
 
 export type AiTurnStreamEvent =

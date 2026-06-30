@@ -34,6 +34,7 @@ import FileSelectionBar from "./FileSelectionBar.vue";
 import FileToolbar from "./FileToolbar.vue";
 import FileOperationDialog from "./FileOperationDialog.vue";
 import { useDirtyGuard } from "../shared/useDirtyGuard";
+import { useConnectionInvalidationRefresh } from "../shared/useConnectionInvalidationRefresh";
 import { useStreamControls } from "../shared/useStreamControls";
 import {
   formatBytes,
@@ -382,6 +383,20 @@ async function guardedSelectEntry(entry: FileEntry): Promise<void> {
 async function guardedLoadList(path: string): Promise<void> {
   await confirmBeforeDiscard(() => loadList(path));
 }
+
+useConnectionInvalidationRefresh({
+  connectionId: () => props.connectionId,
+  refresh: () => loadList(cwd.value),
+  canRefresh: () =>
+    !dirty.value &&
+    !mutating.value &&
+    !mkdirOpen.value &&
+    !renameOpen.value &&
+    !deleteOpen.value &&
+    !chmodOpen.value &&
+    !bulkDeleteOpen.value &&
+    !operationOpen.value,
+});
 
 async function saveFile(): Promise<void> {
   const routeId = writeRouteId.value;

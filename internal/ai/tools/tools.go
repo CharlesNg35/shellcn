@@ -229,7 +229,24 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 	if err != nil {
 		return nil, err
 	}
+	if invalidatesWorkspace(b.risk) {
+		engine.Progress(ctx)(engine.StreamEvent{
+			Type: engine.EventWorkspaceInvalidated,
+			Invalidation: &engine.WorkspaceInvalidation{
+				ConnectionID: ts.connID,
+				RouteID:      b.routeID,
+				Risk:         string(b.risk),
+				Params:       params,
+				ToolName:     call.Name,
+				ToolID:       call.ID,
+			},
+		})
+	}
 	return clean(result), nil
+}
+
+func invalidatesWorkspace(risk plugin.RiskLevel) bool {
+	return risk == plugin.RiskWrite || risk == plugin.RiskDestructive || risk == plugin.RiskPrivileged
 }
 
 // clean marks and truncates oversized tool output.

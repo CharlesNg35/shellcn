@@ -14,6 +14,7 @@ import ResourceTree from "./ResourceTree.vue";
 import DetailView from "../detail/DetailView.vue";
 import PanelHost from "../core/PanelHost.vue";
 import AppIcon from "@/components/AppIcon.vue";
+import { useConnectionInvalidationRefresh } from "../shared/useConnectionInvalidationRefresh";
 import type {
   Action,
   ResourceIdentity,
@@ -170,6 +171,11 @@ watch(
 function refreshTree(): void {
   treeRefreshNonce.value += 1;
 }
+
+useConnectionInvalidationRefresh({
+  connectionId: () => props.connectionId,
+  refresh: refreshTree,
+});
 
 function onListActionDone(): void {
   refreshTree();

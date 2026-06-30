@@ -14,6 +14,7 @@ import {
 import { useAiProvidersStore } from "./aiProviders";
 import { registerSessionCleanup } from "./session";
 import { RiskLevel } from "../types/projection";
+import { useWorkspaceInvalidationStore } from "./workspaceInvalidation";
 
 export type AiRunState = "idle" | "starting" | "streaming" | "stopping";
 
@@ -108,6 +109,7 @@ const nextId = (): string => `m-${Date.now()}-${seq++}`;
 
 export const useAiChatStore = defineStore("aiChat", () => {
   const aiProviders = useAiProvidersStore();
+  const workspaceInvalidation = useWorkspaceInvalidationStore();
   const selectedProviders = useStorage<Record<string, string>>(
     "shellcn:ai:selected-provider",
     {},
@@ -501,6 +503,14 @@ export const useAiChatStore = defineStore("aiChat", () => {
             tc.output = ev.output;
             tc.err = ev.err;
           }
+        }
+        break;
+      case "workspace_invalidated":
+        if (ev.invalidation) {
+          workspaceInvalidation.invalidate({
+            ...ev.invalidation,
+            source: "ai",
+          });
         }
         break;
       case "error":
