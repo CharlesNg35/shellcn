@@ -45,6 +45,7 @@ type Connection struct {
 
 	AIMode             AIMode
 	AIAllowDestructive bool
+	AIAutoApprove      bool
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

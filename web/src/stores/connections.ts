@@ -217,6 +217,7 @@ function mergeConnectionSummary(
     aiMode: updated.aiMode ?? input.aiMode,
     aiAllowDestructive:
       updated.aiAllowDestructive ?? input.aiAllowDestructive ?? false,
+    aiAutoApprove: updated.aiAutoApprove ?? input.aiAutoApprove ?? false,
   };
 }
 

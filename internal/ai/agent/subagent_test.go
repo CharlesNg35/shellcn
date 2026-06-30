@@ -126,3 +126,16 @@ func TestSystemPromptIncludesRecentOpsAndSubagent(t *testing.T) {
 		t.Fatalf("prompt should include workspace focus:\n%s", prompt)
 	}
 }
+
+func TestSystemPromptTellsWriteAgentToUseApprovalFlow(t *testing.T) {
+	prompt := agent.SystemPrompt(agent.PromptInput{
+		ConnectionTitle: "prod", Protocol: "docker", AIMode: models.AIModeReadWrite,
+		Tools: []string{"docker_container_restart"},
+	})
+	if !strings.Contains(prompt, "instead of asking them to type yes or confirm in chat") {
+		t.Fatalf("prompt should prevent typed confirmation loops:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "ShellCN handles any required approval flow") {
+		t.Fatalf("prompt should delegate approval to ShellCN:\n%s", prompt)
+	}
+}

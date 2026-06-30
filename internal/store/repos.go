@@ -159,7 +159,7 @@ func (s *gormConnectionStore) List(ctx context.Context) ([]models.Connection, er
 
 func (s *gormConnectionStore) Update(ctx context.Context, c *models.Connection) error {
 	res := s.db.WithContext(ctx).Model(&models.Connection{}).Where("id = ?", c.ID).
-		Select("name", "protocol", "transport", "shared", "config", "secrets", "recording", "retention_days", "ai_mode", "ai_allow_destructive").Updates(c)
+		Select("name", "protocol", "transport", "shared", "config", "secrets", "recording", "retention_days", "ai_mode", "ai_allow_destructive", "ai_auto_approve").Updates(c)
 	return rowsOrNotFound(res)
 }
 

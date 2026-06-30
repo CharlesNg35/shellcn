@@ -14,6 +14,7 @@ export interface ConnectionCreate {
   recording: Record<string, unknown>;
   aiMode?: string;
   aiAllowDestructive?: boolean;
+  aiAutoApprove?: boolean;
 }
 
 export interface ConnectionUpdate {
@@ -24,6 +25,7 @@ export interface ConnectionUpdate {
   recording: Record<string, unknown>;
   aiMode?: string;
   aiAllowDestructive?: boolean;
+  aiAutoApprove?: boolean;
 }
 
 export interface LayoutItem {

@@ -79,31 +79,34 @@ func TestConnectionAIModePersistsAndClearsDestructive(t *testing.T) {
 	h := newHarness(t)
 
 	resp := h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(
-		`{"name":"ai-rw","protocol":"tester","config":{"host":"h"},"aiMode":"read_write","aiAllowDestructive":true}`))
+		`{"name":"ai-rw","protocol":"tester","config":{"host":"h"},"aiMode":"read_write","aiAllowDestructive":true,"aiAutoApprove":true}`))
 	if resp.Status != http.StatusCreated {
 		t.Fatalf("create: %d (%s)", resp.Status, resp.Body)
 	}
 	id := createConnID(t, resp)
 	detail := h.do(t, http.MethodGet, "/api/connections/"+id, "op", nil)
 	if !strings.Contains(string(detail.Body), `"aiMode":"read_write"`) ||
-		!strings.Contains(string(detail.Body), `"aiAllowDestructive":true`) {
-		t.Fatalf("read_write+destructive not persisted: %s", detail.Body)
+		!strings.Contains(string(detail.Body), `"aiAllowDestructive":true`) ||
+		!strings.Contains(string(detail.Body), `"aiAutoApprove":true`) {
+		t.Fatalf("read_write ai policy not persisted: %s", detail.Body)
 	}
 	list := h.do(t, http.MethodGet, "/api/connections", "op", nil)
 	if !strings.Contains(string(list.Body), `"aiMode":"read_write"`) ||
-		!strings.Contains(string(list.Body), `"aiAllowDestructive":true`) {
+		!strings.Contains(string(list.Body), `"aiAllowDestructive":true`) ||
+		!strings.Contains(string(list.Body), `"aiAutoApprove":true`) {
 		t.Fatalf("connection list must expose ai mode for launcher gating: %s", list.Body)
 	}
 
 	resp = h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(
-		`{"name":"ai-ro","protocol":"tester","config":{"host":"h"},"aiMode":"read_only","aiAllowDestructive":true}`))
+		`{"name":"ai-ro","protocol":"tester","config":{"host":"h"},"aiMode":"read_only","aiAllowDestructive":true,"aiAutoApprove":true}`))
 	if resp.Status != http.StatusCreated {
 		t.Fatalf("create read_only: %d (%s)", resp.Status, resp.Body)
 	}
 	roID := createConnID(t, resp)
 	detail = h.do(t, http.MethodGet, "/api/connections/"+roID, "op", nil)
-	if !strings.Contains(string(detail.Body), `"aiAllowDestructive":false`) {
-		t.Fatalf("read_only must clear destructive opt-in: %s", detail.Body)
+	if !strings.Contains(string(detail.Body), `"aiAllowDestructive":false`) ||
+		!strings.Contains(string(detail.Body), `"aiAutoApprove":false`) {
+		t.Fatalf("read_only must clear mutation options: %s", detail.Body)
 	}
 
 	if resp := h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(

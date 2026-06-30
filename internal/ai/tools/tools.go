@@ -72,17 +72,24 @@ type binding struct {
 // ToolSet is the risk-gated tool catalogue for one connection. It implements
 // engine.ToolExecutor.
 type ToolSet struct {
-	specs     []engine.ToolSpec
-	byName    map[string]binding
-	invoker   Invoker
-	user      models.User
-	connID    string
-	confirmer Confirmer
+	specs       []engine.ToolSpec
+	byName      map[string]binding
+	invoker     Invoker
+	user        models.User
+	connID      string
+	confirmer   Confirmer
+	autoApprove bool
 }
 
 // WithConfirmer attaches a confirmer that gates write/destructive tool calls.
 func (ts *ToolSet) WithConfirmer(c Confirmer) *ToolSet {
 	ts.confirmer = c
+	return ts
+}
+
+// WithAutoApprove runs allowed mutation tools without a user confirmation round-trip.
+func (ts *ToolSet) WithAutoApprove() *ToolSet {
+	ts.autoApprove = true
 	return ts
 }
 
@@ -195,7 +202,7 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 		}
 		return clean(result), nil
 	}
-	if b.risk == plugin.RiskWrite || b.risk == plugin.RiskDestructive {
+	if requiresConfirmation(b.risk) && !ts.autoApprove {
 		if ts.confirmer == nil {
 			return nil, fmt.Errorf("tool %q requires user confirmation", call.Name)
 		}
@@ -247,6 +254,10 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 
 func invalidatesWorkspace(risk plugin.RiskLevel) bool {
 	return risk == plugin.RiskWrite || risk == plugin.RiskDestructive || risk == plugin.RiskPrivileged
+}
+
+func requiresConfirmation(risk plugin.RiskLevel) bool {
+	return risk == plugin.RiskWrite || risk == plugin.RiskDestructive
 }
 
 // clean marks and truncates oversized tool output.

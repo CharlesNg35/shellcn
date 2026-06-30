@@ -67,6 +67,7 @@ type connectionDTO struct {
 	Recording          map[string]string `json:"recording,omitempty"`
 	AIMode             models.AIMode     `json:"aiMode,omitempty"`
 	AIAllowDestructive bool              `json:"aiAllowDestructive,omitempty"`
+	AIAutoApprove      bool              `json:"aiAutoApprove,omitempty"`
 	FolderID           string            `json:"folderId,omitempty"`
 	SortOrder          int               `json:"sortOrder"`
 }

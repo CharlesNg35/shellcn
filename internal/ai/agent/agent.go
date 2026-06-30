@@ -56,7 +56,7 @@ func SystemPrompt(in PromptInput) string {
 
 	switch in.AIMode {
 	case models.AIModeReadWrite:
-		b.WriteString("This connection allows read and write operations. Write actions pause for the user's explicit confirmation before executing.\n")
+		b.WriteString("This connection allows read and write operations. When the user asks for a change, call the appropriate tool instead of asking them to type yes or confirm in chat; ShellCN handles any required approval flow before execution.\n")
 	default:
 		b.WriteString("This connection is read-only. You may inspect resources but cannot modify anything.\n")
 	}

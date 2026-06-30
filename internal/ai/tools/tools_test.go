@@ -655,6 +655,19 @@ func TestConfirmerGatesWritesNotReads(t *testing.T) {
 	}
 }
 
+func TestAutoApproveRunsWriteWithoutConfirmer(t *testing.T) {
+	reg := registry(t)
+	inv := &recordingInvoker{result: map[string]any{"ok": true}}
+	ts := mustBuild(t, reg, map[plugin.RiskLevel]bool{plugin.RiskSafe: true, plugin.RiskWrite: true}, inv).WithAutoApprove()
+
+	if _, err := ts.Execute(context.Background(), engine.ToolCall{ID: "tc1", Name: "demo_create", Input: map[string]any{"name": "x"}}); err != nil {
+		t.Fatalf("auto-approved write: %v", err)
+	}
+	if inv.lastRoute != "demo.create" {
+		t.Fatalf("write should invoke route, got %q", inv.lastRoute)
+	}
+}
+
 func TestSuccessfulWriteEmitsWorkspaceInvalidation(t *testing.T) {
 	reg := registry(t)
 	inv := &recordingInvoker{result: map[string]any{"ok": true}}

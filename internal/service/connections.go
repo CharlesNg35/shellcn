@@ -44,20 +44,22 @@ type ConnectionInput struct {
 	// on update preserves the stored policy; on create it means recording is off.
 	Recording map[string]string
 	// AIMode gates the AI agent (disabled|read_only|read_write); AIAllowDestructive
-	// is honored only with read_write.
+	// is honored only with read_write. AIAutoApprove bypasses the assistant
+	// confirmation prompt for routes already allowed by the mode.
 	AIMode             models.AIMode
 	AIAllowDestructive bool
+	AIAutoApprove      bool
 }
 
-// normalizeAIMode clears destructive opt-in unless the mode is read_write.
-func normalizeAIMode(mode models.AIMode, allowDestructive bool) (models.AIMode, bool, error) {
+// normalizeAIMode clears mutation options unless the mode is read_write.
+func normalizeAIMode(mode models.AIMode, allowDestructive, autoApprove bool) (models.AIMode, bool, bool, error) {
 	switch mode {
 	case "", models.AIModeDisabled, models.AIModeReadOnly:
-		return mode, false, nil
+		return mode, false, false, nil
 	case models.AIModeReadWrite:
-		return mode, allowDestructive, nil
+		return mode, allowDestructive, autoApprove, nil
 	default:
-		return "", false, fmt.Errorf("%w: invalid ai mode %q", plugin.ErrInvalidInput, mode)
+		return "", false, false, fmt.Errorf("%w: invalid ai mode %q", plugin.ErrInvalidInput, mode)
 	}
 }
 
@@ -104,6 +106,7 @@ type ConnectionDetail struct {
 	Recording          map[string]string             `json:"recording"`
 	AIMode             models.AIMode                 `json:"aiMode"`
 	AIAllowDestructive bool                          `json:"aiAllowDestructive"`
+	AIAutoApprove      bool                          `json:"aiAutoApprove"`
 }
 
 type CredentialRefState struct {
@@ -159,7 +162,7 @@ func (s *ConnectionService) Create(ctx context.Context, ownerID string, in Conne
 	if err != nil {
 		return models.Connection{}, err
 	}
-	aiMode, aiAllowDestructive, err := normalizeAIMode(in.AIMode, in.AIAllowDestructive)
+	aiMode, aiAllowDestructive, aiAutoApprove, err := normalizeAIMode(in.AIMode, in.AIAllowDestructive, in.AIAutoApprove)
 	if err != nil {
 		return models.Connection{}, err
 	}
@@ -182,6 +185,7 @@ func (s *ConnectionService) Create(ctx context.Context, ownerID string, in Conne
 		Recording:          recording,
 		AIMode:             aiMode,
 		AIAllowDestructive: aiAllowDestructive,
+		AIAutoApprove:      aiAutoApprove,
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
@@ -235,7 +239,7 @@ func (s *ConnectionService) Update(ctx context.Context, existing models.Connecti
 	if err != nil {
 		return models.Connection{}, err
 	}
-	aiMode, aiAllowDestructive, err := normalizeAIMode(in.AIMode, in.AIAllowDestructive)
+	aiMode, aiAllowDestructive, aiAutoApprove, err := normalizeAIMode(in.AIMode, in.AIAllowDestructive, in.AIAutoApprove)
 	if err != nil {
 		return models.Connection{}, err
 	}
@@ -261,6 +265,7 @@ func (s *ConnectionService) Update(ctx context.Context, existing models.Connecti
 	existing.Recording = recording
 	existing.AIMode = aiMode
 	existing.AIAllowDestructive = aiAllowDestructive
+	existing.AIAutoApprove = aiAutoApprove
 	existing.UpdatedAt = time.Now()
 	if err := s.conns.Update(ctx, &existing); err != nil {
 		return models.Connection{}, err
@@ -448,6 +453,7 @@ func (s *ConnectionService) Detail(ctx context.Context, userID string, conn mode
 		Transport: conn.Transport, OwnerID: conn.OwnerID,
 		Config: config, Secrets: state, Credentials: credentialStates, Recording: recording,
 		AIMode: conn.AIMode, AIAllowDestructive: conn.AIAllowDestructive,
+		AIAutoApprove: conn.AIAutoApprove,
 	}
 }
 
