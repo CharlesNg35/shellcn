@@ -450,8 +450,8 @@ async function onConfig(
                   >Allow destructive operations</span
                 >
                 <span class="text-xs text-amber-600 dark:text-amber-400">
-                  Lets the assistant delete/drop/truncate — each still requires
-                  your confirmation. Off by default.
+                  Lets the assistant delete/drop/truncate - each still requires
+                  your confirmation.
                 </span>
               </span>
             </label>
