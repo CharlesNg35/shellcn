@@ -1360,6 +1360,41 @@ describe("TablePanel staged edits", () => {
     w.unmount();
   });
 
+  it("keeps editable tables selectable through the selection column only when row actions exist", async () => {
+    const action: Action = {
+      id: "db.row.inspect",
+      label: "Inspect",
+      routeId: "db.row.inspect",
+      method: "POST",
+      risk: RiskLevel.Safe,
+      requiresConfirm: false,
+    };
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "postgresql.table.rows" },
+        config: {
+          columns: editableColumns,
+          editable: true,
+          rowActionIds: ["db.row.inspect"],
+          update: { routeId: "postgresql.table.row.update", method: "PATCH" },
+        },
+        actions: [action],
+      },
+    });
+    await flushPromises();
+
+    const dt = w.findComponent({ name: "DataTable" });
+    await w.find("tbody td:nth-child(2)").trigger("click");
+    expect((dt.props("selection") as unknown[]).length).toBe(0);
+
+    const cell = w.find('td[data-p-selection-column="true"]');
+    expect(cell.exists()).toBe(true);
+    await cell.trigger("click");
+    expect((dt.props("selection") as unknown[]).length).toBe(1);
+    w.unmount();
+  });
+
   it("navigates on row-click when rowClick is navigate", async () => {
     const w = mount(TablePanel, {
       props: {

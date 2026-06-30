@@ -230,6 +230,7 @@ func dataGridConfig() plugin.TableConfig {
 	return plugin.TableConfig{
 		Editable:      true,
 		StagedEdits:   true,
+		RowActionIDs:  []string{"mysql.table.row.delete"},
 		Exportable:    true,
 		EmptyText:     "No rows.",
 		Insert:        &plugin.DataSource{RouteID: "mysql.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
@@ -319,6 +320,7 @@ func actions() []plugin.Action {
 		{ID: "mysql.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "mysql.column.drop", Params: map[string]string{"database": "${record.database}", "table": "${record.table}", "name": "${record.name}"}, Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
 		{ID: "mysql.index.create", Label: "Create index", Icon: icon("plus"), RouteID: "mysql.index.create", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: "mysql.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "mysql.index.drop", Params: map[string]string{"database": "${record.database}", "table": "${record.table}", "name": "${record.name}"}, Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
+		{ID: "mysql.table.row.delete", Label: "Delete row", Icon: icon("trash"), RouteID: "mysql.table.row.delete", Params: map[string]string{"database": "${resource.namespace}", "table": "${resource.name}", "key": "${record._key_json}"}, Confirm: true, ConfirmText: "Delete selected row(s)? This cannot be undone.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "_key_json", Op: plugin.OpNotEmpty}}}},
 		{ID: "mysql.table.truncate", Label: "Truncate", Icon: icon("eraser"), RouteID: "mysql.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted.", Group: "Danger zone"},
 		{ID: "mysql.table.drop", Label: "Drop table", Icon: icon("trash-2"), RouteID: "mysql.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted.", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}, Group: "Danger zone"},
 		{ID: "mysql.table.rename", Label: "Rename table", Icon: icon("pencil"), RouteID: "mysql.table.rename", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},

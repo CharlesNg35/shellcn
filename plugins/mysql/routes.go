@@ -1353,6 +1353,9 @@ func keyedRowMutation(rc *plugin.RequestContext, del bool) (any, error) {
 	if err := rc.Bind(&m); err != nil {
 		return nil, err
 	}
+	if err := applyRowKeyParam(rc, &m); err != nil {
+		return nil, err
+	}
 	pk, err := primaryKeyColumns(rc.Ctx, s, database, table)
 	if err != nil {
 		return nil, err
@@ -1380,6 +1383,23 @@ func keyedRowMutation(rc *plugin.RequestContext, del bool) (any, error) {
 		return nil, fmt.Errorf("%w: row no longer matches (it may have changed)", plugin.ErrNotFound)
 	}
 	return actionResult{OK: true}, nil
+}
+
+func applyRowKeyParam(rc *plugin.RequestContext, m *sqldb.RowMutation) error {
+	if len(m.Key) > 0 {
+		return nil
+	}
+	raw := rc.Param("key")
+	if raw == "" {
+		raw = rc.Query().Get("p.key")
+	}
+	if raw == "" {
+		return nil
+	}
+	if err := json.Unmarshal([]byte(raw), &m.Key); err != nil {
+		return fmt.Errorf("%w: invalid row key", plugin.ErrInvalidInput)
+	}
+	return nil
 }
 
 // columnNames returns a table's column names in order, for building the data
@@ -1430,6 +1450,9 @@ func attachRowKeys(rows []plugin.TableRow, pk, patterns []string) {
 			key[col] = r[col]
 		}
 		r["_key"] = key
+		if encoded, err := json.Marshal(key); err == nil {
+			r["_key_json"] = string(encoded)
+		}
 	}
 }
 

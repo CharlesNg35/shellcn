@@ -276,6 +276,28 @@ describe("ActionBar", () => {
     w.unmount();
   });
 
+  it("hides a row action requiring a non-empty field when the field is missing", () => {
+    const deleteRow: Action = {
+      id: "postgresql.table.row.delete",
+      label: "Delete row",
+      routeId: "postgresql.table.row.delete",
+      risk: RiskLevel.Destructive,
+      requiresConfirm: true,
+      visibleWhen: { allOf: [{ field: "_key_json", op: "notEmpty" }] },
+    };
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [deleteRow],
+        record: { name: "keyless" },
+      },
+    });
+
+    expect(bodyButton("Delete row")).toBeUndefined();
+    w.unmount();
+  });
+
   it("clusters same-group actions into one dropdown and keeps ungrouped ones as buttons", () => {
     const grouped: Action[] = [
       {
@@ -336,6 +358,46 @@ describe("ActionBar", () => {
     expect(bodyButton("Act0")).toBeTruthy();
     expect(bodyButton("Act3")).toBeTruthy();
     expect(bodyButton("Act4")).toBeUndefined();
+    w.unmount();
+  });
+
+  it("honors a tighter inline action limit", () => {
+    const actions: Action[] = [
+      {
+        id: "inspect",
+        label: "Inspect",
+        routeId: "r.inspect",
+        risk: RiskLevel.Safe,
+        requiresConfirm: false,
+      },
+      {
+        id: "rename",
+        label: "Rename",
+        routeId: "r.rename",
+        risk: RiskLevel.Write,
+        requiresConfirm: false,
+      },
+      {
+        id: "delete",
+        label: "Delete",
+        routeId: "r.delete",
+        risk: RiskLevel.Destructive,
+        requiresConfirm: false,
+      },
+    ];
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: { connectionId: "c1", actions, maxInline: 2 },
+    });
+
+    expect(bodyButton("Inspect")).toBeTruthy();
+    expect(bodyButton("Rename")).toBeUndefined();
+    expect(bodyButton("Delete")).toBeUndefined();
+    expect(
+      [...document.body.querySelectorAll("button")].some(
+        (b) => b.getAttribute("aria-label") === "More actions",
+      ),
+    ).toBe(true);
     w.unmount();
   });
 

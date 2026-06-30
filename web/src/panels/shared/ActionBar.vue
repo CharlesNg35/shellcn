@@ -16,15 +16,26 @@ import { cn } from "@/utils/cn";
 
 const dock = useDockStore();
 
-const props = defineProps<{
-  connectionId: string;
-  actions: Action[];
-  resource?: ResourceIdentity | null;
-  record?: Row | null;
-  resources?: ResourceIdentity[] | null;
-  records?: Row[] | null;
-  scope?: Record<string, string> | null;
-}>();
+const props = withDefaults(
+  defineProps<{
+    connectionId: string;
+    actions: Action[];
+    resource?: ResourceIdentity | null;
+    record?: Row | null;
+    resources?: ResourceIdentity[] | null;
+    records?: Row[] | null;
+    scope?: Record<string, string> | null;
+    maxInline?: number;
+  }>(),
+  {
+    resource: null,
+    record: null,
+    resources: null,
+    records: null,
+    scope: null,
+    maxInline: 5,
+  },
+);
 
 interface ActionTarget {
   resource: ResourceIdentity | null;
@@ -71,7 +82,16 @@ function recordMatches(
 ): boolean {
   const r = rec as Record<string, unknown>;
   const rules = [...(cond.allOf ?? []), ...(cond.anyOf ?? [])];
-  if (rules.some((x) => resolveField(r, x.field) === undefined)) return true;
+  if (
+    rules.some(
+      (x) =>
+        resolveField(r, x.field) === undefined &&
+        x.op !== "empty" &&
+        x.op !== "notEmpty",
+    )
+  ) {
+    return true;
+  }
   return isVisible(cond, r);
 }
 
@@ -115,7 +135,6 @@ const riskClass: Record<RiskLevel, string> = {
   [RiskLevel.Privileged]: "bg-amber-600 text-white hover:bg-amber-700",
 };
 
-const MAX_INLINE = 5;
 const triggerClass =
   "inline-flex min-w-0 items-center justify-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors " +
   riskClass.safe;
@@ -150,12 +169,13 @@ const renderUnits = computed<RenderUnit[]>(() => {
 
 const layout = computed<{ visible: RenderUnit[]; overflow: Action[] }>(() => {
   const units = renderUnits.value;
-  if (units.length <= MAX_INLINE) return { visible: units, overflow: [] };
+  const maxInline = Math.max(1, props.maxInline);
+  if (units.length <= maxInline) return { visible: units, overflow: [] };
   const visible = [...units];
   const overflow: Action[] = [];
   for (
     let i = visible.length - 1;
-    i >= 0 && visible.length > MAX_INLINE - 1;
+    i >= 0 && visible.length > maxInline - 1;
     i--
   ) {
     const u = visible[i];
@@ -404,7 +424,7 @@ function onVisible(visible: boolean): void {
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-2">
+  <div class="flex min-w-0 flex-wrap items-center gap-2">
     <template
       v-for="unit in layout.visible"
       :key="unit.kind === 'menu' ? unit.key : unit.action.id"

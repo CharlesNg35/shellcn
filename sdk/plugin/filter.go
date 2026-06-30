@@ -7,11 +7,12 @@ import (
 
 // reservedFilterKeys are framework identity/navigation fields hidden from search.
 var reservedFilterKeys = map[string]bool{
-	"ref":    true,
-	"_id":    true,
-	"_key":   true,
-	"_links": true,
-	"__rid":  true,
+	"ref":       true,
+	"_id":       true,
+	"_key":      true,
+	"_key_json": true,
+	"_links":    true,
+	"__rid":     true,
 }
 
 // FilterRows applies the table's case-insensitive free-text search.

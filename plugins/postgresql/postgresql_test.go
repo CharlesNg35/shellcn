@@ -84,16 +84,36 @@ func TestAttachRowKeysOnlyWithPrimaryKey(t *testing.T) {
 	if !ok || key["id"] != int64(7) {
 		t.Fatalf("expected _key from primary key, got %#v", withPK[0])
 	}
+	if withPK[0]["_key_json"] != `{"id":7}` {
+		t.Fatalf("expected _key_json from primary key, got %#v", withPK[0])
+	}
 	keyless := []plugin.TableRow{{"name": "a"}}
 	attachRowKeys(keyless, nil, nil)
 	if _, ok := keyless[0]["_key"]; ok {
 		t.Fatal("keyless tables must stay read-only (no _key)")
+	}
+	if _, ok := keyless[0]["_key_json"]; ok {
+		t.Fatal("keyless tables must not expose _key_json")
 	}
 	// A primary key that is itself sensitive must not be shipped raw via _key.
 	secretPK := []plugin.TableRow{{"api_key": "live_xyz", "name": "a"}}
 	attachRowKeys(secretPK, []string{"api_key"}, sqldb.DefaultRedactColumnPatterns())
 	if _, ok := secretPK[0]["_key"]; ok {
 		t.Fatal("tables keyed by a sensitive column must stay read-only (no _key leak)")
+	}
+	if _, ok := secretPK[0]["_key_json"]; ok {
+		t.Fatal("tables keyed by a sensitive column must not expose _key_json")
+	}
+}
+
+func TestApplyRowKeyParam(t *testing.T) {
+	m := sqldb.RowMutation{}
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{}, nil, map[string]string{"key": `{"id":7}`}, nil, nil)
+	if err := applyRowKeyParam(rc, &m); err != nil {
+		t.Fatalf("apply key param: %v", err)
+	}
+	if m.Key["id"] != float64(7) {
+		t.Fatalf("unexpected key: %#v", m.Key)
 	}
 }
 
@@ -172,6 +192,9 @@ func TestTableDataGridIsEditable(t *testing.T) {
 	tc, ok := data.Config.(plugin.TableConfig)
 	if !ok || !tc.Editable {
 		t.Fatalf("Data tab must be editable: %#v", data.Config)
+	}
+	if !slices.Contains(tc.RowActionIDs, "postgresql.table.row.delete") {
+		t.Fatalf("Data tab must expose row delete action: %#v", tc.RowActionIDs)
 	}
 	for key, ds := range map[string]*plugin.DataSource{"insert": tc.Insert, "update": tc.Update, "delete": tc.Delete} {
 		if ds == nil {

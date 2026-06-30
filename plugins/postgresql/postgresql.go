@@ -253,6 +253,7 @@ func dataGridConfig() plugin.TableConfig {
 	return plugin.TableConfig{
 		Editable:      true,
 		StagedEdits:   true,
+		RowActionIDs:  []string{"postgresql.table.row.delete"},
 		Exportable:    true,
 		EmptyText:     "No rows.",
 		Insert:        &plugin.DataSource{RouteID: "postgresql.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
@@ -376,6 +377,7 @@ func actions() []plugin.Action {
 		{ID: "postgresql.table.rename", Label: "Rename table", Icon: icon("pencil"), RouteID: "postgresql.table.rename", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 		{ID: "postgresql.index.create", Label: "Create index", Icon: icon("plus"), RouteID: "postgresql.index.create", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: "postgresql.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "postgresql.index.drop", Params: map[string]string{"schema": "${record.schema}", "table": "${record.table}", "name": "${record.name}"}, Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
+		{ID: "postgresql.table.row.delete", Label: "Delete row", Icon: icon("trash"), RouteID: "postgresql.table.row.delete", Params: map[string]string{"database": "${resource.scope}", "schema": "${resource.namespace}", "table": "${resource.name}", "key": "${record._key_json}"}, Confirm: true, ConfirmText: "Delete selected row(s)? This cannot be undone.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "_key_json", Op: plugin.OpNotEmpty}}}},
 		{ID: "postgresql.table.truncate", Label: "Truncate", Icon: icon("eraser"), RouteID: "postgresql.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted."},
 		{ID: "postgresql.table.drop", Label: "Drop table", Icon: icon("trash-2"), RouteID: "postgresql.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted.", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 		{ID: "postgresql.view.drop", Label: "Drop view", Icon: icon("trash-2"), RouteID: "postgresql.view.drop", Params: map[string]string{"database": "${resource.scope}", "schema": "${resource.namespace}", "view": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this view?", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
