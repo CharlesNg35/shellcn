@@ -24,6 +24,7 @@ type ProjectedAction struct {
 	RouteID         string            `json:"routeId"`
 	Method          Method            `json:"method,omitempty"`
 	Params          map[string]string `json:"params,omitempty"`
+	Body            map[string]any    `json:"body,omitempty"`
 	Risk            RiskLevel         `json:"risk"`
 	RequiresConfirm bool              `json:"requiresConfirm"`
 	ConfirmText     string            `json:"confirmText,omitempty"`
@@ -36,6 +37,7 @@ type ProjectedAction struct {
 	VisibleWhen     *Condition        `json:"visibleWhen,omitempty"`
 	IconOnly        bool              `json:"iconOnly,omitempty"`
 	Group           string            `json:"group,omitempty"`
+	Bulk            bool              `json:"bulk,omitempty"`
 }
 
 // ProjectedRecording tells the browser which recording options a plugin offers
@@ -128,6 +130,7 @@ func BuildProjection(m Manifest, routes map[string]Route) Projection {
 				Icon:            a.Icon,
 				RouteID:         a.RouteID,
 				Params:          a.Params,
+				Body:            a.Body,
 				RequiresConfirm: a.Confirm,
 				ConfirmText:     a.ConfirmText,
 				OnSuccess:       a.OnSuccess,
@@ -138,6 +141,7 @@ func BuildProjection(m Manifest, routes map[string]Route) Projection {
 				VisibleWhen:     a.VisibleWhen,
 				IconOnly:        a.IconOnly,
 				Group:           a.Group,
+				Bulk:            a.Bulk,
 			}
 			if rt, ok := routes[a.RouteID]; ok {
 				pa.Method = rt.Method

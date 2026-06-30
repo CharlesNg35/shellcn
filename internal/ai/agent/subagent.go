@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	subagentMaxSteps     = 8
+	subagentMaxSteps     = 15
 	subagentMaxOutTokens = 2048
 )
 

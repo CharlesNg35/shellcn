@@ -14,6 +14,7 @@ import CodeDiffView from "../shared/CodeDiffView.vue";
 import { dialogRoot } from "@/primevue/preset";
 import { useDirtyGuard } from "../shared/useDirtyGuard";
 import { useNotify } from "@/composables/useNotify";
+import { useConnectionInvalidationRefresh } from "../shared/useConnectionInvalidationRefresh";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{ close: [] }>();
@@ -127,6 +128,17 @@ async function load(): Promise<void> {
 async function guardedLoad(): Promise<void> {
   await confirmBeforeDiscard(load);
 }
+
+useConnectionInvalidationRefresh({
+  connectionId: () => props.connectionId,
+  refresh: load,
+  canRefresh: () =>
+    !changed.value &&
+    !saving.value &&
+    !previewing.value &&
+    !showDiff.value &&
+    !loading.value,
+});
 
 // onServerPush updates the editor in place when clean, and stashes the change
 // behind a notice when the user has unsaved edits so work is never clobbered.

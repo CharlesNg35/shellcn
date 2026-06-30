@@ -429,6 +429,7 @@ func actions() []plugin.Action {
 			Confirm:     true,
 			ConfirmText: "Stop this running Proxmox task?",
 			EnabledWhen: whenStatus("running"),
+			Bulk:        true,
 		},
 	)
 	return append(acts, plugin.Action{
@@ -436,6 +437,7 @@ func actions() []plugin.Action {
 		Params:  map[string]string{"node": "${resource.namespace}", "storage": "${resource.name}", "volume": "${resource.uid}"},
 		Confirm: true, ConfirmText: "Delete this backup archive? This cannot be undone.",
 		VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "content", Op: plugin.OpEq, Value: "backup"}}},
+		Bulk:        true,
 	})
 }
 
@@ -467,7 +469,7 @@ func lifecycleActions(kind string) []plugin.Action {
 	snapParams := map[string]string{"node": "${resource.namespace}", "vmid": "${resource.name}", "snapname": "${resource.uid}"}
 	return append(acts,
 		plugin.Action{ID: "act." + kind + ".snapshot.rollback", Label: "Rollback", Icon: icon("rotate-cw"), RouteID: "proxmox." + kind + ".snapshot.rollback", Params: snapParams, Confirm: true, ConfirmText: "Roll back to this snapshot? Current state is lost.", VisibleWhen: instanceOnly()},
-		plugin.Action{ID: "act." + kind + ".snapshot.delete", Label: "Delete", Icon: icon("trash"), RouteID: "proxmox." + kind + ".snapshot.delete", Params: snapParams, Confirm: true, ConfirmText: "Delete this snapshot?", VisibleWhen: instanceOnly()},
+		plugin.Action{ID: "act." + kind + ".snapshot.delete", Label: "Delete", Icon: icon("trash"), RouteID: "proxmox." + kind + ".snapshot.delete", Params: snapParams, Confirm: true, ConfirmText: "Delete this snapshot?", VisibleWhen: instanceOnly(), Bulk: true},
 		plugin.Action{ID: "act." + kind + ".backup.restore", Label: "Restore", Icon: icon("upload"), RouteID: "proxmox." + kind + ".restore", Params: map[string]string{"node": "${resource.namespace}", "archive": "${resource.uid}"}, Confirm: true, ConfirmText: "Restore this backup archive. Existing guests can be overwritten only when enabled in the form.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "content", Op: plugin.OpEq, Value: "backup"}, {Field: "guestType", Op: plugin.OpEq, Value: kind}}}},
 	)
 }

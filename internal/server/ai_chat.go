@@ -254,6 +254,7 @@ func (s *Server) handleAITurn(w http.ResponseWriter, r *http.Request) {
 		User: user, ConnID: conn.ID, Protocol: conn.Protocol,
 		ConnectionTitle: conn.Name, AIMode: connectionAIMode(conn),
 		AllowDestructive: conn.AIAllowDestructive,
+		AutoApprove:      conn.AIAutoApprove,
 		Scope:            ai.Scope{ProviderID: providerID},
 		ConversationID:   convID,
 		UserMessage:      req.Content,

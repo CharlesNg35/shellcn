@@ -20,7 +20,7 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
-const defaultMaxSteps = 12
+const defaultMaxSteps = 20
 
 var titleGenerationTimeout = 8 * time.Second
 
@@ -78,6 +78,7 @@ type RunInput struct {
 	ConnectionTitle  string
 	AIMode           models.AIMode
 	AllowDestructive bool
+	AutoApprove      bool
 	Scope            Scope
 	ConversationID   string // when set (with memory wired), history is persisted
 	History          []engine.Message
@@ -104,7 +105,9 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 	if err != nil {
 		return err
 	}
-	if in.Confirm != nil {
+	if in.AutoApprove {
+		toolset.WithAutoApprove()
+	} else if in.Confirm != nil {
 		toolset.WithConfirmer(in.Confirm)
 	}
 

@@ -47,14 +47,27 @@ describe("useAiMessageScroll", () => {
     stick.stopScroll.mockClear();
   });
 
-  it("does not force-scroll when the user has escaped the bottom lock", async () => {
+  it("does not auto-scroll for assistant messages after the user scrolled up", async () => {
+    const { messages } = setup();
+    stick.escapedFromLock.value = true;
+
+    messages.value = [message({ id: "a1", role: "assistant", content: "hi" })];
+    await flushScrollWatchers();
+
+    expect(stick.scrollToBottom).not.toHaveBeenCalled();
+  });
+
+  it("always scrolls to the bottom on send, even after the user scrolled up", async () => {
     const { messages } = setup();
     stick.escapedFromLock.value = true;
 
     messages.value = [message({ id: "u1", role: "user", content: "hello" })];
     await flushScrollWatchers();
 
-    expect(stick.scrollToBottom).not.toHaveBeenCalled();
+    expect(stick.scrollToBottom).toHaveBeenCalledWith({
+      animation: "smooth",
+      wait: true,
+    });
   });
 
   it("auto-follows new user messages without disabling user escape", async () => {

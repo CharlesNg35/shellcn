@@ -104,6 +104,27 @@ describe("AiModelSwitcher", () => {
     expect(wrapper.emitted("select")).toEqual([["p2"]]);
   });
 
+  it("renders the shared provider label when it is selected (empty id)", () => {
+    const wrapper = mount(AiModelSwitcher, {
+      props: {
+        providers: [provider()],
+        global: {
+          configured: true,
+          provider: "Shared Ollama",
+          model: "nemotron",
+        },
+        providerId: "",
+      },
+    });
+    const select = wrapper.findComponent({ name: "Select" });
+    // Non-empty value so PrimeVue renders the label instead of a blank.
+    expect(select.props("modelValue")).toBeTruthy();
+    expect(select.attributes("title")).toBe("Shared Ollama - nemotron");
+    // Choosing the shared option maps back to the empty-id contract.
+    select.vm.$emit("update:modelValue", select.props("modelValue"));
+    expect(wrapper.emitted("select")).toEqual([[""]]);
+  });
+
   it("renders the first available provider when the selected provider is stale", () => {
     const wrapper = mount(AiModelSwitcher, {
       props: {

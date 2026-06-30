@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -61,26 +60,36 @@ type RouteSource interface {
 
 // binding records how to call a route from a sanitized tool name.
 type binding struct {
-	routeID string
-	risk    plugin.RiskLevel
-	params  map[string]bool
-	stream  bool
+	routeID          string
+	risk             plugin.RiskLevel
+	params           map[string]bool
+	bodyDefaults     map[string]any
+	structuredFields map[string]string
+	requiredBody     map[string]bool
+	stream           bool
 }
 
 // ToolSet is the risk-gated tool catalogue for one connection. It implements
 // engine.ToolExecutor.
 type ToolSet struct {
-	specs     []engine.ToolSpec
-	byName    map[string]binding
-	invoker   Invoker
-	user      models.User
-	connID    string
-	confirmer Confirmer
+	specs       []engine.ToolSpec
+	byName      map[string]binding
+	invoker     Invoker
+	user        models.User
+	connID      string
+	confirmer   Confirmer
+	autoApprove bool
 }
 
 // WithConfirmer attaches a confirmer that gates write/destructive tool calls.
 func (ts *ToolSet) WithConfirmer(c Confirmer) *ToolSet {
 	ts.confirmer = c
+	return ts
+}
+
+// WithAutoApprove runs allowed mutation tools without a user confirmation round-trip.
+func (ts *ToolSet) WithAutoApprove() *ToolSet {
+	ts.autoApprove = true
 	return ts
 }
 
@@ -92,7 +101,7 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 	}
 	ts := &ToolSet{byName: map[string]binding{}, invoker: invoker, user: user, connID: connID}
 	manifest := plg.Manifest()
-	manifestParams := routeParamIndex(manifest)
+	contracts := inferRouteContracts(manifest)
 	streams := textObservableStreams(manifest)
 	_, canObserveStreams := invoker.(StreamInvoker)
 	for _, r := range plg.Routes() {
@@ -105,12 +114,22 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 				continue
 			}
 			params := templateParamNames(r.Path)
-			routeParams := mergeRouteParams(params, manifestParams[r.ID])
-			ts.byName[name] = binding{routeID: r.ID, risk: r.Risk, params: routeParamSet(routeParams), stream: true}
+			routeParams := mergeRouteParams(params, contracts.params[r.ID])
+			schema := toStreamJSONSchema(r, params, routeParams, contracts.inputs[r.ID])
+			paramsSet := routeParamSet(routeParams)
+			ts.byName[name] = binding{
+				routeID:          r.ID,
+				risk:             r.Risk,
+				params:           paramsSet,
+				bodyDefaults:     contracts.bodyDefaults[r.ID],
+				structuredFields: structuredFields(schema, paramsSet),
+				requiredBody:     requiredBodyFields(schema, paramsSet),
+				stream:           true,
+			}
 			ts.specs = append(ts.specs, engine.ToolSpec{
 				Name:        name,
 				Description: describeStream(r, routeParams),
-				Parameters:  toStreamJSONSchema(r, params, routeParams),
+				Parameters:  schema,
 			})
 			continue
 		}
@@ -122,12 +141,21 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 			continue
 		}
 		params := templateParamNames(r.Path)
-		routeParams := mergeRouteParams(params, manifestParams[r.ID])
-		ts.byName[name] = binding{routeID: r.ID, risk: r.Risk, params: routeParamSet(routeParams)}
+		routeParams := mergeRouteParams(params, contracts.params[r.ID])
+		schema := toJSONSchema(r, params, routeParams, contracts.inputs[r.ID])
+		paramsSet := routeParamSet(routeParams)
+		ts.byName[name] = binding{
+			routeID:          r.ID,
+			risk:             r.Risk,
+			params:           paramsSet,
+			bodyDefaults:     contracts.bodyDefaults[r.ID],
+			structuredFields: structuredFields(schema, paramsSet),
+			requiredBody:     requiredBodyFields(schema, paramsSet),
+		}
 		ts.specs = append(ts.specs, engine.ToolSpec{
 			Name:        name,
 			Description: describe(r, routeParams),
-			Parameters:  toJSONSchema(r, params, routeParams),
+			Parameters:  schema,
 		})
 	}
 	sort.Slice(ts.specs, func(i, j int) bool { return ts.specs[i].Name < ts.specs[j].Name })
@@ -148,12 +176,21 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 	}
 	params := map[string]string{}
 	body := map[string]any{}
+	for k, v := range b.bodyDefaults {
+		body[k] = v
+	}
 	for k, v := range call.Input {
 		if b.params[k] || (b.stream && !streamControlParam(k)) {
 			params[k] = fmt.Sprint(v)
 			continue
 		}
 		body[k] = v
+	}
+	if err := normalizeStructuredFields(body, b.structuredFields); err != nil {
+		return nil, fmt.Errorf("tool %q: %w", call.Name, err)
+	}
+	if err := requireBodyFields(body, b.requiredBody); err != nil {
+		return nil, fmt.Errorf("tool %q: %w", call.Name, err)
 	}
 	if b.stream {
 		opts := streamOptions(body)
@@ -165,7 +202,7 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 		}
 		return clean(result), nil
 	}
-	if b.risk == plugin.RiskWrite || b.risk == plugin.RiskDestructive {
+	if requiresConfirmation(b.risk) && !ts.autoApprove {
 		if ts.confirmer == nil {
 			return nil, fmt.Errorf("tool %q requires user confirmation", call.Name)
 		}
@@ -199,7 +236,28 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 	if err != nil {
 		return nil, err
 	}
+	if invalidatesWorkspace(b.risk) {
+		engine.Progress(ctx)(engine.StreamEvent{
+			Type: engine.EventWorkspaceInvalidated,
+			Invalidation: &engine.WorkspaceInvalidation{
+				ConnectionID: ts.connID,
+				RouteID:      b.routeID,
+				Risk:         string(b.risk),
+				Params:       params,
+				ToolName:     call.Name,
+				ToolID:       call.ID,
+			},
+		})
+	}
 	return clean(result), nil
+}
+
+func invalidatesWorkspace(risk plugin.RiskLevel) bool {
+	return risk == plugin.RiskWrite || risk == plugin.RiskDestructive || risk == plugin.RiskPrivileged
+}
+
+func requiresConfirmation(risk plugin.RiskLevel) bool {
+	return risk == plugin.RiskWrite || risk == plugin.RiskDestructive
 }
 
 // clean marks and truncates oversized tool output.
@@ -352,7 +410,7 @@ func sanitizeName(id string) string {
 }
 
 // toJSONSchema flattens route input and route params for the model.
-func toJSONSchema(r plugin.Route, pathParams, routeParams []string) map[string]any {
+func toJSONSchema(r plugin.Route, pathParams, routeParams []string, inferred *plugin.Schema) map[string]any {
 	props := map[string]any{}
 	var required []string
 
@@ -368,8 +426,12 @@ func toJSONSchema(r plugin.Route, pathParams, routeParams []string) map[string]a
 		props[p] = map[string]any{"type": "string", "description": "route scope parameter from the plugin manifest"}
 	}
 
-	if r.Input != nil {
-		for _, g := range r.Input.Groups {
+	input := r.Input
+	if input == nil {
+		input = inferred
+	}
+	if input != nil {
+		for _, g := range input.Groups {
 			for _, f := range g.Fields {
 				schema, ok := fieldSchema(f)
 				if !ok {
@@ -390,8 +452,8 @@ func toJSONSchema(r plugin.Route, pathParams, routeParams []string) map[string]a
 	return schema
 }
 
-func toStreamJSONSchema(r plugin.Route, pathParams, routeParams []string) map[string]any {
-	schema := toJSONSchema(r, pathParams, routeParams)
+func toStreamJSONSchema(r plugin.Route, pathParams, routeParams []string, inferred *plugin.Schema) map[string]any {
+	schema := toJSONSchema(r, pathParams, routeParams, inferred)
 	props, _ := schema["properties"].(map[string]any)
 	if props == nil {
 		props = map[string]any{}
@@ -419,6 +481,103 @@ func toStreamJSONSchema(r plugin.Route, pathParams, routeParams []string) map[st
 		"maximum":     500,
 	}
 	return schema
+}
+
+func structuredFields(schema map[string]any, params map[string]bool) map[string]string {
+	props, _ := schema["properties"].(map[string]any)
+	if len(props) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for key, raw := range props {
+		if params[key] {
+			continue
+		}
+		prop, _ := raw.(map[string]any)
+		typ, _ := prop["type"].(string)
+		switch typ {
+		case "object", "array":
+			out[key] = typ
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func requiredBodyFields(schema map[string]any, params map[string]bool) map[string]bool {
+	raw, _ := schema["required"].([]string)
+	if len(raw) == 0 {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, key := range raw {
+		if !params[key] {
+			out[key] = true
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func normalizeStructuredFields(body map[string]any, fields map[string]string) error {
+	for key, typ := range fields {
+		value, ok := body[key]
+		if !ok {
+			continue
+		}
+		text, ok := value.(string)
+		if !ok {
+			continue
+		}
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
+		var decoded any
+		if err := json.Unmarshal([]byte(text), &decoded); err != nil {
+			return fmt.Errorf("%s must be a JSON %s, not a string", key, typ)
+		}
+		if typ == "object" {
+			if _, ok := decoded.(map[string]any); !ok {
+				return fmt.Errorf("%s must be a JSON object", key)
+			}
+		}
+		if typ == "array" {
+			if _, ok := decoded.([]any); !ok {
+				return fmt.Errorf("%s must be a JSON array", key)
+			}
+		}
+		body[key] = decoded
+	}
+	return nil
+}
+
+func requireBodyFields(body map[string]any, required map[string]bool) error {
+	for key := range required {
+		value, ok := body[key]
+		if !ok || emptyToolValue(value) {
+			return fmt.Errorf("%s is required", key)
+		}
+	}
+	return nil
+}
+
+func emptyToolValue(value any) bool {
+	if value == nil {
+		return true
+	}
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v) == ""
+	case []any:
+		return len(v) == 0
+	default:
+		return false
+	}
 }
 
 func streamOptions(input map[string]any) engine.StreamSampleOptions {
@@ -491,68 +650,6 @@ func textObservableStreamKind(kind plugin.StreamKind) bool {
 	}
 }
 
-func routeParamIndex(m plugin.Manifest) map[string]map[string]bool {
-	out := map[string]map[string]bool{}
-	add := func(routeID string, params map[string]string) {
-		if strings.TrimSpace(routeID) == "" {
-			return
-		}
-		for key := range params {
-			if strings.TrimSpace(key) == "" {
-				continue
-			}
-			if out[routeID] == nil {
-				out[routeID] = map[string]bool{}
-			}
-			out[routeID][key] = true
-		}
-	}
-
-	dataSourceType := reflect.TypeOf(plugin.DataSource{})
-	actionType := reflect.TypeOf(plugin.Action{})
-	var walk func(reflect.Value)
-	walk = func(v reflect.Value) {
-		if !v.IsValid() {
-			return
-		}
-		for v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer {
-			if v.IsNil() {
-				return
-			}
-			v = v.Elem()
-		}
-		if v.Type() == dataSourceType {
-			ds := v.Interface().(plugin.DataSource)
-			add(ds.RouteID, ds.Params)
-			return
-		}
-		if v.Type() == actionType {
-			a := v.Interface().(plugin.Action)
-			add(a.RouteID, a.Params)
-		}
-		switch v.Kind() {
-		case reflect.Struct:
-			for i := 0; i < v.NumField(); i++ {
-				if v.Type().Field(i).PkgPath != "" {
-					continue
-				}
-				walk(v.Field(i))
-			}
-		case reflect.Slice, reflect.Array:
-			for i := 0; i < v.Len(); i++ {
-				walk(v.Index(i))
-			}
-		case reflect.Map:
-			iter := v.MapRange()
-			for iter.Next() {
-				walk(iter.Value())
-			}
-		}
-	}
-	walk(reflect.ValueOf(m))
-	return out
-}
-
 func mergeRouteParams(pathParams []string, manifestParams map[string]bool) []string {
 	seen := map[string]bool{}
 	out := make([]string, 0, len(pathParams)+len(manifestParams))
@@ -597,6 +694,7 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 	case plugin.FieldMultiSelect:
 		out["type"] = "array"
 		out["items"] = map[string]any{"type": "string"}
+		appendDescription(out, "Send as a JSON array, not a comma-separated string.")
 	case plugin.FieldArray:
 		out["type"] = "array"
 		if f.Item != nil {
@@ -608,6 +706,7 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 		} else {
 			out["items"] = map[string]any{"type": "string"}
 		}
+		appendDescription(out, "Send as a JSON array, not a SQL fragment or string.")
 	case plugin.FieldObject:
 		out["type"] = "object"
 		props := map[string]any{}
@@ -629,6 +728,7 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 		if len(required) > 0 {
 			out["required"] = required
 		}
+		appendDescription(out, "Send as a JSON object, not a quoted JSON string.")
 	case plugin.FieldMap:
 		out["type"] = "object"
 		if f.Item != nil {
@@ -638,8 +738,10 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 			}
 			out["additionalProperties"] = item
 		}
+		appendDescription(out, "Send as a JSON object with dynamic keys, not a quoted JSON string.")
 	case plugin.FieldJSON:
 		out["type"] = "object"
+		appendDescription(out, "Send parsed JSON, not a quoted JSON string.")
 	default:
 		out["type"] = "string"
 	}
@@ -663,6 +765,17 @@ func fieldSchema(f plugin.Field) (map[string]any, bool) {
 		applyValidator(out, v)
 	}
 	return out, true
+}
+
+func appendDescription(out map[string]any, extra string) {
+	if extra == "" {
+		return
+	}
+	if current, _ := out["description"].(string); strings.TrimSpace(current) != "" {
+		out["description"] = current + " " + extra
+		return
+	}
+	out["description"] = extra
 }
 
 func fieldDescription(f plugin.Field) string {

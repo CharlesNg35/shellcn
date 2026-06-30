@@ -43,6 +43,7 @@ export interface ConnectionSummary {
   recording?: Record<string, string>;
   aiMode?: string;
   aiAllowDestructive?: boolean;
+  aiAutoApprove?: boolean;
   folderId?: string;
   sortOrder?: number;
 }
@@ -98,6 +99,7 @@ export interface ConnectionDetail {
   recording?: Record<string, string>;
   aiMode?: string;
   aiAllowDestructive?: boolean;
+  aiAutoApprove?: boolean;
 }
 
 export interface CredentialRefState {

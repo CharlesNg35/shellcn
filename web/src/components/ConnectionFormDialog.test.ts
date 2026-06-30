@@ -10,6 +10,7 @@ import { useAuthStore } from "../stores/auth";
 import { Role } from "../constants/roles";
 import ProtocolPicker from "./ProtocolPicker.vue";
 import SchemaForm from "../panels/form/SchemaForm.vue";
+import ConnectionAiSettings from "./ConnectionAiSettings.vue";
 import type { PluginProjection } from "../types/projection";
 import { Layout } from "../types/projection";
 
@@ -295,6 +296,53 @@ describe("ConnectionFormDialog", () => {
     // Protocol is a card picker and there's no recording select for an
     // unsupported plugin, so no Select is rendered at all.
     expect(wrapper.findAllComponents(Select)).toHaveLength(0);
+  });
+
+  it("posts connection AI auto-approval settings", async () => {
+    let posted: Record<string, unknown> | null = null;
+    installFetch((url, init) => {
+      if (url.endsWith("/api/plugins/tester")) return { body: projection };
+      if (url.endsWith("/api/ai/global")) {
+        return { body: { configured: true, usable: true } };
+      }
+      if (url.endsWith("/api/me/ai/config")) return { body: [] };
+      if (url.endsWith("/api/connections") && init?.method === "POST") {
+        posted = JSON.parse(String(init.body));
+        return { status: 201, body: { id: "conn-ai", name: posted?.name } };
+      }
+      return { body: [] };
+    });
+    const conns = useConnectionsStore();
+    conns.plugins = [
+      {
+        name: "tester",
+        title: "Tester",
+        icon: { type: "lucide", value: "box" },
+        category: projection.category,
+      },
+    ];
+
+    const wrapper = mount(ConnectionFormDialog, { props: { visible: true } });
+    await flushPromises();
+    await wrapper
+      .findComponent(ProtocolPicker)
+      .vm.$emit("update:modelValue", "tester");
+    await flushPromises();
+
+    const ai = wrapper.findComponent(ConnectionAiSettings);
+    ai.vm.$emit("update:mode", "read_write");
+    ai.vm.$emit("update:allowDestructive", true);
+    ai.vm.$emit("update:autoApprove", true);
+    wrapper.findAllComponents(InputText)[0].vm.$emit("update:modelValue", "ai");
+    await flushPromises();
+    wrapper.findComponent(SchemaForm).vm.$emit("submit", { host: "10.0.0.1" });
+    await flushPromises();
+
+    expect(posted).toMatchObject({
+      aiMode: "read_write",
+      aiAllowDestructive: true,
+      aiAutoApprove: true,
+    });
   });
 
   it("passes transport context into the manifest schema", async () => {

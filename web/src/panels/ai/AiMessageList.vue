@@ -117,6 +117,9 @@ const quickStarts = [
             :streaming="streaming && m.id === currentId"
           />
         </TransitionGroup>
+        <!-- Footer (confirm/queue) lives inside the scroll content so it grows
+             the content the library follows, rather than resizing the viewport. -->
+        <slot name="footer" />
       </div>
     </div>
 

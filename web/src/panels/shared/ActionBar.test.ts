@@ -276,6 +276,28 @@ describe("ActionBar", () => {
     w.unmount();
   });
 
+  it("hides a row action requiring a non-empty field when the field is missing", () => {
+    const deleteRow: Action = {
+      id: "postgresql.table.row.delete",
+      label: "Delete row",
+      routeId: "postgresql.table.row.delete",
+      risk: RiskLevel.Destructive,
+      requiresConfirm: true,
+      visibleWhen: { allOf: [{ field: "_key", op: "notEmpty" }] },
+    };
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [deleteRow],
+        record: { name: "keyless" },
+      },
+    });
+
+    expect(bodyButton("Delete row")).toBeUndefined();
+    w.unmount();
+  });
+
   it("clusters same-group actions into one dropdown and keeps ungrouped ones as buttons", () => {
     const grouped: Action[] = [
       {
@@ -339,6 +361,46 @@ describe("ActionBar", () => {
     w.unmount();
   });
 
+  it("honors a tighter inline action limit", () => {
+    const actions: Action[] = [
+      {
+        id: "inspect",
+        label: "Inspect",
+        routeId: "r.inspect",
+        risk: RiskLevel.Safe,
+        requiresConfirm: false,
+      },
+      {
+        id: "rename",
+        label: "Rename",
+        routeId: "r.rename",
+        risk: RiskLevel.Write,
+        requiresConfirm: false,
+      },
+      {
+        id: "delete",
+        label: "Delete",
+        routeId: "r.delete",
+        risk: RiskLevel.Destructive,
+        requiresConfirm: false,
+      },
+    ];
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: { connectionId: "c1", actions, maxInline: 2 },
+    });
+
+    expect(bodyButton("Inspect")).toBeTruthy();
+    expect(bodyButton("Rename")).toBeUndefined();
+    expect(bodyButton("Delete")).toBeUndefined();
+    expect(
+      [...document.body.querySelectorAll("button")].some(
+        (b) => b.getAttribute("aria-label") === "More actions",
+      ),
+    ).toBe(true);
+    w.unmount();
+  });
+
   it("uses declarative action params when provided", async () => {
     const action: Action = {
       ...snapshot,
@@ -358,6 +420,101 @@ describe("ActionBar", () => {
     const url = new URL(posted[0].url, "http://localhost");
     expect(url.searchParams.get("p.node")).toBe("pve1");
     expect(url.searchParams.get("p.vmid")).toBe("101");
+    w.unmount();
+  });
+
+  it("uses declarative action bodies and preserves raw row identity objects", async () => {
+    const action: Action = {
+      id: "postgresql.table.row.delete",
+      label: "Delete row",
+      routeId: "postgresql.table.row.delete",
+      method: "DELETE",
+      risk: RiskLevel.Destructive,
+      requiresConfirm: false,
+      params: {
+        database: "${resource.scope}",
+        schema: "${resource.namespace}",
+        table: "${resource.name}",
+      },
+      body: { key: "${record._key}" },
+    };
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [action],
+        resource: {
+          kind: "table",
+          scope: "app",
+          namespace: "public",
+          name: "users",
+          uid: "app.public.users",
+        },
+        record: { id: 7, name: "alice", _key: { id: 7 } },
+      },
+    });
+
+    await w.find("button").trigger("click");
+    await flushPromises();
+
+    bodyButton("Confirm")!.click();
+    await flushPromises();
+
+    const url = new URL(posted[0].url, "http://localhost");
+    expect(url.searchParams.get("p.database")).toBe("app");
+    expect(url.searchParams.get("p.schema")).toBe("public");
+    expect(url.searchParams.get("p.table")).toBe("users");
+    expect(posted[0].body).toEqual({ key: { id: 7 } });
+    w.unmount();
+  });
+
+  it("hides single-row actions for multi-selection and keeps bulk actions", async () => {
+    const rename: Action = {
+      id: "postgresql.column.rename",
+      label: "Rename",
+      routeId: "postgresql.column.rename",
+      method: "PATCH",
+      risk: RiskLevel.Write,
+      requiresConfirm: false,
+      params: { name: "${record.name}" },
+    };
+    const deleteRow: Action = {
+      id: "postgresql.table.row.delete",
+      label: "Delete",
+      routeId: "postgresql.table.row.delete",
+      method: "DELETE",
+      risk: RiskLevel.Destructive,
+      requiresConfirm: false,
+      params: { table: "${record.table}" },
+      body: { key: "${record._key}" },
+      bulk: true,
+    };
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [rename, deleteRow],
+        records: [
+          { table: "users", name: "id", _key: { id: 1 } },
+          { table: "users", name: "name", _key: { id: 2 } },
+        ],
+      },
+    });
+
+    expect(bodyButton("Rename")).toBeUndefined();
+    expect(bodyButton("Delete")).toBeTruthy();
+
+    await w.find("button").trigger("click");
+    await flushPromises();
+
+    bodyButton("Confirm")!.click();
+    await flushPromises();
+
+    expect(posted).toHaveLength(2);
+    expect(posted.map((p) => p.body)).toEqual([
+      { key: { id: 1 } },
+      { key: { id: 2 } },
+    ]);
     w.unmount();
   });
 

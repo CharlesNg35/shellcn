@@ -34,6 +34,7 @@ const {
   reset,
 } = useRefreshableSource<unknown>(loadDocument, {
   initialValue: () => null,
+  connectionId: () => props.connectionId,
 });
 
 function clearCopiedTimer(): void {

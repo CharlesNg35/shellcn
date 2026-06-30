@@ -76,6 +76,47 @@ function toNode(
   };
 }
 
+function treeNodeIdentity(n: TreeNode): string {
+  return n.ref?.uid ? `ref:${n.ref.uid}` : `key:${n.key}`;
+}
+
+function pvNodeIdentity(n: PVNode): string {
+  const data = n.data as NodeData;
+  return data.ref?.uid ? `ref:${data.ref.uid}` : `key:${String(n.key)}`;
+}
+
+function updateNode(
+  target: PVNode,
+  source: TreeNode,
+  parentPath: string[],
+  groupLabel: string,
+): PVNode {
+  const next = toNode(source, parentPath, groupLabel);
+  target.key = next.key;
+  target.label = next.label;
+  target.leaf = next.leaf;
+  target.data = next.data;
+  if (next.leaf) target.children = undefined;
+  return target;
+}
+
+function reconcileChildren(
+  node: PVNode,
+  items: TreeNode[],
+  parentPath: string[],
+  groupLabel: string,
+): void {
+  const existing = new Map(
+    (node.children ?? []).map((child) => [pvNodeIdentity(child), child]),
+  );
+  node.children = items.map((item) => {
+    const child = existing.get(treeNodeIdentity(item));
+    return child
+      ? updateNode(child, item, parentPath, groupLabel)
+      : toNode(item, parentPath, groupLabel);
+  });
+}
+
 function selectedNodeKey(uid: string): string {
   const found = findNodeByUid(nodes.value, uid);
   return found ? String(found.key) : uid;
@@ -118,11 +159,11 @@ async function loadChildren(
     const page = await fetchPage<TreeNode>(props.connectionId, data.source);
     const groupLabel = data.isGroup
       ? String(node.label ?? "")
-      : data.groupLabel;
+      : (data.groupLabel ?? "");
     const childPath = data.isGroup
       ? []
       : [...(data.parentPath ?? []), String(node.label ?? "")];
-    node.children = page.items.map((n) => toNode(n, childPath, groupLabel));
+    reconcileChildren(node, page.items, childPath, groupLabel);
   } finally {
     if (showLoading) node.loading = false;
   }

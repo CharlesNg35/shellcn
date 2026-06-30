@@ -140,7 +140,7 @@ function approve(): void {
           class="flex cursor-pointer items-center gap-2 text-xs text-surface-600 dark:text-surface-300"
         >
           <Checkbox v-model="remember" binary input-id="ai-remember-confirm" />
-          Always allow for this connection
+          Always allow in this conversation
         </label>
         <div class="ml-auto flex items-center gap-2">
           <Button :pt="{ root: btnGhost }" size="small" @click="emit('reject')">

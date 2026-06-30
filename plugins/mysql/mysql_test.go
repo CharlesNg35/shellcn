@@ -255,6 +255,21 @@ func TestRedactRowsMasksConfiguredColumns(t *testing.T) {
 	}
 }
 
+func TestAttachRowKeysOnlyWithSafePrimaryKey(t *testing.T) {
+	withPK := []plugin.TableRow{{"id": int64(7), "name": "a"}}
+	attachRowKeys(withPK, []string{"id"}, nil)
+	key, ok := withPK[0]["_key"].(map[string]any)
+	if !ok || key["id"] != int64(7) {
+		t.Fatalf("expected _key from primary key, got %#v", withPK[0])
+	}
+
+	secretPK := []plugin.TableRow{{"access_token": "live", "name": "a"}}
+	attachRowKeys(secretPK, []string{"access_token"}, sqldb.DefaultRedactColumnPatterns())
+	if _, ok := secretPK[0]["_key"]; ok {
+		t.Fatal("tables keyed by a sensitive column must stay read-only")
+	}
+}
+
 func TestTableDataGridIsEditable(t *testing.T) {
 	p := New()
 	m := p.Manifest()
@@ -276,6 +291,24 @@ func TestTableDataGridIsEditable(t *testing.T) {
 	tc, ok := data.Config.(plugin.TableConfig)
 	if data.Key == "" || !ok || !tc.Editable {
 		t.Fatalf("table Data tab must be an editable grid: %#v", data.Config)
+	}
+	if !contains(tc.RowActionIDs, "mysql.table.row.delete") {
+		t.Fatalf("Data tab must expose row delete action: %#v", tc.RowActionIDs)
+	}
+	var rowDelete plugin.Action
+	for _, a := range m.Actions {
+		if a.ID == "mysql.table.row.delete" {
+			rowDelete = a
+		}
+	}
+	if rowDelete.Body["key"] != "${record._key}" {
+		t.Fatalf("row delete must send row identity in the request body: %#v", rowDelete)
+	}
+	if !rowDelete.Bulk {
+		t.Fatalf("row delete must explicitly opt into multi-row execution: %#v", rowDelete)
+	}
+	if _, ok := rowDelete.Params["key"]; ok {
+		t.Fatalf("row delete must not encode row identity as params: %#v", rowDelete.Params)
 	}
 	for key, ds := range map[string]*plugin.DataSource{"insert": tc.Insert, "update": tc.Update, "delete": tc.Delete} {
 		if ds == nil {

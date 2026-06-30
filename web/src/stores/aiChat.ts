@@ -14,6 +14,7 @@ import {
 import { useAiProvidersStore } from "./aiProviders";
 import { registerSessionCleanup } from "./session";
 import { RiskLevel } from "../types/projection";
+import { useWorkspaceInvalidationStore } from "./workspaceInvalidation";
 
 export type AiRunState = "idle" | "starting" | "streaming" | "stopping";
 
@@ -64,6 +65,7 @@ interface ChatState {
   loadingOlder: boolean;
   loadingConversation: boolean;
   loadSeq: number;
+  autoConfirmRoutes: Record<string, string[]>;
 }
 
 function newState(): ChatState {
@@ -83,6 +85,7 @@ function newState(): ChatState {
     loadingOlder: false,
     loadingConversation: false,
     loadSeq: 0,
+    autoConfirmRoutes: {},
   };
 }
 
@@ -108,14 +111,14 @@ const nextId = (): string => `m-${Date.now()}-${seq++}`;
 
 export const useAiChatStore = defineStore("aiChat", () => {
   const aiProviders = useAiProvidersStore();
+  const workspaceInvalidation = useWorkspaceInvalidationStore();
   const selectedProviders = useStorage<Record<string, string>>(
     "shellcn:ai:selected-provider",
     {},
   );
-  const rememberedConfirmations = useStorage<Record<string, string[]>>(
-    "shellcn:ai:auto-confirm-write-routes",
-    {},
-  );
+  // The last provider the user explicitly chose, used as the default for
+  // connections that have no preference of their own.
+  const lastProvider = useStorage<string>("shellcn:ai:last-provider", "");
   const byConn = reactive<Record<string, ChatState>>({});
   const providers = computed(() => aiProviders.providers);
   const global = computed(() => aiProviders.global);
@@ -141,6 +144,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     const st = state(connId);
     st.providerId = providerId;
     rememberProvider(connId, providerId);
+    lastProvider.value = providerId;
   }
 
   function state(connId: string): ChatState {
@@ -156,7 +160,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
   function storedProvider(connId: string): string {
     return Object.prototype.hasOwnProperty.call(selectedProviders.value, connId)
       ? (selectedProviders.value[connId] ?? "")
-      : "";
+      : lastProvider.value;
   }
 
   function rememberProvider(connId: string, providerId: string): void {
@@ -388,6 +392,9 @@ export const useAiChatStore = defineStore("aiChat", () => {
     }
     try {
       await aiApi.deleteConversation(connId, cid);
+      const { [cid]: _removed, ...routes } = st.autoConfirmRoutes;
+      void _removed;
+      st.autoConfirmRoutes = routes;
       if (st.activeId === cid) newChat(connId);
       await loadConversations(connId);
     } catch (err) {
@@ -425,7 +432,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
       return;
     }
     if (approve && options.remember) {
-      rememberConfirmation(connId, pending);
+      rememberConfirmation(st, pending);
     }
     st.pendingConfirm = null;
     void aiApi.turnControl(connId, st.turnId, {
@@ -451,7 +458,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
       const { type: _type, turnId, ...rest } = ev;
       void _type;
       st.turnId = turnId || st.turnId;
-      if (st.turnId && shouldAutoConfirm(connId, rest)) {
+      if (st.turnId && shouldAutoConfirm(st, rest)) {
         void aiApi.turnControl(connId, st.turnId, {
           type: "confirm",
           toolId: rest.toolId,
@@ -497,6 +504,14 @@ export const useAiChatStore = defineStore("aiChat", () => {
             tc.output = ev.output;
             tc.err = ev.err;
           }
+        }
+        break;
+      case "workspace_invalidated":
+        if (ev.invalidation) {
+          workspaceInvalidation.invalidate({
+            ...ev.invalidation,
+            source: "ai",
+          });
         }
         break;
       case "error":
@@ -547,6 +562,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.pendingConfirm = null;
     st.queue = [];
     st.hasMore = false;
+    st.autoConfirmRoutes = {};
   }
 
   function resetAll(): void {
@@ -555,7 +571,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
       delete byConn[connId];
     }
     selectedProviders.value = {};
-    rememberedConfirmations.value = {};
+    lastProvider.value = "";
   }
 
   registerSessionCleanup("aiChat", resetAll);
@@ -645,24 +661,31 @@ export const useAiChatStore = defineStore("aiChat", () => {
     return !pending.destructive && pending.risk === RiskLevel.Write;
   }
 
-  function rememberedRoutes(connId: string): string[] {
-    return rememberedConfirmations.value[connId] ?? [];
+  function activeConversationKey(st: ChatState): string {
+    return st.activeId ?? "";
   }
 
-  function shouldAutoConfirm(connId: string, pending: PendingConfirm): boolean {
+  function rememberedRoutes(st: ChatState): string[] {
+    const key = activeConversationKey(st);
+    return key ? (st.autoConfirmRoutes[key] ?? []) : [];
+  }
+
+  function shouldAutoConfirm(st: ChatState, pending: PendingConfirm): boolean {
     return (
       canRememberConfirmation(pending) &&
-      rememberedRoutes(connId).includes(pending.routeId)
+      rememberedRoutes(st).includes(pending.routeId)
     );
   }
 
-  function rememberConfirmation(connId: string, pending: PendingConfirm): void {
+  function rememberConfirmation(st: ChatState, pending: PendingConfirm): void {
     if (!canRememberConfirmation(pending)) return;
-    const routes = new Set(rememberedRoutes(connId));
+    const key = activeConversationKey(st);
+    if (!key) return;
+    const routes = new Set(rememberedRoutes(st));
     routes.add(pending.routeId);
-    rememberedConfirmations.value = {
-      ...rememberedConfirmations.value,
-      [connId]: [...routes].sort(),
+    st.autoConfirmRoutes = {
+      ...st.autoConfirmRoutes,
+      [key]: [...routes].sort(),
     };
   }
 

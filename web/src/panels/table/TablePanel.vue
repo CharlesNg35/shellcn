@@ -80,6 +80,7 @@ import PanelError from "../shared/PanelError.vue";
 import FormField from "../form/FormField.vue";
 import AppIcon from "@/components/AppIcon.vue";
 import { useDirtyGuard } from "../shared/useDirtyGuard";
+import { useConnectionInvalidationRefresh } from "../shared/useConnectionInvalidationRefresh";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{
@@ -267,9 +268,7 @@ function canJsonEditCell(col: ColumnSpec): boolean {
   return editableCells.value && isJsonEditor(col);
 }
 const selectable = computed(
-  () =>
-    (rowActions.value.length > 0 || tableConfig.value?.selectable === true) &&
-    !editable.value,
+  () => rowActions.value.length > 0 || tableConfig.value?.selectable === true,
 );
 const selectedRefs = computed(() =>
   selection.value
@@ -1208,21 +1207,35 @@ onDeactivated(() => {
   stopResourceWatch();
 });
 
-async function refresh(): Promise<void> {
-  if (!props.source || loading.value || committing.value) return;
-  if (pendingCount.value > 0) return;
+function canAutoRefresh(): boolean {
+  if (!props.source || loading.value || committing.value) return false;
+  if (pendingCount.value > 0) return false;
   if (
     showInsert.value ||
     deleteTarget.value ||
     actionOutput.value ||
     jsonEdit.value
   )
-    return;
-  if (detailRow.value) return;
+    return false;
+  if (detailRow.value) return false;
+  return true;
+}
+
+useConnectionInvalidationRefresh({
+  connectionId: () => props.connectionId,
+  refresh,
+  active,
+  canRefresh: canAutoRefresh,
+});
+
+async function refresh(): Promise<void> {
+  if (!canAutoRefresh()) return;
+  const source = props.source;
+  if (!source) return;
   try {
     const page = await fetchPage<Row>(
       props.connectionId,
-      props.source,
+      source,
       { resource: props.resource, record: props.record },
       {
         cursor: cursorFor(first.value),
@@ -1344,9 +1357,9 @@ onUnmounted(() => {
 <template>
   <div class="flex h-full flex-col">
     <div
-      class="flex items-center gap-3 border-b border-surface-200 px-4 py-2 dark:border-surface-800"
+      class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-surface-200 px-4 py-2 dark:border-surface-800"
     >
-      <div class="w-56">
+      <div class="min-w-44 flex-1 sm:w-56 sm:flex-none">
         <InputText
           v-model="filterText"
           type="search"
@@ -1362,6 +1375,7 @@ onUnmounted(() => {
       <Button
         v-if="editable && insertSource"
         type="button"
+        size="small"
         severity="secondary"
         :disabled="loading || addRowLoading || !columns.length"
         :title="addRowTitle"
@@ -1382,7 +1396,10 @@ onUnmounted(() => {
         :scope="source?.params"
         @done="onActionDone"
       />
-      <template v-if="rowActions.length && selection.length">
+      <div
+        v-if="rowActions.length && selection.length"
+        class="flex min-w-0 flex-wrap items-center gap-2"
+      >
         <span class="text-xs text-surface-400"
           >{{ selection.length }} selected</span
         >
@@ -1394,13 +1411,15 @@ onUnmounted(() => {
           "
           :record="selection.length === 1 ? selection[0] : null"
           :records="selection"
+          :max-inline="2"
           @done="onActionDone"
         />
-      </template>
-      <div class="ml-auto flex items-center gap-2">
+      </div>
+      <div class="ml-auto flex shrink-0 items-center gap-2">
         <Button
           v-if="canExport"
           type="button"
+          size="small"
           severity="secondary"
           :disabled="!rows.length"
           title="Export loaded rows"
@@ -1413,6 +1432,7 @@ onUnmounted(() => {
         <Menu v-if="canExport" ref="exportMenu" :model="exportItems" popup />
         <Button
           type="button"
+          size="small"
           :disabled="loading"
           severity="secondary"
           @click="guardedLoad(first)"
@@ -1442,6 +1462,7 @@ onUnmounted(() => {
       <div class="ml-auto flex gap-2">
         <Button
           type="button"
+          size="small"
           label="Discard"
           severity="secondary"
           :disabled="committing"
@@ -1449,6 +1470,7 @@ onUnmounted(() => {
         />
         <Button
           type="button"
+          size="small"
           label="Commit"
           :loading="committing"
           :disabled="committing"
@@ -1525,6 +1547,7 @@ onUnmounted(() => {
               <Button
                 v-if="linkRef(data as Row, col)"
                 type="button"
+                size="small"
                 text
                 severity="secondary"
                 :title="displayTitle(data as Row, col)"
@@ -1556,6 +1579,7 @@ onUnmounted(() => {
               <Button
                 v-if="canJsonEditCell(col) && !linkRef(data as Row, col)"
                 type="button"
+                size="small"
                 text
                 rounded
                 severity="secondary"
@@ -1623,6 +1647,7 @@ onUnmounted(() => {
             <Button
               v-if="canDelete(data as Row)"
               type="button"
+              size="small"
               text
               rounded
               :severity="
@@ -1655,6 +1680,7 @@ onUnmounted(() => {
           <template #body="{ data }">
             <Button
               type="button"
+              size="small"
               text
               rounded
               severity="secondary"
@@ -1694,12 +1720,14 @@ onUnmounted(() => {
       <template #footer>
         <Button
           type="button"
+          size="small"
           label="Cancel"
           severity="secondary"
           @click="showInsert = false"
         />
         <Button
           type="button"
+          size="small"
           label="Add row"
           :loading="inserting"
           :disabled="inserting"
@@ -1745,6 +1773,7 @@ onUnmounted(() => {
       <template #footer>
         <Button
           type="button"
+          size="small"
           label="Cancel"
           severity="secondary"
           :disabled="deleteBusy"
@@ -1752,6 +1781,7 @@ onUnmounted(() => {
         />
         <Button
           type="button"
+          size="small"
           label="Delete"
           severity="danger"
           :loading="deleteBusy"
@@ -1782,6 +1812,7 @@ onUnmounted(() => {
       <template #footer>
         <Button
           type="button"
+          size="small"
           label="Close"
           severity="secondary"
           @click="actionOutput = null"

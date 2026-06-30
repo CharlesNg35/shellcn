@@ -65,6 +65,7 @@ vi.mock("../api/ai", () => ({
 }));
 
 import { useAiChatStore } from "./aiChat";
+import { useWorkspaceInvalidationStore } from "./workspaceInvalidation";
 
 const CONN = "c1";
 
@@ -162,6 +163,31 @@ describe("aiChat store", () => {
 
     store.apply(CONN, { type: "done" });
     expect(store.state(CONN).runState).toBe("idle");
+  });
+
+  it("publishes workspace invalidations from the AI stream", () => {
+    const store = useAiChatStore();
+    const invalidations = useWorkspaceInvalidationStore();
+
+    store.apply(CONN, {
+      type: "workspace_invalidated",
+      invalidation: {
+        connectionId: CONN,
+        routeId: "demo.create",
+        risk: RiskLevel.Write,
+        params: { name: "created" },
+        toolName: "demo_create",
+        toolId: "t1",
+      },
+    });
+
+    expect(invalidations.version(CONN)).toBe(1);
+    expect(invalidations.last(CONN)).toMatchObject({
+      connectionId: CONN,
+      routeId: "demo.create",
+      risk: RiskLevel.Write,
+      source: "ai",
+    });
   });
 
   it("marks an error and keeps the partial assistant message", () => {
@@ -268,9 +294,10 @@ describe("aiChat store", () => {
     });
   });
 
-  it("remembers non-destructive write approvals by connection and route", () => {
+  it("remembers non-destructive write approvals by conversation and route", () => {
     const store = useAiChatStore();
     const st = store.state(CONN);
+    st.activeId = "conv-1";
     st.turnId = "turn-1";
     st.pendingConfirm = {
       toolId: "t1",
@@ -306,15 +333,37 @@ describe("aiChat store", () => {
       type: "confirm",
       toolId: "t2",
     });
+
+    st.activeId = "conv-2";
+    store.apply(CONN, { type: "done" });
+    store.send(CONN, "create in another conversation");
+    streamCalls[1].options.onEvent({
+      type: "needs_confirmation",
+      turnId: "turn-3",
+      toolId: "t3",
+      toolName: "demo_create",
+      routeId: "demo.create",
+      risk: RiskLevel.Write,
+      destructive: false,
+      params: {},
+      body: {},
+    });
+
+    expect(st.pendingConfirm).toMatchObject({
+      routeId: "demo.create",
+      destructive: false,
+    });
+    expect(turnControl).not.toHaveBeenLastCalledWith(CONN, "turn-3", {
+      type: "confirm",
+      toolId: "t3",
+    });
   });
 
   it("does not auto-confirm remembered destructive actions", () => {
-    localStorage.setItem(
-      "shellcn:ai:auto-confirm-write-routes",
-      JSON.stringify({ [CONN]: ["demo.delete"] }),
-    );
     const store = useAiChatStore();
     const st = store.state(CONN);
+    st.activeId = "conv-1";
+    st.autoConfirmRoutes = { "conv-1": ["demo.delete"] };
 
     store.send(CONN, "delete");
     streamCalls[0].options.onEvent({
@@ -595,6 +644,25 @@ describe("aiChat store", () => {
     expect(streamCalls.at(-1)?.body).toMatchObject({
       providerId: "p-local",
     });
+  });
+
+  it("defaults a new connection to the last chosen provider", async () => {
+    const make = (id: string) => ({
+      id,
+      kind: "openrouter" as const,
+      name: id,
+      models: ["m"],
+      model: "m",
+      hasKey: true,
+      createdAt: "",
+      updatedAt: "",
+    });
+    listProviders.mockResolvedValue([make("p1"), make("p2")]);
+    const store = useAiChatStore();
+    await store.loadProviders();
+
+    store.setProvider("conn-a", "p2");
+    expect(store.state("conn-b").providerId).toBe("p2");
   });
 
   it("can force-refresh providers after settings change", async () => {

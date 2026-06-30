@@ -6,6 +6,7 @@ import {
   fetchPage,
   interpolate,
   queryParams,
+  resolveBody,
   resolveParams,
   runFormAction,
   uploadFiles,
@@ -116,6 +117,29 @@ describe("dataSource resolver", () => {
         { resource: { kind: "ns", name: "default", uid: "1" } },
       ),
     ).toEqual({ name: "default" });
+  });
+
+  it("resolves action body templates while preserving raw object values", () => {
+    const body = resolveBody(
+      {
+        key: "${record._key}",
+        values: {
+          name: "${record.name}",
+          label: "user-${record.id}",
+        },
+        tags: ["stable", "${resource.name}"],
+      },
+      {
+        resource: { kind: "table", name: "users", uid: "public.users" },
+        record: { id: 7, name: "alice", _key: { id: 7 } },
+      },
+    );
+
+    expect(body).toEqual({
+      key: { id: 7 },
+      values: { name: "alice", label: "user-7" },
+      tags: ["stable", "users"],
+    });
   });
 
   it("builds the p.-prefixed scheme without colliding with list controls", () => {

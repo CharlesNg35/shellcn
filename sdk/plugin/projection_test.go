@@ -111,7 +111,8 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		}},
 		Actions: []plugin.Action{{
 			ID: "sample.start", Label: "Start", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"},
-			RouteID: "sample.start", Confirm: true, ConfirmText: "Start it?",
+			RouteID: "sample.start", Params: map[string]string{"id": "${resource.uid}"}, Body: map[string]any{"force": "${record.force}"},
+			Confirm: true, ConfirmText: "Start it?", Bulk: true,
 			EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "state", Op: plugin.OpEq, Value: "stopped"}}},
 		}},
 		Streams: []plugin.Stream{
@@ -255,6 +256,17 @@ func TestProjectionMatchesContract(t *testing.T) {
 	}
 	if a["method"] != "POST" {
 		t.Errorf("action method resolved from route: want POST, got %v", a["method"])
+	}
+	params, ok := a["params"].(map[string]any)
+	if !ok || params["id"] != "${resource.uid}" {
+		t.Fatalf("action params missing from projection: %v", a["params"])
+	}
+	body, ok := a["body"].(map[string]any)
+	if !ok || body["force"] != "${record.force}" {
+		t.Fatalf("action body missing from projection: %v", a["body"])
+	}
+	if a["bulk"] != true {
+		t.Fatalf("action bulk flag missing from projection: %v", a["bulk"])
 	}
 	if _, ok := a["input"]; !ok {
 		t.Errorf("action input resolved from route route, missing")

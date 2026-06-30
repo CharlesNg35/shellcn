@@ -173,6 +173,24 @@ func TestTableDataGridIsEditable(t *testing.T) {
 	if !ok || !tc.Editable {
 		t.Fatalf("Data tab must be editable: %#v", data.Config)
 	}
+	if !slices.Contains(tc.RowActionIDs, "postgresql.table.row.delete") {
+		t.Fatalf("Data tab must expose row delete action: %#v", tc.RowActionIDs)
+	}
+	var rowDelete plugin.Action
+	for _, a := range m.Actions {
+		if a.ID == "postgresql.table.row.delete" {
+			rowDelete = a
+		}
+	}
+	if rowDelete.Body["key"] != "${record._key}" {
+		t.Fatalf("row delete must send row identity in the request body: %#v", rowDelete)
+	}
+	if !rowDelete.Bulk {
+		t.Fatalf("row delete must explicitly opt into multi-row execution: %#v", rowDelete)
+	}
+	if _, ok := rowDelete.Params["key"]; ok {
+		t.Fatalf("row delete must not encode row identity as params: %#v", rowDelete.Params)
+	}
 	for key, ds := range map[string]*plugin.DataSource{"insert": tc.Insert, "update": tc.Update, "delete": tc.Delete} {
 		if ds == nil {
 			t.Fatalf("Data tab missing %q mutation source: %#v", key, data.Config)

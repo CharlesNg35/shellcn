@@ -580,6 +580,7 @@ export interface Action {
   routeId: string;
   method?: Method;
   params?: Record<string, string>;
+  body?: Record<string, unknown>;
   risk: RiskLevel;
   requiresConfirm: boolean;
   confirmText?: string;
@@ -592,6 +593,7 @@ export interface Action {
   visibleWhen?: Condition;
   iconOnly?: boolean;
   group?: string;
+  bulk?: boolean;
 }
 
 export const OpenTarget = {

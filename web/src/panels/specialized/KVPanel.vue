@@ -17,6 +17,7 @@ import SkeletonList from "@/components/SkeletonList.vue";
 import AppIcon from "@/components/AppIcon.vue";
 import { dialogRoot } from "@/primevue/preset";
 import { useDirtyGuard } from "../shared/useDirtyGuard";
+import { useConnectionInvalidationRefresh } from "../shared/useConnectionInvalidationRefresh";
 
 interface KVEntry {
   key: string;
@@ -147,6 +148,12 @@ async function load(): Promise<void> {
     loading.value = false;
   }
 }
+
+useConnectionInvalidationRefresh({
+  connectionId: () => props.connectionId,
+  refresh: load,
+  canRefresh: () => !dirty.value && !saving.value && !createOpen.value,
+});
 
 async function loadDetail(entry: KVEntry): Promise<void> {
   const request = ++detailRequest;

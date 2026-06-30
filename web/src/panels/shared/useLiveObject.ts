@@ -5,6 +5,7 @@ import {
   useRefreshableSource,
   type RefreshableSource,
 } from "./useRefreshableSource";
+import { useConnectionInvalidationRefresh } from "./useConnectionInvalidationRefresh";
 
 interface LiveObjectOptions<T> {
   initialValue: () => T;
@@ -86,6 +87,12 @@ export function useLiveObject<T>(
     start();
   }
   onScopeDispose(halt);
+  useConnectionInvalidationRefresh({
+    connectionId: () => connectionId,
+    refresh: base.load,
+    active: options.active,
+    canRefresh: accept,
+  });
 
   return { ...base, externalChanged, deleted, applyPending };
 }

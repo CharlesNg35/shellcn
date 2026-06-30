@@ -199,4 +199,56 @@ describe("ResourceTree", () => {
     expect(dt.props("expandedKeys")).toMatchObject({ workloads: true });
     expect(requests).toHaveLength(2);
   });
+
+  it("patches refreshed expanded branches without replacing loaded descendants", async () => {
+    const calls: string[] = [];
+    installFetch((url) => {
+      calls.push(String(url));
+      if (url.includes("k8s.tree.namespace")) {
+        return {
+          body: {
+            items: [
+              {
+                key: "pod:api",
+                label: calls.length > 3 ? "api-updated" : "api",
+                ref: { kind: "pod", name: "api", uid: "pod-api" },
+              },
+            ],
+          },
+        };
+      }
+      return {
+        body: {
+          items: [
+            {
+              key: "ns:prod",
+              label: calls.length > 2 ? "prod-updated" : "prod",
+              ref: { kind: "namespace", name: "prod", uid: "ns-prod" },
+              childrenSource: { routeId: "k8s.tree.namespace" },
+            },
+          ],
+        },
+      };
+    });
+    const w = mountTree();
+    const dt = w.findComponent({ name: "Tree" });
+    const root = dt.props("value")[0];
+
+    dt.vm.$emit("node-expand", root);
+    await flushPromises();
+    const namespace = root.children[0];
+
+    dt.vm.$emit("node-expand", namespace);
+    await flushPromises();
+    const pod = namespace.children[0];
+
+    await w.setProps({ refreshKey: "refresh-1" });
+    await flushPromises();
+
+    const refreshedNamespace = root.children[0];
+    expect(refreshedNamespace).toBe(namespace);
+    expect(refreshedNamespace.label).toBe("prod-updated");
+    expect(refreshedNamespace.children[0]).toBe(pod);
+    expect(refreshedNamespace.children[0].label).toBe("api-updated");
+  });
 });

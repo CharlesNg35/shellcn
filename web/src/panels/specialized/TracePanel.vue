@@ -61,6 +61,7 @@ const {
   reset,
 } = useRefreshableSource<TracePayload>(loadTrace, {
   initialValue: () => ({}),
+  connectionId: () => props.connectionId,
 });
 
 function spanStart(span: TraceSpan): number {
