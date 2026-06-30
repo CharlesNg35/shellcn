@@ -99,7 +99,6 @@ const RESERVED = new Set([
   "childrenSource",
   "badge",
   "_key",
-  "_key_json",
   "_links",
   "_id",
   "__rid",

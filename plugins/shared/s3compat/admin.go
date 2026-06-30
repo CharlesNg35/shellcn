@@ -101,7 +101,7 @@ func Actions(protocol string) []plugin.Action {
 	return []plugin.Action{
 		{ID: routeID(protocol, "bucket.create"), Label: "Create bucket", Icon: icon("plus"), RouteID: routeID(protocol, "bucket.create")},
 		{ID: routeID(protocol, "bucket.versions"), Label: "Versions", Icon: icon("layers-3"), RouteID: routeID(protocol, "bucket.versions"), Params: bucketParams(), Open: plugin.OpenDialog, Panel: plugin.PanelTable, Config: bucketVersionsTableConfig()},
-		{ID: routeID(protocol, "bucket.delete"), Label: "Delete", Icon: icon("trash-2"), RouteID: routeID(protocol, "bucket.delete"), Params: bucketParams(), Confirm: true, ConfirmText: "Delete this bucket? The bucket must be empty."},
+		{ID: routeID(protocol, "bucket.delete"), Label: "Delete", Icon: icon("trash-2"), RouteID: routeID(protocol, "bucket.delete"), Params: bucketParams(), Confirm: true, ConfirmText: "Delete this bucket? The bucket must be empty.", Bulk: true},
 		{ID: routeID(protocol, "bucket.versioning.set"), Label: "Edit versioning", Icon: icon("history"), RouteID: routeID(protocol, "bucket.versioning.set"), Params: bucketParams(), Confirm: true, ConfirmText: "Change bucket versioning? After versioning is enabled, S3 only allows suspending it."},
 	}
 }

@@ -758,6 +758,7 @@ type Action struct {
 	Icon        Icon              `json:"icon,omitzero"`
 	RouteID     string            `json:"routeId"`
 	Params      map[string]string `json:"params,omitempty"`
+	Body        map[string]any    `json:"body,omitempty"`
 	Confirm     bool              `json:"confirm,omitempty"`
 	ConfirmText string            `json:"confirmText,omitempty"`
 	OnSuccess   *ActionSuccess    `json:"onSuccess,omitempty"`
@@ -774,6 +775,8 @@ type Action struct {
 	IconOnly bool `json:"iconOnly,omitempty"`
 	// Group clusters actions into a labeled dropdown.
 	Group string `json:"group,omitempty"`
+	// Bulk allows the action to run against multiple selected row targets.
+	Bulk bool `json:"bulk,omitempty"`
 }
 
 // NavigateTarget is where the UI moves after an action succeeds.

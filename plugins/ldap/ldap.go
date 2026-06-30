@@ -145,6 +145,6 @@ func actions() []plugin.Action {
 	return []plugin.Action{
 		{ID: "ldap.entry.add", Label: "Add child entry", Icon: icon("plus"), RouteID: "ldap.entry.add", Params: map[string]string{"parent": "${resource.uid}"}, EnabledWhen: writable, OnSuccess: &plugin.ActionSuccess{SelectTab: "children"}},
 		{ID: "ldap.entry.rename", Label: "Rename or move", Icon: icon("pencil"), RouteID: "ldap.entry.rename", Params: map[string]string{"dn": "${resource.uid}"}, Confirm: true, ConfirmText: "Rename or move this entry? Existing references to its DN may need to be updated.", EnabledWhen: writable},
-		{ID: "ldap.entry.delete", Label: "Delete entry", Icon: icon("trash-2"), RouteID: "ldap.entry.delete", Params: map[string]string{"dn": "${resource.uid}"}, Confirm: true, ConfirmText: "Delete this entry? This permanently removes it from the directory.", EnabledWhen: writable, OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
+		{ID: "ldap.entry.delete", Label: "Delete entry", Icon: icon("trash-2"), RouteID: "ldap.entry.delete", Params: map[string]string{"dn": "${resource.uid}"}, Confirm: true, ConfirmText: "Delete this entry? This permanently removes it from the directory.", EnabledWhen: writable, OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}, Bulk: true},
 	}
 }

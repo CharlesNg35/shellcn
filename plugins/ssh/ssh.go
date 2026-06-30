@@ -66,6 +66,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				Params:      map[string]string{"id": "${record.id}"},
 				Confirm:     true,
 				ConfirmText: "Delete this snippet?",
+				Bulk:        true,
 			},
 		},
 		Streams: []plugin.Stream{

@@ -707,9 +707,6 @@ func attachRowKeys(rows []plugin.TableRow, pk, patterns []string) {
 			key[col] = r[col]
 		}
 		r["_key"] = key
-		if encoded, err := json.Marshal(key); err == nil {
-			r["_key_json"] = string(encoded)
-		}
 	}
 }
 
@@ -953,9 +950,6 @@ func updateRow(rc *plugin.RequestContext) (any, error) {
 	if err := rc.Bind(&m); err != nil {
 		return nil, err
 	}
-	if err := applyRowKeyParam(rc, &m); err != nil {
-		return nil, err
-	}
 	if err := validateRowKey(rc, pool, s, schema, table, m.Key); err != nil {
 		return nil, err
 	}
@@ -998,20 +992,6 @@ func deleteRow(rc *plugin.RequestContext) (any, error) {
 		return nil, pgErr(err)
 	}
 	return singleRowResult(tag.RowsAffected())
-}
-
-func applyRowKeyParam(rc *plugin.RequestContext, m *sqldb.RowMutation) error {
-	if len(m.Key) > 0 {
-		return nil
-	}
-	raw := paramOf(rc, "key")
-	if raw == "" {
-		return nil
-	}
-	if err := json.Unmarshal([]byte(raw), &m.Key); err != nil {
-		return fmt.Errorf("%w: invalid row key", plugin.ErrInvalidInput)
-	}
-	return nil
 }
 
 // validateRowKey loads the table's primary key and rejects any client key that

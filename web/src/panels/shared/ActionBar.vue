@@ -4,7 +4,7 @@ import Dialog from "primevue/dialog";
 import Button from "primevue/button";
 import Menu from "primevue/menu";
 import { useToast } from "primevue/usetoast";
-import { fetchDoc, runFormAction } from "@/api/dataSource";
+import { fetchDoc, resolveBody, runFormAction } from "@/api/dataSource";
 import type { Action, ResourceIdentity, Row } from "@/types/projection";
 import { RiskLevel } from "@/types/projection";
 import AppIcon from "@/components/AppIcon.vue";
@@ -107,6 +107,7 @@ function isEnabled(action: Action): boolean {
 }
 
 function isActionVisible(action: Action): boolean {
+  if (actionTargets().length > 1 && !action.bulk) return false;
   const cond = action.visibleWhen;
   if (!cond) return true;
   const recs = props.records?.length
@@ -289,6 +290,17 @@ function actionParams(
   return params;
 }
 
+function actionBody(
+  action: Action,
+  target: ActionTarget,
+  formBody?: Record<string, unknown>,
+): Record<string, unknown> {
+  const templated = action.body
+    ? resolveBody(action.body, targetContext(target))
+    : {};
+  return { ...templated, ...(formBody ?? {}) };
+}
+
 function formParams(body?: Record<string, unknown>): Record<string, string> {
   const params: Record<string, string> = {};
   for (const [key, value] of Object.entries(body ?? {})) {
@@ -325,7 +337,7 @@ async function openURL(
             props.connectionId,
             action.routeId,
             targetContext(target),
-            {},
+            actionBody(action, target),
             params,
             action.method ?? "POST",
           );
@@ -371,7 +383,7 @@ async function execute(
           props.connectionId,
           action.routeId,
           targetContext(target),
-          body ?? {},
+          actionBody(action, target, body),
           actionParams(action, target),
           action.method ?? "POST",
         );
@@ -389,7 +401,7 @@ async function execute(
         props.connectionId,
         action.routeId,
         targetContext(target),
-        body ?? {},
+        actionBody(action, target, body),
         actionParams(action, target),
         action.method ?? "POST",
       );

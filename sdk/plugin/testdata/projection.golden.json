@@ -283,6 +283,12 @@
       },
       "routeId": "sample.start",
       "method": "POST",
+      "params": {
+        "id": "${resource.uid}"
+      },
+      "body": {
+        "force": "${record.force}"
+      },
       "risk": "write",
       "requiresConfirm": true,
       "confirmText": "Start it?",
@@ -308,7 +314,8 @@
             "value": "stopped"
           }
         ]
-      }
+      },
+      "bulk": true
     }
   ],
   "streams": [

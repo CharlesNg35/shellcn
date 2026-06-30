@@ -118,6 +118,32 @@ export function resolveParams(
   return out;
 }
 
+export function resolveBody<T = unknown>(template: T, ctx: ResolveContext): T {
+  if (typeof template === "string") {
+    const lone = template.match(LONE_TOKEN);
+    if (lone) {
+      const expr = lone[1].trim();
+      const value = lookupRaw(expr, ctx);
+      if (value === undefined || value === "") {
+        throw new Error(`Cannot resolve "\${${expr}}": no value in context`);
+      }
+      return value as T;
+    }
+    return (
+      template.includes("${") ? interpolate(template, ctx) : template
+    ) as T;
+  }
+  if (Array.isArray(template)) {
+    return template.map((item) => resolveBody(item, ctx)) as T;
+  }
+  if (!template || typeof template !== "object") return template;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(template)) {
+    out[key] = resolveBody(value, ctx);
+  }
+  return out as T;
+}
+
 export function routePath(connectionId: string, routeId: string): string {
   return `${API_BASE}/connections/${connectionId}/x/${routeId}`;
 }
