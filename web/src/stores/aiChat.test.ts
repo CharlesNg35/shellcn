@@ -294,9 +294,10 @@ describe("aiChat store", () => {
     });
   });
 
-  it("remembers non-destructive write approvals by connection and route", () => {
+  it("remembers non-destructive write approvals by conversation and route", () => {
     const store = useAiChatStore();
     const st = store.state(CONN);
+    st.activeId = "conv-1";
     st.turnId = "turn-1";
     st.pendingConfirm = {
       toolId: "t1",
@@ -332,15 +333,37 @@ describe("aiChat store", () => {
       type: "confirm",
       toolId: "t2",
     });
+
+    st.activeId = "conv-2";
+    store.apply(CONN, { type: "done" });
+    store.send(CONN, "create in another conversation");
+    streamCalls[1].options.onEvent({
+      type: "needs_confirmation",
+      turnId: "turn-3",
+      toolId: "t3",
+      toolName: "demo_create",
+      routeId: "demo.create",
+      risk: RiskLevel.Write,
+      destructive: false,
+      params: {},
+      body: {},
+    });
+
+    expect(st.pendingConfirm).toMatchObject({
+      routeId: "demo.create",
+      destructive: false,
+    });
+    expect(turnControl).not.toHaveBeenLastCalledWith(CONN, "turn-3", {
+      type: "confirm",
+      toolId: "t3",
+    });
   });
 
   it("does not auto-confirm remembered destructive actions", () => {
-    localStorage.setItem(
-      "shellcn:ai:auto-confirm-write-routes",
-      JSON.stringify({ [CONN]: ["demo.delete"] }),
-    );
     const store = useAiChatStore();
     const st = store.state(CONN);
+    st.activeId = "conv-1";
+    st.autoConfirmRoutes = { "conv-1": ["demo.delete"] };
 
     store.send(CONN, "delete");
     streamCalls[0].options.onEvent({
