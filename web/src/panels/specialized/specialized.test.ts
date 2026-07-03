@@ -465,6 +465,41 @@ describe("specialized panels", () => {
     w.unmount();
   });
 
+  it("treats a leading delimiter as the root, not an empty folder", async () => {
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.includes("kv.list")) {
+        return {
+          body: {
+            items: [
+              { key: "/test/readonly" },
+              { key: "/test/other" },
+            ],
+            nextCursor: "",
+          },
+        };
+      }
+      if (url.includes("kv.read")) {
+        return { body: { key: "/test/readonly", value: "test" } };
+      }
+      return { body: {} };
+    });
+    const w = mount(KVPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "kv.list" },
+        config: { readRouteId: "kv.read", delimiter: "/" },
+      },
+    });
+    await flushPromises();
+
+    // "test" is the (collapsed) root folder; with the bug it would be hidden
+    // inside an empty-named folder and not render here.
+    expect(w.text()).toContain("test");
+    expect(w.text()).toContain("2 keys");
+    w.unmount();
+  });
+
   it("loads KV filter matches from the server", async () => {
     vi.useFakeTimers();
     try {
