@@ -108,7 +108,7 @@ func TestCompositeRoutesToSubagentOrBase(t *testing.T) {
 func TestSystemPromptIncludesRecentOpsAndSubagent(t *testing.T) {
 	prompt := agent.SystemPrompt(agent.PromptInput{
 		ConnectionTitle: "prod", Protocol: "docker", AIMode: models.AIModeReadOnly,
-		Tools:          []string{"list_containers"},
+		HasTools:       true,
 		HasSubagent:    true,
 		RecentOps:      []string{"error docker.container.delete: permission denied"},
 		WorkspaceQuery: "?v=detail:pod:uid:n=api,ns=default",
@@ -122,6 +122,15 @@ func TestSystemPromptIncludesRecentOpsAndSubagent(t *testing.T) {
 	if !strings.Contains(prompt, "permission denied") {
 		t.Fatal("prompt should surface the failed operation")
 	}
+	if !strings.Contains(prompt, "historical audit records, not the current permission set") {
+		t.Fatalf("prompt should prevent stale audit entries from overriding current tools:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "provider-supplied tool catalog") {
+		t.Fatalf("prompt should point to the provider tool catalog:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "list_containers") {
+		t.Fatalf("prompt should not duplicate tool names:\n%s", prompt)
+	}
 	if !strings.Contains(prompt, "Current workspace focus") || !strings.Contains(prompt, "?v=detail:pod:uid:n=api,ns=default") {
 		t.Fatalf("prompt should include workspace focus:\n%s", prompt)
 	}
@@ -130,12 +139,21 @@ func TestSystemPromptIncludesRecentOpsAndSubagent(t *testing.T) {
 func TestSystemPromptTellsWriteAgentToUseApprovalFlow(t *testing.T) {
 	prompt := agent.SystemPrompt(agent.PromptInput{
 		ConnectionTitle: "prod", Protocol: "docker", AIMode: models.AIModeReadWrite,
-		Tools: []string{"docker_container_restart"},
+		HasTools: true,
 	})
 	if !strings.Contains(prompt, "instead of asking them to type yes or confirm in chat") {
 		t.Fatalf("prompt should prevent typed confirmation loops:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "ShellCN handles any required approval flow") {
 		t.Fatalf("prompt should delegate approval to ShellCN:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Do not describe this connection as read-only") {
+		t.Fatalf("prompt should prevent false read-only claims:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "provider-supplied tool catalog") {
+		t.Fatalf("prompt should defer tool metadata to the provider catalog:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "docker_container_restart") || strings.Contains(prompt, "Permission: docker.containers.write") {
+		t.Fatalf("prompt should not duplicate tool metadata:\n%s", prompt)
 	}
 }

@@ -121,10 +121,6 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 		hasSubagent = true
 	}
 
-	names := make([]string, 0, len(specs))
-	for _, sp := range specs {
-		names = append(names, sp.Name)
-	}
 	protocolTitle, protocolDescription := s.protocolInfo(in.Protocol)
 	promptInput := agent.PromptInput{
 		ConnectionTitle:     in.ConnectionTitle,
@@ -132,7 +128,7 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 		ProtocolTitle:       protocolTitle,
 		ProtocolDescription: protocolDescription,
 		AIMode:              in.AIMode,
-		Tools:               names,
+		HasTools:            len(specs) > 0,
 		WorkspaceQuery:      in.WorkspaceQuery,
 		RecentOps:           in.RecentOps,
 		HasSubagent:         hasSubagent,
