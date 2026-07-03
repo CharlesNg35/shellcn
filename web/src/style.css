@@ -215,6 +215,21 @@ textarea:focus-visible,
   }
 }
 
+/* Sonner-style toaster: the stack height and each toast's transform/opacity
+   animate on the same spring-like easing so collapse/expand and enter/leave
+   all feel of a piece. */
+.shell-toaster {
+  transition: height 400ms cubic-bezier(0.21, 1.02, 0.73, 1);
+}
+
+.shell-toast {
+  transition:
+    transform 400ms cubic-bezier(0.21, 1.02, 0.73, 1),
+    opacity 300ms ease;
+  transform-origin: bottom center;
+  will-change: transform, opacity;
+}
+
 :where([data-pc-name="tablist"]) {
   min-width: 0;
   overflow: hidden;
