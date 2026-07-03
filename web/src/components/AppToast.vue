@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from "vue";
+import {
+  ref,
+  reactive,
+  computed,
+  onMounted,
+  onBeforeUnmount,
+  nextTick,
+} from "vue";
 import ToastEventBus from "primevue/toasteventbus";
 import AppIcon from "./AppIcon.vue";
 import type { Icon } from "../types/projection";
 
 // Sonner-style toaster: a collapsed stack that fans out on hover/focus. We
-// subscribe straight to PrimeVue's ToastEventBus (what useToast().add emits on),
-// so every existing call site keeps working while we own the rendering entirely.
+// subscribe to PrimeVue's ToastEventBus (what useToast().add emits on) so every
+// existing call site keeps working while we own the rendering.
 
 interface ToastMessage {
   severity?: string;
@@ -67,7 +74,10 @@ const DEFAULT_HEIGHT = 64; // fallback until a toast is measured
 const items = ref<Item[]>([]); // newest first: index 0 is the front toast
 const expanded = ref(false);
 const heights = reactive<Record<number, number>>({});
-const timers = new Map<number, { start: number; remaining: number; handle: number }>();
+const timers = new Map<
+  number,
+  { start: number; remaining: number; handle: number }
+>();
 let seq = 0;
 
 const cards = new Map<number, HTMLElement>();
@@ -122,7 +132,10 @@ function pauseTimers(): void {
 function resumeTimers(): void {
   timers.forEach((rec, id) => {
     rec.start = Date.now();
-    rec.handle = window.setTimeout(() => dismiss(id), Math.max(0, rec.remaining));
+    rec.handle = window.setTimeout(
+      () => dismiss(id),
+      Math.max(0, rec.remaining),
+    );
   });
 }
 function dismiss(id: number): void {
@@ -227,7 +240,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    class="shell-toaster fixed bottom-4 right-4 z-[100] w-89 max-w-[calc(100vw-2rem)]"
+    class="shell-toaster fixed right-4 bottom-4 z-[100] w-89 max-w-[calc(100vw-2rem)]"
     :class="items.length ? 'pointer-events-auto' : 'pointer-events-none'"
     :style="containerStyle"
     @pointerenter="onExpand"
@@ -268,7 +281,7 @@ onBeforeUnmount(() => {
       <button
         type="button"
         aria-label="Dismiss"
-        class="-mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-surface-400 outline-none transition-colors hover:bg-surface-100 hover:text-surface-700 focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:hover:bg-surface-800 dark:hover:text-surface-100"
+        class="-mt-1 -mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-surface-400 transition-colors outline-none hover:bg-surface-100 hover:text-surface-700 focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:hover:bg-surface-800 dark:hover:text-surface-100"
         @click="dismiss(item.id)"
       >
         <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="14" />

@@ -215,9 +215,7 @@ textarea:focus-visible,
   }
 }
 
-/* Sonner-style toaster: the stack height and each toast's transform/opacity
-   animate on the same spring-like easing so collapse/expand and enter/leave
-   all feel of a piece. */
+/* Sonner-style toaster: stack height and per-toast transform share one easing. */
 .shell-toaster {
   transition: height 400ms cubic-bezier(0.21, 1.02, 0.73, 1);
 }
@@ -228,6 +226,19 @@ textarea:focus-visible,
     opacity 300ms ease;
   transform-origin: bottom center;
   will-change: transform, opacity;
+}
+
+/* Trailing check on the selected dropdown option; the row background is left to
+   the focus/hover state so the check never competes with the hover highlight. */
+.shell-select-option[data-p-selected="true"] {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.625rem center;
+  background-size: 1rem;
+}
+
+.dark .shell-select-option[data-p-selected="true"] {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2393c5fd' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
 }
 
 :where([data-pc-name="tablist"]) {

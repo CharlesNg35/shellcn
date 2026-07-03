@@ -102,14 +102,17 @@ const iconButtonSize = {
   large: "p-3",
 };
 const buttonSolid = {
-  primary: "bg-primary-600 text-white shadow-sm hover:bg-primary-700 active:bg-primary-800",
+  primary:
+    "bg-primary-600 text-white shadow-sm hover:bg-primary-700 active:bg-primary-800",
   secondary:
     "border border-surface-300 bg-surface-0 text-surface-700 shadow-sm hover:bg-surface-100 active:bg-surface-200 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-200 dark:hover:bg-surface-800 dark:active:bg-surface-700",
-  success: "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 active:bg-emerald-800",
+  success:
+    "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 active:bg-emerald-800",
   info: "bg-sky-600 text-white shadow-sm hover:bg-sky-700 active:bg-sky-800",
   warn: "bg-amber-600 text-white shadow-sm hover:bg-amber-700 active:bg-amber-800",
   help: "bg-violet-600 text-white shadow-sm hover:bg-violet-700 active:bg-violet-800",
-  danger: "bg-rose-600 text-white shadow-sm hover:bg-rose-700 active:bg-rose-800",
+  danger:
+    "bg-rose-600 text-white shadow-sm hover:bg-rose-700 active:bg-rose-800",
   contrast:
     "bg-surface-900 text-white shadow-sm hover:bg-surface-800 active:bg-surface-700 dark:bg-surface-100 dark:text-surface-950 dark:hover:bg-surface-200 dark:active:bg-surface-300",
 };
@@ -222,8 +225,10 @@ export const smallSecondaryButtonClass = cn(
 const overlay =
   "mt-1.5 origin-top overflow-hidden rounded-lg border border-surface-200 bg-surface-0 p-1 shadow-lg ring-1 ring-surface-950/5 dark:border-surface-700 dark:bg-surface-900 dark:ring-surface-0/5";
 const selectOverlay = cn(overlay, "p-0");
+// Background follows the focused/hovered row; the selected row is marked by a
+// trailing check (.shell-select-option in style.css) plus primary text.
 const option =
-  "cursor-pointer truncate rounded-md px-2.5 py-1.5 text-sm text-surface-700 transition-colors data-[p-focused=true]:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-200 dark:data-[p-focused=true]:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/15 dark:data-[p-selected=true]:text-primary-300";
+  "shell-select-option cursor-pointer truncate rounded-md py-1.5 pl-2.5 pr-8 text-sm text-surface-700 transition-colors data-[p-focused=true]:bg-surface-100 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-200 dark:data-[p-focused=true]:bg-surface-800 dark:data-[p-selected=true]:text-primary-300";
 const selectFilterHeader =
   "border-b border-surface-200 p-2 dark:border-surface-800";
 const selectFilterContainer = "relative flex w-full min-w-0 items-center";
