@@ -19,11 +19,10 @@ func New() *Plugin { return &Plugin{} }
 
 // statusSeverities colors guest/node/task/storage status badges by value.
 var statusSeverities = map[string]plugin.Severity{
-	"running": plugin.SeveritySuccess, "online": plugin.SeveritySuccess, "ok": plugin.SeveritySuccess, "available": plugin.SeveritySuccess, "active": plugin.SeveritySuccess,
-	"OK":      plugin.SeveritySuccess,
+	"running": plugin.SeveritySuccess, "online": plugin.SeveritySuccess, "ok": plugin.SeveritySuccess, "available": plugin.SeveritySuccess, "active": plugin.SeveritySuccess, "success": plugin.SeveritySuccess,
 	"stopped": plugin.SeveritySecondary, "offline": plugin.SeveritySecondary, "disabled": plugin.SeveritySecondary,
-	"paused": plugin.SeverityWarn, "unknown": plugin.SeverityWarn, "WARNINGS": plugin.SeverityWarn,
-	"error": plugin.SeverityDanger, "ERROR": plugin.SeverityDanger,
+	"paused": plugin.SeverityWarn, "unknown": plugin.SeverityWarn, "warning": plugin.SeverityWarn, "warnings": plugin.SeverityWarn,
+	"error": plugin.SeverityDanger, "failed": plugin.SeverityDanger, "failure": plugin.SeverityDanger, "critical": plugin.SeverityDanger,
 }
 
 var templateSeverities = map[string]plugin.Severity{
@@ -43,11 +42,12 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Icon:                plugin.Icon{Type: plugin.IconSVG, Value: iconSVG},
 		Category:            plugin.CategoryVirtualization,
 		Config:              configSchema("proxmox"),
-		Capabilities:        []plugin.Capability{"nodes", "vms", "containers", "storage", "remote_desktop", "terminal", "snapshots", "backups"},
+		Capabilities:        []plugin.Capability{"nodes", "vms", "containers", "storage", "remote_desktop", "terminal", "snapshots", "backups", "events", "health"},
 		CredentialKinds:     credentialKinds(),
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutSidebarTree,
 		Tree: []plugin.TreeGroup{
+			{Key: "overview", Label: "Overview", Icon: icon("layout-dashboard"), Ref: &plugin.ResourceIdentity{Kind: "overview", Name: "Overview", UID: "overview"}},
 			{Key: "nodes", Label: "Nodes", Icon: icon("server"), Source: plugin.DataSource{RouteID: "proxmox.tree.nodes"}, ResourceKind: "node"},
 			{Key: "storage", Label: "Storage", Icon: icon("database"), Source: plugin.DataSource{RouteID: "proxmox.tree.storage"}, ResourceKind: "storage"},
 		},
@@ -60,6 +60,11 @@ func (p *Plugin) Manifest() plugin.Manifest {
 			{ID: "proxmox.qemu.metrics", Kind: plugin.StreamMetrics, RouteID: "proxmox.qemu.metrics"},
 			{ID: "proxmox.lxc.metrics", Kind: plugin.StreamMetrics, RouteID: "proxmox.lxc.metrics"},
 			{ID: "proxmox.node.metrics", Kind: plugin.StreamMetrics, RouteID: "proxmox.node.metrics"},
+			{ID: "proxmox.overview.metrics", Kind: plugin.StreamMetrics, RouteID: "proxmox.overview.metrics"},
+			{ID: "proxmox.resource.watch", Kind: plugin.StreamResource, RouteID: "proxmox.resource.watch"},
+			{ID: "proxmox.object.watch", Kind: plugin.StreamResource, RouteID: "proxmox.object.watch"},
+			{ID: "proxmox.timeline.watch", Kind: plugin.StreamResource, RouteID: "proxmox.timeline.watch"},
+			{ID: "proxmox.task.log.watch", Kind: plugin.StreamResource, RouteID: "proxmox.task.log.watch"},
 		},
 		Recording: []plugin.RecordingCapability{
 			{Class: plugin.RecordingDesktop, Formats: []plugin.RecordingFormat{plugin.FormatWebMCanvas}, StreamIDs: []string{"proxmox.qemu.console"}},
@@ -75,7 +80,49 @@ func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.
 }
 
 func resources() []plugin.ResourceType {
-	return []plugin.ResourceType{guestResource(), qemuResource(), lxcResource(), nodeResource(), storageResource(), taskResource()}
+	return []plugin.ResourceType{overviewResource(), guestResource(), qemuResource(), lxcResource(), nodeResource(), storageResource(), taskResource(), healthResource(), haResource(), poolResource(), replicationResource()}
+}
+
+func listWatch(kind string) *plugin.DataSource {
+	return &plugin.DataSource{RouteID: "proxmox.resource.watch", Method: plugin.MethodWS, Params: map[string]string{"kind": kind}}
+}
+
+func nodeListWatch(kind string) *plugin.DataSource {
+	return &plugin.DataSource{RouteID: "proxmox.resource.watch", Method: plugin.MethodWS, Params: map[string]string{"kind": kind, "node": "${resource.uid}"}}
+}
+
+func objectWatch(kind, node, id string) *plugin.DataSource {
+	return &plugin.DataSource{RouteID: "proxmox.object.watch", Method: plugin.MethodWS, Params: map[string]string{"kind": kind, "node": node, "id": id}}
+}
+
+func watchedObjectConfig(cfg plugin.ObjectDetailConfig, kind, node, id string) plugin.ObjectDetailConfig {
+	cfg.Watch = objectWatch(kind, node, id)
+	return cfg
+}
+
+func refreshTableConfig(cfg plugin.TableConfig, intervalMs int) plugin.TableConfig {
+	cfg.RefreshIntervalMs = intervalMs
+	return cfg
+}
+
+func overviewResource() plugin.ResourceType {
+	dash := plugin.DashboardConfig{Cells: []plugin.Panel{
+		{Key: "stats", Label: "Cluster", Type: plugin.PanelMetrics, Span: 2, Source: &plugin.DataSource{RouteID: "proxmox.overview.metrics", Method: plugin.MethodWS}, Config: overviewMetricsConfig()},
+		{Key: "health", Label: "Health", Type: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "proxmox.health.list"}, Config: plugin.TableConfig{Columns: healthColumns(), EmptyText: "No health findings.", RefreshIntervalMs: 10000}},
+		{Key: "guests", Label: "Guests", Type: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "proxmox.guest.list"}, Config: plugin.TableConfig{Columns: guestColumns(), EmptyText: "No guests found.", Watch: listWatch("guest")}},
+		{Key: "tasks", Label: "Recent tasks", Type: plugin.PanelTimeline, Span: 2, Source: &plugin.DataSource{RouteID: "proxmox.timeline.list"}, Config: taskTimelineConfig(&plugin.DataSource{RouteID: "proxmox.timeline.watch", Method: plugin.MethodWS})},
+		{Key: "storage", Label: "Storage", Type: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "proxmox.storage.list"}, Config: plugin.TableConfig{Columns: storageColumns(), EmptyText: "No storage found.", Watch: listWatch("storage")}},
+	}}
+	return plugin.ResourceType{
+		Kind:    "overview",
+		Title:   "Overview",
+		List:    plugin.DataSource{RouteID: "proxmox.overview.list"},
+		Columns: []plugin.Column{{Key: "name", Label: "Name"}},
+		Detail: plugin.DetailView{
+			Header: plugin.HeaderSpec{Title: "Overview"},
+			Tabs:   []plugin.Panel{{Key: "dashboard", Label: "Overview", Icon: icon("layout-dashboard"), Type: plugin.PanelDashboard, Config: dash}},
+		},
+	}
 }
 
 func guestColumns() []plugin.Column {
@@ -100,6 +147,7 @@ func guestResource() plugin.ResourceType {
 		Kind:    "guest",
 		Title:   "Guests",
 		List:    plugin.DataSource{RouteID: "proxmox.guest.list"},
+		Watch:   listWatch("guest"),
 		Columns: guestColumns(),
 	}
 }
@@ -132,16 +180,16 @@ func qemuResource() plugin.ResourceType {
 	row := []string{"act.qemu.destroy"}
 	return plugin.ResourceType{
 		Kind: "qemu", Title: "Virtual Machines",
-		List: plugin.DataSource{RouteID: "proxmox.qemu.list"}, Columns: cols,
+		List: plugin.DataSource{RouteID: "proxmox.qemu.list"}, Watch: listWatch("qemu"), Columns: cols,
 		Actions: plugin.ResourceActions{Detail: lifecycle, Row: row},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Panel{
-				{Key: "summary", Label: "Summary", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.qemu.overview", Params: guestParams()}, Config: guestOverviewConfig()},
+				{Key: "summary", Label: "Summary", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.qemu.overview", Params: guestParams()}, Config: watchedObjectConfig(guestOverviewConfig(), "qemu", "${resource.namespace}", "${resource.uid}")},
 				{Key: "metrics", Label: "Metrics", Icon: icon("activity"), Type: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.qemu.metrics", Method: plugin.MethodWS, Params: guestParams()}, Config: cpuMemMetrics(), VisibleWhen: instanceOnly()},
 				{Key: "console", Label: "Console", Icon: icon("monitor"), Type: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "proxmox.qemu.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.RemoteDesktopConfig{Resize: true}, VisibleWhen: instanceOnly()},
-				{Key: "snapshots", Label: "Snapshots", Icon: icon("camera"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.snapshots", Params: guestParams()}, Config: plugin.TableConfig{Columns: snapshotColumns(), RowActionIDs: []string{"act.qemu.snapshot.rollback", "act.qemu.snapshot.delete"}, EmptyText: "No snapshots for this VM."}, VisibleWhen: instanceOnly()},
-				{Key: "backups", Label: "Backups", Icon: icon("archive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.backups", Params: guestParams()}, Config: plugin.TableConfig{Columns: backupColumns(), RowActionIDs: []string{"act.qemu.backup.restore", "act.backup.delete"}, RowClick: plugin.RowClickSelect, EmptyText: "No backup archives found for this VM."}},
+				{Key: "snapshots", Label: "Snapshots", Icon: icon("camera"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.snapshots", Params: guestParams()}, Config: refreshTableConfig(plugin.TableConfig{Columns: snapshotColumns(), RowActionIDs: []string{"act.qemu.snapshot.rollback", "act.qemu.snapshot.delete"}, EmptyText: "No snapshots for this VM."}, 5000), VisibleWhen: instanceOnly()},
+				{Key: "backups", Label: "Backups", Icon: icon("archive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.backups", Params: guestParams()}, Config: refreshTableConfig(plugin.TableConfig{Columns: backupColumns(), RowActionIDs: []string{"act.qemu.backup.restore", "act.backup.delete"}, RowClick: plugin.RowClickSelect, EmptyText: "No backup archives found for this VM."}, 10000)},
 				{Key: "hardware", Label: "Hardware", Icon: icon("cpu"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.qemu.config", Params: guestParams()}, Config: qemuHardwareConfig()},
 			},
 		},
@@ -154,16 +202,16 @@ func lxcResource() plugin.ResourceType {
 	row := []string{"act.lxc.destroy"}
 	return plugin.ResourceType{
 		Kind: "lxc", Title: "Containers",
-		List: plugin.DataSource{RouteID: "proxmox.lxc.list"}, Columns: cols,
+		List: plugin.DataSource{RouteID: "proxmox.lxc.list"}, Watch: listWatch("lxc"), Columns: cols,
 		Actions: plugin.ResourceActions{Detail: lifecycle, Row: row},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Panel{
-				{Key: "summary", Label: "Summary", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.lxc.overview", Params: guestParams()}, Config: guestOverviewConfig()},
+				{Key: "summary", Label: "Summary", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.lxc.overview", Params: guestParams()}, Config: watchedObjectConfig(guestOverviewConfig(), "lxc", "${resource.namespace}", "${resource.uid}")},
 				{Key: "metrics", Label: "Metrics", Icon: icon("activity"), Type: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.lxc.metrics", Method: plugin.MethodWS, Params: guestParams()}, Config: cpuMemMetrics(), VisibleWhen: instanceOnly()},
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "proxmox.lxc.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.TerminalConfig{Zoom: true, Search: true}, VisibleWhen: instanceOnly()},
-				{Key: "snapshots", Label: "Snapshots", Icon: icon("camera"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.snapshots", Params: guestParams()}, Config: plugin.TableConfig{Columns: snapshotColumns(), RowActionIDs: []string{"act.lxc.snapshot.rollback", "act.lxc.snapshot.delete"}, EmptyText: "No snapshots for this container."}, VisibleWhen: instanceOnly()},
-				{Key: "backups", Label: "Backups", Icon: icon("archive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.backups", Params: guestParams()}, Config: plugin.TableConfig{Columns: backupColumns(), RowActionIDs: []string{"act.lxc.backup.restore", "act.backup.delete"}, RowClick: plugin.RowClickSelect, EmptyText: "No backup archives found for this container."}},
+				{Key: "snapshots", Label: "Snapshots", Icon: icon("camera"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.snapshots", Params: guestParams()}, Config: refreshTableConfig(plugin.TableConfig{Columns: snapshotColumns(), RowActionIDs: []string{"act.lxc.snapshot.rollback", "act.lxc.snapshot.delete"}, EmptyText: "No snapshots for this container."}, 5000), VisibleWhen: instanceOnly()},
+				{Key: "backups", Label: "Backups", Icon: icon("archive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.backups", Params: guestParams()}, Config: refreshTableConfig(plugin.TableConfig{Columns: backupColumns(), RowActionIDs: []string{"act.lxc.backup.restore", "act.backup.delete"}, RowClick: plugin.RowClickSelect, EmptyText: "No backup archives found for this container."}, 10000)},
 				{Key: "config", Label: "Config", Icon: icon("code"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.lxc.config", Params: guestParams()}, Config: lxcConfigDetail()},
 			},
 		},
@@ -182,15 +230,18 @@ func nodeResource() plugin.ResourceType {
 	nodeParam := map[string]string{"node": "${resource.uid}"}
 	return plugin.ResourceType{
 		Kind: "node", Title: "Nodes",
-		List: plugin.DataSource{RouteID: "proxmox.node.list"}, Columns: cols,
+		List: plugin.DataSource{RouteID: "proxmox.node.list"}, Watch: listWatch("node"), Columns: cols,
 		Actions: plugin.ResourceActions{Detail: []string{"act.node.power"}},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("activity"), Type: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.node.metrics", Method: plugin.MethodWS, Params: nodeParam}, Config: cpuMemMetrics()},
 				{Key: "shell", Label: "Shell", Icon: icon("terminal"), Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "proxmox.node.shell", Method: plugin.MethodWS, Params: nodeParam}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
-				{Key: "storage", Label: "Storage", Icon: icon("database"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.node.storage", Params: nodeParam}, Config: plugin.TableConfig{Columns: storageColumns(), EmptyText: "No storage is available on this node."}},
-				{Key: "tasks", Label: "Task History", Icon: icon("list"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.node.tasks", Params: nodeParam}, Config: plugin.TableConfig{Columns: taskColumns(), RowActionIDs: []string{"act.task.stop"}, RowClick: plugin.RowClickDetail, DefaultSort: &plugin.SortKey{Field: "starttime", Desc: true}, EmptyText: "No recent tasks on this node."}},
+				{Key: "status", Label: "Status", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.node.status", Params: nodeParam}, Config: watchedObjectConfig(nodeStatusConfig(), "node", "${resource.uid}", "${resource.uid}")},
+				{Key: "storage", Label: "Storage", Icon: icon("database"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.node.storage", Params: nodeParam}, Config: plugin.TableConfig{Columns: storageColumns(), EmptyText: "No storage is available on this node.", Watch: nodeListWatch("storage")}},
+				{Key: "tasks", Label: "Task History", Icon: icon("list"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.node.tasks", Params: nodeParam}, Config: plugin.TableConfig{Columns: taskColumns(), RowActionIDs: []string{"act.task.stop"}, RowClick: plugin.RowClickDetail, DefaultSort: &plugin.SortKey{Field: "starttime", Desc: true}, EmptyText: "No recent tasks on this node.", RefreshIntervalMs: 3000}},
+				{Key: "syslog", Label: "Syslog", Icon: icon("scroll-text"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.node.syslog", Params: nodeParam}, Config: plugin.TableConfig{Columns: logColumns(), EmptyText: "No syslog lines returned.", RefreshIntervalMs: 5000}},
+				{Key: "updates", Label: "Updates", Icon: icon("package"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.node.updates", Params: nodeParam}, Config: plugin.TableConfig{Columns: updateColumns(), EmptyText: "No package updates reported.", RefreshIntervalMs: 30000}},
 			},
 		},
 	}
@@ -199,11 +250,11 @@ func nodeResource() plugin.ResourceType {
 func storageResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "storage", Title: "Storage",
-		List: plugin.DataSource{RouteID: "proxmox.storage.list"}, Columns: storageColumns(),
+		List: plugin.DataSource{RouteID: "proxmox.storage.list"}, Watch: listWatch("storage"), Columns: storageColumns(),
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Panel{
-				{Key: "content", Label: "Content", Icon: icon("hard-drive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.storage.content", Params: map[string]string{"node": "${resource.namespace}", "storage": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: contentColumns(), RowActionIDs: []string{"act.qemu.backup.restore", "act.lxc.backup.restore", "act.backup.delete"}, RowClick: plugin.RowClickSelect, EmptyText: "This storage has no content visible to this connection."}},
+				{Key: "content", Label: "Content", Icon: icon("hard-drive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.storage.content", Params: map[string]string{"node": "${resource.namespace}", "storage": "${resource.uid}"}}, Config: refreshTableConfig(plugin.TableConfig{Columns: contentColumns(), RowActionIDs: []string{"act.qemu.backup.restore", "act.lxc.backup.restore", "act.backup.delete"}, RowClick: plugin.RowClickSelect, EmptyText: "This storage has no content visible to this connection."}, 10000)},
 			},
 		},
 	}
@@ -214,13 +265,14 @@ func taskResource() plugin.ResourceType {
 		Kind:    "task",
 		Title:   "Tasks",
 		List:    plugin.DataSource{RouteID: "proxmox.task.list"},
+		Watch:   listWatch("task"),
 		Columns: taskColumns(),
 		Actions: plugin.ResourceActions{Detail: []string{"act.task.stop"}},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.uid}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Panel{
-				{Key: "status", Label: "Status", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.task.status", Params: map[string]string{"node": "${resource.namespace}", "upid": "${resource.uid}"}}, Config: taskStatusConfig()},
-				{Key: "log", Label: "Log", Icon: icon("scroll-text"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.task.log", Params: map[string]string{"node": "${resource.namespace}", "upid": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: []plugin.Column{{Key: "n", Label: "#", Type: plugin.ColumnNumber, Width: "5rem"}, {Key: "t", Label: "Message"}}, EmptyText: "This task has no log lines."}},
+				{Key: "status", Label: "Status", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.task.status", Params: map[string]string{"node": "${resource.namespace}", "upid": "${resource.uid}"}}, Config: watchedObjectConfig(taskStatusConfig(), "task", "${resource.namespace}", "${resource.uid}")},
+				{Key: "log", Label: "Log", Icon: icon("scroll-text"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.task.log", Params: map[string]string{"node": "${resource.namespace}", "upid": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: []plugin.Column{{Key: "n", Label: "#", Type: plugin.ColumnNumber, Width: "5rem"}, {Key: "t", Label: "Message"}}, EmptyText: "This task has no log lines.", Watch: &plugin.DataSource{RouteID: "proxmox.task.log.watch", Method: plugin.MethodWS, Params: map[string]string{"node": "${resource.namespace}", "upid": "${resource.uid}"}}}},
 			},
 		},
 	}
@@ -404,6 +456,13 @@ func mountFields() []plugin.ObjectDetailField {
 // cpuMemMetrics declares compact CPU/Memory usage rows plus history lines.
 func cpuMemMetrics() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
+		Stats: []plugin.MetricStat{
+			{Key: "uptime", Label: "Uptime"},
+			{Key: "diskRead", Label: "Disk read", Unit: "B"},
+			{Key: "diskWrite", Label: "Disk write", Unit: "B"},
+			{Key: "netIn", Label: "Net in", Unit: "B"},
+			{Key: "netOut", Label: "Net out", Unit: "B"},
+		},
 		Usage: []plugin.MetricUsage{
 			{Key: "cpu", Label: "CPU usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpu", TotalKey: "cpuTotal", TotalType: plugin.ColumnNumber, TotalLabel: "of", Unit: "CPU(s)", WarnAt: 75, CriticalAt: 90}},
 			{Key: "mem", Label: "Memory usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "mem", UsedKey: "memUsed", TotalKey: "memTotal", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 80, CriticalAt: 95}},

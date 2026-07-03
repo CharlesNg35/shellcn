@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -182,60 +184,75 @@ func (s *Store) History(ctx context.Context, convID string, tokenBudget int) (su
 	if tokenBudget <= 0 {
 		tokenBudget = budget.DefaultHistoryBudget
 	}
-	summary, msgs, err = splitByTokenBudget(all, tokenBudget)
+	compactedRecent, msgs, err := splitByTokenBudget(all, tokenBudget)
 	if err != nil {
 		return "", nil, err
 	}
-	return s.mergedSummary(ctx, convID, c.Summary, summary), msgs, nil
+	total, err := s.msg.Count(ctx, convID)
+	if err != nil {
+		return "", nil, err
+	}
+	agedOut, err := s.compactRange(ctx, convID, c.CompactedCount, agedOutCount(total))
+	if err != nil {
+		return "", nil, err
+	}
+	summary = mergeSummaries(c.Summary, agedOut, summaryCharBudget)
+	summary = mergeSummaries(summary, compactedRecent, summaryCharBudget)
+	return summary, msgs, nil
 }
 
-// RefreshSummary stores the compacted context snapshot used as long-term memory
-// for messages that age out of the loaded recent window.
-func (s *Store) RefreshSummary(ctx context.Context, convID string, tokenBudget int) error {
+// RefreshSummary folds newly aged-out messages into the persisted Summary,
+// advancing the watermark so each message is compacted exactly once.
+func (s *Store) RefreshSummary(ctx context.Context, convID string) error {
 	c, err := s.conv.Get(ctx, convID)
 	if err != nil {
 		return err
 	}
-	all, err := s.msg.Recent(ctx, convID, maxLoadedMessages)
+	total, err := s.msg.Count(ctx, convID)
 	if err != nil {
 		return err
 	}
-	if tokenBudget <= 0 {
-		tokenBudget = budget.DefaultHistoryBudget
+	agedOut := agedOutCount(total)
+	if agedOut <= c.CompactedCount {
+		return nil
 	}
-	summary, _, err := splitByTokenBudget(all, tokenBudget)
+	delta, err := s.compactRange(ctx, convID, c.CompactedCount, agedOut)
 	if err != nil {
 		return err
 	}
-	c.Summary = s.mergedSummary(ctx, convID, c.Summary, summary)
+	if delta == "" {
+		return nil
+	}
+	c.Summary = mergeSummaries(c.Summary, delta, summaryCharBudget)
+	c.CompactedCount = agedOut
 	c.UpdatedAt = s.now()
 	return s.conv.Update(ctx, &c)
 }
 
-func (s *Store) mergedSummary(ctx context.Context, convID, existing, compactedRecent string) string {
-	agedOut, _ := s.agedOutSummary(ctx, convID)
-	return mergeSummaries(mergeSummaries(existing, agedOut, summaryCharBudget), compactedRecent, summaryCharBudget)
+func agedOutCount(total int) int {
+	if total <= maxLoadedMessages {
+		return 0
+	}
+	return total - maxLoadedMessages
 }
 
-func (s *Store) agedOutSummary(ctx context.Context, convID string) (string, error) {
-	total, err := s.msg.Count(ctx, convID)
-	if err != nil || total <= maxLoadedMessages {
-		return "", err
+func (s *Store) compactRange(ctx context.Context, convID string, from, to int) (string, error) {
+	if to <= from {
+		return "", nil
 	}
-	olderCount := total - maxLoadedMessages
-	msgs, err := s.msg.Range(ctx, convID, olderCount-1, 1)
+	msgs, err := s.msg.Range(ctx, convID, from, to-from)
 	if err != nil || len(msgs) == 0 {
 		return "", err
 	}
-	formatted := make([]formatted, 0, len(msgs))
+	items := make([]formatted, 0, len(msgs))
 	for _, msg := range msgs {
 		limit := compactedAssistCharLimit
 		if msg.Role == string(engine.RoleUser) {
 			limit = compactedUserCharLimit
 		}
-		formatted = append(formatted, formatMessage(msg, limit, true))
+		items = append(items, formatMessage(msg, limit, true))
 	}
-	return buildSummary(formatted, summaryCharBudget), nil
+	return buildSummary(items, summaryCharBudget), nil
 }
 
 // MessagePage is one UI window of conversation messages.
@@ -433,6 +450,10 @@ func keepSummaryTail(s string, charBudget int) string {
 	cut := len(s) - charBudget
 	if i := strings.IndexByte(s[cut:], '\n'); i >= 0 {
 		cut += i + 1
+	} else {
+		for cut < len(s) && !utf8.RuneStart(s[cut]) { // don't split a multi-byte rune
+			cut++
+		}
 	}
 	return "[Earlier conversation memory trimmed]\n" + s[cut:]
 }
@@ -473,15 +494,18 @@ func sanitizePromptSlice(values []any, depth int) any {
 }
 
 func sanitizePromptMap(values map[string]any, depth int) any {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys) // stable key subset when over the cap
 	out := make(map[string]any, min(len(values), sanitizeObjectKeyLimit)+1)
-	count := 0
-	for key, value := range values {
-		if count >= sanitizeObjectKeyLimit {
-			out["_truncatedKeys"] = len(values) - count
+	for i, key := range keys {
+		if i >= sanitizeObjectKeyLimit {
+			out["_truncatedKeys"] = len(values) - i
 			break
 		}
-		out[key] = sanitizePromptValue(value, depth+1)
-		count++
+		out[key] = sanitizePromptValue(values[key], depth+1)
 	}
 	return out
 }
@@ -515,7 +539,11 @@ func truncate(s string, limit int) string {
 	if len(s) <= limit {
 		return s
 	}
-	return s[:limit] + "…"
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(s[cut]) { // don't split a multi-byte rune
+		cut--
+	}
+	return s[:cut] + "…"
 }
 
 func itoa(n int) string {

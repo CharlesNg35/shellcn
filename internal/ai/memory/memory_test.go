@@ -125,12 +125,13 @@ func TestRefreshSummaryCarriesOlderMemoryPastRecentWindow(t *testing.T) {
 
 	_ = m.AppendUser(ctx, c.ID, "remember the first database was billing")
 	_ = m.AppendAssistant(ctx, c.ID, "noted", "", nil, false)
-	for i := 0; i < 12; i++ {
-		_ = m.AppendUser(ctx, c.ID, "older user "+itoa(i)+" "+strings.Repeat("x", 200))
-		_ = m.AppendAssistant(ctx, c.ID, "older assistant "+itoa(i)+" "+strings.Repeat("y", 200), "", nil, false)
-	}
-	if err := m.RefreshSummary(ctx, c.ID, 500); err != nil {
-		t.Fatalf("refresh summary: %v", err)
+	// Push the opening turn out of the loaded window; only the summary can keep it.
+	for i := 0; i < 40; i++ {
+		_ = m.AppendUser(ctx, c.ID, "older user "+itoa(i))
+		_ = m.AppendAssistant(ctx, c.ID, "older assistant "+itoa(i), "", nil, false)
+		if err := m.RefreshSummary(ctx, c.ID); err != nil {
+			t.Fatalf("refresh summary: %v", err)
+		}
 	}
 	got, err := m.Get(ctx, "u1", c.ID)
 	if err != nil {
@@ -140,16 +141,39 @@ func TestRefreshSummaryCarriesOlderMemoryPastRecentWindow(t *testing.T) {
 		t.Fatalf("summary should keep compacted older context, got %q", got.Summary)
 	}
 
-	for i := 0; i < 60; i++ {
-		_ = m.AppendUser(ctx, c.ID, "new user "+itoa(i))
-		_ = m.AppendAssistant(ctx, c.ID, "new assistant "+itoa(i), "", nil, false)
-	}
 	summary, _, err := m.History(ctx, c.ID, 1_000_000)
 	if err != nil {
 		t.Fatalf("history: %v", err)
 	}
 	if !strings.Contains(summary, "billing") {
 		t.Fatalf("stored summary should be reused after messages leave recent window, got %q", summary)
+	}
+}
+
+func TestRefreshSummaryFoldsEveryAgedOutUserTurn(t *testing.T) {
+	m := newStore()
+	ctx := context.Background()
+	c, _ := m.Create(ctx, "u1", "c1", "", "gpt-4o")
+
+	// No token pressure, so only the aging-out fold feeds the summary. Every
+	// aged-out user turn must survive, not just the assistant half the old
+	// single-message fold captured.
+	const turns = 30
+	for i := 0; i < turns; i++ {
+		_ = m.AppendUser(ctx, c.ID, "USERMARK-"+itoa(i))
+		_ = m.AppendAssistant(ctx, c.ID, "reply "+itoa(i), "", nil, false)
+		if err := m.RefreshSummary(ctx, c.ID); err != nil {
+			t.Fatalf("refresh turn %d: %v", i, err)
+		}
+	}
+	got, err := m.Get(ctx, "u1", c.ID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	for i := 0; i < 10; i++ {
+		if !strings.Contains(got.Summary, "USERMARK-"+itoa(i)) {
+			t.Fatalf("aged-out user turn %d dropped from summary (parity bug): %q", i, got.Summary)
+		}
 	}
 }
 
@@ -182,7 +206,7 @@ func TestSummaryKeepsNewestMemoryWhenBudgetIsFull(t *testing.T) {
 	for i := 0; i < 120; i++ {
 		_ = m.AppendUser(ctx, c.ID, "early topic "+itoa(i)+" "+strings.Repeat("a", 180))
 		_ = m.AppendAssistant(ctx, c.ID, "early answer "+itoa(i), "", nil, false)
-		if err := m.RefreshSummary(ctx, c.ID, 500); err != nil {
+		if err := m.RefreshSummary(ctx, c.ID); err != nil {
 			t.Fatalf("refresh early: %v", err)
 		}
 	}
@@ -190,7 +214,7 @@ func TestSummaryKeepsNewestMemoryWhenBudgetIsFull(t *testing.T) {
 	for i := 0; i < 40; i++ {
 		_ = m.AppendUser(ctx, c.ID, "tail filler "+itoa(i))
 	}
-	if err := m.RefreshSummary(ctx, c.ID, 500); err != nil {
+	if err := m.RefreshSummary(ctx, c.ID); err != nil {
 		t.Fatalf("refresh latest: %v", err)
 	}
 

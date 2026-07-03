@@ -171,7 +171,6 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 			if summary != "" {
 				system = agent.SystemPrompt(promptInput) + "\n\nConversation memory:\n" + summary
 				overheadTokens = budget.Estimate(system) + toolTokens
-				historyBudget = budget.HistoryBudget(limits, overheadTokens, 0)
 				maxOut = budget.ResolveOutputTokens(limits, overheadTokens, 0)
 			}
 		}
@@ -203,7 +202,7 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 
 	if persist && acc.err == "" {
 		_ = s.mem.AppendAssistant(ctx, in.ConversationID, acc.content.String(), acc.reasoning.String(), acc.calls, acc.truncated)
-		_ = s.mem.RefreshSummary(ctx, in.ConversationID, historyBudget)
+		_ = s.mem.RefreshSummary(ctx, in.ConversationID)
 		s.autoTitle(ctx, provider, model, in.User.ID, in.ConversationID)
 	}
 	return nil

@@ -2,11 +2,13 @@ package proxmox
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
@@ -448,6 +450,86 @@ func TestProxmoxUXInformationArchitecture(t *testing.T) {
 	}
 }
 
+func TestProxmoxLiveOpsUXContract(t *testing.T) {
+	m := New().Manifest()
+	streams := map[string]plugin.StreamKind{}
+	for _, stream := range m.Streams {
+		streams[stream.RouteID] = stream.Kind
+	}
+	for _, routeID := range []string{"proxmox.resource.watch", "proxmox.object.watch", "proxmox.timeline.watch", "proxmox.task.log.watch"} {
+		if streams[routeID] != plugin.StreamResource {
+			t.Fatalf("%s stream kind = %q", routeID, streams[routeID])
+		}
+	}
+
+	byKind := map[string]plugin.ResourceType{}
+	for _, resource := range m.Resources {
+		byKind[resource.Kind] = resource
+	}
+	if byKind["overview"].Detail.Tabs[0].Type != plugin.PanelDashboard {
+		t.Fatalf("overview should render a dashboard: %+v", byKind["overview"].Detail.Tabs)
+	}
+	for _, kind := range []string{"qemu", "lxc", "node", "storage", "task"} {
+		if byKind[kind].Watch == nil || byKind[kind].Watch.RouteID != "proxmox.resource.watch" {
+			t.Fatalf("%s resource watch = %+v", kind, byKind[kind].Watch)
+		}
+	}
+	for _, tab := range byKind["qemu"].Detail.Tabs {
+		if tab.Key == "summary" {
+			cfg := tab.Config.(plugin.ObjectDetailConfig)
+			if cfg.Watch == nil || cfg.Watch.RouteID != "proxmox.object.watch" {
+				t.Fatalf("qemu summary watch = %+v", cfg.Watch)
+			}
+		}
+	}
+	for _, tab := range byKind["task"].Detail.Tabs {
+		if tab.Key == "log" {
+			cfg := tab.Config.(plugin.TableConfig)
+			if cfg.Watch == nil || cfg.Watch.RouteID != "proxmox.task.log.watch" {
+				t.Fatalf("task log watch = %+v", cfg.Watch)
+			}
+		}
+	}
+	for _, state := range []string{"running", "ok", "warning", "failed", "critical"} {
+		if statusSeverities[state] == "" {
+			t.Fatalf("missing status severity for %q", state)
+		}
+	}
+}
+
+func TestOverviewAndHealthRoutes(t *testing.T) {
+	srv := fakeProxmox(t)
+	defer srv.Close()
+
+	host, port := splitHostPort(t, srv.URL)
+	sess := dialSession(t, host, port)
+
+	frame, err := overviewFrame(context.Background(), sess)
+	if err != nil {
+		t.Fatalf("overview frame: %v", err)
+	}
+	if frame["nodes"] != 1 || frame["guests"] != 2 || frame["runningGuests"] != int64(1) {
+		t.Fatalf("overview frame = %+v", frame)
+	}
+	if frame["failedTasks"] != int64(1) {
+		t.Fatalf("failed task count = %+v", frame["failedTasks"])
+	}
+
+	rows, err := healthRows(context.Background(), sess)
+	if err != nil {
+		t.Fatalf("health rows: %v", err)
+	}
+	foundFailedTask := false
+	for _, row := range rows {
+		if row["title"] == "Recent task failed" {
+			foundFailedTask = true
+		}
+	}
+	if !foundFailedTask {
+		t.Fatalf("health rows missing failed task finding: %+v", rows)
+	}
+}
+
 func hasUsageField(cfg plugin.ObjectDetailConfig, key string) bool {
 	for _, section := range cfg.Sections {
 		for _, field := range section.Fields {
@@ -493,6 +575,8 @@ func schemaField(t *testing.T, schema *plugin.Schema, key string) plugin.Field {
 func fakeProxmox(t *testing.T) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
+	started := time.Now().Add(-1 * time.Hour).Unix()
+	ended := time.Now().Add(-55 * time.Minute).Unix()
 	mux.HandleFunc("/api2/json/version", jsonHandler(`{"data":{"version":"8.1.0","release":"8"}}`))
 	mux.HandleFunc("/api2/json/cluster/resources", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("type") == "storage" {
@@ -505,7 +589,12 @@ func fakeProxmox(t *testing.T) *httptest.Server {
 			]}`))
 	})
 	mux.HandleFunc("/api2/json/nodes", jsonHandler(`{"data":[{"node":"pve","status":"online","cpu":0.1,"mem":1073741824,"maxmem":4294967296,"uptime":7200}]}`))
+	mux.HandleFunc("/api2/json/cluster/tasks", jsonHandler(fmt.Sprintf(`{"data":[
+		{"upid":"UPID:pve:00001234:0AB12345:65000000:vzdump:100:root@pam:","node":"pve","type":"vzdump","id":"100","user":"root@pam","starttime":%d,"endtime":%d,"status":"stopped","exitstatus":"ERROR"},
+		{"upid":"UPID:pve:00001235:0AB12345:65000010:qmstart:100:root@pam:","node":"pve","type":"qmstart","id":"100","user":"root@pam","starttime":%d,"status":"running"}
+	]}`, started, ended, started)))
 	mux.HandleFunc("/api2/json/nodes/pve/storage", jsonHandler(`{"data":[{"storage":"local","type":"dir","content":"backup,iso","used":10,"total":100,"active":1},{"storage":"local-lvm","type":"lvmthin","content":"images,rootdir","used":20,"total":200,"active":1}]}`))
+	mux.HandleFunc("/api2/json/nodes/pve/status", jsonHandler(`{"data":{"cpu":0.1,"memory":{"used":1073741824,"total":4294967296},"rootfs":{"used":10,"total":100},"uptime":7200,"pveversion":"8.1.0"}}`))
 	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/status/current", jsonHandler(`{"data":{"status":"running","cpu":0.25,"mem":1073741824,"maxmem":2147483648,"uptime":3600}}`))
 	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/config", jsonHandler(`{"data":{"name":"web","memory":2048,"balloon":512,"cores":2,"sockets":1,"ostype":"l26","tags":"prod"}}`))
 	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/snapshot", jsonHandler(`{"data":[{"name":"pre-upgrade","description":"before update","snaptime":1700000000,"vmstate":1}]}`))
