@@ -369,7 +369,7 @@ func keyEntries(ctx context.Context, client *redisclient.Client, keys []string) 
 			kind = "none"
 		}
 		kinds[i] = kind
-		sizeCmds[i] = queueKeySize(sizePipe, ctx, key, kind)
+		sizeCmds[i] = queueKeySize(ctx, sizePipe, key, kind)
 	}
 	// Size is best-effort metadata; tolerate per-key WRONGTYPE races from keys that
 	// changed type between the two pipelines.
@@ -389,7 +389,7 @@ func keyEntries(ctx context.Context, client *redisclient.Client, keys []string) 
 	return items, nil
 }
 
-func queueKeySize(pipe redisclient.Pipeliner, ctx context.Context, key, kind string) *redisclient.IntCmd {
+func queueKeySize(ctx context.Context, pipe redisclient.Pipeliner, key, kind string) *redisclient.IntCmd {
 	switch kind {
 	case "string":
 		return pipe.StrLen(ctx, key)
