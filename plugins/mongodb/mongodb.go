@@ -31,6 +31,8 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Actions:             actions(),
 		Streams: []plugin.Stream{
 			{ID: "mongodb.command", Kind: plugin.StreamQuery, RouteID: "mongodb.command"},
+			{ID: "mongodb.server.metrics", Kind: plugin.StreamMetrics, RouteID: "mongodb.server.metrics"},
+			{ID: "mongodb.resource.watch", Kind: plugin.StreamResource, RouteID: "mongodb.resource.watch"},
 		},
 	}
 }
@@ -47,22 +49,43 @@ func icon(name string) plugin.Icon {
 
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
+		{Key: "overview", Label: "Overview", Icon: icon("layout-dashboard"), Ref: &plugin.ResourceIdentity{Kind: "server", Name: "MongoDB", UID: "server"}},
 		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "mongodb.databases.tree"}, ResourceKind: "database"},
 	}
 }
 
 func resources() []plugin.ResourceType {
 	return []plugin.ResourceType{
+		serverResource(),
 		databaseResource(),
 		collectionResource(),
 		documentResource(),
 	}
 }
 
+func serverResource() plugin.ResourceType {
+	return plugin.ResourceType{
+		Kind: "server", Title: "Server",
+		List:    plugin.DataSource{RouteID: "mongodb.server.list"},
+		Watch:   resourceWatch("server", nil),
+		Columns: serverColumns(),
+		Detail: plugin.DetailView{
+			Header: plugin.HeaderSpec{Title: "MongoDB", StatusField: "status", Severities: statusSeverities()},
+			Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("layout-dashboard"), Type: plugin.PanelDashboard, Config: serverOverviewDashboard()},
+				{Key: "databases", Label: "Databases", Icon: icon("database"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.databases.list"}, Config: databasesTableConfig()},
+				{Key: "operations", Label: "Operations", Icon: icon("activity"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.current_ops.list"}, Config: currentOpsTableConfig()},
+				{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mongodb.command", Method: plugin.MethodWS}, Config: commandConfig(`{"serverStatus": 1}`)},
+			},
+		},
+	}
+}
+
 func databaseResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "database", Title: "Databases",
-		List: plugin.DataSource{RouteID: "mongodb.databases.list"},
+		List:  plugin.DataSource{RouteID: "mongodb.databases.list"},
+		Watch: resourceWatch("database", nil),
 		Columns: []plugin.Column{
 			{Key: "name", Label: "Database", Sortable: true},
 			{Key: "size", Label: "Size", Type: plugin.ColumnBytes, Sortable: true},
@@ -76,7 +99,8 @@ func databaseResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("gauge"), Type: plugin.PanelDashboard, Config: databaseOverviewDashboard()},
-				{Key: "collections", Label: "Collections", Icon: icon("folders"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.collections.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: collectionsTableConfig([]string{"mongodb.collection.create"}, []string{"mongodb.collection.drop"})},
+				{Key: "collections", Label: "Collections", Icon: icon("folders"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.collections.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: collectionsTableConfig([]string{"mongodb.collection.create"}, []string{"mongodb.collection.drop"}, "${resource.uid}")},
+				{Key: "operations", Label: "Operations", Icon: icon("activity"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.current_ops.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: currentOpsTableConfig()},
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mongodb.command", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.uid}"}}, Config: commandConfig(`{"serverStatus": 1}`)},
 			},
 		},
@@ -87,16 +111,18 @@ func collectionResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "collection", Title: "Collections",
 		List:    plugin.DataSource{RouteID: "mongodb.collections.list"},
+		Watch:   resourceWatch("collection", nil),
 		Columns: collectionColumns(),
 		Actions: plugin.ResourceActions{
 			Row:    []string{"mongodb.collection.drop"},
 			Detail: []string{"mongodb.collection.drop"},
 		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"},
+			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", StatusField: "status", Severities: statusSeverities()},
 			Tabs: []plugin.Panel{
 				{Key: "documents", Label: "Documents", Icon: icon("braces"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.documents.list", Params: collectionParams()}, Config: documentsTableConfig()},
 				{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.indexes.list", Params: collectionParams()}, Config: indexesTableConfig()},
+				{Key: "operations", Label: "Operations", Icon: icon("activity"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.current_ops.list", Params: collectionParams()}, Config: currentOpsTableConfig()},
 				{Key: "validation", Label: "Validation", Icon: icon("shield-check"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mongodb.collection.validation", Params: collectionParams()}, Config: collectionValidationDetailConfig()},
 				{Key: "stats", Label: "Stats", Icon: icon("bar-chart-3"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mongodb.collection.stats", Params: collectionParams()}, Config: collectionStatsDetailConfig()},
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mongodb.command", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.namespace}"}}, Config: commandConfig(`{"find": "${resource.name}", "filter": {}, "limit": 50}`)},
@@ -109,7 +135,42 @@ func databaseOverviewDashboard() plugin.DashboardConfig {
 	databaseParams := map[string]string{"database": "${resource.uid}"}
 	return plugin.DashboardConfig{Cells: []plugin.Panel{
 		{Key: "summary", Label: "Summary", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mongodb.database.overview", Params: databaseParams}, Config: databaseOverviewDetailConfig(), Span: 2},
+		{Key: "collections", Label: "Collections", Icon: icon("folders"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.collections.list", Params: databaseParams}, Config: collectionsTableConfig(nil, []string{"mongodb.collection.drop"}, "${resource.uid}"), Span: 2},
+		{Key: "operations", Label: "Operations", Icon: icon("activity"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.current_ops.list", Params: databaseParams}, Config: currentOpsTableConfig(), Span: 2},
 	}}
+}
+
+func serverOverviewDashboard() plugin.DashboardConfig {
+	return plugin.DashboardConfig{Cells: []plugin.Panel{
+		{Key: "status", Label: "Status", Icon: icon("server"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "mongodb.server.status"}, Config: serverStatusDetailConfig(), Span: 2},
+		{Key: "metrics", Label: "Traffic", Icon: icon("activity"), Type: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "mongodb.server.metrics", Method: plugin.MethodWS}, Config: serverMetricsConfig(), Span: 2},
+		{Key: "health", Label: "Health", Icon: icon("shield-check"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.health.list"}, Config: healthTableConfig(), Span: 2},
+		{Key: "databases", Label: "Databases", Icon: icon("database"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.databases.list"}, Config: databasesTableConfig(), Span: 2},
+	}}
+}
+
+func serverStatusDetailConfig() plugin.ObjectDetailConfig {
+	return plugin.ObjectDetailConfig{
+		Watch: resourceWatch("server", nil),
+		Sections: []plugin.ObjectDetailSection{
+			{Title: "Server", Fields: []plugin.ObjectDetailField{
+				{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Severities: statusSeverities()},
+				{Key: "host", Label: "Host", Copy: true},
+				{Key: "version", Label: "Version"},
+				{Key: "process", Label: "Process"},
+				{Key: "uptimeSeconds", Label: "Uptime (seconds)", Type: plugin.ColumnNumber},
+			}},
+			{Title: "Connections", Fields: []plugin.ObjectDetailField{
+				{Key: "connectionsCurrent", Label: "Current", Type: plugin.ColumnNumber},
+				{Key: "connectionsAvailable", Label: "Available", Type: plugin.ColumnNumber},
+				{Key: "connectionsPct", Label: "Used", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "connectionsPct", WarnAt: 80, CriticalAt: 90}},
+			}},
+			{Title: "Replica Set", Fields: []plugin.ObjectDetailField{
+				{Key: "replicaSet", Label: "Set"},
+				{Key: "replicaState", Label: "State", Type: plugin.ColumnBadge},
+			}},
+		},
+	}
 }
 
 func databaseOverviewDetailConfig() plugin.ObjectDetailConfig {
@@ -182,16 +243,43 @@ func collectionParams() map[string]string {
 	return map[string]string{"database": "${resource.namespace}", "collection": "${resource.name}"}
 }
 
-func collectionsTableConfig(actions, rowActions []string) plugin.TableConfig {
-	return plugin.TableConfig{Columns: collectionColumns(), ActionIDs: actions, RowActionIDs: rowActions, EmptyText: "No collections.", Exportable: true}
+func resourceWatch(kind string, params map[string]string) *plugin.DataSource {
+	if params == nil {
+		params = map[string]string{}
+	}
+	out := map[string]string{"kind": kind}
+	for key, value := range params {
+		out[key] = value
+	}
+	return &plugin.DataSource{RouteID: "mongodb.resource.watch", Method: plugin.MethodWS, Params: out}
+}
+
+func databasesTableConfig() plugin.TableConfig {
+	return plugin.TableConfig{Columns: databaseColumns(), EmptyText: "No databases.", Exportable: true, Watch: resourceWatch("database", nil)}
+}
+
+func collectionsTableConfig(actions, rowActions []string, database string) plugin.TableConfig {
+	params := map[string]string{}
+	if database != "" {
+		params["database"] = database
+	}
+	return plugin.TableConfig{Columns: collectionColumns(), ActionIDs: actions, RowActionIDs: rowActions, EmptyText: "No collections.", Exportable: true, Watch: resourceWatch("collection", params)}
 }
 
 func documentsTableConfig() plugin.TableConfig {
-	return plugin.TableConfig{Exportable: true, ActionIDs: []string{"mongodb.document.create"}, RowActionIDs: []string{"mongodb.document.delete"}, EmptyText: "No matching documents."}
+	return plugin.TableConfig{Exportable: true, ActionIDs: []string{"mongodb.document.create"}, RowActionIDs: []string{"mongodb.document.delete"}, EmptyText: "No matching documents.", RefreshIntervalMs: 5000}
 }
 
 func indexesTableConfig() plugin.TableConfig {
-	return plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"mongodb.index.create"}, RowActionIDs: []string{"mongodb.index.drop"}, EmptyText: "No indexes.", Exportable: true}
+	return plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"mongodb.index.create"}, RowActionIDs: []string{"mongodb.index.drop"}, EmptyText: "No indexes.", Exportable: true, Watch: resourceWatch("index", collectionParams())}
+}
+
+func healthTableConfig() plugin.TableConfig {
+	return plugin.TableConfig{Columns: healthColumns(), EmptyText: "No health findings.", Exportable: true, RefreshIntervalMs: 10000}
+}
+
+func currentOpsTableConfig() plugin.TableConfig {
+	return plugin.TableConfig{Columns: currentOpColumns(), EmptyText: "No current operations.", Exportable: true, RefreshIntervalMs: 3000, DefaultSort: &plugin.SortKey{Field: "secsRunning", Desc: true}, RowClick: plugin.RowClickDetail}
 }
 
 func commandConfig(initial string) plugin.QueryEditorConfig {
@@ -212,8 +300,27 @@ func collectionColumns() []plugin.Column {
 		{Key: "name", Label: "Collection", Sortable: true},
 		{Key: "database", Label: "Database", Sortable: true},
 		{Key: "type", Label: "Type", Sortable: true},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: statusSeverities()},
 		{Key: "count", Label: "Documents", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "size", Label: "Size", Type: plugin.ColumnBytes, Sortable: true},
+	}
+}
+
+func databaseColumns() []plugin.Column {
+	return []plugin.Column{
+		{Key: "name", Label: "Database", Sortable: true},
+		{Key: "size", Label: "Size", Type: plugin.ColumnBytes, Sortable: true},
+		{Key: "empty", Label: "Empty", Type: plugin.ColumnBool, Sortable: true},
+	}
+}
+
+func serverColumns() []plugin.Column {
+	return []plugin.Column{
+		{Key: "host", Label: "Host", Sortable: true},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: statusSeverities()},
+		{Key: "version", Label: "Version", Sortable: true},
+		{Key: "connectionsCurrent", Label: "Connections", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "uptimeSeconds", Label: "Uptime (seconds)", Type: plugin.ColumnNumber, Sortable: true},
 	}
 }
 
@@ -226,7 +333,66 @@ func indexColumns() []plugin.Column {
 		{Key: "sparse", Label: "Sparse", Type: plugin.ColumnBool},
 		{Key: "hidden", Label: "Hidden", Type: plugin.ColumnBool},
 		{Key: "ttl", Label: "TTL", Type: plugin.ColumnNumber},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: statusSeverities()},
 		{Key: "properties", Label: "Properties"},
+	}
+}
+
+func healthColumns() []plugin.Column {
+	return []plugin.Column{
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: statusSeverities()},
+		{Key: "target", Label: "Target", Sortable: true},
+		{Key: "message", Label: "Finding"},
+		{Key: "recommendation", Label: "Recommendation"},
+	}
+}
+
+func currentOpColumns() []plugin.Column {
+	return []plugin.Column{
+		{Key: "opid", Label: "Operation", Sortable: true},
+		{Key: "active", Label: "Active", Type: plugin.ColumnBool, Sortable: true},
+		{Key: "secsRunning", Label: "Seconds", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "op", Label: "Op", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "namespace", Label: "Namespace", Sortable: true},
+		{Key: "client", Label: "Client", Sortable: true},
+		{Key: "appName", Label: "App", Sortable: true},
+		{Key: "waitingForLock", Label: "Waiting lock", Type: plugin.ColumnBool, Sortable: true},
+	}
+}
+
+func serverMetricsConfig() plugin.MetricsConfig {
+	return plugin.MetricsConfig{
+		Stats: []plugin.MetricStat{
+			{Key: "connectionsCurrent", Label: "Connections"},
+			{Key: "ops_commandRate", Label: "Commands/s"},
+			{Key: "networkRequests", Label: "Requests"},
+		},
+		Gauges: []plugin.MetricGauge{
+			{Key: "connectionsPct", Label: "Connections", Unit: "%", Max: 100},
+		},
+		Series: []plugin.MetricSeries{
+			{Key: "ops_queryRate", Label: "Queries/s"},
+			{Key: "ops_insertRate", Label: "Inserts/s"},
+			{Key: "ops_updateRate", Label: "Updates/s"},
+			{Key: "ops_deleteRate", Label: "Deletes/s"},
+			{Key: "networkInRate", Label: "Network in", Unit: "bytes/s"},
+			{Key: "networkOutRate", Label: "Network out", Unit: "bytes/s"},
+		},
+		History: 120,
+	}
+}
+
+func statusSeverities() map[string]plugin.Severity {
+	return map[string]plugin.Severity{
+		"healthy":  plugin.SeveritySuccess,
+		"ready":    plugin.SeveritySuccess,
+		"primary":  plugin.SeverityInfo,
+		"hidden":   plugin.SeverityWarn,
+		"ok":       plugin.SeveritySuccess,
+		"warn":     plugin.SeverityWarn,
+		"warning":  plugin.SeverityWarn,
+		"critical": plugin.SeverityDanger,
+		"error":    plugin.SeverityDanger,
 	}
 }
 
