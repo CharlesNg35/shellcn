@@ -114,9 +114,10 @@ make build    # single binary at bin/shellcn
 make dev      # live-reloading dev server
 ```
 
-## Screenshot
+## Screenshots
 
 ![ShellCN Kubernetes cluster overview](docs/assets/shellcn-kubernetes-overview.png)
+![shellcn-mongo-documents-tab.png](docs/assets/shellcn-mongo-documents-tab.png)
 
 ## Features
 
