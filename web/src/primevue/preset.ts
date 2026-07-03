@@ -519,7 +519,7 @@ export const primeVuePassthrough = {
     root: "overflow-y-auto p-2 text-sm",
     node: "",
     nodeContent:
-      "flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:text-primary-700 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/10 dark:data-[p-selected=true]:text-primary-200",
+      "mx-1 my-px flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:text-primary-700 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/10 dark:data-[p-selected=true]:text-primary-200",
     nodeToggleButton:
       "flex h-5 w-5 shrink-0 items-center justify-center rounded text-surface-400 transition-colors hover:bg-surface-200 hover:text-surface-700 data-[p-leaf=true]:invisible dark:hover:bg-surface-700 dark:hover:text-surface-100",
     nodeLabel: "flex-1 truncate text-surface-700 dark:text-surface-200",
