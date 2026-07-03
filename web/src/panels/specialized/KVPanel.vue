@@ -131,7 +131,12 @@ const treeSelectionKeys = computed(() =>
 );
 
 function leafNode(entry: KVEntry, label: string): KVNode {
-  return { key: `key:${entry.key}`, label, leaf: true, data: { kind: "key", entry } };
+  return {
+    key: `key:${entry.key}`,
+    label,
+    leaf: true,
+    data: { kind: "key", entry },
+  };
 }
 
 // buildKeyTree groups keys into a namespace tree by splitting on the delimiter.
@@ -187,7 +192,10 @@ function buildKeyTree(list: KVEntry[], delim: string): KVNode[] {
 
   const byLabel = (a: KVNode, b: KVNode): number =>
     (a.label ?? "").localeCompare(b.label ?? "");
-  const assemble = (folders: Map<string, Folder>, leaves: KVNode[]): KVNode[] => {
+  const assemble = (
+    folders: Map<string, Folder>,
+    leaves: KVNode[],
+  ): KVNode[] => {
     const folderNodes = [...folders.values()]
       .map((folder) => {
         folder.node.children = assemble(folder.folders, folder.leaves);
@@ -609,7 +617,11 @@ onUnmounted(() => {
           <template #default="{ node }">
             <span
               class="flex w-full items-center gap-1.5"
-              :title="node.data.kind === 'key' ? node.data.entry?.key : node.data.prefix"
+              :title="
+                node.data.kind === 'key'
+                  ? node.data.entry?.key
+                  : node.data.prefix
+              "
             >
               <template v-if="node.data.kind === 'folder'">
                 <AppIcon
@@ -638,7 +650,9 @@ onUnmounted(() => {
             </span>
           </template>
           <template #empty>
-            <p class="px-2 py-6 text-center text-sm text-surface-400">No keys.</p>
+            <p class="px-2 py-6 text-center text-sm text-surface-400">
+              No keys.
+            </p>
           </template>
         </Tree>
 

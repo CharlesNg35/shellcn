@@ -414,7 +414,8 @@ describe("specialized panels", () => {
     const cursors: string[] = [];
     installFetch((url) => {
       if (url.includes("kv.list")) {
-        const cursor = new URL(url, "http://h").searchParams.get("cursor") ?? "";
+        const cursor =
+          new URL(url, "http://h").searchParams.get("cursor") ?? "";
         cursors.push(cursor);
         if (cursor === "") {
           return {
