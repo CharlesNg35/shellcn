@@ -135,17 +135,17 @@ func healthSeverities() map[string]plugin.Severity {
 
 func UsageSeverities() map[string]plugin.Severity {
 	return map[string]plugin.Severity{
-		"In use":  plugin.SeveritySuccess,
-		"Unused":  plugin.SeveritySecondary,
-		"Unknown": plugin.SeverityWarn,
+		"in use":  plugin.SeveritySuccess,
+		"unused":  plugin.SeveritySecondary,
+		"unknown": plugin.SeverityWarn,
 	}
 }
 
 func ComposeSeverities() map[string]plugin.Severity {
 	return map[string]plugin.Severity{
-		"Running": plugin.SeveritySuccess,
-		"Partial": plugin.SeverityWarn,
-		"Stopped": plugin.SeveritySecondary,
-		"Empty":   plugin.SeveritySecondary,
+		"running": plugin.SeveritySuccess,
+		"partial": plugin.SeverityWarn,
+		"stopped": plugin.SeveritySecondary,
+		"empty":   plugin.SeveritySecondary,
 	}
 }

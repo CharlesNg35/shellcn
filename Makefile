@@ -101,6 +101,9 @@ dev-server: dev-api
 dev-web:
 	@cd $(WEB_DIR) && pnpm dev
 
+husky: tidy fmt lint test build
+	@echo "✓ husky pre-commit checks passed" 
+
 clean:
 	@rm -rf $(BIN_DIR) coverage.out $(WEB_DIST) tmp
 	@echo "✓ cleaned"

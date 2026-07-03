@@ -46,6 +46,35 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 	}
 
 	rc := plugin.NewRequestContext(ctx, plugin.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
+	status, err := serverStatus(rc)
+	if err != nil {
+		t.Fatalf("server status: %v", err)
+	}
+	if status.(plugin.TableRow)["status"] != "healthy" {
+		t.Fatalf("unexpected server status: %#v", status)
+	}
+	server, err := serverList(rc)
+	if err != nil {
+		t.Fatalf("server list: %v", err)
+	}
+	if len(server.(plugin.Page[plugin.TableRow]).Items) != 1 {
+		t.Fatalf("unexpected server list: %#v", server)
+	}
+	health, err := healthList(rc)
+	if err != nil {
+		t.Fatalf("health list: %v", err)
+	}
+	if health.(plugin.Page[plugin.TableRow]).Total == nil {
+		t.Fatalf("health list should report total: %#v", health)
+	}
+	ops, err := listCurrentOps(rc)
+	if err != nil {
+		t.Fatalf("current ops: %v", err)
+	}
+	if ops.(plugin.Page[plugin.TableRow]).Total == nil {
+		t.Fatalf("current ops should report total: %#v", ops)
+	}
+
 	databases, err := listDatabases(rc)
 	if err != nil {
 		t.Fatalf("list databases: %v", err)
@@ -93,6 +122,9 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 	if !pageHasName(collections.(plugin.Page[plugin.TableRow]), "shellcn_it_coll") {
 		t.Fatalf("created collection missing: %#v", collections)
 	}
+	if !pageHasStatus(collections.(plugin.Page[plugin.TableRow]), "shellcn_it_coll", "ready") {
+		t.Fatalf("created collection status missing: %#v", collections)
+	}
 
 	// Index create → list → drop round-trip.
 	idxParams := map[string]string{"database": "shellcn", "collection": "people"}
@@ -105,6 +137,9 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 	}
 	if !pageHasName(indexes.(plugin.Page[plugin.TableRow]), "role_1") {
 		t.Fatalf("created index missing: %#v", indexes)
+	}
+	if !pageHasStatus(indexes.(plugin.Page[plugin.TableRow]), "role_1", "ready") {
+		t.Fatalf("created index status missing: %#v", indexes)
 	}
 	dropParams := map[string]string{"database": "shellcn", "collection": "people", "name": "role_1"}
 	if _, err := dropIndex(plugin.NewRequestContext(ctx, plugin.User{}, s, dropParams, nil, nil)); err != nil {
@@ -180,6 +215,15 @@ func run(ctx context.Context, t *testing.T, name string, args ...string) string 
 func pageHasName(page plugin.Page[plugin.TableRow], name string) bool {
 	for _, item := range page.Items {
 		if item["name"] == name {
+			return true
+		}
+	}
+	return false
+}
+
+func pageHasStatus(page plugin.Page[plugin.TableRow], name, status string) bool {
+	for _, item := range page.Items {
+		if item["name"] == name && item["status"] == status {
 			return true
 		}
 	}

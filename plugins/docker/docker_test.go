@@ -64,7 +64,7 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	if !contains(containerRes.Actions.Toolbar, "docker.container.create") {
 		t.Fatalf("container list actions = %#v, want create action", containerRes.Actions.Toolbar)
 	}
-	wantTabs := []string{"overview", "logs", "terminal", "env", "mounts", "inspect"}
+	wantTabs := []string{"overview", "stats", "processes", "logs", "terminal", "env", "mounts", "inspect"}
 	if len(containerRes.Detail.Tabs) != len(wantTabs) {
 		t.Fatalf("container detail tabs = %d, want %d", len(containerRes.Detail.Tabs), len(wantTabs))
 	}
@@ -76,28 +76,39 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	if containerRes.Detail.Tabs[0].Type != plugin.PanelObjectDetail || containerRes.Detail.Tabs[0].Source.RouteID != "docker.container.overview" {
 		t.Fatalf("container overview should render selected container details, got panel=%s source=%+v", containerRes.Detail.Tabs[0].Type, containerRes.Detail.Tabs[0].Source)
 	}
-	if logs := containerRes.Detail.Tabs[1]; logs.Type != plugin.PanelLogStream {
+	if stats := containerRes.Detail.Tabs[1]; stats.Type != plugin.PanelMetrics || stats.Source.RouteID != "docker.container.stats" || stats.VisibleWhen == nil {
+		t.Fatalf("container stats panel mismatch: panel=%s source=%+v visible=%+v", stats.Type, stats.Source, stats.VisibleWhen)
+	}
+	if processes := containerRes.Detail.Tabs[2]; processes.Type != plugin.PanelTable || processes.Source.RouteID != "docker.container.processes" || processes.VisibleWhen == nil {
+		t.Fatalf("container processes panel mismatch: panel=%s source=%+v visible=%+v", processes.Type, processes.Source, processes.VisibleWhen)
+	} else if cfg, ok := processes.Config.(plugin.TableConfig); !ok || cfg.EmptyText == "" {
+		t.Fatalf("container processes table config = %#v, want empty text", processes.Config)
+	}
+	if logs := containerRes.Detail.Tabs[3]; logs.Type != plugin.PanelLogStream {
 		t.Fatalf("container logs panel = %s, want %s", logs.Type, plugin.PanelLogStream)
 	}
-	if terminal := containerRes.Detail.Tabs[2]; terminal.Type != plugin.PanelTerminal || terminal.Label != "Exec" {
+	if terminal := containerRes.Detail.Tabs[4]; terminal.Type != plugin.PanelTerminal || terminal.Label != "Exec" {
 		t.Fatalf("container exec panel = %s/%s, want Exec terminal", terminal.Type, terminal.Label)
 	} else if terminal.VisibleWhen == nil {
 		t.Fatalf("container exec panel should only be visible for running containers")
 	}
-	if env := containerRes.Detail.Tabs[3]; env.Type != plugin.PanelTable {
+	if env := containerRes.Detail.Tabs[5]; env.Type != plugin.PanelTable {
 		t.Fatalf("container env should render a table, got %s", env.Type)
 	} else if cfg, ok := env.Config.(plugin.TableConfig); !ok || cfg.EmptyText == "" {
 		t.Fatalf("container env table config = %#v, want empty text", env.Config)
 	}
-	if mounts := containerRes.Detail.Tabs[4]; mounts.Type != plugin.PanelTable || mounts.Source.RouteID != "docker.container.mounts" {
+	if mounts := containerRes.Detail.Tabs[6]; mounts.Type != plugin.PanelTable || mounts.Source.RouteID != "docker.container.mounts" {
 		t.Fatalf("container mounts should render a table from mounts route, got panel=%s source=%+v", mounts.Type, mounts.Source)
 	} else if cfg, ok := mounts.Config.(plugin.TableConfig); !ok || cfg.EmptyText == "" {
 		t.Fatalf("container mounts table config = %#v, want empty text", mounts.Config)
 	}
-	if inspect := containerRes.Detail.Tabs[5]; inspect.Type != plugin.PanelObjectDetail || inspect.Source.RouteID != "docker.container.inspect" {
+	if inspect := containerRes.Detail.Tabs[7]; inspect.Type != plugin.PanelObjectDetail || inspect.Source.RouteID != "docker.container.inspect" {
 		t.Fatalf("container inspect should render object details, got panel=%s source=%+v", inspect.Type, inspect.Source)
 	} else if cfg, ok := inspect.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
 		t.Fatalf("container inspect config = %#v, want raw-toggle object detail", inspect.Config)
+	}
+	if containerRes.Watch == nil || containerRes.Watch.RouteID != "docker.events.watch" || containerRes.Watch.Params["kind"] != "container" {
+		t.Fatalf("container list watch mismatch: %+v", containerRes.Watch)
 	}
 	var composeRes *plugin.ResourceType
 	for i := range m.Resources {

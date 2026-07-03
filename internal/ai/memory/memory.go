@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -26,6 +28,11 @@ const (
 	toolResultCharLimit      = 600
 	toolResultCountLimit     = 6
 	defaultMessagePageSize   = 30
+	recentToolJSONCharLimit  = 4_000
+	sanitizeStringCharLimit  = 800
+	sanitizeArrayItemLimit   = 20
+	sanitizeObjectKeyLimit   = 40
+	sanitizeDepthLimit       = 4
 )
 
 // Store is the conversation persistence and context-assembly surface.
@@ -166,6 +173,10 @@ func (s *Store) AppendAssistant(ctx context.Context, convID, content, reasoning 
 
 // History returns compacted older turns plus recent messages within tokenBudget.
 func (s *Store) History(ctx context.Context, convID string, tokenBudget int) (summary string, msgs []engine.Message, err error) {
+	c, err := s.conv.Get(ctx, convID)
+	if err != nil {
+		return "", nil, err
+	}
 	all, err := s.msg.Recent(ctx, convID, maxLoadedMessages)
 	if err != nil {
 		return "", nil, err
@@ -173,7 +184,75 @@ func (s *Store) History(ctx context.Context, convID string, tokenBudget int) (su
 	if tokenBudget <= 0 {
 		tokenBudget = budget.DefaultHistoryBudget
 	}
-	return splitByTokenBudget(all, tokenBudget)
+	compactedRecent, msgs, err := splitByTokenBudget(all, tokenBudget)
+	if err != nil {
+		return "", nil, err
+	}
+	total, err := s.msg.Count(ctx, convID)
+	if err != nil {
+		return "", nil, err
+	}
+	agedOut, err := s.compactRange(ctx, convID, c.CompactedCount, agedOutCount(total))
+	if err != nil {
+		return "", nil, err
+	}
+	summary = mergeSummaries(c.Summary, agedOut, summaryCharBudget)
+	summary = mergeSummaries(summary, compactedRecent, summaryCharBudget)
+	return summary, msgs, nil
+}
+
+// RefreshSummary folds newly aged-out messages into the persisted Summary,
+// advancing the watermark so each message is compacted exactly once.
+func (s *Store) RefreshSummary(ctx context.Context, convID string) error {
+	c, err := s.conv.Get(ctx, convID)
+	if err != nil {
+		return err
+	}
+	total, err := s.msg.Count(ctx, convID)
+	if err != nil {
+		return err
+	}
+	agedOut := agedOutCount(total)
+	if agedOut <= c.CompactedCount {
+		return nil
+	}
+	delta, err := s.compactRange(ctx, convID, c.CompactedCount, agedOut)
+	if err != nil {
+		return err
+	}
+	if delta == "" {
+		return nil
+	}
+	c.Summary = mergeSummaries(c.Summary, delta, summaryCharBudget)
+	c.CompactedCount = agedOut
+	c.UpdatedAt = s.now()
+	return s.conv.Update(ctx, &c)
+}
+
+func agedOutCount(total int) int {
+	if total <= maxLoadedMessages {
+		return 0
+	}
+	return total - maxLoadedMessages
+}
+
+func (s *Store) compactRange(ctx context.Context, convID string, from, to int) (string, error) {
+	if to <= from {
+		return "", nil
+	}
+	msgs, err := s.msg.Range(ctx, convID, from, to-from)
+	if err != nil || len(msgs) == 0 {
+		return "", err
+	}
+	items := make([]formatted, 0, len(msgs))
+	for _, msg := range msgs {
+		limit := compactedAssistCharLimit
+		if msg.Role == string(engine.RoleUser) {
+			limit = compactedUserCharLimit
+		}
+		items = append(items, formatMessage(msg, limit, true))
+	}
+	return buildSummary(items, summaryCharBudget), nil
 }
 
 // MessagePage is one UI window of conversation messages.
@@ -307,7 +386,7 @@ func formatToolCallRaw(tc models.AIToolCallRecord) string {
 	if tc.Err != "" {
 		return "[Tool:" + tc.Name + "] error: " + tc.Err
 	}
-	body := stringify(tc.Output)
+	body := truncate(stringify(sanitizePromptValue(tc.Output, 0)), recentToolJSONCharLimit)
 	if body == "" {
 		return "[Tool:" + tc.Name + "]"
 	}
@@ -352,6 +431,85 @@ func buildSummary(messages []formatted, charBudget int) string {
 	return strings.Join(kept, "\n")
 }
 
+func mergeSummaries(existing, next string, charBudget int) string {
+	existing = strings.TrimSpace(existing)
+	next = strings.TrimSpace(next)
+	if existing == "" {
+		return keepSummaryTail(next, charBudget)
+	}
+	if next == "" || strings.Contains(existing, next) {
+		return keepSummaryTail(existing, charBudget)
+	}
+	return keepSummaryTail(existing+"\n"+next, charBudget)
+}
+
+func keepSummaryTail(s string, charBudget int) string {
+	if len(s) <= charBudget {
+		return s
+	}
+	cut := len(s) - charBudget
+	if i := strings.IndexByte(s[cut:], '\n'); i >= 0 {
+		cut += i + 1
+	} else {
+		for cut < len(s) && !utf8.RuneStart(s[cut]) { // don't split a multi-byte rune
+			cut++
+		}
+	}
+	return "[Earlier conversation memory trimmed]\n" + s[cut:]
+}
+
+func sanitizePromptValue(v any, depth int) any {
+	if v == nil {
+		return nil
+	}
+	if depth >= sanitizeDepthLimit {
+		return truncate(normalizeWhitespace(stringify(v)), sanitizeStringCharLimit)
+	}
+	switch x := v.(type) {
+	case string:
+		return truncate(normalizeWhitespace(x), sanitizeStringCharLimit)
+	case []any:
+		return sanitizePromptSlice(x, depth)
+	case map[string]any:
+		return sanitizePromptMap(x, depth)
+	default:
+		raw := stringify(v)
+		if raw == "" || len(raw) <= sanitizeStringCharLimit {
+			return v
+		}
+		return truncate(normalizeWhitespace(raw), sanitizeStringCharLimit)
+	}
+}
+
+func sanitizePromptSlice(values []any, depth int) any {
+	limit := min(len(values), sanitizeArrayItemLimit)
+	out := make([]any, 0, limit+1)
+	for _, item := range values[:limit] {
+		out = append(out, sanitizePromptValue(item, depth+1))
+	}
+	if len(values) > limit {
+		out = append(out, map[string]any{"truncated": len(values) - limit})
+	}
+	return out
+}
+
+func sanitizePromptMap(values map[string]any, depth int) any {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys) // stable key subset when over the cap
+	out := make(map[string]any, min(len(values), sanitizeObjectKeyLimit)+1)
+	for i, key := range keys {
+		if i >= sanitizeObjectKeyLimit {
+			out["_truncatedKeys"] = len(values) - i
+			break
+		}
+		out[key] = sanitizePromptValue(values[key], depth+1)
+	}
+	return out
+}
+
 func normalizeWhitespace(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 func stringify(v any) string {
@@ -381,7 +539,11 @@ func truncate(s string, limit int) string {
 	if len(s) <= limit {
 		return s
 	}
-	return s[:limit] + "…"
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(s[cut]) { // don't split a multi-byte rune
+		cut--
+	}
+	return s[:cut] + "…"
 }
 
 func itoa(n int) string {

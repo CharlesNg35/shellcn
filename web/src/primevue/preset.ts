@@ -2,7 +2,7 @@ import type { ButtonPassThroughMethodOptions } from "primevue/button";
 import { cn } from "../utils/cn";
 
 export const fieldSurface =
-  "rounded-md border border-surface-300 bg-surface-0 dark:border-surface-700 dark:bg-surface-950";
+  "rounded-md border border-surface-300 bg-surface-0 hover:border-surface-400 dark:border-surface-700 dark:bg-surface-950 dark:hover:border-surface-500";
 const focusRing =
   "focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30";
 const focusWithinRing =
@@ -28,7 +28,7 @@ function sizeKey(options: SizedOptions): keyof typeof fieldSize {
 }
 
 const inputBaseNoPad = cn(
-  "w-full text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 dark:text-surface-100",
+  "w-full text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 disabled:cursor-not-allowed disabled:bg-surface-100 disabled:text-surface-400 dark:text-surface-100 dark:disabled:bg-surface-800 dark:disabled:text-surface-500",
   fieldSurface,
   focusRing,
 );
@@ -60,13 +60,13 @@ export const drawerRoot = (maxWidth = "max-w-md"): string =>
   );
 
 export const btnPrimary =
-  "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50";
+  "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-700 active:bg-primary-800 disabled:opacity-50";
 export const btnGhost =
-  "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100 disabled:opacity-50 dark:text-surface-300 dark:hover:bg-surface-800";
+  "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100 active:bg-surface-200 disabled:opacity-50 dark:text-surface-300 dark:hover:bg-surface-800 dark:active:bg-surface-700";
 export const btnDanger =
-  "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md bg-rose-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:opacity-50";
+  "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md bg-rose-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-rose-700 active:bg-rose-800 disabled:opacity-50";
 export const btnPrimaryBlock =
-  "flex w-full items-center justify-center gap-1.5 rounded-md bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-700 focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:opacity-50";
+  "flex w-full items-center justify-center gap-1.5 rounded-md bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-700 active:bg-primary-800 focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:opacity-50";
 
 export const opsDetailRow =
   "grid min-w-0 grid-cols-[minmax(8rem,14rem)_1fr_auto] items-start gap-3 px-4 py-2.5 text-sm";
@@ -102,46 +102,49 @@ const iconButtonSize = {
   large: "p-3",
 };
 const buttonSolid = {
-  primary: "bg-primary-600 text-white hover:bg-primary-700",
+  primary:
+    "bg-primary-600 text-white shadow-sm hover:bg-primary-700 active:bg-primary-800",
   secondary:
-    "border border-surface-300 bg-surface-0 text-surface-700 hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-200 dark:hover:bg-surface-800",
-  success: "bg-emerald-600 text-white hover:bg-emerald-700",
-  info: "bg-sky-600 text-white hover:bg-sky-700",
-  warn: "bg-amber-600 text-white hover:bg-amber-700",
-  help: "bg-violet-600 text-white hover:bg-violet-700",
-  danger: "bg-rose-600 text-white hover:bg-rose-700",
+    "border border-surface-300 bg-surface-0 text-surface-700 shadow-sm hover:bg-surface-100 active:bg-surface-200 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-200 dark:hover:bg-surface-800 dark:active:bg-surface-700",
+  success:
+    "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 active:bg-emerald-800",
+  info: "bg-sky-600 text-white shadow-sm hover:bg-sky-700 active:bg-sky-800",
+  warn: "bg-amber-600 text-white shadow-sm hover:bg-amber-700 active:bg-amber-800",
+  help: "bg-violet-600 text-white shadow-sm hover:bg-violet-700 active:bg-violet-800",
+  danger:
+    "bg-rose-600 text-white shadow-sm hover:bg-rose-700 active:bg-rose-800",
   contrast:
-    "bg-surface-900 text-white hover:bg-surface-800 dark:bg-surface-100 dark:text-surface-950 dark:hover:bg-surface-200",
+    "bg-surface-900 text-white shadow-sm hover:bg-surface-800 active:bg-surface-700 dark:bg-surface-100 dark:text-surface-950 dark:hover:bg-surface-200 dark:active:bg-surface-300",
 };
 const buttonText = {
   primary:
-    "text-primary-700 hover:bg-primary-50 dark:text-primary-300 dark:hover:bg-primary-500/10",
+    "text-primary-700 hover:bg-primary-50 active:bg-primary-100 dark:text-primary-300 dark:hover:bg-primary-500/10 dark:active:bg-primary-500/20",
   secondary:
-    "text-surface-600 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-800",
+    "text-surface-600 hover:bg-surface-100 active:bg-surface-200 dark:text-surface-300 dark:hover:bg-surface-800 dark:active:bg-surface-700",
   success:
-    "text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-500/10",
-  info: "text-sky-700 hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-500/10",
-  warn: "text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10",
-  help: "text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-500/10",
+    "text-emerald-700 hover:bg-emerald-50 active:bg-emerald-100 dark:text-emerald-300 dark:hover:bg-emerald-500/10 dark:active:bg-emerald-500/20",
+  info: "text-sky-700 hover:bg-sky-50 active:bg-sky-100 dark:text-sky-300 dark:hover:bg-sky-500/10 dark:active:bg-sky-500/20",
+  warn: "text-amber-700 hover:bg-amber-50 active:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-500/10 dark:active:bg-amber-500/20",
+  help: "text-violet-700 hover:bg-violet-50 active:bg-violet-100 dark:text-violet-300 dark:hover:bg-violet-500/10 dark:active:bg-violet-500/20",
   danger:
-    "text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10",
+    "text-rose-700 hover:bg-rose-50 active:bg-rose-100 dark:text-rose-300 dark:hover:bg-rose-500/10 dark:active:bg-rose-500/20",
   contrast:
-    "text-surface-900 hover:bg-surface-100 dark:text-surface-100 dark:hover:bg-surface-800",
+    "text-surface-900 hover:bg-surface-100 active:bg-surface-200 dark:text-surface-100 dark:hover:bg-surface-800 dark:active:bg-surface-700",
 };
 const buttonOutlined = {
   primary:
-    "border border-primary-300 text-primary-700 hover:bg-primary-50 dark:border-primary-700 dark:text-primary-300 dark:hover:bg-primary-500/10",
+    "border border-primary-300 text-primary-700 hover:bg-primary-50 active:bg-primary-100 dark:border-primary-700 dark:text-primary-300 dark:hover:bg-primary-500/10 dark:active:bg-primary-500/20",
   secondary:
-    "border border-surface-300 text-surface-700 hover:bg-surface-100 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800",
+    "border border-surface-300 text-surface-700 hover:bg-surface-100 active:bg-surface-200 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:active:bg-surface-700",
   success:
-    "border border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-500/10",
-  info: "border border-sky-300 text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:text-sky-300 dark:hover:bg-sky-500/10",
-  warn: "border border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-500/10",
-  help: "border border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-500/10",
+    "border border-emerald-300 text-emerald-700 hover:bg-emerald-50 active:bg-emerald-100 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-500/10 dark:active:bg-emerald-500/20",
+  info: "border border-sky-300 text-sky-700 hover:bg-sky-50 active:bg-sky-100 dark:border-sky-700 dark:text-sky-300 dark:hover:bg-sky-500/10 dark:active:bg-sky-500/20",
+  warn: "border border-amber-300 text-amber-700 hover:bg-amber-50 active:bg-amber-100 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-500/10 dark:active:bg-amber-500/20",
+  help: "border border-violet-300 text-violet-700 hover:bg-violet-50 active:bg-violet-100 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-500/10 dark:active:bg-violet-500/20",
   danger:
-    "border border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-700 dark:text-rose-300 dark:hover:bg-rose-500/10",
+    "border border-rose-300 text-rose-700 hover:bg-rose-50 active:bg-rose-100 dark:border-rose-700 dark:text-rose-300 dark:hover:bg-rose-500/10 dark:active:bg-rose-500/20",
   contrast:
-    "border border-surface-600 text-surface-900 hover:bg-surface-100 dark:border-surface-400 dark:text-surface-100 dark:hover:bg-surface-800",
+    "border border-surface-600 text-surface-900 hover:bg-surface-100 active:bg-surface-200 dark:border-surface-400 dark:text-surface-100 dark:hover:bg-surface-800 dark:active:bg-surface-700",
 };
 
 type ButtonTone = keyof typeof buttonSolid;
@@ -222,8 +225,10 @@ export const smallSecondaryButtonClass = cn(
 const overlay =
   "mt-1.5 origin-top overflow-hidden rounded-lg border border-surface-200 bg-surface-0 p-1 shadow-lg ring-1 ring-surface-950/5 dark:border-surface-700 dark:bg-surface-900 dark:ring-surface-0/5";
 const selectOverlay = cn(overlay, "p-0");
+// Background follows the focused/hovered row; the selected row is marked by a
+// trailing check (.shell-select-option in style.css) plus primary text.
 const option =
-  "cursor-pointer truncate rounded-md px-2.5 py-1.5 text-sm text-surface-700 transition-colors data-[p-focused=true]:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-200 dark:data-[p-focused=true]:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/15 dark:data-[p-selected=true]:text-primary-300";
+  "shell-select-option cursor-pointer truncate rounded-md py-1.5 pl-2.5 pr-8 text-sm text-surface-700 transition-colors data-[p-focused=true]:bg-surface-100 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-200 dark:data-[p-focused=true]:bg-surface-800 dark:data-[p-selected=true]:text-primary-300";
 const selectFilterHeader =
   "border-b border-surface-200 p-2 dark:border-surface-800";
 const selectFilterContainer = "relative flex w-full min-w-0 items-center";
@@ -292,14 +297,14 @@ const dialogTransition = {
 const checkbox = {
   root: "relative inline-flex h-4 w-4 shrink-0",
   input: "absolute inset-0 cursor-pointer opacity-0",
-  box: "flex h-4 w-4 items-center justify-center rounded border border-surface-300 bg-surface-0 transition-colors dark:border-surface-600 dark:bg-surface-950 data-[p~=checked]:border-primary-500 data-[p~=checked]:bg-primary-500 data-[p~=checked]:text-white dark:data-[p~=checked]:border-primary-500 dark:data-[p~=checked]:bg-primary-500",
+  box: "flex h-4 w-4 items-center justify-center rounded border border-surface-300 bg-surface-0 transition-colors hover:border-surface-400 dark:border-surface-600 dark:bg-surface-950 dark:hover:border-surface-500 data-[p~=checked]:border-primary-500 data-[p~=checked]:bg-primary-500 data-[p~=checked]:text-white data-[p~=checked]:hover:border-primary-600 data-[p~=checked]:hover:bg-primary-600 dark:data-[p~=checked]:border-primary-500 dark:data-[p~=checked]:bg-primary-500 dark:data-[p~=checked]:hover:border-primary-600 dark:data-[p~=checked]:hover:bg-primary-600",
   icon: "h-3 w-3 text-white",
 };
 
 const radioButton = {
   root: "relative inline-flex h-4 w-4 shrink-0",
   input: "absolute inset-0 cursor-pointer opacity-0",
-  box: "flex h-4 w-4 items-center justify-center rounded-full border border-surface-300 bg-surface-0 transition-colors dark:border-surface-600 dark:bg-surface-950 data-[p~=checked]:border-primary-500 data-[p~=checked]:bg-primary-500 dark:data-[p~=checked]:border-primary-500 dark:data-[p~=checked]:bg-primary-500",
+  box: "flex h-4 w-4 items-center justify-center rounded-full border border-surface-300 bg-surface-0 transition-colors hover:border-surface-400 dark:border-surface-600 dark:bg-surface-950 dark:hover:border-surface-500 data-[p~=checked]:border-primary-500 data-[p~=checked]:bg-primary-500 data-[p~=checked]:hover:border-primary-600 data-[p~=checked]:hover:bg-primary-600 dark:data-[p~=checked]:border-primary-500 dark:data-[p~=checked]:bg-primary-500 dark:data-[p~=checked]:hover:border-primary-600 dark:data-[p~=checked]:hover:bg-primary-600",
   icon: "h-2 w-2 rounded-full bg-white",
 };
 
@@ -514,7 +519,7 @@ export const primeVuePassthrough = {
     root: "overflow-y-auto p-2 text-sm",
     node: "",
     nodeContent:
-      "flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:text-primary-700 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/10 dark:data-[p-selected=true]:text-primary-200",
+      "mx-1 my-px flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:text-primary-700 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/10 dark:data-[p-selected=true]:text-primary-200",
     nodeToggleButton:
       "flex h-5 w-5 shrink-0 items-center justify-center rounded text-surface-400 transition-colors hover:bg-surface-200 hover:text-surface-700 data-[p-leaf=true]:invisible dark:hover:bg-surface-700 dark:hover:text-surface-100",
     nodeLabel: "flex-1 truncate text-surface-700 dark:text-surface-200",
@@ -567,7 +572,7 @@ export const primeVuePassthrough = {
     root: "relative inline-flex h-5 w-9 cursor-pointer",
     input: "absolute inset-0 z-10 cursor-pointer opacity-0",
     slider:
-      "absolute inset-0 rounded-full bg-surface-300 transition-colors before:absolute before:left-0.5 before:top-0.5 before:h-4 before:w-4 before:rounded-full before:bg-white before:transition-transform data-[p~=checked]:bg-primary-500 data-[p~=checked]:before:translate-x-4 dark:bg-surface-700 dark:data-[p~=checked]:bg-primary-500",
+      "absolute inset-0 rounded-full bg-surface-300 transition-colors before:absolute before:left-0.5 before:top-0.5 before:h-4 before:w-4 before:rounded-full before:bg-white before:transition-transform hover:bg-surface-400 data-[p~=checked]:bg-primary-500 data-[p~=checked]:before:translate-x-4 data-[p~=checked]:hover:bg-primary-600 dark:bg-surface-700 dark:hover:bg-surface-600 dark:data-[p~=checked]:bg-primary-500 dark:data-[p~=checked]:hover:bg-primary-600",
   },
 
   button: {

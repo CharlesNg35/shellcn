@@ -267,6 +267,15 @@ func TestResourceEventDieKeepsContainerListedAsExited(t *testing.T) {
 	}
 }
 
+func TestSharedStatusSeveritiesUseRendererKeys(t *testing.T) {
+	if UsageSeverities()["in use"] == "" || UsageSeverities()["unused"] == "" || UsageSeverities()["unknown"] == "" {
+		t.Fatalf("usage severities should use normalized renderer keys: %+v", UsageSeverities())
+	}
+	if ComposeSeverities()["running"] == "" || ComposeSeverities()["partial"] == "" || ComposeSeverities()["stopped"] == "" {
+		t.Fatalf("compose severities should use normalized renderer keys: %+v", ComposeSeverities())
+	}
+}
+
 func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 	srv, calls := fakeDockerDaemon(t)
 	defer srv.Close()

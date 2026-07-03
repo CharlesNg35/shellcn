@@ -34,6 +34,12 @@ const mongoNamePattern = `^[^$/\\\x00][^/\\\x00]*$`
 
 func routes() []plugin.Route {
 	return []plugin.Route{
+		{ID: "mongodb.server.list", Method: plugin.MethodGet, Path: "/server", Permission: "mongodb.server.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.server.list", Handle: serverList},
+		{ID: "mongodb.server.status", Method: plugin.MethodGet, Path: "/server/status", Permission: "mongodb.server.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.server.status", Handle: serverStatus},
+		{ID: "mongodb.server.metrics", Method: plugin.MethodWS, Path: "/server/metrics", Permission: "mongodb.server.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.server.metrics", Stream: serverMetrics},
+		{ID: "mongodb.health.list", Method: plugin.MethodGet, Path: "/health", Permission: "mongodb.server.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.health.list", Handle: healthList},
+		{ID: "mongodb.current_ops.list", Method: plugin.MethodGet, Path: "/current-ops", Permission: "mongodb.server.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.current_ops.list", Handle: listCurrentOps},
+		{ID: "mongodb.resource.watch", Method: plugin.MethodWS, Path: "/watch/{kind}", Permission: "mongodb.server.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.resource.watch", Stream: watchResource},
 		{ID: "mongodb.databases.tree", Method: plugin.MethodGet, Path: "/tree/databases", Permission: "mongodb.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.databases.tree", Handle: treeDatabases},
 		{ID: "mongodb.databases.list", Method: plugin.MethodGet, Path: "/databases", Permission: "mongodb.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.databases.list", Handle: listDatabases},
 		{ID: "mongodb.database.create", Method: plugin.MethodPost, Path: "/databases", Permission: "mongodb.databases.write", Risk: plugin.RiskWrite, AuditEvent: "mongodb.database.create", Input: databaseCreateSchema(), Handle: createDatabase},
@@ -110,11 +116,18 @@ func documentCreateSchema() *plugin.Schema {
 }
 
 func treeDatabases(rc *plugin.RequestContext) (any, error) {
-	res, err := listDatabases(rc)
+	s, err := mongoSession(rc)
 	if err != nil {
 		return nil, err
 	}
-	page := res.(plugin.Page[plugin.TableRow])
+	rows, err := databaseRows(rc.Ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	page, err := pageRows(rc, rows)
+	if err != nil {
+		return nil, err
+	}
 	nodes := make([]plugin.TreeNode, 0, len(page.Items))
 	for _, item := range page.Items {
 		name := fmt.Sprint(item["name"])
@@ -131,11 +144,18 @@ func treeDatabases(rc *plugin.RequestContext) (any, error) {
 }
 
 func treeCollections(rc *plugin.RequestContext) (any, error) {
-	res, err := listCollections(rc)
+	s, err := mongoSession(rc)
 	if err != nil {
 		return nil, err
 	}
-	page := res.(plugin.Page[plugin.TableRow])
+	rows, err := collectionRows(rc.Ctx, s, strings.TrimSpace(rc.Query().Get("p.database")))
+	if err != nil {
+		return nil, err
+	}
+	page, err := pageRows(rc, rows)
+	if err != nil {
+		return nil, err
+	}
 	nodes := make([]plugin.TreeNode, 0, len(page.Items))
 	for _, item := range page.Items {
 		name, database := fmt.Sprint(item["name"]), fmt.Sprint(item["database"])
@@ -150,7 +170,15 @@ func listDatabases(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := commandContext(rc.Ctx, s)
+	rows, err := databaseRows(rc.Ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	return pageRows(rc, rows)
+}
+
+func databaseRows(ctx context.Context, s *Session) ([]plugin.TableRow, error) {
+	ctx, cancel := commandContext(ctx, s)
 	defer cancel()
 	result, err := s.client.ListDatabases(ctx, bson.D{})
 	if err != nil {
@@ -168,7 +196,7 @@ func listDatabases(rc *plugin.RequestContext) (any, error) {
 			"ref":   plugin.ResourceIdentity{Kind: "database", Name: db.Name, UID: db.Name},
 		})
 	}
-	return pageRows(rc, rows)
+	return rows, nil
 }
 
 func databaseOverview(rc *plugin.RequestContext) (any, error) {
@@ -194,8 +222,15 @@ func listCollections(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	database := strings.TrimSpace(rc.Query().Get("p.database"))
-	ctx, cancel := commandContext(rc.Ctx, s)
+	rows, err := collectionRows(rc.Ctx, s, strings.TrimSpace(rc.Query().Get("p.database")))
+	if err != nil {
+		return nil, err
+	}
+	return pageRows(rc, rows)
+}
+
+func collectionRows(ctx context.Context, s *Session, database string) ([]plugin.TableRow, error) {
+	ctx, cancel := commandContext(ctx, s)
 	defer cancel()
 	databases := []string{database}
 	if database == "" {
@@ -234,13 +269,14 @@ func listCollections(rc *plugin.RequestContext) (any, error) {
 				"name":     name,
 				"database": dbName,
 				"type":     fmt.Sprint(coll["type"]),
+				"status":   "ready",
 				"count":    count,
 				"size":     numberValue(stats["size"]),
 				"ref":      plugin.ResourceIdentity{Kind: "collection", Namespace: dbName, Name: name, UID: dbName + "." + name},
 			})
 		}
 	}
-	return pageRows(rc, rows)
+	return rows, nil
 }
 
 func collectionStats(rc *plugin.RequestContext) (any, error) {
@@ -306,7 +342,15 @@ func listIndexes(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := commandContext(rc.Ctx, s)
+	rows, err := indexRows(rc.Ctx, s, database, collection)
+	if err != nil {
+		return nil, err
+	}
+	return pageRows(rc, rows)
+}
+
+func indexRows(ctx context.Context, s *Session, database, collection string) ([]plugin.TableRow, error) {
+	ctx, cancel := commandContext(ctx, s)
 	defer cancel()
 	cur, err := s.client.Database(database).Collection(collection).Indexes().List(ctx)
 	if err != nil {
@@ -331,9 +375,23 @@ func listIndexes(rc *plugin.RequestContext) (any, error) {
 			"hidden":     boolField(idx["hidden"]),
 			"ttl":        numberValue(idx["expireAfterSeconds"]),
 			"properties": strings.Join(properties, ", "),
+			"status":     mongoIndexStatus(name, properties),
+			"ref":        plugin.ResourceIdentity{Kind: "index", Namespace: database, Scope: collection, Name: name, UID: database + "." + collection + "." + name},
 		})
 	}
-	return pageRows(rc, rows)
+	return rows, nil
+}
+
+func mongoIndexStatus(name string, properties []string) string {
+	if name == "_id_" {
+		return "primary"
+	}
+	for _, property := range properties {
+		if property == "hidden" {
+			return "hidden"
+		}
+	}
+	return "ready"
 }
 
 func mongoIndexProperties(idx bson.M) []string {
@@ -796,6 +854,7 @@ func completionRoute(*plugin.RequestContext) (any, error) {
 		`{"listCollections": 1}`,
 		`{"dbStats": 1}`,
 		`{"serverStatus": 1}`,
+		`{"currentOp": 1, "$all": true}`,
 		`{"buildInfo": 1}`,
 	}
 	items := make([]sqldb.CompletionItem, 0, len(commands))
@@ -1196,7 +1255,7 @@ func orderedCommand(in bson.M) bson.D {
 		return bson.D{}
 	}
 	first := keys[0]
-	for _, candidate := range []string{"find", "aggregate", "count", "distinct", "listCollections", "listIndexes", "dbStats", "collStats", "serverStatus", "buildInfo", "ping"} {
+	for _, candidate := range []string{"find", "aggregate", "count", "distinct", "listCollections", "listIndexes", "dbStats", "collStats", "serverStatus", "currentOp", "buildInfo", "ping"} {
 		if _, ok := in[candidate]; ok {
 			first = candidate
 			break
@@ -1213,7 +1272,7 @@ func orderedCommand(in bson.M) bson.D {
 }
 
 func commandName(command bson.M) string {
-	for _, key := range []string{"find", "aggregate", "count", "distinct", "listCollections", "listIndexes", "dbStats", "collStats", "serverStatus", "buildInfo", "ping", "insert", "update", "delete", "drop", "dropDatabase", "create"} {
+	for _, key := range []string{"find", "aggregate", "count", "distinct", "listCollections", "listIndexes", "dbStats", "collStats", "serverStatus", "currentOp", "buildInfo", "ping", "insert", "update", "delete", "drop", "dropDatabase", "create"} {
 		if _, ok := command[key]; ok {
 			return key
 		}
@@ -1226,7 +1285,7 @@ func commandName(command bson.M) string {
 
 func isReadOnlyCommand(name string, command bson.M) bool {
 	switch name {
-	case "find", "count", "distinct", "listCollections", "listIndexes", "dbStats", "collStats", "serverStatus", "buildInfo", "ping":
+	case "find", "count", "distinct", "listCollections", "listIndexes", "dbStats", "collStats", "serverStatus", "currentOp", "buildInfo", "ping":
 		return true
 	case "aggregate":
 		return !pipelineWrites(command["pipeline"])

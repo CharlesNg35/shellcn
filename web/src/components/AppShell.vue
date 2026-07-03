@@ -181,7 +181,7 @@ async function onConnectionSaved(payload: {
           >
             <RouterLink
               :to="{ name: 'credentials' }"
-              class="mx-2 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
+              class="mx-2 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-600 transition-colors hover:bg-surface-200 hover:text-surface-900 dark:text-surface-300 dark:hover:bg-surface-800 dark:hover:text-surface-100"
               :class="
                 route.name === 'credentials'
                   ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
@@ -193,7 +193,7 @@ async function onConnectionSaved(payload: {
             </RouterLink>
             <RouterLink
               :to="{ name: 'recordings' }"
-              class="mx-2 mt-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
+              class="mx-2 mt-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-600 transition-colors hover:bg-surface-200 hover:text-surface-900 dark:text-surface-300 dark:hover:bg-surface-800 dark:hover:text-surface-100"
               :class="
                 route.name === 'recordings'
                   ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
@@ -205,7 +205,7 @@ async function onConnectionSaved(payload: {
             </RouterLink>
             <RouterLink
               :to="{ name: 'settings' }"
-              class="mx-2 my-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
+              class="mx-2 my-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-600 transition-colors hover:bg-surface-200 hover:text-surface-900 dark:text-surface-300 dark:hover:bg-surface-800 dark:hover:text-surface-100"
               :class="
                 route.name === 'settings'
                   ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'

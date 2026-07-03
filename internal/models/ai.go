@@ -61,9 +61,11 @@ type AIConversation struct {
 	ProviderID string `json:"providerId"`
 	Model      string `json:"model"`
 	// Summary is the rolling compaction of older turns (see internal/ai/memory).
-	Summary   string    `json:"-"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Summary string `json:"-"`
+	// CompactedCount is how many of the oldest messages are already folded into Summary.
+	CompactedCount int       `json:"-"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 func (AIConversation) TableName() string { return "ai_conversations" }

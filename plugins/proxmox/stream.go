@@ -33,6 +33,30 @@ func nodeMetrics(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	return metricsLoop(rc, client, pvePath("nodes", node, "status"))
 }
 
+func overviewMetrics(rc *plugin.RequestContext, client plugin.ClientStream) error {
+	s, err := sess(rc)
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(client)
+	ticker := time.NewTicker(metricsInterval)
+	defer ticker.Stop()
+	for {
+		frame, err := overviewFrame(rc.Ctx, s)
+		if err != nil {
+			return err
+		}
+		if err := enc.Encode(frame); err != nil {
+			return err
+		}
+		select {
+		case <-client.Context().Done():
+			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
 func metricsLoop(rc *plugin.RequestContext, client plugin.ClientStream, statusPath string) error {
 	s, err := sess(rc)
 	if err != nil {
@@ -76,11 +100,16 @@ func metricFrame(status plugin.TableRow) map[string]any {
 		}
 	}
 	return map[string]any{
-		"cpu":      cpu,
-		"cpuTotal": cpuTotal,
-		"mem":      round1(memPct),
-		"memUsed":  memUsed,
-		"memTotal": memTotal,
+		"cpu":       cpu,
+		"cpuTotal":  cpuTotal,
+		"mem":       round1(memPct),
+		"memUsed":   memUsed,
+		"memTotal":  memTotal,
+		"diskRead":  numInt(status["diskread"]),
+		"diskWrite": numInt(status["diskwrite"]),
+		"netIn":     numInt(status["netin"]),
+		"netOut":    numInt(status["netout"]),
+		"uptime":    numInt(status["uptime"]),
 	}
 }
 

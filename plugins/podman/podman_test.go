@@ -95,7 +95,7 @@ func TestManifestDeclaresPodmanWorkspace(t *testing.T) {
 	if containerRes == nil {
 		t.Fatal("missing container resource")
 	}
-	wantTabs := []string{"overview", "logs", "terminal", "env", "mounts", "inspect"}
+	wantTabs := []string{"overview", "stats", "processes", "logs", "terminal", "env", "mounts", "inspect"}
 	if len(containerRes.Detail.Tabs) != len(wantTabs) {
 		t.Fatalf("container detail tabs = %d, want %d", len(containerRes.Detail.Tabs), len(wantTabs))
 	}
@@ -104,11 +104,20 @@ func TestManifestDeclaresPodmanWorkspace(t *testing.T) {
 			t.Fatalf("container tab %d = %q, want %q", i, containerRes.Detail.Tabs[i].Key, want)
 		}
 	}
-	if terminal := containerRes.Detail.Tabs[2]; terminal.Type != plugin.PanelTerminal || terminal.VisibleWhen == nil {
+	if stats := containerRes.Detail.Tabs[1]; stats.Type != plugin.PanelMetrics || stats.Source.RouteID != "podman.container.stats" || stats.VisibleWhen == nil {
+		t.Fatalf("container stats panel mismatch: panel=%s source=%+v visible=%+v", stats.Type, stats.Source, stats.VisibleWhen)
+	}
+	if processes := containerRes.Detail.Tabs[2]; processes.Type != plugin.PanelTable || processes.Source.RouteID != "podman.container.processes" || processes.VisibleWhen == nil {
+		t.Fatalf("container processes panel mismatch: panel=%s source=%+v visible=%+v", processes.Type, processes.Source, processes.VisibleWhen)
+	}
+	if terminal := containerRes.Detail.Tabs[4]; terminal.Type != plugin.PanelTerminal || terminal.VisibleWhen == nil {
 		t.Fatalf("container exec panel = %s visible=%v, want running-only terminal", terminal.Type, terminal.VisibleWhen)
 	}
-	if mounts := containerRes.Detail.Tabs[4]; mounts.Type != plugin.PanelTable || mounts.Source.RouteID != "podman.container.mounts" {
+	if mounts := containerRes.Detail.Tabs[6]; mounts.Type != plugin.PanelTable || mounts.Source.RouteID != "podman.container.mounts" {
 		t.Fatalf("container mounts should render a table from mounts route, got panel=%s source=%+v", mounts.Type, mounts.Source)
+	}
+	if containerRes.Watch == nil || containerRes.Watch.RouteID != "podman.events.watch" || containerRes.Watch.Params["kind"] != "container" {
+		t.Fatalf("container list watch mismatch: %+v", containerRes.Watch)
 	}
 	for _, id := range []string{"podman.container.remove", "podman.pod.remove", "podman.image.remove", "podman.volume.remove", "podman.network.remove"} {
 		action := findAction(m.Actions, id)

@@ -35,6 +35,7 @@ func Routes() []plugin.Route {
 		{ID: "swarm.stacks.list", Method: plugin.MethodGet, Path: "/stacks", Permission: "swarm.stacks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.stacks.list", Handle: listStacks},
 		{ID: "swarm.nodes.list", Method: plugin.MethodGet, Path: "/nodes", Permission: "swarm.nodes.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.nodes.list", Handle: listNodes},
 		{ID: "swarm.tasks.list", Method: plugin.MethodGet, Path: "/tasks", Permission: "swarm.tasks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.tasks.list", Handle: listTasks},
+		{ID: "swarm.events.list", Method: plugin.MethodGet, Path: "/events/recent", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.events.list", Handle: dockerengine.EventsTimeline},
 		{ID: "swarm.service.overview", Method: plugin.MethodGet, Path: "/services/{id}/overview", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.overview", Handle: serviceOverview},
 		{ID: "swarm.service.inspect", Method: plugin.MethodGet, Path: "/services/{id}/inspect", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.inspect", Handle: inspectService},
 		{ID: "swarm.service.tasks", Method: plugin.MethodGet, Path: "/services/{id}/tasks", Permission: "swarm.tasks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.tasks", Handle: serviceTasks},
@@ -55,7 +56,8 @@ func Routes() []plugin.Route {
 		{ID: "swarm.stack.deploy", Method: plugin.MethodPost, Path: "/stacks/deploy", Permission: "swarm.stacks.write", Risk: plugin.RiskWrite, AuditEvent: "swarm.stack.deploy", Input: stackDeploySchema(), Handle: deployStack},
 		{ID: "swarm.stack.remove", Method: plugin.MethodDelete, Path: "/stacks/{stack}", Permission: "swarm.stacks.delete", Risk: plugin.RiskDestructive, AuditEvent: "swarm.stack.remove", Handle: removeStack},
 		{ID: "swarm.service.logs", Method: plugin.MethodWS, Path: "/services/{id}/logs", Permission: "swarm.services.logs", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.logs", Input: dockerengine.LogsSchema(), Stream: serviceLogsStream},
-		{ID: "swarm.events.watch", Method: plugin.MethodWS, Path: "/events", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.events.watch", Stream: watchServiceEvents},
+		{ID: "swarm.events.watch", Method: plugin.MethodWS, Path: "/events", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.events.watch", Stream: watchSwarmEvents},
+		{ID: "swarm.events.timeline.watch", Method: plugin.MethodWS, Path: "/events/timeline", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.events.timeline.watch", Stream: dockerengine.DockerTimelineWatch},
 	}
 }
 
@@ -448,15 +450,28 @@ func serviceLogsStream(rc *plugin.RequestContext, stream plugin.ClientStream) er
 	}
 }
 
-func watchServiceEvents(rc *plugin.RequestContext, stream plugin.ClientStream) error {
+func watchSwarmEvents(rc *plugin.RequestContext, stream plugin.ClientStream) error {
 	cli, err := client(rc)
 	if err != nil {
 		return err
 	}
+	kind := strings.TrimSpace(rc.Param("kind"))
+	if kind == "" {
+		kind = "service"
+	}
 	ctx, cancel := context.WithCancel(rc.Ctx)
 	defer cancel()
+	filters := make(dockerclient.Filters)
+	switch kind {
+	case "node":
+		filters = filters.Add("type", string(events.NodeEventType))
+	case "stack", "service", "":
+		filters = filters.Add("type", string(events.ServiceEventType))
+	default:
+		return fmt.Errorf("%w: unsupported swarm watch kind %q", plugin.ErrInvalidInput, kind)
+	}
 	result := cli.Events(ctx, dockerclient.EventsListOptions{
-		Filters: make(dockerclient.Filters).Add("type", string(events.ServiceEventType)),
+		Filters: filters,
 	})
 	enc := json.NewEncoder(stream)
 	for {
@@ -472,7 +487,7 @@ func watchServiceEvents(rc *plugin.RequestContext, stream plugin.ClientStream) e
 			if !ok {
 				return nil
 			}
-			if ev := serviceEvent(msg); ev != nil {
+			if ev := swarmEvent(rc, cli, kind, msg); ev != nil {
 				if err := enc.Encode(ev); err != nil {
 					return err
 				}
@@ -481,7 +496,18 @@ func watchServiceEvents(rc *plugin.RequestContext, stream plugin.ClientStream) e
 	}
 }
 
-func serviceEvent(msg events.Message) *plugin.ResourceEvent {
+func swarmEvent(rc *plugin.RequestContext, cli *dockerclient.Client, kind string, msg events.Message) *plugin.ResourceEvent {
+	switch kind {
+	case "node":
+		return nodeEvent(rc.Ctx, cli, msg)
+	case "stack":
+		return stackEvent(rc, msg)
+	default:
+		return serviceEvent(rc.Ctx, cli, msg)
+	}
+}
+
+func serviceEvent(ctx context.Context, cli *dockerclient.Client, msg events.Message) *plugin.ResourceEvent {
 	id := msg.Actor.ID
 	if id == "" {
 		return nil
@@ -502,7 +528,61 @@ func serviceEvent(msg events.Message) *plugin.ResourceEvent {
 		name = dockerengine.ShortID(id)
 	}
 	ref := plugin.ResourceIdentity{Kind: "service", Name: name, UID: id}
-	return &plugin.ResourceEvent{Type: evType, Ref: ref, Resource: dockerengine.Row{"id": id, "name": name, "ref": ref}}
+	if evType == "deleted" {
+		return &plugin.ResourceEvent{Type: evType, Ref: ref}
+	}
+	inspect, err := cli.ServiceInspect(ctx, id, dockerclient.ServiceInspectOptions{})
+	if err != nil {
+		return &plugin.ResourceEvent{Type: evType, Ref: ref, Resource: dockerengine.Row{"id": id, "name": name, "ref": ref}}
+	}
+	row := serviceRows([]swarm.Service{inspect.Service})[0]
+	return &plugin.ResourceEvent{Type: evType, Ref: row["ref"].(plugin.ResourceIdentity), Resource: row}
+}
+
+func nodeEvent(ctx context.Context, cli *dockerclient.Client, msg events.Message) *plugin.ResourceEvent {
+	id := msg.Actor.ID
+	if id == "" {
+		return nil
+	}
+	evType := "updated"
+	switch msg.Action {
+	case events.ActionCreate:
+		evType = "added"
+	case events.ActionRemove:
+		evType = "deleted"
+	}
+	name := msg.Actor.Attributes["name"]
+	if name == "" {
+		name = dockerengine.ShortID(id)
+	}
+	ref := plugin.ResourceIdentity{Kind: "node", Name: name, UID: id}
+	if evType == "deleted" {
+		return &plugin.ResourceEvent{Type: evType, Ref: ref}
+	}
+	inspect, err := cli.NodeInspect(ctx, id, dockerclient.NodeInspectOptions{})
+	if err != nil {
+		return &plugin.ResourceEvent{Type: evType, Ref: ref, Resource: dockerengine.Row{"id": id, "name": name, "ref": ref}}
+	}
+	row := nodeRows([]swarm.Node{inspect.Node})[0]
+	return &plugin.ResourceEvent{Type: evType, Ref: row["ref"].(plugin.ResourceIdentity), Resource: row}
+}
+
+func stackEvent(rc *plugin.RequestContext, msg events.Message) *plugin.ResourceEvent {
+	stack := msg.Actor.Attributes[stackNamespaceLabel]
+	if stack == "" {
+		return nil
+	}
+	ref := plugin.ResourceIdentity{Kind: "stack", Name: stack, UID: stack}
+	rows, err := stackRows(rc)
+	if err != nil {
+		return &plugin.ResourceEvent{Type: "updated", Ref: ref, Resource: dockerengine.Row{"name": stack, "ref": ref}}
+	}
+	for _, row := range rows {
+		if row["name"] == stack {
+			return &plugin.ResourceEvent{Type: "updated", Ref: ref, Resource: row}
+		}
+	}
+	return &plugin.ResourceEvent{Type: "deleted", Ref: ref}
 }
 
 func serviceRows(items []swarm.Service) []dockerengine.Row {

@@ -194,8 +194,81 @@ func TestDatabaseOverviewUsesGenericDashboard(t *testing.T) {
 	if cells["summary"].Type != plugin.PanelObjectDetail || cells["summary"].Source == nil || cells["summary"].Source.RouteID != "mongodb.database.overview" {
 		t.Fatalf("summary cell should render database overview details: %#v", cells["summary"])
 	}
-	if len(cells) != 1 {
-		t.Fatalf("database overview should not duplicate the Collections tab: %#v", cells)
+	if cells["collections"].Type != plugin.PanelTable || cells["collections"].Source == nil || cells["collections"].Source.RouteID != "mongodb.collections.list" {
+		t.Fatalf("collections cell should render live collection rows: %#v", cells["collections"])
+	}
+	if cells["operations"].Type != plugin.PanelTable || cells["operations"].Source == nil || cells["operations"].Source.RouteID != "mongodb.current_ops.list" {
+		t.Fatalf("operations cell should render scoped current ops: %#v", cells["operations"])
+	}
+	if len(cells) != 3 {
+		t.Fatalf("database overview cells = %#v", cells)
+	}
+}
+
+func TestOperationalDashboardAndLiveRefreshAreManifestDriven(t *testing.T) {
+	m := New().Manifest()
+	streams := map[string]plugin.StreamKind{}
+	for _, stream := range m.Streams {
+		streams[stream.RouteID] = stream.Kind
+	}
+	if streams["mongodb.server.metrics"] != plugin.StreamMetrics {
+		t.Fatalf("server metrics stream missing: %#v", streams)
+	}
+	if streams["mongodb.resource.watch"] != plugin.StreamResource {
+		t.Fatalf("resource watch stream missing: %#v", streams)
+	}
+
+	var server, database, collection plugin.ResourceType
+	for _, res := range m.Resources {
+		switch res.Kind {
+		case "server":
+			server = res
+		case "database":
+			database = res
+		case "collection":
+			collection = res
+		}
+	}
+	if server.Watch == nil || server.Watch.RouteID != "mongodb.resource.watch" || server.Detail.Header.StatusField != "status" {
+		t.Fatalf("server resource should expose status and watch: %#v", server)
+	}
+	if database.Watch == nil || database.Watch.Params["kind"] != "database" {
+		t.Fatalf("database resource watch mismatch: %#v", database.Watch)
+	}
+	if collection.Watch == nil || collection.Watch.Params["kind"] != "collection" || collection.Detail.Header.StatusField != "status" {
+		t.Fatalf("collection resource should expose live status: %#v", collection)
+	}
+
+	serverCells := map[string]plugin.Panel{}
+	serverOverview := server.Detail.Tabs[0]
+	cfg, ok := serverOverview.Config.(plugin.DashboardConfig)
+	if serverOverview.Type != plugin.PanelDashboard || !ok {
+		t.Fatalf("server overview should be dashboard: %#v", serverOverview)
+	}
+	for _, cell := range cfg.Cells {
+		serverCells[cell.Key] = cell
+	}
+	if serverCells["metrics"].Type != plugin.PanelMetrics || serverCells["metrics"].Source == nil || serverCells["metrics"].Source.RouteID != "mongodb.server.metrics" {
+		t.Fatalf("server metrics cell mismatch: %#v", serverCells["metrics"])
+	}
+	if serverCells["health"].Type != plugin.PanelTable || serverCells["health"].Source == nil || serverCells["health"].Source.RouteID != "mongodb.health.list" {
+		t.Fatalf("health cell mismatch: %#v", serverCells["health"])
+	}
+
+	tabConfigs := map[string]plugin.TableConfig{}
+	for _, tab := range collection.Detail.Tabs {
+		if cfg, ok := tab.Config.(plugin.TableConfig); ok {
+			tabConfigs[tab.Key] = cfg
+		}
+	}
+	if tabConfigs["documents"].RefreshIntervalMs == 0 {
+		t.Fatalf("documents table should refresh live: %#v", tabConfigs["documents"])
+	}
+	if tabConfigs["indexes"].Watch == nil || tabConfigs["indexes"].Watch.Params["kind"] != "index" {
+		t.Fatalf("indexes table should watch index rows: %#v", tabConfigs["indexes"])
+	}
+	if tabConfigs["operations"].RefreshIntervalMs == 0 {
+		t.Fatalf("operations table should refresh live: %#v", tabConfigs["operations"])
 	}
 }
 

@@ -19,7 +19,7 @@ const (
 	modelsDevURL  = "https://models.dev/api.json"
 	cacheTTL      = 24 * time.Hour
 	fetchTimeout  = 10 * time.Second
-	defaultWindow = 128_000
+	defaultWindow = 32_000
 )
 
 // Limits are a model's resolved token limits (0 = unknown).

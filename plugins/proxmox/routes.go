@@ -1,6 +1,7 @@
 package proxmox
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -20,6 +21,9 @@ func Routes() []plugin.Route {
 		{ID: "proxmox.tree.storage", Method: plugin.MethodGet, Path: "/tree/storage", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.tree.storage", Handle: treeStorage},
 
 		// Lists.
+		{ID: "proxmox.overview.list", Method: plugin.MethodGet, Path: "/overview", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.overview.list", Handle: overviewList},
+		{ID: "proxmox.health.list", Method: plugin.MethodGet, Path: "/health", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.health.list", Handle: healthList},
+		{ID: "proxmox.timeline.list", Method: plugin.MethodGet, Path: "/timeline", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.timeline.list", Handle: taskTimeline},
 		{ID: "proxmox.guest.list", Method: plugin.MethodGet, Path: "/guests", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.guest.list", Handle: listGuests("")},
 		{ID: "proxmox.qemu.list", Method: plugin.MethodGet, Path: "/qemu", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.qemu.list", Handle: listGuests("qemu")},
 		{ID: "proxmox.lxc.list", Method: plugin.MethodGet, Path: "/lxc", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.lxc.list", Handle: listGuests("lxc")},
@@ -36,6 +40,11 @@ func Routes() []plugin.Route {
 		{ID: "proxmox.lxc.snapshots", Method: plugin.MethodGet, Path: "/nodes/{node}/lxc/{vmid}/snapshot", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.lxc.snapshots", Handle: listSnapshots("lxc")},
 		{ID: "proxmox.qemu.backups", Method: plugin.MethodGet, Path: "/nodes/{node}/qemu/{vmid}/backups", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.qemu.backups", Handle: listBackups},
 		{ID: "proxmox.lxc.backups", Method: plugin.MethodGet, Path: "/nodes/{node}/lxc/{vmid}/backups", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.lxc.backups", Handle: listBackups},
+		{ID: "proxmox.ha.resources", Method: plugin.MethodGet, Path: "/ha/resources", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.ha.resources", Handle: listHAResources},
+		{ID: "proxmox.pools", Method: plugin.MethodGet, Path: "/pools", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.pools", Handle: listPools},
+		{ID: "proxmox.replication", Method: plugin.MethodGet, Path: "/replication", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.replication", Handle: listReplication},
+		{ID: "proxmox.node.syslog", Method: plugin.MethodGet, Path: "/nodes/{node}/syslog", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.syslog", Handle: nodeSyslog},
+		{ID: "proxmox.node.updates", Method: plugin.MethodGet, Path: "/nodes/{node}/updates", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.updates", Handle: nodeUpdates},
 
 		// Documents.
 		{ID: "proxmox.qemu.config", Method: plugin.MethodGet, Path: "/nodes/{node}/qemu/{vmid}/config", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.qemu.config", Handle: guestConfig("qemu")},
@@ -45,9 +54,14 @@ func Routes() []plugin.Route {
 		{ID: "proxmox.node.status", Method: plugin.MethodGet, Path: "/nodes/{node}/status", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.status", Handle: nodeStatus},
 
 		// Metrics streams.
+		{ID: "proxmox.overview.metrics", Method: plugin.MethodWS, Path: "/overview/metrics", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.overview.metrics", Stream: overviewMetrics},
 		{ID: "proxmox.qemu.metrics", Method: plugin.MethodWS, Path: "/nodes/{node}/qemu/{vmid}/metrics", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.qemu.metrics", Stream: guestMetrics("qemu")},
 		{ID: "proxmox.lxc.metrics", Method: plugin.MethodWS, Path: "/nodes/{node}/lxc/{vmid}/metrics", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.lxc.metrics", Stream: guestMetrics("lxc")},
 		{ID: "proxmox.node.metrics", Method: plugin.MethodWS, Path: "/nodes/{node}/metrics", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.metrics", Stream: nodeMetrics},
+		{ID: "proxmox.resource.watch", Method: plugin.MethodWS, Path: "/watch/{kind}", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.resource.watch", Stream: watchResource},
+		{ID: "proxmox.object.watch", Method: plugin.MethodWS, Path: "/watch/{kind}/{node}/{id}", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.object.watch", Stream: watchObject},
+		{ID: "proxmox.timeline.watch", Method: plugin.MethodWS, Path: "/timeline/watch", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.timeline.watch", Stream: watchTimeline},
+		{ID: "proxmox.task.log.watch", Method: plugin.MethodWS, Path: "/nodes/{node}/tasks/{upid}/log/watch", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.task.log.watch", Stream: watchTaskLog},
 
 		// Consoles.
 		{ID: "proxmox.qemu.console", Method: plugin.MethodWS, Path: "/nodes/{node}/qemu/{vmid}/console", Permission: "proxmox.qemu.console", Risk: plugin.RiskPrivileged, AuditEvent: "proxmox.qemu.console", Stream: vmConsole},
@@ -235,48 +249,56 @@ func listGuests(kind string) plugin.Handler {
 		if err != nil {
 			return nil, err
 		}
-		items, err := s.list(rc.Ctx, "/cluster/resources?type=vm")
-		if err != nil {
-			return nil, err
-		}
-		rows := make([]plugin.TableRow, 0, len(items))
 		onlyNode := rc.Query().Get("p.node")
 		if onlyNode == "" {
 			onlyNode = rc.Param("node")
 		}
-		for _, g := range items {
-			guestKind := str(g["type"])
-			if guestKind == "" {
-				continue
-			}
-			if kind != "" && guestKind != kind {
-				continue
-			}
-			node := str(g["node"])
-			if onlyNode != "" && node != onlyNode {
-				continue
-			}
-			vmid := str(g["vmid"])
-			name := guestName(g, guestKind, vmid)
-			rows = append(rows, plugin.TableRow{
-				"kindIcon": guestKindIcon(guestKind),
-				"name":     name,
-				"type":     guestKind,
-				"mode":     guestMode(g),
-				"template": isTemplateValue(g["template"]),
-				"vmid":     numInt(g["vmid"]),
-				"node":     node,
-				"status":   str(g["status"]),
-				"cpu":      round1(numFloat(g["cpu"]) * 100),
-				"mem":      numInt(g["mem"]),
-				"maxmem":   numInt(g["maxmem"]),
-				"uptime":   numInt(g["uptime"]),
-				"tags":     str(g["tags"]),
-				"ref":      plugin.ResourceIdentity{Kind: guestKind, Namespace: node, Name: name, UID: vmid},
-			})
+		rows, err := guestRows(rc.Ctx, s, kind, onlyNode)
+		if err != nil {
+			return nil, err
 		}
 		return pageRows(rc, rows)
 	}
+}
+
+func guestRows(ctx context.Context, s *Session, kind, onlyNode string) ([]plugin.TableRow, error) {
+	items, err := s.list(ctx, "/cluster/resources?type=vm")
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]plugin.TableRow, 0, len(items))
+	for _, g := range items {
+		guestKind := str(g["type"])
+		if guestKind == "" {
+			continue
+		}
+		if kind != "" && guestKind != kind {
+			continue
+		}
+		node := str(g["node"])
+		if onlyNode != "" && node != onlyNode {
+			continue
+		}
+		vmid := str(g["vmid"])
+		name := guestName(g, guestKind, vmid)
+		rows = append(rows, plugin.TableRow{
+			"kindIcon": guestKindIcon(guestKind),
+			"name":     name,
+			"type":     guestKind,
+			"mode":     guestMode(g),
+			"template": isTemplateValue(g["template"]),
+			"vmid":     numInt(g["vmid"]),
+			"node":     node,
+			"status":   str(g["status"]),
+			"cpu":      round1(numFloat(g["cpu"]) * 100),
+			"mem":      numInt(g["mem"]),
+			"maxmem":   numInt(g["maxmem"]),
+			"uptime":   numInt(g["uptime"]),
+			"tags":     str(g["tags"]),
+			"ref":      plugin.ResourceIdentity{Kind: guestKind, Namespace: node, Name: name, UID: vmid},
+		})
+	}
+	return rows, nil
 }
 
 func guestKindIcon(kind string) string {
@@ -307,7 +329,15 @@ func listNodes(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	items, err := s.list(rc.Ctx, "/nodes")
+	rows, err := nodeRows(rc.Ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	return pageRows(rc, rows)
+}
+
+func nodeRows(ctx context.Context, s *Session) ([]plugin.TableRow, error) {
+	items, err := s.list(ctx, "/nodes")
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +354,7 @@ func listNodes(rc *plugin.RequestContext) (any, error) {
 			"ref":    plugin.ResourceIdentity{Kind: "node", Namespace: name, Name: name, UID: name},
 		})
 	}
-	return pageRows(rc, rows)
+	return rows, nil
 }
 
 func nodeOptions(rc *plugin.RequestContext) (any, error) {
@@ -418,16 +448,9 @@ func listStorage(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	items, err := s.list(rc.Ctx, "/cluster/resources?type=storage")
+	rows, err := storageRows(rc.Ctx, s, "")
 	if err != nil {
 		return nil, err
-	}
-	rows := make([]plugin.TableRow, 0, len(items))
-	for _, st := range items {
-		node := str(st["node"])
-		if r, ok := storageRow(node, st); ok {
-			rows = append(rows, r)
-		}
 	}
 	return pageRows(rc, rows)
 }
@@ -441,17 +464,33 @@ func listNodeStorage(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	items, err := s.list(rc.Ctx, pvePath("nodes", node, "storage"))
+	rows, err := storageRows(rc.Ctx, s, node)
+	if err != nil {
+		return nil, err
+	}
+	return pageRows(rc, rows)
+}
+
+func storageRows(ctx context.Context, s *Session, node string) ([]plugin.TableRow, error) {
+	path := "/cluster/resources?type=storage"
+	if node != "" {
+		path = pvePath("nodes", node, "storage")
+	}
+	items, err := s.list(ctx, path)
 	if err != nil {
 		return nil, err
 	}
 	rows := make([]plugin.TableRow, 0, len(items))
 	for _, st := range items {
-		if r, ok := storageRow(node, st); ok {
+		rowNode := node
+		if rowNode == "" {
+			rowNode = str(st["node"])
+		}
+		if r, ok := storageRow(rowNode, st); ok {
 			rows = append(rows, r)
 		}
 	}
-	return pageRows(rc, rows)
+	return rows, nil
 }
 
 func storageRow(node string, st plugin.TableRow) (plugin.TableRow, bool) {
@@ -755,7 +794,12 @@ func nodeStatus(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s.object(rc.Ctx, pvePath("nodes", node, "status"))
+	status, err := s.object(rc.Ctx, pvePath("nodes", node, "status"))
+	if err != nil {
+		return nil, err
+	}
+	status["node"] = node
+	return nodeStatusRow(status), nil
 }
 
 // --- Actions --------------------------------------------------------------

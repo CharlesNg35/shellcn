@@ -71,6 +71,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 			{ID: "swarm.overview.metrics", Kind: plugin.StreamMetrics, RouteID: "swarm.overview.metrics"},
 			{ID: "swarm.service.logs", Kind: plugin.StreamLogs, RouteID: "swarm.service.logs"},
 			{ID: "swarm.events.watch", Kind: plugin.StreamResource, RouteID: "swarm.events.watch"},
+			{ID: "swarm.events.timeline.watch", Kind: plugin.StreamResource, RouteID: "swarm.events.timeline.watch"},
 		},
 	}
 }
@@ -85,6 +86,10 @@ func icon(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide,
 
 func inspectDetailConfig() plugin.ObjectDetailConfig {
 	return plugin.ObjectDetailConfig{RawToggle: true}
+}
+
+func swarmWatch(kind string) *plugin.DataSource {
+	return &plugin.DataSource{RouteID: "swarm.events.watch", Method: plugin.MethodWS, Params: map[string]string{"kind": kind}}
 }
 
 func tree() []plugin.TreeGroup {
@@ -110,8 +115,9 @@ func resources() []plugin.ResourceType {
 func overviewResource() plugin.ResourceType {
 	dash := plugin.DashboardConfig{Cells: []plugin.Panel{
 		{Key: "stats", Label: "Cluster", Type: plugin.PanelMetrics, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.overview.metrics", Method: plugin.MethodWS}, Config: overviewMetricsConfig()},
-		{Key: "services", Label: "Services", Type: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.services.list"}, Config: plugin.TableConfig{Columns: serviceColumns(), EmptyText: "No services found."}},
-		{Key: "nodes", Label: "Nodes", Type: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.nodes.list"}, Config: plugin.TableConfig{Columns: nodeResource().Columns, EmptyText: "No nodes found."}},
+		{Key: "services", Label: "Services", Type: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.services.list"}, Config: plugin.TableConfig{Columns: serviceColumns(), EmptyText: "No services found.", Watch: swarmWatch("service")}},
+		{Key: "nodes", Label: "Nodes", Type: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.nodes.list"}, Config: plugin.TableConfig{Columns: nodeResource().Columns, EmptyText: "No nodes found.", Watch: swarmWatch("node")}},
+		{Key: "events", Label: "Events", Type: plugin.PanelTimeline, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.events.list"}, Config: dockerengine.EventsTimelineConfig(&plugin.DataSource{RouteID: "swarm.events.timeline.watch", Method: plugin.MethodWS})},
 	}}
 	return plugin.ResourceType{
 		Kind: dockerengine.OverviewKind, Title: "Overview",
@@ -160,7 +166,7 @@ func serviceResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "service", Title: "Services",
 		List:    plugin.DataSource{RouteID: "swarm.services.list"},
-		Watch:   &plugin.DataSource{RouteID: "swarm.events.watch", Method: plugin.MethodWS},
+		Watch:   swarmWatch("service"),
 		Columns: serviceColumns(),
 		Actions: plugin.ResourceActions{
 			Row:    []string{"swarm.service.remove"},
@@ -170,7 +176,7 @@ func serviceResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.service.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: serviceOverviewDetailConfig()},
-				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.service.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns(), EmptyText: "No tasks found for this service."}},
+				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.service.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns(), EmptyText: "No tasks found for this service.", RefreshIntervalMs: 5000}},
 				{Key: "logs", Label: "Logs", Icon: icon("scroll-text"), Type: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "swarm.service.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.service.inspect", Params: map[string]string{"id": "${resource.uid}"}}, Config: inspectDetailConfig()},
 			},
@@ -184,7 +190,7 @@ func stackResource() plugin.ResourceType {
 		{Key: "services", Label: "Services", Type: plugin.ColumnNumber, Sortable: true},
 	}
 	return plugin.ResourceType{
-		Kind: "stack", Title: "Stacks", List: plugin.DataSource{RouteID: "swarm.stacks.list"}, Columns: columns,
+		Kind: "stack", Title: "Stacks", List: plugin.DataSource{RouteID: "swarm.stacks.list"}, Watch: swarmWatch("stack"), Columns: columns,
 		Actions: plugin.ResourceActions{
 			Toolbar: []string{"swarm.stack.deploy"},
 			Row:     []string{"swarm.stack.remove"},
@@ -194,7 +200,7 @@ func stackResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.stack.overview", Params: map[string]string{"stack": "${resource.uid}"}}, Config: stackOverviewDetailConfig()},
-				{Key: "services", Label: "Services", Icon: icon("workflow"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.stack.services", Params: map[string]string{"stack": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns(), EmptyText: "No services found in this stack."}},
+				{Key: "services", Label: "Services", Icon: icon("workflow"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.stack.services", Params: map[string]string{"stack": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns(), EmptyText: "No services found in this stack.", RefreshIntervalMs: 5000}},
 			},
 		},
 	}
@@ -211,7 +217,7 @@ func nodeResource() plugin.ResourceType {
 		{Key: "address", Label: "Address"},
 	}
 	return plugin.ResourceType{
-		Kind: "node", Title: "Nodes", List: plugin.DataSource{RouteID: "swarm.nodes.list"}, Columns: columns,
+		Kind: "node", Title: "Nodes", List: plugin.DataSource{RouteID: "swarm.nodes.list"}, Watch: swarmWatch("node"), Columns: columns,
 		Actions: plugin.ResourceActions{
 			Detail: []string{"swarm.node.update"},
 		},
@@ -219,7 +225,7 @@ func nodeResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: stateSeverities},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.node.overview", Params: map[string]string{"id": "${resource.uid}"}}, Config: nodeOverviewDetailConfig()},
-				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.node.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns(), EmptyText: "No tasks found on this node."}},
+				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.node.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns(), EmptyText: "No tasks found on this node.", RefreshIntervalMs: 5000}},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "swarm.node.inspect", Params: map[string]string{"id": "${resource.uid}"}}, Config: inspectDetailConfig()},
 			},
 		},
