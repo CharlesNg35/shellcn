@@ -299,6 +299,7 @@ export interface KVPanelConfig {
   keyParam?: string;
   writable?: boolean;
   valueTypes?: string[];
+  delimiter?: string;
 }
 
 export interface HTTPClientConfig {

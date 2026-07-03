@@ -525,6 +525,9 @@ type KVConfig struct {
 	Writable      bool   `json:"writable,omitempty"`
 	// ValueTypes enables a type picker; empty means plain value editing.
 	ValueTypes []string `json:"valueTypes,omitempty"`
+	// Delimiter groups keys into a namespace tree (e.g. ":"); empty offers only
+	// the flat list.
+	Delimiter string `json:"delimiter,omitempty"`
 }
 
 // TerminalConfig opts a terminal panel into extra controls. Off by default so a

@@ -918,6 +918,9 @@
         "deleteRouteId": {
           "type": "string"
         },
+        "delimiter": {
+          "type": "string"
+        },
         "keyParam": {
           "type": "string"
         },

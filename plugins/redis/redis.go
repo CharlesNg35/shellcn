@@ -32,6 +32,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 			{Key: "keys", Label: "Keys", Icon: icon("key-round"), Type: plugin.PanelKV, Source: &plugin.DataSource{RouteID: "redis.keys.list"}, Config: plugin.KVConfig{
 				CreateRouteID: "redis.key.write", ReadRouteID: "redis.key.read", WriteRouteID: "redis.key.write", DeleteRouteID: "redis.key.delete", KeyParam: "key", Writable: true,
 				ValueTypes: []string{"string", "hash", "list", "set", "zset"},
+				Delimiter:  ":",
 			}},
 			{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "redis.terminal", Method: plugin.MethodWS}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
 			{Key: "monitor", Label: "Monitor", Icon: icon("activity"), Type: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "redis.monitor", Method: plugin.MethodWS}},

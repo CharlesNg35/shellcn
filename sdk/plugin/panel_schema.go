@@ -229,6 +229,7 @@ func PanelConfigSchemas() PanelConfigSchemaMap {
 				prop("keyParam", stringProp()),
 				prop("writable", boolProp()),
 				prop("valueTypes", array(stringProp())),
+				prop("delimiter", stringProp()),
 			),
 		},
 		PanelTerminal: {Type: "object", Properties: props(prop("zoom", boolProp()), prop("search", boolProp()), prop("controls", array(streamControl())))},

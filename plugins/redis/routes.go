@@ -341,19 +341,71 @@ func listKeys(rc *plugin.RequestContext) (any, error) {
 	return plugin.Page[keyEntry]{Items: items, NextCursor: nextCursor}, nil
 }
 
+// keyEntries resolves type, TTL, and size for a batch of keys using two pipelined
+// round trips (type+TTL, then size) instead of three sequential calls per key,
+// which keeps large key scans responsive.
 func keyEntries(ctx context.Context, client *redisclient.Client, keys []string) ([]keyEntry, error) {
-	items := make([]keyEntry, 0, len(keys))
-	for _, key := range keys {
-		entry, err := keySummary(ctx, client, key)
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	metaPipe := client.Pipeline()
+	typeCmds := make([]*redisclient.StatusCmd, len(keys))
+	ttlCmds := make([]*redisclient.DurationCmd, len(keys))
+	for i, key := range keys {
+		typeCmds[i] = metaPipe.Type(ctx, key)
+		ttlCmds[i] = metaPipe.TTL(ctx, key)
+	}
+	// TYPE/TTL never error per key (missing keys report "none"/-2), so a failure
+	// here is connection-level.
+	if _, err := metaPipe.Exec(ctx); err != nil {
+		return nil, redisErr(err)
+	}
+	sizePipe := client.Pipeline()
+	kinds := make([]string, len(keys))
+	sizeCmds := make([]*redisclient.IntCmd, len(keys))
+	for i, key := range keys {
+		kind, err := typeCmds[i].Result()
 		if err != nil {
-			return nil, err
+			kind = "none"
 		}
-		if entry.Type == "none" {
+		kinds[i] = kind
+		sizeCmds[i] = queueKeySize(sizePipe, ctx, key, kind)
+	}
+	// Size is best-effort metadata; tolerate per-key WRONGTYPE races from keys that
+	// changed type between the two pipelines.
+	_, _ = sizePipe.Exec(ctx)
+	items := make([]keyEntry, 0, len(keys))
+	for i, key := range keys {
+		if kinds[i] == "none" {
 			continue
 		}
-		items = append(items, entry)
+		ttl, _ := ttlCmds[i].Result()
+		var size int64
+		if sizeCmds[i] != nil {
+			size, _ = sizeCmds[i].Result()
+		}
+		items = append(items, keyEntry{Key: key, Type: kinds[i], TTL: int64(ttl.Seconds()), Size: size})
 	}
 	return items, nil
+}
+
+func queueKeySize(pipe redisclient.Pipeliner, ctx context.Context, key, kind string) *redisclient.IntCmd {
+	switch kind {
+	case "string":
+		return pipe.StrLen(ctx, key)
+	case "hash":
+		return pipe.HLen(ctx, key)
+	case "list":
+		return pipe.LLen(ctx, key)
+	case "set":
+		return pipe.SCard(ctx, key)
+	case "zset":
+		return pipe.ZCard(ctx, key)
+	case "stream":
+		return pipe.XLen(ctx, key)
+	default:
+		return nil
+	}
 }
 
 func readKey(rc *plugin.RequestContext) (any, error) {
@@ -694,19 +746,6 @@ func executeCommand(parent context.Context, s *Session, client *redisclient.Clie
 		Statement:  req.Query,
 		CommandTag: command,
 	}, nil
-}
-
-func keySummary(ctx context.Context, client *redisclient.Client, key string) (keyEntry, error) {
-	kind, err := client.Type(ctx, key).Result()
-	if err != nil {
-		return keyEntry{}, redisErr(err)
-	}
-	ttl, err := client.TTL(ctx, key).Result()
-	if err != nil {
-		return keyEntry{}, redisErr(err)
-	}
-	size, _ := keySize(ctx, client, key, kind)
-	return keyEntry{Key: key, Type: kind, TTL: int64(ttl.Seconds()), Size: size}, nil
 }
 
 func keyValue(ctx context.Context, s *Session, client *redisclient.Client, key string) (keyDetail, error) {

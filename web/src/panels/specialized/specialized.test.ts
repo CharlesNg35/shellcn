@@ -409,6 +409,61 @@ describe("specialized panels", () => {
     expect(w.find(".shellcn-codemirror-host").exists()).toBe(true);
   });
 
+  it("scans every page and groups keys into a namespace tree", async () => {
+    vi.unstubAllGlobals();
+    const cursors: string[] = [];
+    installFetch((url) => {
+      if (url.includes("kv.list")) {
+        const cursor = new URL(url, "http://h").searchParams.get("cursor") ?? "";
+        cursors.push(cursor);
+        if (cursor === "") {
+          return {
+            body: {
+              items: [
+                { key: "user:1", type: "string" },
+                { key: "user:2", type: "hash" },
+              ],
+              nextCursor: "c1",
+            },
+          };
+        }
+        return {
+          body: {
+            items: [
+              { key: "job:queue", type: "list" },
+              { key: "standalone", type: "string" },
+            ],
+            nextCursor: "",
+          },
+        };
+      }
+      if (url.includes("kv.read")) {
+        return { body: { key: "user:1", type: "string", value: "v" } };
+      }
+      return { body: {} };
+    });
+    const w = mount(KVPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "kv.list" },
+        config: { readRouteId: "kv.read", delimiter: ":" },
+      },
+    });
+    await flushPromises();
+
+    // Progressive scan followed the page cursor across both pages.
+    expect(cursors).toContain("");
+    expect(cursors).toContain("c1");
+    // A configured delimiter defaults to the tree view; every scanned key counts.
+    expect(w.findComponent({ name: "Tree" }).exists()).toBe(true);
+    expect(w.text()).toContain("4 keys");
+    // Namespaces become folders; unqualified keys stay at the root.
+    expect(w.text()).toContain("user");
+    expect(w.text()).toContain("job");
+    expect(w.text()).toContain("standalone");
+    w.unmount();
+  });
+
   it("loads KV filter matches from the server", async () => {
     vi.useFakeTimers();
     try {
