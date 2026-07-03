@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/charlesng35/shellcn/internal/ai/memory"
+	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/store"
 )
 
@@ -114,6 +115,124 @@ func TestHistoryKeepsRecentAndCompactsOlder(t *testing.T) {
 	}
 	if len(msgs) >= 24 {
 		t.Fatalf("history not bounded: kept %d of 24", len(msgs))
+	}
+}
+
+func TestRefreshSummaryCarriesOlderMemoryPastRecentWindow(t *testing.T) {
+	m := newStore()
+	ctx := context.Background()
+	c, _ := m.Create(ctx, "u1", "c1", "", "gpt-4o")
+
+	_ = m.AppendUser(ctx, c.ID, "remember the first database was billing")
+	_ = m.AppendAssistant(ctx, c.ID, "noted", "", nil, false)
+	for i := 0; i < 12; i++ {
+		_ = m.AppendUser(ctx, c.ID, "older user "+itoa(i)+" "+strings.Repeat("x", 200))
+		_ = m.AppendAssistant(ctx, c.ID, "older assistant "+itoa(i)+" "+strings.Repeat("y", 200), "", nil, false)
+	}
+	if err := m.RefreshSummary(ctx, c.ID, 500); err != nil {
+		t.Fatalf("refresh summary: %v", err)
+	}
+	got, err := m.Get(ctx, "u1", c.ID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if !strings.Contains(got.Summary, "billing") {
+		t.Fatalf("summary should keep compacted older context, got %q", got.Summary)
+	}
+
+	for i := 0; i < 60; i++ {
+		_ = m.AppendUser(ctx, c.ID, "new user "+itoa(i))
+		_ = m.AppendAssistant(ctx, c.ID, "new assistant "+itoa(i), "", nil, false)
+	}
+	summary, _, err := m.History(ctx, c.ID, 1_000_000)
+	if err != nil {
+		t.Fatalf("history: %v", err)
+	}
+	if !strings.Contains(summary, "billing") {
+		t.Fatalf("stored summary should be reused after messages leave recent window, got %q", summary)
+	}
+}
+
+func TestHistorySummarizesAgedOutMessageWithoutTokenPressure(t *testing.T) {
+	m := newStore()
+	ctx := context.Background()
+	c, _ := m.Create(ctx, "u1", "c1", "", "gpt-4o")
+
+	_ = m.AppendUser(ctx, c.ID, "first message should survive")
+	for i := 1; i < 41; i++ {
+		_ = m.AppendUser(ctx, c.ID, "msg "+itoa(i))
+	}
+	summary, msgs, err := m.History(ctx, c.ID, 1_000_000)
+	if err != nil {
+		t.Fatalf("history: %v", err)
+	}
+	if len(msgs) != 40 {
+		t.Fatalf("expected recent window only, got %d", len(msgs))
+	}
+	if !strings.Contains(summary, "first message should survive") {
+		t.Fatalf("aged-out message should be summarized even without token pressure, got %q", summary)
+	}
+}
+
+func TestSummaryKeepsNewestMemoryWhenBudgetIsFull(t *testing.T) {
+	m := newStore()
+	ctx := context.Background()
+	c, _ := m.Create(ctx, "u1", "c1", "", "gpt-4o")
+
+	for i := 0; i < 120; i++ {
+		_ = m.AppendUser(ctx, c.ID, "early topic "+itoa(i)+" "+strings.Repeat("a", 180))
+		_ = m.AppendAssistant(ctx, c.ID, "early answer "+itoa(i), "", nil, false)
+		if err := m.RefreshSummary(ctx, c.ID, 500); err != nil {
+			t.Fatalf("refresh early: %v", err)
+		}
+	}
+	_ = m.AppendUser(ctx, c.ID, "latest important topic is invoices")
+	for i := 0; i < 40; i++ {
+		_ = m.AppendUser(ctx, c.ID, "tail filler "+itoa(i))
+	}
+	if err := m.RefreshSummary(ctx, c.ID, 500); err != nil {
+		t.Fatalf("refresh latest: %v", err)
+	}
+
+	got, err := m.Get(ctx, "u1", c.ID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if !strings.Contains(got.Summary, "latest important topic is invoices") {
+		t.Fatalf("summary should retain newest memory when full, got %q", got.Summary)
+	}
+}
+
+func TestHistoryBoundsRecentToolOutput(t *testing.T) {
+	m := newStore()
+	ctx := context.Background()
+	c, _ := m.Create(ctx, "u1", "c1", "", "gpt-4o")
+
+	large := strings.Repeat("abcdef", 2_000)
+	err := m.AppendAssistant(ctx, c.ID, "", "", []models.AIToolCallRecord{{
+		ID: "tc1", Name: "large_result", Output: map[string]any{
+			"id":      "row-1",
+			"content": large,
+		},
+	}}, false)
+	if err != nil {
+		t.Fatalf("append assistant: %v", err)
+	}
+	_, msgs, err := m.History(ctx, c.ID, 1_000_000)
+	if err != nil {
+		t.Fatalf("history: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected one prompt message, got %d", len(msgs))
+	}
+	if len(msgs[0].Content) > 5_000 {
+		t.Fatalf("recent tool output was not bounded, length=%d", len(msgs[0].Content))
+	}
+	if !strings.Contains(msgs[0].Content, "row-1") {
+		t.Fatalf("sanitized tool output should preserve useful identifiers: %q", msgs[0].Content)
+	}
+	if strings.Contains(msgs[0].Content, large) {
+		t.Fatal("prompt history should not include raw large tool output")
 	}
 }
 

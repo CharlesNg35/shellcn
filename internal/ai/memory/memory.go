@@ -26,6 +26,11 @@ const (
 	toolResultCharLimit      = 600
 	toolResultCountLimit     = 6
 	defaultMessagePageSize   = 30
+	recentToolJSONCharLimit  = 4_000
+	sanitizeStringCharLimit  = 800
+	sanitizeArrayItemLimit   = 20
+	sanitizeObjectKeyLimit   = 40
+	sanitizeDepthLimit       = 4
 )
 
 // Store is the conversation persistence and context-assembly surface.
@@ -166,6 +171,10 @@ func (s *Store) AppendAssistant(ctx context.Context, convID, content, reasoning 
 
 // History returns compacted older turns plus recent messages within tokenBudget.
 func (s *Store) History(ctx context.Context, convID string, tokenBudget int) (summary string, msgs []engine.Message, err error) {
+	c, err := s.conv.Get(ctx, convID)
+	if err != nil {
+		return "", nil, err
+	}
 	all, err := s.msg.Recent(ctx, convID, maxLoadedMessages)
 	if err != nil {
 		return "", nil, err
@@ -173,7 +182,60 @@ func (s *Store) History(ctx context.Context, convID string, tokenBudget int) (su
 	if tokenBudget <= 0 {
 		tokenBudget = budget.DefaultHistoryBudget
 	}
-	return splitByTokenBudget(all, tokenBudget)
+	summary, msgs, err = splitByTokenBudget(all, tokenBudget)
+	if err != nil {
+		return "", nil, err
+	}
+	return s.mergedSummary(ctx, convID, c.Summary, summary), msgs, nil
+}
+
+// RefreshSummary stores the compacted context snapshot used as long-term memory
+// for messages that age out of the loaded recent window.
+func (s *Store) RefreshSummary(ctx context.Context, convID string, tokenBudget int) error {
+	c, err := s.conv.Get(ctx, convID)
+	if err != nil {
+		return err
+	}
+	all, err := s.msg.Recent(ctx, convID, maxLoadedMessages)
+	if err != nil {
+		return err
+	}
+	if tokenBudget <= 0 {
+		tokenBudget = budget.DefaultHistoryBudget
+	}
+	summary, _, err := splitByTokenBudget(all, tokenBudget)
+	if err != nil {
+		return err
+	}
+	c.Summary = s.mergedSummary(ctx, convID, c.Summary, summary)
+	c.UpdatedAt = s.now()
+	return s.conv.Update(ctx, &c)
+}
+
+func (s *Store) mergedSummary(ctx context.Context, convID, existing, compactedRecent string) string {
+	agedOut, _ := s.agedOutSummary(ctx, convID)
+	return mergeSummaries(mergeSummaries(existing, agedOut, summaryCharBudget), compactedRecent, summaryCharBudget)
+}
+
+func (s *Store) agedOutSummary(ctx context.Context, convID string) (string, error) {
+	total, err := s.msg.Count(ctx, convID)
+	if err != nil || total <= maxLoadedMessages {
+		return "", err
+	}
+	olderCount := total - maxLoadedMessages
+	msgs, err := s.msg.Range(ctx, convID, olderCount-1, 1)
+	if err != nil || len(msgs) == 0 {
+		return "", err
+	}
+	formatted := make([]formatted, 0, len(msgs))
+	for _, msg := range msgs {
+		limit := compactedAssistCharLimit
+		if msg.Role == string(engine.RoleUser) {
+			limit = compactedUserCharLimit
+		}
+		formatted = append(formatted, formatMessage(msg, limit, true))
+	}
+	return buildSummary(formatted, summaryCharBudget), nil
 }
 
 // MessagePage is one UI window of conversation messages.
@@ -307,7 +369,7 @@ func formatToolCallRaw(tc models.AIToolCallRecord) string {
 	if tc.Err != "" {
 		return "[Tool:" + tc.Name + "] error: " + tc.Err
 	}
-	body := stringify(tc.Output)
+	body := truncate(stringify(sanitizePromptValue(tc.Output, 0)), recentToolJSONCharLimit)
 	if body == "" {
 		return "[Tool:" + tc.Name + "]"
 	}
@@ -350,6 +412,78 @@ func buildSummary(messages []formatted, charBudget int) string {
 		kept = append([]string{"[Earlier conversation compacted: " + itoa(dropped) + " message(s)]"}, kept...)
 	}
 	return strings.Join(kept, "\n")
+}
+
+func mergeSummaries(existing, next string, charBudget int) string {
+	existing = strings.TrimSpace(existing)
+	next = strings.TrimSpace(next)
+	if existing == "" {
+		return keepSummaryTail(next, charBudget)
+	}
+	if next == "" || strings.Contains(existing, next) {
+		return keepSummaryTail(existing, charBudget)
+	}
+	return keepSummaryTail(existing+"\n"+next, charBudget)
+}
+
+func keepSummaryTail(s string, charBudget int) string {
+	if len(s) <= charBudget {
+		return s
+	}
+	cut := len(s) - charBudget
+	if i := strings.IndexByte(s[cut:], '\n'); i >= 0 {
+		cut += i + 1
+	}
+	return "[Earlier conversation memory trimmed]\n" + s[cut:]
+}
+
+func sanitizePromptValue(v any, depth int) any {
+	if v == nil {
+		return nil
+	}
+	if depth >= sanitizeDepthLimit {
+		return truncate(normalizeWhitespace(stringify(v)), sanitizeStringCharLimit)
+	}
+	switch x := v.(type) {
+	case string:
+		return truncate(normalizeWhitespace(x), sanitizeStringCharLimit)
+	case []any:
+		return sanitizePromptSlice(x, depth)
+	case map[string]any:
+		return sanitizePromptMap(x, depth)
+	default:
+		raw := stringify(v)
+		if raw == "" || len(raw) <= sanitizeStringCharLimit {
+			return v
+		}
+		return truncate(normalizeWhitespace(raw), sanitizeStringCharLimit)
+	}
+}
+
+func sanitizePromptSlice(values []any, depth int) any {
+	limit := min(len(values), sanitizeArrayItemLimit)
+	out := make([]any, 0, limit+1)
+	for _, item := range values[:limit] {
+		out = append(out, sanitizePromptValue(item, depth+1))
+	}
+	if len(values) > limit {
+		out = append(out, map[string]any{"truncated": len(values) - limit})
+	}
+	return out
+}
+
+func sanitizePromptMap(values map[string]any, depth int) any {
+	out := make(map[string]any, min(len(values), sanitizeObjectKeyLimit)+1)
+	count := 0
+	for key, value := range values {
+		if count >= sanitizeObjectKeyLimit {
+			out["_truncatedKeys"] = len(values) - count
+			break
+		}
+		out[key] = sanitizePromptValue(value, depth+1)
+		count++
+	}
+	return out
 }
 
 func normalizeWhitespace(s string) string { return strings.Join(strings.Fields(s), " ") }

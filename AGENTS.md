@@ -14,9 +14,7 @@ projection — **adding a plugin requires zero frontend changes.**
 **Authoritative docs (read before coding):**
 
 - [`specs/project.md`](specs/project.md) — architecture (source of truth).
-- [`specs/plans/`](specs/plans/) — phased, numbered build steps (each with a
-  sub-task checklist + Definition of Done).
-- [`specs/plans/TESTING.md`](specs/plans/TESTING.md) — testing standard.
+- [`specs/plans/`](specs/plans/) — phased, numbered build steps (each with a sub-task checklist + Definition of Done).
 - [`specs/plugins.md`](specs/plugins.md) — plugin roadmap.
 
 ## How to work here

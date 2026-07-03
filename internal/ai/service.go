@@ -126,7 +126,7 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 		names = append(names, sp.Name)
 	}
 	protocolTitle, protocolDescription := s.protocolInfo(in.Protocol)
-	system := agent.SystemPrompt(agent.PromptInput{
+	promptInput := agent.PromptInput{
 		ConnectionTitle:     in.ConnectionTitle,
 		Protocol:            in.Protocol,
 		ProtocolTitle:       protocolTitle,
@@ -136,13 +136,15 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 		WorkspaceQuery:      in.WorkspaceQuery,
 		RecentOps:           in.RecentOps,
 		HasSubagent:         hasSubagent,
-	})
+	}
+	system := agent.SystemPrompt(promptInput)
 
 	limits := budget.Limits{ContextWindow: s.models.ContextWindow(ctx, model, registryProvider(kind))}
 	if lk, ok := s.models.Lookup(ctx, model, registryProvider(kind)); ok {
 		limits.MaxOutputTokens = lk.MaxOutputTokens
 	}
-	overheadTokens := budget.Estimate(system) + budget.MeasureToolTokens(specs)
+	toolTokens := budget.MeasureToolTokens(specs)
+	overheadTokens := budget.Estimate(system) + toolTokens
 	historyBudget := budget.HistoryBudget(limits, overheadTokens, 0)
 	maxOut := budget.ResolveOutputTokens(limits, overheadTokens, 0)
 
@@ -159,6 +161,19 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 		msgs = history
 		if summary != "" {
 			system += "\n\nConversation memory:\n" + summary
+			overheadTokens = budget.Estimate(system) + toolTokens
+			historyBudget = budget.HistoryBudget(limits, overheadTokens, 0)
+			maxOut = budget.ResolveOutputTokens(limits, overheadTokens, 0)
+			summary, msgs, err = s.mem.History(ctx, in.ConversationID, historyBudget)
+			if err != nil {
+				return err
+			}
+			if summary != "" {
+				system = agent.SystemPrompt(promptInput) + "\n\nConversation memory:\n" + summary
+				overheadTokens = budget.Estimate(system) + toolTokens
+				historyBudget = budget.HistoryBudget(limits, overheadTokens, 0)
+				maxOut = budget.ResolveOutputTokens(limits, overheadTokens, 0)
+			}
 		}
 	} else {
 		msgs = append(append([]engine.Message{}, in.History...), engine.Message{Role: engine.RoleUser, Content: in.UserMessage})
@@ -188,6 +203,7 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 
 	if persist && acc.err == "" {
 		_ = s.mem.AppendAssistant(ctx, in.ConversationID, acc.content.String(), acc.reasoning.String(), acc.calls, acc.truncated)
+		_ = s.mem.RefreshSummary(ctx, in.ConversationID, historyBudget)
 		s.autoTitle(ctx, provider, model, in.User.ID, in.ConversationID)
 	}
 	return nil
