@@ -217,34 +217,51 @@ function activateEntry(entry: KVEntry | null): void {
   tableSelection.value = entry;
 }
 
-// scanBudgetedBatch pulls paged batches, following the cursor, until it has added
-// SCAN_BUDGET new keys or the source is exhausted. Duplicate keys a paged source
-// may return across batches are dropped.
-async function scanBudgetedBatch(): Promise<void> {
-  if (!props.source) return;
+// The tree is built from a background scan that follows the page cursor: load()
+// paints after the first page, then fills up to SCAN_BUDGET more keys without
+// blocking the panel; "Scan more" resumes past the cap. A generation token lets a
+// reload or a new filter cancel an in-flight background fill.
+let scanGen = 0;
+
+async function scanNextPage(): Promise<number> {
+  if (!props.source) return 0;
   const search = filterText.value.trim();
-  const startCount = entries.value.length;
+  const page = await fetchPage<KVEntry>(
+    props.connectionId,
+    props.source,
+    { resource: props.resource, record: props.record },
+    { filter: search ? { q: search } : undefined, cursor: scanCursor.value },
+  );
+  let added = 0;
+  for (const entry of normalizeList(page)) {
+    if (seenKeys.has(entry.key)) continue;
+    seenKeys.add(entry.key);
+    entries.value.push(entry);
+    added++;
+  }
+  scanCursor.value = page.nextCursor || undefined;
+  return added;
+}
+
+async function fillToBudget(gen: number): Promise<void> {
+  if (gen !== scanGen) return;
   scanning.value = true;
   try {
-    do {
-      const page = await fetchPage<KVEntry>(
-        props.connectionId,
-        props.source,
-        { resource: props.resource, record: props.record },
-        {
-          filter: search ? { q: search } : undefined,
-          cursor: scanCursor.value,
-        },
-      );
-      for (const entry of normalizeList(page)) {
-        if (seenKeys.has(entry.key)) continue;
-        seenKeys.add(entry.key);
-        entries.value.push(entry);
-      }
-      scanCursor.value = page.nextCursor || undefined;
-    } while (scanCursor.value && entries.value.length - startCount < SCAN_BUDGET);
+    let added = 0;
+    while (scanCursor.value && added < SCAN_BUDGET && gen === scanGen) {
+      added += await scanNextPage();
+    }
+  } catch (e) {
+    if (gen === scanGen) {
+      toast.add({
+        severity: "error",
+        summary: "Could not scan more keys",
+        detail: (e as Error).message,
+        life: 4000,
+      });
+    }
   } finally {
-    scanning.value = false;
+    if (gen === scanGen) scanning.value = false;
   }
 }
 
@@ -253,6 +270,7 @@ async function load(): Promise<void> {
     loading.value = false;
     return;
   }
+  const gen = ++scanGen;
   loading.value = true;
   error.value = null;
   const selectedKey = selected.value?.key;
@@ -260,7 +278,8 @@ async function load(): Promise<void> {
   seenKeys.clear();
   scanCursor.value = undefined;
   try {
-    await scanBudgetedBatch();
+    await scanNextPage();
+    if (gen !== scanGen) return;
     const next =
       entries.value.find((entry) => entry.key === selectedKey) ??
       entries.value[0] ??
@@ -269,22 +288,15 @@ async function load(): Promise<void> {
     if (selected.value) await loadDetail(selected.value);
   } catch (e) {
     error.value = (e as Error).message;
-  } finally {
     loading.value = false;
+    return;
   }
+  loading.value = false;
+  if (scanCursor.value) void fillToBudget(gen);
 }
 
 async function scanMore(): Promise<void> {
-  try {
-    await scanBudgetedBatch();
-  } catch (e) {
-    toast.add({
-      severity: "error",
-      summary: "Could not scan more keys",
-      detail: (e as Error).message,
-      life: 4000,
-    });
-  }
+  await fillToBudget(scanGen);
 }
 
 useConnectionInvalidationRefresh({
