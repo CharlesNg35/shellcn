@@ -86,6 +86,10 @@ func (demoPlugin) Routes() []plugin.Route {
 			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
 		},
 		{
+			ID: "demo.update", Method: plugin.MethodPost, Risk: plugin.RiskWrite, Permission: "demo.write", AuditEvent: "demo.update",
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
+		},
+		{
 			ID: "demo.delete", Method: plugin.MethodDelete, Risk: plugin.RiskDestructive, Permission: "demo.delete", AuditEvent: "demo.delete",
 			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
 		},
@@ -146,8 +150,11 @@ func TestAgentListsResourcesViaTools(t *testing.T) {
 	if !offered["demo_list"] || !offered["investigate"] {
 		t.Fatalf("read-only should expose demo_list + investigate, got %+v", prov.gotTools)
 	}
-	if offered["demo_delete"] {
-		t.Fatalf("read-only must not expose the destructive tool: %+v", prov.gotTools)
+	forbidden := []string{"demo_update", "demo_delete"}
+	for _, name := range forbidden {
+		if offered[name] {
+			t.Fatalf("read-only must not expose %s: %+v", name, prov.gotTools)
+		}
 	}
 	if !strings.Contains(prov.system, "Demo") || !strings.Contains(prov.system, "Manage demo infrastructure resources.") {
 		t.Fatalf("system prompt should include compact protocol context:\n%s", prov.system)
@@ -173,6 +180,50 @@ func TestAgentListsResourcesViaTools(t *testing.T) {
 	}
 	if !sawTool || !sawDone {
 		t.Fatalf("missing tool/done events: %+v", events)
+	}
+}
+
+func TestReadWriteKeepsToolsInProviderCatalogNotSystemPrompt(t *testing.T) {
+	key, _ := secrets.GenerateMasterKey()
+	vault, _ := secrets.NewVault(key)
+	st := store.NewMemory()
+	global := config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", Model: "gpt-4o"}
+	providers := aiconfig.New(st.AIProviders, vault, global)
+
+	reg := pluginregistry.New()
+	reg.MustRegister(demoPlugin{})
+
+	prov := &scriptedProvider{}
+	svc := ai.New(providers, global, reg, &recordingInvoker{}, nil, modelreg.New(modelreg.WithoutRegistryFetch())).WithProviderFactory(
+		func(context.Context, models.AIProviderKind, string, string, string) (engine.Provider, error) {
+			return prov, nil
+		},
+	)
+
+	err := svc.Run(context.Background(), ai.RunInput{
+		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "demo",
+		ConnectionTitle: "prod", AIMode: models.AIModeReadWrite, UserMessage: "update it",
+	}, func(engine.StreamEvent) {})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	offered := map[string]bool{}
+	for _, tspec := range prov.gotTools {
+		offered[tspec.Name] = true
+	}
+	if !offered["demo_update"] {
+		t.Fatalf("read-write should expose write tool: %+v", prov.gotTools)
+	}
+	if strings.Contains(prov.system, "demo_update") ||
+		strings.Contains(prov.system, "Permission: demo.write") {
+		t.Fatalf("system prompt should not duplicate provider tool metadata:\n%s", prov.system)
+	}
+	if !strings.Contains(prov.system, "provider-supplied tool catalog") {
+		t.Fatalf("system prompt should defer to provider tool catalog:\n%s", prov.system)
+	}
+	if !strings.Contains(prov.system, "Do not describe this connection as read-only") {
+		t.Fatalf("system prompt should guard against false read-only claims:\n%s", prov.system)
 	}
 }
 

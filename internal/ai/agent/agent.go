@@ -1,8 +1,8 @@
 // Package agent builds the system prompt and relays a provider turn to the
 // transport, buffering text deltas so the UI receives smooth, batched updates
 // instead of a flood of tiny frames. It is plugin-agnostic: the prompt is
-// assembled from the connection's protocol/title, the AI mode, and the tool
-// names — never plugin-specific logic.
+// assembled from the connection's protocol/title and AI mode — never
+// plugin-specific logic.
 package agent
 
 import (
@@ -29,7 +29,7 @@ type PromptInput struct {
 	ProtocolTitle       string
 	ProtocolDescription string
 	AIMode              models.AIMode
-	Tools               []string
+	HasTools            bool
 	// RecentOps are pre-formatted recent audit lines for the user on this
 	// connection, so the agent can explain a just-failed action.
 	RecentOps []string
@@ -57,15 +57,13 @@ func SystemPrompt(in PromptInput) string {
 	switch in.AIMode {
 	case models.AIModeReadWrite:
 		b.WriteString("This connection allows read and write operations. When the user asks for a change, call the appropriate tool instead of asking them to type yes or confirm in chat; ShellCN handles any required approval flow before execution.\n")
+		b.WriteString("Do not describe this connection as read-only unless a tool call returns an authorization error or no suitable tool exists in the provider-supplied tool catalog.\n")
 	default:
 		b.WriteString("This connection is read-only. You may inspect resources but cannot modify anything.\n")
 	}
 
-	if len(in.Tools) > 0 {
-		b.WriteString("\nAvailable tools (call them to inspect the connection):\n")
-		for _, t := range in.Tools {
-			fmt.Fprintf(&b, "- %s\n", t)
-		}
+	if in.HasTools {
+		b.WriteString("\nThe current callable tool catalog is attached to this request through the provider tool API. Treat that catalog as authoritative for tool names, parameters, route permissions, and risk metadata; do not rely on this prompt or chat history to enumerate tools.\n")
 	} else {
 		b.WriteString("\nNo tools are available for this connection; answer from general knowledge only.\n")
 	}
@@ -79,7 +77,7 @@ func SystemPrompt(in PromptInput) string {
 		for _, op := range in.RecentOps {
 			fmt.Fprintf(&b, "- %s\n", op)
 		}
-		b.WriteString("Use these to explain what just happened or why something failed.\n")
+		b.WriteString("These are historical audit records, not the current permission set; the current AI mode and provider-supplied tool catalog are authoritative. Use recent operations to explain what happened, but do not infer that a past denial still applies after the connection mode or tool catalog says otherwise.\n")
 	}
 
 	if q := strings.TrimSpace(in.WorkspaceQuery); q != "" {

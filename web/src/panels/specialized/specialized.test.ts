@@ -471,10 +471,7 @@ describe("specialized panels", () => {
       if (url.includes("kv.list")) {
         return {
           body: {
-            items: [
-              { key: "/test/readonly" },
-              { key: "/test/other" },
-            ],
+            items: [{ key: "/test/readonly" }, { key: "/test/other" }],
             nextCursor: "",
           },
         };
