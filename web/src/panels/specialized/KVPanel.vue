@@ -166,9 +166,11 @@ function buildKeyTree(list: KVEntry[], delim: string): KVNode[] {
   const rootLeaves: KVNode[] = [];
 
   for (const entry of list) {
-    const segments = entry.key.split(delim);
+    let segments = entry.key.split(delim);
+    // A leading delimiter (e.g. "/a/b") is the root, not an empty folder.
+    if (segments.length > 1 && segments[0] === "") segments = segments.slice(1);
     if (segments.length === 1) {
-      rootLeaves.push(leafNode(entry, entry.key));
+      rootLeaves.push(leafNode(entry, segments[0]));
       continue;
     }
     let level = rootFolders;
