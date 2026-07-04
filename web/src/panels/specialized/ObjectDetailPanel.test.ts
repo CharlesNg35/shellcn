@@ -4,9 +4,15 @@ import ObjectDetailPanel from "./ObjectDetailPanel.vue";
 
 const fetchDoc = vi.hoisted(() => vi.fn());
 
-vi.mock("../../api/dataSource", () => ({
-  fetchDoc,
-}));
+vi.mock("../../api/dataSource", async () => {
+  const actual = await vi.importActual<typeof import("../../api/dataSource")>(
+    "../../api/dataSource",
+  );
+  return {
+    ...actual,
+    fetchDoc,
+  };
+});
 
 describe("ObjectDetailPanel", () => {
   beforeEach(() => {
@@ -202,5 +208,70 @@ describe("ObjectDetailPanel", () => {
 
     expect(wrapper.text()).toContain("api-v2");
     expect(wrapper.text()).toContain("Ready");
+  });
+
+  it("does not reset when only unused backing row fields change", async () => {
+    fetchDoc.mockResolvedValue({ name: "api", status: "Running" });
+
+    const wrapper = mount(ObjectDetailPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "x.object" },
+        record: { status: "Running" },
+        config: {
+          sections: [
+            {
+              fields: [
+                { key: "name", label: "Name" },
+                { key: "status", label: "Status" },
+              ],
+            },
+          ],
+        },
+      },
+      global: { stubs: { AppIcon: true } },
+    });
+    await flushPromises();
+
+    fetchDoc.mockClear();
+    await wrapper.setProps({ record: { status: "Succeeded" } });
+    await flushPromises();
+
+    expect(fetchDoc).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-test="skeleton-list"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain("api");
+    expect(wrapper.text()).toContain("Running");
+  });
+
+  it("reloads when a backing row change alters source params", async () => {
+    fetchDoc
+      .mockResolvedValueOnce({ name: "api", status: "Running" })
+      .mockResolvedValueOnce({ name: "worker", status: "Running" });
+
+    const wrapper = mount(ObjectDetailPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "x.object", params: { name: "${record.name}" } },
+        record: { name: "api" },
+        config: {
+          sections: [
+            {
+              fields: [
+                { key: "name", label: "Name" },
+                { key: "status", label: "Status" },
+              ],
+            },
+          ],
+        },
+      },
+      global: { stubs: { AppIcon: true } },
+    });
+    await flushPromises();
+
+    await wrapper.setProps({ record: { name: "worker" } });
+    await flushPromises();
+
+    expect(fetchDoc).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).toContain("worker");
   });
 });

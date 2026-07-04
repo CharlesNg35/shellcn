@@ -2,7 +2,7 @@
 import { computed, onUnmounted, ref, watch } from "vue";
 import Panel from "primevue/panel";
 import Button from "primevue/button";
-import { fetchDoc } from "@/api/dataSource";
+import { fetchDoc, resolveParams } from "@/api/dataSource";
 import type {
   ObjectDetailField,
   ObjectDetailPanelConfig,
@@ -33,6 +33,29 @@ async function loadDetail(): Promise<unknown> {
     resource: props.resource,
     record: props.record,
   });
+}
+
+function sourceParamsKey(): string {
+  if (!props.source) return "";
+  try {
+    return JSON.stringify(
+      resolveParams(props.source.params, {
+        resource: props.resource,
+        record: props.record,
+      }),
+    );
+  } catch {
+    return JSON.stringify(props.source.params ?? {});
+  }
+}
+
+function loadKey(): string {
+  return JSON.stringify([
+    props.connectionId,
+    props.resource?.uid,
+    props.source?.routeId,
+    sourceParamsKey(),
+  ]);
 }
 
 const {
@@ -99,13 +122,7 @@ async function copy(field: ObjectDetailField): Promise<void> {
 }
 
 watch(
-  () => [
-    props.connectionId,
-    props.resource?.uid,
-    props.source?.routeId,
-    JSON.stringify(props.source?.params ?? {}),
-    JSON.stringify(props.record ?? {}),
-  ],
+  loadKey,
   () => {
     reset();
     void load();

@@ -178,6 +178,22 @@ func TestStreamSchemasConstrainTerminalAndLogInputs(t *testing.T) {
 	}
 }
 
+func TestContainerStatsConfigUsesHumanReadableByteUnits(t *testing.T) {
+	cfg := ContainerStatsConfig()
+	units := make(map[string]string, len(cfg.Stats))
+	for _, stat := range cfg.Stats {
+		units[stat.Key] = stat.Unit
+	}
+	for _, key := range []string{"netRx", "netTx", "blockRead", "blockWrite"} {
+		if units[key] != "bytes" {
+			t.Fatalf("%s unit = %q, want bytes", key, units[key])
+		}
+	}
+	if units["cpuPct"] != "%" {
+		t.Fatalf("cpuPct unit = %q, want %%", units["cpuPct"])
+	}
+}
+
 func TestEngineShellCreateOptionsMountDockerSocket(t *testing.T) {
 	opts := engineShellCreateOptions(endpoint{network: "unix", address: "/run/docker.sock"})
 	if opts.Name != engineShellName {

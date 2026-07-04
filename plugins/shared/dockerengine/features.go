@@ -632,10 +632,10 @@ func ContainerStatsConfig() plugin.MetricsConfig {
 		Stats: []plugin.MetricStat{
 			{Key: "cpuPct", Label: "CPU", Unit: "%"},
 			{Key: "pids", Label: "PIDs"},
-			{Key: "netRx", Label: "Net in", Unit: "B"},
-			{Key: "netTx", Label: "Net out", Unit: "B"},
-			{Key: "blockRead", Label: "Block read", Unit: "B"},
-			{Key: "blockWrite", Label: "Block write", Unit: "B"},
+			{Key: "netRx", Label: "Net in", Unit: "bytes"},
+			{Key: "netTx", Label: "Net out", Unit: "bytes"},
+			{Key: "blockRead", Label: "Block read", Unit: "bytes"},
+			{Key: "blockWrite", Label: "Block write", Unit: "bytes"},
 		},
 		Usage: []plugin.MetricUsage{
 			{Key: "memPct", Label: "Memory usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "memPct", UsedKey: "memUsed", TotalKey: "memLimit", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 80, CriticalAt: 95}},
