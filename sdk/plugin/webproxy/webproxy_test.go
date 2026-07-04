@@ -259,6 +259,102 @@ func TestServeRewritesSingleQuotedHTMLURLs(t *testing.T) {
 	}
 }
 
+func TestServeRewritesBareAndScriptRootNavigations(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Refresh", "0; url=/admin/next.php")
+		_, _ = io.WriteString(w, `<html><head></head><body>`+
+			`<a href=/admin/company.php?mainmenu=home&action=edit>company</a>`+
+			`<script>location.href="/admin/company.php?mainmenu=home&action=edit";window.open('/admin/new.php');</script>`+
+			`</body></html>`)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	rec := httptest.NewRecorder()
+	webproxy.Serve(rec, httptest.NewRequest(http.MethodGet, "/", nil), webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/", PublicPrefix: "/proxy/x",
+	})
+
+	if got := rec.Header().Get("Refresh"); got != "0; url=/proxy/x/admin/next.php" {
+		t.Fatalf("Refresh = %q, want proxied URL", got)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`href=/proxy/x/admin/company.php?mainmenu=home&action=edit`,
+		`location.href="/proxy/x/admin/company.php?mainmenu=home&action=edit"`,
+		`window.open('/proxy/x/admin/new.php')`,
+		`addEventListener("click"`,
+		`window.open=function`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("rewrite missing %q in %s", want, body)
+		}
+	}
+}
+
+func TestServeMarksProxyPrefixCookie(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, `<html><head></head><body></body></html>`)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	rec := httptest.NewRecorder()
+	webproxy.Serve(rec, httptest.NewRequest(http.MethodGet, "/", nil), webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/", PublicPrefix: "/proxy/x",
+	})
+
+	var found bool
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name != webproxy.PrefixCookieName {
+			continue
+		}
+		found = true
+		if cookie.Value != "%2Fproxy%2Fx" || cookie.Path != "/" || !cookie.HttpOnly || cookie.SameSite != http.SameSiteLaxMode {
+			t.Fatalf("proxy prefix cookie = %#v", cookie)
+		}
+	}
+	if !found {
+		t.Fatalf("missing %s cookie in %v", webproxy.PrefixCookieName, rec.Result().Cookies())
+	}
+}
+
+func TestServeKeepsRecentProxyPrefixesInCookie(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, `<html><head></head><body></body></html>`)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  webproxy.PrefixCookieName,
+		Value: url.QueryEscape("/proxy/other\n/proxy/x"),
+	})
+
+	rec := httptest.NewRecorder()
+	webproxy.Serve(rec, req, webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/", PublicPrefix: "/proxy/current",
+	})
+
+	var got string
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == webproxy.PrefixCookieName {
+			got = cookie.Value
+			break
+		}
+	}
+	decoded, err := url.QueryUnescape(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded != "/proxy/current\n/proxy/other\n/proxy/x" {
+		t.Fatalf("prefix marker = %q", decoded)
+	}
+}
+
 func TestServeWorkerQuotesPrefixSafely(t *testing.T) {
 	rec := httptest.NewRecorder()
 	webproxy.ServeWorker(rec, `/proxy/"x\y`)
