@@ -162,6 +162,7 @@ async function onActionDone(
         <PanelHost
           v-if="current"
           :key="`${connectionId}:${row.ref?.uid}:${current.key}`"
+          :panel-instance-key="`${connectionId}:${row.ref?.uid}:${current.key}`"
           :panel="currentPanel ?? current.panel"
           :connection-id="connectionId"
           :source="current.source"

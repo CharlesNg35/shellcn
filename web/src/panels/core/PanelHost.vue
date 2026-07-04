@@ -24,6 +24,7 @@ const props = defineProps<{
   resource?: ResourceIdentity | null;
   record?: Row | null;
   actions?: Action[];
+  panelInstanceKey?: string;
 }>();
 const emit = defineEmits<{
   actionDone: [action: Action, result?: Record<string, unknown>];
@@ -43,15 +44,17 @@ const panelRecording = computed(() =>
     : props.recording,
 );
 const scope = useScopeStore();
-const panelKey = computed(() =>
-  JSON.stringify({
-    panel: props.panel,
-    connectionId: props.connectionId,
-    source: props.source,
-    resource: props.resource?.uid,
-    record: props.record,
-    scope: scope.key(props.connectionId),
-  }),
+const panelKey = computed(
+  () =>
+    props.panelInstanceKey ??
+    JSON.stringify({
+      panel: props.panel,
+      connectionId: props.connectionId,
+      source: props.source,
+      resource: props.resource?.uid,
+      record: props.record,
+      scope: scope.key(props.connectionId),
+    }),
 );
 
 function onActionDone(action: Action, result?: Record<string, unknown>): void {
