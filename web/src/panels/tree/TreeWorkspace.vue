@@ -1,7 +1,14 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  ref,
+  watch as vueWatch,
+} from "vue";
 import Button from "primevue/button";
 import { VueDraggable } from "vue-draggable-plus";
+import { watch as watchResource } from "@/api/dataSource";
 import { KEEP_ALIVE_WORKBENCH_TABS_MAX } from "@/stores/sessionLimits";
 import {
   MAX_TREE_SIDEBAR_WIDTH,
@@ -18,6 +25,7 @@ import { useConnectionInvalidationRefresh } from "../shared/useConnectionInvalid
 import type {
   Action,
   ResourceIdentity,
+  ResourceEvent,
   ResourceType,
   Row,
   TreeGroup,
@@ -114,12 +122,38 @@ const treeSelectedUid = computed(() =>
   activeView.value?.kind === "detail" ? activeView.value.ref?.uid : undefined,
 );
 
+const liveDetailRows = ref<Record<string, Row>>({});
+
+function resourceKey(ref: ResourceIdentity | undefined | null): string {
+  return ref ? `${ref.kind}:${ref.uid}` : "";
+}
+
+function mergeLiveDetailRow(row: Row): void {
+  const key = resourceKey(row.ref);
+  if (!key) return;
+  liveDetailRows.value = {
+    ...liveDetailRows.value,
+    [key]: { ...(liveDetailRows.value[key] ?? {}), ...row },
+  };
+}
+
+const activeDetailRow = computed(() => {
+  const v = activeView.value;
+  if (v?.kind !== "detail" || !v.row) return undefined;
+  const key = resourceKey(v.ref ?? v.row.ref);
+  const live = key ? liveDetailRows.value[key] : undefined;
+  return live
+    ? { ...v.row, ...live, ref: live.ref ?? v.ref ?? v.row.ref }
+    : v.row;
+});
+
 function workbenchTabTitle(v: OpenView): string {
   return v.subtitle ? `${v.title} - ${v.subtitle} ` : v.title;
 }
 
 function openDetail(row: Row, qualifier?: string): void {
   if (!row.ref || !resourceByKind.value.has(row.ref.kind)) return;
+  mergeLiveDetailRow(row);
   ws.openPreviewView(props.connectionId, {
     id: "detail:" + row.ref.uid,
     title: row.ref.name,
@@ -161,11 +195,72 @@ async function scrollActiveTabIntoView(): Promise<void> {
   });
 }
 
-watch(
+vueWatch(
   () => [view.value.activeViewId, view.value.views.length] as const,
   ([activeId]) => {
     if (activeId) void scrollActiveTabIntoView();
   },
+);
+
+function applyActiveDetailEvent(ev: ResourceEvent): void {
+  const v = activeView.value;
+  if (v?.kind !== "detail" || !v.ref) return;
+  if (ev.ref.kind !== v.ref.kind || ev.ref.uid !== v.ref.uid) return;
+  if (String(ev.type).toLowerCase() === "deleted") {
+    const key = resourceKey(v.ref);
+    if (key && liveDetailRows.value[key]) {
+      const rest = { ...liveDetailRows.value };
+      delete rest[key];
+      liveDetailRows.value = rest;
+    }
+    refreshTree();
+    return;
+  }
+  if (
+    !ev.resource ||
+    typeof ev.resource !== "object" ||
+    Array.isArray(ev.resource)
+  ) {
+    return;
+  }
+  const key = resourceKey(v.ref);
+  if (!key) return;
+  liveDetailRows.value = {
+    ...liveDetailRows.value,
+    [key]: {
+      ...(v.row ?? {}),
+      ...(liveDetailRows.value[key] ?? {}),
+      ...(ev.resource as Row),
+      ref: ev.ref,
+    },
+  };
+}
+
+let stopDetailWatch: (() => void) | undefined;
+
+function stopActiveDetailWatch(): void {
+  stopDetailWatch?.();
+  stopDetailWatch = undefined;
+}
+
+vueWatch(
+  () => {
+    const v = activeView.value;
+    const res = activeDetailResource.value;
+    if (v?.kind !== "detail" || !v.ref || !res?.watch) return undefined;
+    return { ref: v.ref, source: res.watch };
+  },
+  (next) => {
+    stopActiveDetailWatch();
+    if (!next) return;
+    stopDetailWatch = watchResource(
+      props.connectionId,
+      next.source,
+      { resource: next.ref, record: activeDetailRow.value ?? null },
+      applyActiveDetailEvent,
+    );
+  },
+  { immediate: true },
 );
 
 function refreshTree(): void {
@@ -281,7 +376,10 @@ function onSidebarResizeKeydown(event: KeyboardEvent): void {
   }
 }
 
-onBeforeUnmount(stopSidebarResize);
+onBeforeUnmount(() => {
+  stopSidebarResize();
+  stopActiveDetailWatch();
+});
 </script>
 
 <template>
@@ -396,13 +494,13 @@ onBeforeUnmount(stopSidebarResize);
             v-if="
               activeView?.kind === 'detail' &&
               activeDetailResource &&
-              activeView.row
+              activeDetailRow
             "
             :key="`${connectionId}:${activeView.id}`"
             :connection-id="connectionId"
             :detail="activeDetailResource.detail"
             :detail-action-ids="activeDetailResource.actions?.detail ?? []"
-            :row="activeView.row"
+            :row="activeDetailRow"
             :actions="actions"
             @select="openDetail"
             @action-done="onDetailActionDone"

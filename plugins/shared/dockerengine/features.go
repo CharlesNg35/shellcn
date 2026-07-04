@@ -16,7 +16,6 @@ import (
 	"github.com/moby/moby/api/types/events"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/network"
-	"github.com/moby/moby/api/types/volume"
 	dockerclient "github.com/moby/moby/client"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -836,7 +835,11 @@ func volumeResourceEvent(ctx context.Context, s *Session, msg events.Message) *p
 	if err != nil {
 		return nil
 	}
-	row := volumeRowFromVolume(inspect.Volume)
+	refs, err := volumeRefCounts(ctx, s)
+	if err != nil {
+		return nil
+	}
+	row := volumeRowFromVolume(inspect.Volume, refs)
 	return &plugin.ResourceEvent{Type: "updated", Ref: row["ref"].(plugin.ResourceIdentity), Resource: row}
 }
 
@@ -1175,21 +1178,11 @@ func volumeOverviewForID(ctx context.Context, s *Session, id string) (Row, error
 	if err != nil {
 		return nil, DockerErr(err)
 	}
-	out := Row{
-		"name":       res.Volume.Name,
-		"driver":     res.Volume.Driver,
-		"scope":      res.Volume.Scope,
-		"mountpoint": res.Volume.Mountpoint,
-		"createdAt":  res.Volume.CreatedAt,
-		"labels":     res.Volume.Labels,
-		"options":    res.Volume.Options,
+	refs, err := volumeRefCounts(ctx, s)
+	if err != nil {
+		return nil, DockerErr(err)
 	}
-	if res.Volume.UsageData != nil {
-		out["size"] = res.Volume.UsageData.Size
-		out["refs"] = res.Volume.UsageData.RefCount
-		out["status"] = volumeUsageStatus(res.Volume.UsageData.RefCount)
-	}
-	return out, nil
+	return volumeOverviewRow(res.Volume, refs), nil
 }
 
 func networkOverviewForID(ctx context.Context, s *Session, id string) (Row, error) {
@@ -1270,28 +1263,4 @@ func composeRowsForSession(ctx context.Context, s *Session) ([]Row, error) {
 		rows = append(rows, r)
 	}
 	return rows, nil
-}
-
-func volumeRowFromVolume(v volume.Volume) Row {
-	size := int64(-1)
-	refs := int64(-1)
-	status := "Unknown"
-	if v.UsageData != nil {
-		size = v.UsageData.Size
-		refs = v.UsageData.RefCount
-		status = volumeUsageStatus(refs)
-	}
-	return Row{
-		"id":         v.Name,
-		"name":       v.Name,
-		"status":     status,
-		"driver":     v.Driver,
-		"scope":      v.Scope,
-		"mountpoint": v.Mountpoint,
-		"size":       size,
-		"refs":       refs,
-		"createdAt":  v.CreatedAt,
-		"compose":    v.Labels[ComposeProjectLabel],
-		"ref":        plugin.ResourceIdentity{Kind: "volume", Name: v.Name, UID: v.Name},
-	}
 }
