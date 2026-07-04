@@ -323,6 +323,34 @@ func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 		t.Fatalf("container overview ports/mounts unexpected: %+v", overview)
 	}
 
+	volumes, err := ListVolumes(rc)
+	if err != nil {
+		t.Fatalf("list volumes: %v", err)
+	}
+	volumePage := volumes.(plugin.Page[Row])
+	if len(volumePage.Items) != 2 {
+		t.Fatalf("volume rows = %+v, want two rows", volumePage.Items)
+	}
+	volumeByName := map[string]Row{}
+	for _, row := range volumePage.Items {
+		volumeByName[fmt.Sprint(row["name"])] = row
+	}
+	if got := volumeByName["data"]; got["status"] != "In use" || got["refs"] != int64(1) {
+		t.Fatalf("data volume row = %+v, want In use with one ref", got)
+	}
+	if got := volumeByName["scratch"]; got["status"] != "Unused" || got["refs"] != int64(0) {
+		t.Fatalf("scratch volume row = %+v, want Unused with zero refs", got)
+	}
+
+	volumeRC := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u"}, sess, map[string]string{"id": "data"}, url.Values{}, nil)
+	volumeOverview, err := VolumeOverview(volumeRC)
+	if err != nil {
+		t.Fatalf("volume overview: %v", err)
+	}
+	if got := volumeOverview.(Row); got["status"] != "In use" || got["refs"] != int64(1) {
+		t.Fatalf("volume overview row = %+v, want In use with one ref", got)
+	}
+
 	mounts, err := ContainerMounts(inspectRC)
 	if err != nil {
 		t.Fatalf("container mounts: %v", err)
@@ -406,6 +434,12 @@ func fakeDockerDaemon(t *testing.T) (*httptest.Server, map[string]bool) {
 				"State":   "running",
 				"Status":  "Up 2 minutes",
 				"Labels":  map[string]string{"com.docker.compose.project": "demo", "com.docker.compose.service": "web"},
+				"Mounts": []map[string]any{{
+					"Type":        "volume",
+					"Name":        "data",
+					"Source":      "/var/lib/docker/volumes/data/_data",
+					"Destination": "/data",
+				}},
 			}})
 		case p == "/containers/abc123/json":
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -434,7 +468,12 @@ func fakeDockerDaemon(t *testing.T) (*httptest.Server, map[string]bool) {
 		case p == "/images/json":
 			_ = json.NewEncoder(w).Encode([]map[string]any{{"Id": "sha256:img", "RepoTags": []string{"nginx:latest"}, "Size": 1234, "Created": 1710000000, "Containers": 1}})
 		case p == "/volumes":
-			_ = json.NewEncoder(w).Encode(map[string]any{"Volumes": []map[string]any{{"Name": "data", "Driver": "local", "Mountpoint": "/var/lib/docker/volumes/data", "Scope": "local"}}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"Volumes": []map[string]any{
+				{"Name": "data", "Driver": "local", "Mountpoint": "/var/lib/docker/volumes/data", "Scope": "local"},
+				{"Name": "scratch", "Driver": "local", "Mountpoint": "/var/lib/docker/volumes/scratch", "Scope": "local"},
+			}})
+		case p == "/volumes/data":
+			_ = json.NewEncoder(w).Encode(map[string]any{"Name": "data", "Driver": "local", "Mountpoint": "/var/lib/docker/volumes/data", "Scope": "local"})
 		case p == "/networks":
 			_ = json.NewEncoder(w).Encode([]map[string]any{{"Id": "net1", "Name": "bridge", "Driver": "bridge", "Scope": "local"}})
 		case r.Method == http.MethodPost && p == "/containers/abc123/start":

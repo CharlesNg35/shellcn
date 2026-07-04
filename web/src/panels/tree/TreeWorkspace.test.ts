@@ -3,6 +3,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import TreeWorkspace from "./TreeWorkspace.vue";
+import * as dataSource from "@/api/dataSource";
 import {
   DEFAULT_TREE_SIDEBAR_WIDTH,
   MAX_TREE_SIDEBAR_WIDTH,
@@ -11,12 +12,19 @@ import {
   useWorkspaceStore,
 } from "@/stores/workspace";
 import { useScopeStore } from "@/stores/scope";
+import type { ResourceEvent, Row } from "@/types/projection";
+
+vi.mock("@/api/dataSource", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/api/dataSource")>();
+  return { ...actual, watch: vi.fn(() => vi.fn()) };
+});
 
 describe("TreeWorkspace", () => {
   let scrollIntoView: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     setActivePinia(createPinia());
+    vi.mocked(dataSource.watch).mockReturnValue(vi.fn());
     // jsdom doesn't implement scrollIntoView, so install a mock rather than spy.
     scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView =
@@ -363,6 +371,88 @@ describe("TreeWorkspace", () => {
     expect(treeMounts).toBe(1);
     expect(treeRefreshKey).toBe("namespace=prod");
     expect(panelMounts).toBe(2);
+  });
+
+  it("patches the active detail row from matching resource watch events", async () => {
+    let onEvent: ((event: ResourceEvent) => void) | undefined;
+    let capturedRow: Row | undefined;
+    const stopWatch = vi.fn();
+    vi.mocked(dataSource.watch).mockImplementation(
+      (_connectionId, _source, _ctx, cb) => {
+        onEvent = cb;
+        return stopWatch;
+      },
+    );
+    const ref = { kind: "container", name: "web", uid: "abc123" };
+    const wrapper = mount(TreeWorkspace, {
+      props: {
+        connectionId: "c1",
+        tree: [],
+        resources: [
+          {
+            kind: "container",
+            title: "Containers",
+            list: { routeId: "docker.containers.list" },
+            watch: { routeId: "docker.events.watch" },
+            columns: [],
+            detail: { header: { statusField: "state" }, tabs: [] },
+          },
+        ] as never,
+        actions: [],
+      },
+      global: {
+        stubs: {
+          AppIcon: true,
+          Button: { template: "<button><slot /></button>" },
+          ResourceTree: true,
+          VueDraggable: { template: "<div><slot /></div>" },
+          DetailView: {
+            props: ["row"],
+            mounted() {
+              capturedRow = (this as { row: Row }).row;
+            },
+            updated() {
+              capturedRow = (this as { row: Row }).row;
+            },
+            template: "<div data-test='detail'>{{ row.state }}</div>",
+          },
+        },
+      },
+    });
+    const ws = useWorkspaceStore();
+    ws.openPreviewView("c1", {
+      id: "detail:abc123",
+      title: "web",
+      kind: "detail",
+      ref,
+      row: { ref, state: "running", status: "running" },
+    });
+    await nextTick();
+    await flushPromises();
+
+    expect(dataSource.watch).toHaveBeenCalledWith(
+      "c1",
+      { routeId: "docker.events.watch" },
+      {
+        resource: ref,
+        record: expect.objectContaining({ state: "running" }),
+      },
+      expect.any(Function),
+    );
+    expect(capturedRow?.state).toBe("running");
+
+    onEvent?.({
+      type: "updated",
+      ref,
+      resource: { state: "exited", status: "exited" },
+    });
+    await nextTick();
+
+    expect(capturedRow?.state).toBe("exited");
+    expect(wrapper.get("[data-test='detail']").text()).toBe("exited");
+
+    wrapper.unmount();
+    expect(stopWatch).toHaveBeenCalled();
   });
 
   it("refreshes the resource tree after a list action completes", async () => {
