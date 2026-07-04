@@ -19,6 +19,12 @@ import (
 // requests (bundler chunks, dynamic imports, CSS) under the proxy prefix.
 const SWFile = "__shellcn_sw.js"
 
+// PrefixCookieName marks the active proxy prefix for same-origin root navigation
+// recovery in the gateway fallback. The value is not secret.
+const PrefixCookieName = "shellcn_webproxy_prefix"
+
+const maxPrefixCookieEntries = 8
+
 // IsTLSPort is a best-effort guess that a port serves TLS, by the conventional
 // "443" suffix (443, 8443, 9443, …). Used only when no protocol metadata exists.
 func IsTLSPort(port int) bool {
@@ -69,6 +75,7 @@ type WebSocketOptions struct {
 // Serve reverse-proxies r to the upstream and rewrites the response so the app's
 // absolute paths, redirects, fetches, and assets resolve back under PublicPrefix.
 func Serve(w http.ResponseWriter, r *http.Request, o Options) {
+	prefixMarker := proxyPrefixMarker(r, o.PublicPrefix)
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			req.URL.Scheme = o.Base.Scheme
@@ -87,7 +94,7 @@ func Serve(w http.ResponseWriter, r *http.Request, o Options) {
 		Transport:     o.Transport,
 		FlushInterval: -1,
 		//nolint:bodyclose // body is read+closed in the HTML branch; otherwise the ReverseProxy owns it.
-		ModifyResponse: rewriteResponse(o.Base, o.SourcePrefix, o.PublicPrefix, r.Host),
+		ModifyResponse: rewriteResponse(o.Base, o.SourcePrefix, o.PublicPrefix, r.Host, prefixMarker),
 	}
 	proxy.ServeHTTP(w, r)
 }
@@ -121,17 +128,22 @@ func applyWebSocketOptions(req *http.Request, opts WebSocketOptions) {
 var (
 	rootRelAttr       = regexp.MustCompile(`(\s(?:href|src|action|formaction|poster)=")(/(?:[^"/][^"]*)?)"`)
 	rootRelSingleAttr = regexp.MustCompile(`(\s(?:href|src|action|formaction|poster)=')(/(?:[^'/][^']*)?)'`)
+	rootRelBareAttr   = regexp.MustCompile(`(\s(?:href|src|action|formaction|poster)=)(/[^ \t\r\n"'<>]*)`)
 	srcsetAttr        = regexp.MustCompile(`(\ssrcset=")([^"]*)"`)
 	srcsetSingleAttr  = regexp.MustCompile(`(\ssrcset=')([^']*)'`)
+	refreshHeaderURL  = regexp.MustCompile(`(?i)(;\s*url=)(/[^ \t\r\n]*)`)
 	metaRefresh       = regexp.MustCompile(`(?i)(content="\s*\d+\s*;\s*url=)(/[^"/][^"]*)"`)
 	metaRefreshSingle = regexp.MustCompile(`(?i)(content='\s*\d+\s*;\s*url=)(/[^'/][^']*)'`)
 	metaCSP           = regexp.MustCompile(`(?i)<meta[^>]+http-equiv="content-security-policy"[^>]*>`)
 	cssURL            = regexp.MustCompile(`url\(\s*(['"]?)(/[^'")\s]*)(['"]?)\s*\)`)
+	scriptBlock       = regexp.MustCompile(`(?is)(<script\b[^>]*>)(.*?)(</script>)`)
+	jsRootDouble      = regexp.MustCompile(`"(/[^/"'<>\s][^"'<>\s]*)"`)
+	jsRootSingle      = regexp.MustCompile(`'(/[^/"'<>\s][^"'<>\s]*)'`)
 )
 
 // rewriteResponse maps an upstream response back under prefix: Location, Set-Cookie,
 // framing/CSP headers, and HTML/CSS bodies.
-func rewriteResponse(base *url.URL, sourcePrefix, prefix, publicHost string) func(*http.Response) error {
+func rewriteResponse(base *url.URL, sourcePrefix, prefix, publicHost, prefixMarker string) func(*http.Response) error {
 	upstreamOrigin, upstreamHost := "", ""
 	if base != nil {
 		upstreamOrigin = base.Scheme + "://" + base.Host
@@ -141,7 +153,11 @@ func rewriteResponse(base *url.URL, sourcePrefix, prefix, publicHost string) fun
 		if loc := resp.Header.Get("Location"); loc != "" {
 			resp.Header.Set("Location", mapLocation(loc, prefix, publicHost, upstreamHost, sourcePrefix))
 		}
+		if refresh := resp.Header.Get("Refresh"); refresh != "" {
+			resp.Header.Set("Refresh", rewriteRefreshHeader(refresh, prefix))
+		}
 		rewriteCookiePaths(resp.Header, prefix)
+		markProxyPrefix(resp.Header, prefixMarker)
 		// Allow embedding + the inline shim by relaxing framing/CSP.
 		resp.Header.Del("Content-Security-Policy")
 		resp.Header.Del("Content-Security-Policy-Report-Only")
@@ -254,6 +270,10 @@ func rewriteHTML(html, sourcePrefix, upstreamOrigin, prefix string) string {
 		g := rootRelSingleAttr.FindStringSubmatch(m)
 		return g[1] + prefixRootRel(g[2], prefix) + `'`
 	})
+	html = rootRelBareAttr.ReplaceAllStringFunc(html, func(m string) string {
+		g := rootRelBareAttr.FindStringSubmatch(m)
+		return g[1] + prefixRootRel(g[2], prefix)
+	})
 	html = srcsetAttr.ReplaceAllStringFunc(html, func(m string) string {
 		g := srcsetAttr.FindStringSubmatch(m)
 		return g[1] + rewriteSrcset(g[2], prefix) + `"`
@@ -271,6 +291,7 @@ func rewriteHTML(html, sourcePrefix, upstreamOrigin, prefix string) string {
 		return g[1] + prefixRootRel(g[2], prefix) + `'`
 	})
 	html = rewriteInlineCSS(html, prefix)
+	html = rewriteInlineJS(html, prefix)
 	// The PWA manifest is fetched without credentials by default, which the
 	// authenticated proxy rejects; ask the browser to send them.
 	html = strings.ReplaceAll(html, `rel="manifest"`, `rel="manifest" crossorigin="use-credentials"`)
@@ -319,6 +340,89 @@ func rewriteCSS(css, upstreamOrigin, prefix string) string {
 		g := cssURL.FindStringSubmatch(m)
 		return "url(" + g[1] + prefixRootRel(g[2], prefix) + g[3] + ")"
 	})
+}
+
+func rewriteInlineJS(html, prefix string) string {
+	return scriptBlock.ReplaceAllStringFunc(html, func(m string) string {
+		g := scriptBlock.FindStringSubmatch(m)
+		return g[1] + rewriteJSRootStrings(g[2], prefix) + g[3]
+	})
+}
+
+func rewriteJSRootStrings(js, prefix string) string {
+	js = jsRootDouble.ReplaceAllStringFunc(js, func(m string) string {
+		g := jsRootDouble.FindStringSubmatch(m)
+		return `"` + prefixRootRel(g[1], prefix) + `"`
+	})
+	return jsRootSingle.ReplaceAllStringFunc(js, func(m string) string {
+		g := jsRootSingle.FindStringSubmatch(m)
+		return `'` + prefixRootRel(g[1], prefix) + `'`
+	})
+}
+
+func rewriteRefreshHeader(refresh, prefix string) string {
+	return refreshHeaderURL.ReplaceAllStringFunc(refresh, func(m string) string {
+		g := refreshHeaderURL.FindStringSubmatch(m)
+		return g[1] + prefixRootRel(g[2], prefix)
+	})
+}
+
+func proxyPrefixMarker(r *http.Request, prefix string) string {
+	prefixes := []string{prefix}
+	if cookie, err := r.Cookie(PrefixCookieName); err == nil {
+		for _, existing := range parsePrefixMarker(cookie.Value) {
+			if existing != prefix {
+				prefixes = append(prefixes, existing)
+			}
+			if len(prefixes) >= maxPrefixCookieEntries {
+				break
+			}
+		}
+	}
+	return url.QueryEscape(strings.Join(prefixes, "\n"))
+}
+
+func parsePrefixMarker(value string) []string {
+	decoded, err := url.QueryUnescape(value)
+	if err != nil {
+		return nil
+	}
+	parts := strings.Split(decoded, "\n")
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		prefix := strings.TrimSpace(part)
+		if !validPrefixMarker(prefix) {
+			continue
+		}
+		if _, ok := seen[prefix]; ok {
+			continue
+		}
+		seen[prefix] = struct{}{}
+		out = append(out, prefix)
+	}
+	return out
+}
+
+func validPrefixMarker(prefix string) bool {
+	if !strings.HasPrefix(prefix, "/") || strings.HasPrefix(prefix, "//") || strings.ContainsAny(prefix, "\r\n\t") {
+		return false
+	}
+	u, err := url.Parse(prefix)
+	return err == nil && !u.IsAbs() && u.Host == "" && u.RawQuery == "" && u.Fragment == ""
+}
+
+func markProxyPrefix(h http.Header, marker string) {
+	if marker == "" {
+		return
+	}
+	h.Add("Set-Cookie", (&http.Cookie{
+		Name:     PrefixCookieName,
+		Value:    marker,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	}).String())
 }
 
 func rewriteCookiePaths(h http.Header, prefix string) {
@@ -370,6 +474,7 @@ func injectShim(html, prefix string) string {
 function fix(u){if(typeof u!=="string")return u;if(u.charAt(0)==="/"&&u.charAt(1)!=="/"&&u.indexOf(p)!==0)return p+u;var o=location.origin;if(u.indexOf(o+"/")===0&&u.slice(o.length).indexOf(p)!==0)return o+p+u.slice(o.length);var wo=(location.protocol==="https:"?"wss://":"ws://")+location.host;if(u.indexOf(wo+"/")===0&&u.slice(wo.length).indexOf(p)!==0)return wo+p+u.slice(wo.length);return u;}
 var of=window.fetch;if(of){window.fetch=function(i,o){try{if(typeof i==="string")i=fix(i);else if(i&&i.url)i=new Request(fix(i.url),i);}catch(e){}return of.call(this,i,o);};}
 var ox=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){return ox.apply(this,[m,fix(u)].concat([].slice.call(arguments,2)));};
+var owo=window.open;if(owo)window.open=function(u,n,f){return owo.call(window,typeof u==="string"?fix(u):u,n,f);};
 function wrap(C){if(!C)return C;function W(){var a=[].slice.call(arguments);if(a.length)a[0]=fix(a[0]);return new (Function.prototype.bind.apply(C,[null].concat(a)))();}W.prototype=C.prototype;["CONNECTING","OPEN","CLOSING","CLOSED"].forEach(function(k){if(k in C)W[k]=C[k];});return W;}
 try{window.WebSocket=wrap(window.WebSocket);window.EventSource=wrap(window.EventSource);window.Worker=wrap(window.Worker);}catch(e){}
 function patch(proto,prop){var d=Object.getOwnPropertyDescriptor(proto,prop);if(d&&d.set)Object.defineProperty(proto,prop,{configurable:true,enumerable:d.enumerable,get:function(){return d.get.call(this);},set:function(v){d.set.call(this,fix(v));}});}
@@ -378,6 +483,7 @@ var sa=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,
 ["pushState","replaceState"].forEach(function(m){var o=history[m];if(o)history[m]=function(s,t,u){return o.call(this,s,t,typeof u==="string"?fix(u):u);};});
 ["assign","replace"].forEach(function(m){var o=location[m];if(o)try{location[m]=function(u){return o.call(location,fix(u));};}catch(e){}});
 try{var lh=Object.getOwnPropertyDescriptor(Location.prototype,"href");if(lh&&lh.set)Object.defineProperty(location,"href",{configurable:true,get:function(){return lh.get.call(location);},set:function(v){lh.set.call(location,fix(v));}});}catch(e){}
+document.addEventListener("click",function(e){var t=e.target;var a=t&&t.closest?t.closest("a[href],area[href]"):null;if(!a)return;var raw=a.getAttribute("href");if(!raw)return;var g=fix(raw);if(g!==raw)a.setAttribute("href",g);},true);
 document.addEventListener("submit",function(e){var f=e.target;if(!f||f.tagName!=="FORM")return;var raw=f.getAttribute("action");if(!raw)return;var g=fix(raw);if(g!==raw)f.setAttribute("action",g);},true);
 if(navigator.serviceWorker){try{navigator.serviceWorker.register(p+"/` + SWFile + `").then(function(){if(!navigator.serviceWorker.controller){var k="scnsw:"+p;if(!sessionStorage.getItem(k)){sessionStorage.setItem(k,"1");navigator.serviceWorker.ready.then(function(){location.reload();});}}});}catch(e){}}
 })();</script>`
