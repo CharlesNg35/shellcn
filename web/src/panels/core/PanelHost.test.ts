@@ -253,6 +253,31 @@ describe("PanelHost", () => {
     expect(w.text()).toContain("panel c2");
   });
 
+  it("keeps panel instances stable when an explicit instance key is supplied", async () => {
+    const w = mountPanelHost({
+      panel: "test_panel",
+      connectionId: "c1",
+      resource: { kind: "container", name: "web", uid: "abc123" },
+      record: {
+        ref: { kind: "container", name: "web", uid: "abc123" },
+        state: "running",
+      },
+      panelInstanceKey: "c1:abc123:summary",
+    });
+
+    expect(lifecycle.mounts).toBe(1);
+
+    await w.setProps({
+      record: {
+        ref: { kind: "container", name: "web", uid: "abc123" },
+        state: "exited",
+      },
+    });
+
+    expect(lifecycle.unmounts).toBe(0);
+    expect(lifecycle.mounts).toBe(1);
+  });
+
   it("remounts panels when connection scope changes", async () => {
     const scope = useScopeStore();
     scope.configure("c1", [{ param: "database" }]);

@@ -110,4 +110,53 @@ describe("DetailView", () => {
     expect(wrapper.text()).not.toContain("Metrics");
     expect(wrapper.text()).not.toContain("Console");
   });
+
+  it("updates the header status without remounting the active panel", async () => {
+    let mounts = 0;
+    let unmounts = 0;
+    wrapper = mount(DetailView, {
+      props: {
+        connectionId: "c1",
+        row: {
+          state: "running",
+          ref: { kind: "container", name: "web", uid: "abc123" },
+        },
+        actions: [],
+        detail: {
+          header: { title: "${resource.name}", statusField: "state" },
+          tabs: [{ key: "summary", label: "Summary", panel: "object_detail" }],
+        },
+      },
+      global: {
+        stubs: {
+          PanelHost: {
+            props: ["record", "panelInstanceKey"],
+            mounted() {
+              mounts += 1;
+            },
+            unmounted() {
+              unmounts += 1;
+            },
+            template:
+              '<div data-test="panel">{{ record.state }} {{ panelInstanceKey }}</div>',
+          },
+          AppIcon: true,
+        },
+      },
+    });
+
+    expect(wrapper.text()).toContain("running");
+    expect(mounts).toBe(1);
+
+    await wrapper.setProps({
+      row: {
+        state: "exited",
+        ref: { kind: "container", name: "web", uid: "abc123" },
+      },
+    });
+
+    expect(wrapper.text()).toContain("exited");
+    expect(mounts).toBe(1);
+    expect(unmounts).toBe(0);
+  });
 });
