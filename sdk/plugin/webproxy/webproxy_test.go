@@ -330,6 +330,47 @@ func TestServeShimsRuntimeConstructedImportScripts(t *testing.T) {
 	}
 }
 
+// Importless workers and non-worker /sw.js assets are not rewritten.
+func TestServeLeavesImportlessWorkerAndNonWorkerUntouched(t *testing.T) {
+	const worker = `"use strict";self.addEventListener("fetch",function(e){});`
+	t.Run("importless worker with header", func(t *testing.T) {
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/javascript")
+			_, _ = io.WriteString(w, worker)
+		}))
+		defer upstream.Close()
+		base, _ := url.Parse(upstream.URL)
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/sw.js", nil)
+		req.Header.Set("Service-Worker", "script")
+		webproxy.Serve(rec, req, webproxy.Options{
+			Base: base, Transport: http.DefaultTransport, UpstreamPath: "/sw.js", PublicPrefix: "/proxy/x",
+		})
+		if body := rec.Body.String(); body != worker {
+			t.Fatalf("importless worker altered: %q", body)
+		}
+	})
+	t.Run("sw.js path without header is not a worker", func(t *testing.T) {
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/javascript")
+			_, _ = io.WriteString(w, `importScripts("/x.js");`)
+		}))
+		defer upstream.Close()
+		base, _ := url.Parse(upstream.URL)
+		rec := httptest.NewRecorder()
+		// No Service-Worker header: the filename alone must not trigger worker handling.
+		webproxy.Serve(rec, httptest.NewRequest(http.MethodGet, "/sw.js", nil), webproxy.Options{
+			Base: base, Transport: http.DefaultTransport, UpstreamPath: "/sw.js", PublicPrefix: "/proxy/x",
+		})
+		if body := rec.Body.String(); body != `importScripts("/x.js");` {
+			t.Fatalf("non-worker /sw.js was rewritten: %q", body)
+		}
+		if got := rec.Header().Get("Service-Worker-Allowed"); got != "" {
+			t.Fatalf("non-worker got worker headers: %q", got)
+		}
+	})
+}
+
 func TestServeDoesNotRewriteNormalJavaScriptBundle(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/javascript")

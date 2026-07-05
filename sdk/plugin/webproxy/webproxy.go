@@ -233,17 +233,9 @@ func decodedBody(resp *http.Response) (io.Reader, bool) {
 	}
 }
 
+// isServiceWorkerScriptResponse identifies the browser's top-level worker fetch.
 func isServiceWorkerScriptResponse(resp *http.Response) bool {
-	if resp.Request != nil {
-		if strings.EqualFold(resp.Request.Header.Get("Service-Worker"), "script") {
-			return true
-		}
-		if resp.Request.URL != nil {
-			path := strings.ToLower(resp.Request.URL.Path)
-			return strings.HasSuffix(path, "/sw.js") || strings.HasSuffix(path, "/service-worker.js")
-		}
-	}
-	return false
+	return resp.Request != nil && strings.EqualFold(resp.Request.Header.Get("Service-Worker"), "script")
 }
 
 // mapLocation rewrites a redirect Location to stay under prefix. It maps targets on
@@ -406,6 +398,10 @@ func rewriteInlineJS(html, prefix string) string {
 }
 
 func rewriteServiceWorkerImports(js, upstreamOrigin, prefix string) string {
+	// Preserve importless workers, including module-style workers.
+	if !strings.Contains(js, "importScripts") {
+		return js
+	}
 	return serviceWorkerShim(prefix) + rewriteImportScripts(js, upstreamOrigin, prefix)
 }
 
