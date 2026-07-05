@@ -1,22 +1,31 @@
 # Copy to config.yaml and adjust for your environment.
 
+# HTTP listener and process logging.
 server:
   addr: ":8081"
   log_level: info
   # log_file: /var/log/shellcn.log  # default: stdout; rotated by size automatically
-  access_log: false 
+  access_log: false
 
+# Encryption keys for stored credentials and other secrets.
+secrets:
+  master_key: ""
+  master_key_file: ""
+
+# Browser session lifetime and JWT signing.
 auth:
   session_ttl: 24h
   # If empty, derives the signing key from the master key
   jwt_secret: ""
 
+# First admin account created when the database is empty.
 bootstrap:
   # Leave admin_password empty to print a
   # generated one-time initial password on first startup.
   admin_username: admin
   admin_password: ""
 
+# Gateway metadata store.
 database:
   driver: sqlite
   dsn: shellcn.db
@@ -25,10 +34,7 @@ database:
   # driver: mysql
   # dsn: shellcn:secret@tcp(localhost:3306)/shellcn?charset=utf8mb4&parseTime=True&loc=Local
 
-secrets:
-  master_key: ""
-  master_key_file: ""
-
+# Outbound SMTP for invitations and account email.
 email:
   enabled: false
   host: smtp.example.com
@@ -38,17 +44,21 @@ email:
   password: ""
   use_tls: false
 
+# Audit event storage and optional retention cleanup.
 audit:
   enabled: true
   retention_days: 0
   cleanup_interval: 1h
 
+# Coordinates active sessions and agent tunnels across gateway instances.
+# Tune these only if sessions or agents expire too aggressively.
 live_state:
   lease_ttl: 15s
   renew_interval: 5s
 
-# Shared AI is optional. Supported kinds: openrouter, openai, anthropic, google,
-# openai_compatible. Users can also add personal providers in Settings.
+# Shared AI provider configured by the operator for everyone.
+# Settings -> AI providers manages encrypted per-user provider keys and models.
+# Supported kinds: openrouter, openai, anthropic, google, openai_compatible.
 # ai:
 #   kind: openrouter
 #   name: Shared OpenRouter
@@ -64,14 +74,15 @@ live_state:
 #   api_key: ollama
 #   model: llama3.1:8b
 
+# Session recording storage and optional retention cleanup.
 recordings:
   dir: recordings
   retention_days: 0
   cleanup_interval: 1h
   max_chunk_bytes: 8388608
 
-# Out-of-tree plugins and the plugin marketplace. Values below are the built-in
-# plugins:
+# Out-of-tree plugin directory and marketplace indexes.
+# Values below are the built-in defaults.
 #   dir: plugins.d # directory scanned for external plugin binaries ("" disables)
 #   market:
 #     enabled: true # allow installing plugins from the registry indexes
