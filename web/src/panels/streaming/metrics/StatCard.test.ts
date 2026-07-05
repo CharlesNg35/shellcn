@@ -24,4 +24,21 @@ describe("StatCard", () => {
     });
     expect(w.text()).toContain("2.0 KiB/s");
   });
+
+  it("formats common backend unit aliases", () => {
+    const bytes = mount(StatCard, {
+      props: { label: "Disk read", value: 442_304_951_296, unit: "B" },
+    });
+    expect(bytes.text()).toContain("411.9 GiB");
+
+    const rate = mount(StatCard, {
+      props: { label: "Network", value: 2048, unit: "B/s" },
+    });
+    expect(rate.text()).toContain("2.0 KiB/s");
+
+    const uptime = mount(StatCard, {
+      props: { label: "Uptime", value: 3_093_695, unit: "s" },
+    });
+    expect(uptime.text()).toContain("35d 19h");
+  });
 });

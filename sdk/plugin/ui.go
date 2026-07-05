@@ -102,6 +102,7 @@ const (
 	ColumnBytes        ColumnType = "bytes"
 	ColumnDateTime     ColumnType = "datetime"
 	ColumnRelativeTime ColumnType = "relative_time"
+	ColumnDuration     ColumnType = "duration"
 	ColumnNumber       ColumnType = "number"
 	ColumnPercent      ColumnType = "percent"
 	ColumnBool         ColumnType = "bool"

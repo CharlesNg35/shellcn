@@ -159,4 +159,60 @@ describe("DetailView", () => {
     expect(mounts).toBe(1);
     expect(unmounts).toBe(0);
   });
+
+  it("keeps the active tab when row updates only change other visible tabs", async () => {
+    wrapper = mount(DetailView, {
+      props: {
+        connectionId: "c1",
+        row: {
+          name: "vm-1",
+          template: true,
+          ref: { kind: "qemu", name: "vm-1", uid: "100" },
+        },
+        actions: [],
+        detail: {
+          header: { title: "${resource.name}" },
+          tabs: [
+            { key: "summary", label: "Summary", panel: "object_detail" },
+            {
+              key: "console",
+              label: "Console",
+              panel: "terminal",
+              visibleWhen: {
+                allOf: [{ field: "template", op: "neq", value: true }],
+              },
+            },
+            { key: "backups", label: "Backups", panel: "table" },
+          ],
+        },
+      },
+      global: {
+        stubs: {
+          PanelHost: {
+            props: ["panel"],
+            template: '<div data-test="panel">{{ panel }}</div>',
+          },
+          AppIcon: true,
+        },
+      },
+    });
+
+    const backups = wrapper
+      .findAll('[role="tab"]')
+      .find((tab) => tab.text().includes("Backups"));
+    expect(backups).toBeTruthy();
+    await backups!.trigger("click");
+    expect(wrapper.get('[data-test="panel"]').text()).toBe("table");
+
+    await wrapper.setProps({
+      row: {
+        name: "vm-1",
+        template: false,
+        ref: { kind: "qemu", name: "vm-1", uid: "100" },
+      },
+    });
+
+    expect(wrapper.text()).toContain("Console");
+    expect(wrapper.get('[data-test="panel"]').text()).toBe("table");
+  });
 });

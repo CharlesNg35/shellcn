@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { formatBytes } from "../../specialized/objectDetailFormat";
+import {
+  formatBytes,
+  formatDurationSeconds,
+} from "../../specialized/objectDetailFormat";
 
 const props = defineProps<{
   label: string;
@@ -17,11 +20,13 @@ function formatNumber(value: number): string {
 
 const display = computed(() => {
   if (props.value === null) return { value: "—", unit: "" };
-  if (props.unit === "bytes")
+  if (props.unit === "bytes" || props.unit === "B")
     return { value: formatBytes(props.value), unit: "" };
-  if (props.unit === "bytes/s") {
+  if (props.unit === "bytes/s" || props.unit === "B/s") {
     return { value: `${formatBytes(props.value)}/s`, unit: "" };
   }
+  if (props.unit === "seconds" || props.unit === "s")
+    return { value: formatDurationSeconds(props.value), unit: "" };
   return { value: formatNumber(props.value), unit: props.unit ?? "" };
 });
 </script>

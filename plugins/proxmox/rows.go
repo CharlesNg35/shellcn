@@ -52,14 +52,18 @@ func mapErr(err error) error {
 		return nil
 	}
 	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return err
 	case errors.Is(err, pmox.ErrNotFound):
 		return fmt.Errorf("%w: %v", plugin.ErrNotFound, err)
 	case errors.Is(err, pmox.ErrNotAuthorized):
 		return fmt.Errorf("%w: %v", plugin.ErrForbidden, err)
 	case errors.Is(err, pmox.ErrTimeout):
 		return fmt.Errorf("%w: %v", plugin.ErrUnavailable, err)
+	case strings.HasPrefix(err.Error(), "bad request:"):
+		return fmt.Errorf("%w: %v", plugin.ErrInvalidInput, err)
 	default:
-		return err
+		return fmt.Errorf("%w: proxmox api: %v", plugin.ErrUnavailable, err)
 	}
 }
 
@@ -169,8 +173,8 @@ func sortRows(rows []plugin.TableRow, keys []plugin.SortKey) {
 	key := keys[0]
 	sort.SliceStable(rows, func(i, j int) bool {
 		a, b := rows[i][key.Field], rows[j][key.Field]
-		if af, ok := a.(float64); ok {
-			if bf, ok := b.(float64); ok {
+		if af, aok := asNumber(a); aok {
+			if bf, bok := asNumber(b); bok {
 				if key.Desc {
 					return af > bf
 				}
@@ -183,6 +187,19 @@ func sortRows(rows []plugin.TableRow, keys []plugin.SortKey) {
 		}
 		return as < bs
 	})
+}
+
+func asNumber(v any) (float64, bool) {
+	switch t := v.(type) {
+	case float64:
+		return t, true
+	case int64:
+		return float64(t), true
+	case int:
+		return float64(t), true
+	default:
+		return 0, false
+	}
 }
 
 func ignoreEOF(err error) error {

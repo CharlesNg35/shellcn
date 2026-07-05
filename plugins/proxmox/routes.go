@@ -52,6 +52,8 @@ func Routes() []plugin.Route {
 		{ID: "proxmox.qemu.overview", Method: plugin.MethodGet, Path: "/nodes/{node}/qemu/{vmid}/overview", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.qemu.overview", Handle: guestOverview("qemu")},
 		{ID: "proxmox.lxc.overview", Method: plugin.MethodGet, Path: "/nodes/{node}/lxc/{vmid}/overview", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.lxc.overview", Handle: guestOverview("lxc")},
 		{ID: "proxmox.node.status", Method: plugin.MethodGet, Path: "/nodes/{node}/status", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.status", Handle: nodeStatus},
+		{ID: "proxmox.qemu.network", Method: plugin.MethodGet, Path: "/nodes/{node}/qemu/{vmid}/network", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.qemu.network", Handle: guestNetwork("qemu")},
+		{ID: "proxmox.lxc.network", Method: plugin.MethodGet, Path: "/nodes/{node}/lxc/{vmid}/network", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.lxc.network", Handle: guestNetwork("lxc")},
 
 		// Metrics streams.
 		{ID: "proxmox.overview.metrics", Method: plugin.MethodWS, Path: "/overview/metrics", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.overview.metrics", Stream: overviewMetrics},
@@ -800,6 +802,89 @@ func nodeStatus(rc *plugin.RequestContext) (any, error) {
 	}
 	status["node"] = node
 	return nodeStatusRow(status), nil
+}
+
+func guestNetwork(kind string) plugin.Handler {
+	return func(rc *plugin.RequestContext) (any, error) {
+		s, err := sess(rc)
+		if err != nil {
+			return nil, err
+		}
+		node, vmid, err := requireGuest(rc)
+		if err != nil {
+			return nil, err
+		}
+		return pageRows(rc, guestInterfaces(rc.Ctx, s, kind, node, vmid))
+	}
+}
+
+func guestInterfaces(ctx context.Context, s *Session, kind, node, vmid string) []plugin.TableRow {
+	if kind == "qemu" {
+		obj, err := s.object(ctx, pvePath("nodes", node, "qemu", vmid, "agent", "network-get-interfaces"))
+		if err != nil {
+			return []plugin.TableRow{}
+		}
+		return qemuAgentInterfaces(obj)
+	}
+	items, err := s.list(ctx, pvePath("nodes", node, "lxc", vmid, "interfaces"))
+	if err != nil {
+		return []plugin.TableRow{}
+	}
+	return lxcInterfaces(items)
+}
+
+func qemuAgentInterfaces(obj plugin.TableRow) []plugin.TableRow {
+	rows := []plugin.TableRow{}
+	for _, raw := range rowSlice(obj["result"]) {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		name := str(m["name"])
+		if name == "" || name == "lo" {
+			continue
+		}
+		var v4, v6 []string
+		for _, ipRaw := range rowSlice(m["ip-addresses"]) {
+			ip, ok := ipRaw.(map[string]any)
+			if !ok {
+				continue
+			}
+			addr := str(ip["ip-address"])
+			if addr == "" {
+				continue
+			}
+			if str(ip["ip-address-type"]) == "ipv6" {
+				v6 = append(v6, addr)
+			} else {
+				v4 = append(v4, addr)
+			}
+		}
+		rows = append(rows, interfaceRow(name, str(m["hardware-address"]), strings.Join(v4, ", "), strings.Join(v6, ", ")))
+	}
+	return rows
+}
+
+func lxcInterfaces(items []plugin.TableRow) []plugin.TableRow {
+	rows := make([]plugin.TableRow, 0, len(items))
+	for _, it := range items {
+		name := str(it["name"])
+		if name == "" || name == "lo" {
+			continue
+		}
+		rows = append(rows, interfaceRow(name, str(it["hwaddr"]), str(it["inet"]), str(it["inet6"])))
+	}
+	return rows
+}
+
+func interfaceRow(name, hwaddr, ipv4, ipv6 string) plugin.TableRow {
+	return plugin.TableRow{
+		"name":   name,
+		"hwaddr": hwaddr,
+		"ipv4":   ipv4,
+		"ipv6":   ipv6,
+		"ref":    plugin.ResourceIdentity{Kind: "interface", Name: name, UID: name},
+	}
 }
 
 // --- Actions --------------------------------------------------------------

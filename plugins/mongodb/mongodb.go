@@ -158,7 +158,7 @@ func serverStatusDetailConfig() plugin.ObjectDetailConfig {
 				{Key: "host", Label: "Host", Copy: true},
 				{Key: "version", Label: "Version"},
 				{Key: "process", Label: "Process"},
-				{Key: "uptimeSeconds", Label: "Uptime (seconds)", Type: plugin.ColumnNumber},
+				{Key: "uptimeSeconds", Label: "Uptime", Type: plugin.ColumnDuration},
 			}},
 			{Title: "Connections", Fields: []plugin.ObjectDetailField{
 				{Key: "connectionsCurrent", Label: "Current", Type: plugin.ColumnNumber},
@@ -320,7 +320,7 @@ func serverColumns() []plugin.Column {
 		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: statusSeverities()},
 		{Key: "version", Label: "Version", Sortable: true},
 		{Key: "connectionsCurrent", Label: "Connections", Type: plugin.ColumnNumber, Sortable: true},
-		{Key: "uptimeSeconds", Label: "Uptime (seconds)", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "uptimeSeconds", Label: "Uptime", Type: plugin.ColumnDuration, Sortable: true},
 	}
 }
 

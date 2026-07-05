@@ -44,13 +44,21 @@ function initialTab(): string {
 const activeTab = ref(initialTab());
 
 watch(
+  () => props.row.ref?.uid,
+  () => {
+    activeTab.value = initialTab();
+  },
+);
+
+watch(
   () => [
-    props.row.ref?.uid,
     props.detail.defaultTab,
     visibleTabs.value.map((tab) => tab.key).join("\0"),
   ],
   () => {
-    activeTab.value = initialTab();
+    if (!visibleTabs.value.some((tab) => tab.key === activeTab.value)) {
+      activeTab.value = initialTab();
+    }
   },
 );
 

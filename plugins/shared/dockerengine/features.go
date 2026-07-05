@@ -839,7 +839,7 @@ func volumeResourceEvent(ctx context.Context, s *Session, msg events.Message) *p
 	if err != nil {
 		return nil
 	}
-	row := volumeRowFromVolume(inspect.Volume, refs)
+	row := volumeRowFromVolume(inspect.Volume, refs, volumeSizes(ctx, s))
 	return &plugin.ResourceEvent{Type: "updated", Ref: row["ref"].(plugin.ResourceIdentity), Resource: row}
 }
 
@@ -1182,7 +1182,7 @@ func volumeOverviewForID(ctx context.Context, s *Session, id string) (Row, error
 	if err != nil {
 		return nil, DockerErr(err)
 	}
-	return volumeOverviewRow(res.Volume, refs), nil
+	return volumeOverviewRow(res.Volume, refs, volumeSizes(ctx, s)), nil
 }
 
 func networkOverviewForID(ctx context.Context, s *Session, id string) (Row, error) {

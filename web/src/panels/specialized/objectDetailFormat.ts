@@ -23,11 +23,28 @@ export function formatBytes(value: number): string {
   return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+export function formatDurationSeconds(value: number): string {
+  let remaining = Math.max(0, Math.floor(value));
+  const days = Math.floor(remaining / 86400);
+  remaining %= 86400;
+  const hours = Math.floor(remaining / 3600);
+  remaining %= 3600;
+  const minutes = Math.floor(remaining / 60);
+  const seconds = remaining % 60;
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
 export function formatValue(value: unknown, type?: ColumnTypeValue): string {
   if (value === undefined || value === null || value === "") return "—";
   const numeric = numberValue(value);
   if (type === ColumnType.Bytes && numeric != null) return formatBytes(numeric);
   if (type === ColumnType.Percent && numeric != null) return `${numeric}%`;
+  if (type === ColumnType.Duration && numeric != null)
+    return formatDurationSeconds(numeric);
   if (type === ColumnType.DateTime && typeof value === "string") {
     return new Date(value).toLocaleString();
   }

@@ -137,7 +137,7 @@ func guestColumns() []plugin.Column {
 		{Key: "cpu", Label: "CPU", Type: plugin.ColumnPercent, Sortable: true, Precision: oneDecimal()},
 		{Key: "mem", Label: "Memory used", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "maxmem", Label: "Memory limit", Type: plugin.ColumnBytes, Sortable: true},
-		{Key: "uptime", Label: "Uptime", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "uptime", Label: "Uptime", Type: plugin.ColumnDuration, Sortable: true},
 		{Key: "tags", Label: "Tags"},
 	}
 }
@@ -174,6 +174,15 @@ func backupColumns() []plugin.Column {
 	}
 }
 
+func guestNetworkColumns() []plugin.Column {
+	return []plugin.Column{
+		{Key: "name", Label: "Interface", Sortable: true},
+		{Key: "hwaddr", Label: "MAC"},
+		{Key: "ipv4", Label: "IPv4"},
+		{Key: "ipv6", Label: "IPv6"},
+	}
+}
+
 func qemuResource() plugin.ResourceType {
 	cols := guestColumns()
 	lifecycle := []string{"act.qemu.start", "act.qemu.shutdown", "act.qemu.reboot", "act.qemu.stop", "act.qemu.suspend", "act.qemu.resume", "act.qemu.migrate", "act.qemu.clone", "act.qemu.resize", "act.qemu.snapshot.create", "act.qemu.backup", "act.qemu.destroy"}
@@ -190,6 +199,7 @@ func qemuResource() plugin.ResourceType {
 				{Key: "console", Label: "Console", Icon: icon("monitor"), Type: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "proxmox.qemu.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.RemoteDesktopConfig{Resize: true}, VisibleWhen: instanceOnly()},
 				{Key: "snapshots", Label: "Snapshots", Icon: icon("camera"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.snapshots", Params: guestParams()}, Config: refreshTableConfig(plugin.TableConfig{Columns: snapshotColumns(), RowActionIDs: []string{"act.qemu.snapshot.rollback", "act.qemu.snapshot.delete"}, EmptyText: "No snapshots for this VM."}, 5000), VisibleWhen: instanceOnly()},
 				{Key: "backups", Label: "Backups", Icon: icon("archive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.backups", Params: guestParams()}, Config: refreshTableConfig(plugin.TableConfig{Columns: backupColumns(), RowActionIDs: []string{"act.qemu.backup.restore", "act.backup.delete"}, RowClick: plugin.RowClickSelect, EmptyText: "No backup archives found for this VM."}, 10000)},
+				{Key: "network", Label: "Network", Icon: icon("network"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.qemu.network", Params: guestParams()}, Config: plugin.TableConfig{Columns: guestNetworkColumns(), EmptyText: "No interfaces reported (the QEMU guest agent may be off).", RefreshIntervalMs: 10000}, VisibleWhen: instanceOnly()},
 				{Key: "hardware", Label: "Hardware", Icon: icon("cpu"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.qemu.config", Params: guestParams()}, Config: qemuHardwareConfig()},
 			},
 		},
@@ -212,6 +222,7 @@ func lxcResource() plugin.ResourceType {
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "proxmox.lxc.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.TerminalConfig{Zoom: true, Search: true}, VisibleWhen: instanceOnly()},
 				{Key: "snapshots", Label: "Snapshots", Icon: icon("camera"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.snapshots", Params: guestParams()}, Config: refreshTableConfig(plugin.TableConfig{Columns: snapshotColumns(), RowActionIDs: []string{"act.lxc.snapshot.rollback", "act.lxc.snapshot.delete"}, EmptyText: "No snapshots for this container."}, 5000), VisibleWhen: instanceOnly()},
 				{Key: "backups", Label: "Backups", Icon: icon("archive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.backups", Params: guestParams()}, Config: refreshTableConfig(plugin.TableConfig{Columns: backupColumns(), RowActionIDs: []string{"act.lxc.backup.restore", "act.backup.delete"}, RowClick: plugin.RowClickSelect, EmptyText: "No backup archives found for this container."}, 10000)},
+				{Key: "network", Label: "Network", Icon: icon("network"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.lxc.network", Params: guestParams()}, Config: plugin.TableConfig{Columns: guestNetworkColumns(), EmptyText: "No interfaces reported.", RefreshIntervalMs: 10000}, VisibleWhen: instanceOnly()},
 				{Key: "config", Label: "Config", Icon: icon("code"), Type: plugin.PanelObjectDetail, Source: &plugin.DataSource{RouteID: "proxmox.lxc.config", Params: guestParams()}, Config: lxcConfigDetail()},
 			},
 		},
@@ -225,7 +236,7 @@ func nodeResource() plugin.ResourceType {
 		{Key: "cpu", Label: "CPU", Type: plugin.ColumnPercent, Sortable: true, Precision: oneDecimal()},
 		{Key: "mem", Label: "Memory", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "maxmem", Label: "Total", Type: plugin.ColumnBytes, Sortable: true},
-		{Key: "uptime", Label: "Uptime", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "uptime", Label: "Uptime", Type: plugin.ColumnDuration, Sortable: true},
 	}
 	nodeParam := map[string]string{"node": "${resource.uid}"}
 	return plugin.ResourceType{
@@ -337,7 +348,7 @@ func guestOverviewConfig() plugin.ObjectDetailConfig {
 			{Title: "Runtime", Fields: []plugin.ObjectDetailField{
 				{Key: "cpu", Label: "CPU usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpu", TotalKey: "cpuTotal", TotalType: plugin.ColumnNumber, TotalLabel: "of", Unit: "CPU(s)", WarnAt: 75, CriticalAt: 90}},
 				{Key: "memPct", Label: "Memory usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "memPct", UsedKey: "mem", TotalKey: "maxmem", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 80, CriticalAt: 95}},
-				{Key: "uptime", Label: "Uptime", Type: plugin.ColumnNumber},
+				{Key: "uptime", Label: "Uptime", Type: plugin.ColumnDuration},
 				{Key: "lock", Label: "Lock"},
 				{Key: "ha", Label: "HA state"},
 			}},
@@ -457,11 +468,11 @@ func mountFields() []plugin.ObjectDetailField {
 func cpuMemMetrics() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
 		Stats: []plugin.MetricStat{
-			{Key: "uptime", Label: "Uptime"},
-			{Key: "diskRead", Label: "Disk read", Unit: "B"},
-			{Key: "diskWrite", Label: "Disk write", Unit: "B"},
-			{Key: "netIn", Label: "Net in", Unit: "B"},
-			{Key: "netOut", Label: "Net out", Unit: "B"},
+			{Key: "uptime", Label: "Uptime", Unit: "s"},
+			{Key: "diskRead", Label: "Disk read", Unit: "bytes"},
+			{Key: "diskWrite", Label: "Disk write", Unit: "bytes"},
+			{Key: "netIn", Label: "Net in", Unit: "bytes"},
+			{Key: "netOut", Label: "Net out", Unit: "bytes"},
 		},
 		Usage: []plugin.MetricUsage{
 			{Key: "cpu", Label: "CPU usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpu", TotalKey: "cpuTotal", TotalType: plugin.ColumnNumber, TotalLabel: "of", Unit: "CPU(s)", WarnAt: 75, CriticalAt: 90}},

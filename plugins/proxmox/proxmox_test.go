@@ -2,6 +2,7 @@ package proxmox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -31,6 +32,18 @@ func TestTerminalRecordingIsAuthoritative(t *testing.T) {
 		return
 	}
 	t.Fatal("terminal recording capability missing")
+}
+
+func TestMapErrClassifiesProxmoxAPIFailures(t *testing.T) {
+	if err := mapErr(errors.New("500 could not activate storage 'rpool2-storage'")); !errors.Is(err, plugin.ErrUnavailable) {
+		t.Fatalf("storage activation error = %v, want ErrUnavailable", err)
+	}
+	if err := mapErr(errors.New("bad request: 400 Bad Request - invalid mode")); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("bad request error = %v, want ErrInvalidInput", err)
+	}
+	if err := mapErr(fmt.Errorf("request stopped: %w", context.Canceled)); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled error = %v, want context.Canceled", err)
+	}
 }
 
 func TestNodeStorageTabIsNodeScoped(t *testing.T) {
@@ -372,6 +385,29 @@ func TestStorageColumnsExposeCapacityUsage(t *testing.T) {
 	}
 }
 
+func TestSortRowsOrdersNumericColumnsByValue(t *testing.T) {
+	rows := []plugin.TableRow{
+		{"name": "big", "mem": numInt(float64(10_000_000_000)), "vmid": numInt(float64(100))},
+		{"name": "small", "mem": numInt(float64(9_000_000_000)), "vmid": numInt(float64(9))},
+	}
+	sortRows(rows, []plugin.SortKey{{Field: "mem"}})
+	if rows[0]["name"] != "small" || rows[1]["name"] != "big" {
+		t.Fatalf("mem ascending order wrong: %v, %v", rows[0]["name"], rows[1]["name"])
+	}
+	sortRows(rows, []plugin.SortKey{{Field: "vmid", Desc: true}})
+	if rows[0]["name"] != "big" {
+		t.Fatalf("vmid descending should put vmid 100 first, got %v", rows[0]["name"])
+	}
+	ts := []plugin.TableRow{
+		{"name": "later", "starttime": "2026-07-05T10:00:00Z"},
+		{"name": "earlier", "starttime": "2026-07-05T09:00:00Z"},
+	}
+	sortRows(ts, []plugin.SortKey{{Field: "starttime"}})
+	if ts[0]["name"] != "earlier" {
+		t.Fatalf("timestamp ascending order wrong: %v first", ts[0]["name"])
+	}
+}
+
 func TestBackupSchemaUsesStoragePicker(t *testing.T) {
 	var field *plugin.Field
 	for _, group := range backupSchema().Groups {
@@ -428,6 +464,9 @@ func TestProxmoxUXInformationArchitecture(t *testing.T) {
 			t.Fatalf("task log tab = %+v", tab)
 		}
 	}
+	if typ := columnType(byKind["qemu"].Columns, "uptime"); typ != plugin.ColumnDuration {
+		t.Fatalf("qemu uptime column type = %q, want %q", typ, plugin.ColumnDuration)
+	}
 	for _, tab := range byKind["qemu"].Detail.Tabs {
 		if tab.Key == "summary" {
 			cfg := tab.Config.(plugin.ObjectDetailConfig)
@@ -440,6 +479,12 @@ func TestProxmoxUXInformationArchitecture(t *testing.T) {
 			if len(cfg.Gauges) != 0 || len(cfg.Usage) != 2 {
 				t.Fatalf("qemu metrics should prefer usage rows over duplicate gauges: %+v", cfg)
 			}
+			if unit := metricStatUnit(cfg, "uptime"); unit != "s" {
+				t.Fatalf("qemu uptime metric unit = %q, want s", unit)
+			}
+			if unit := metricStatUnit(cfg, "diskRead"); unit != "bytes" {
+				t.Fatalf("qemu disk read metric unit = %q, want bytes", unit)
+			}
 		}
 		if tab.Key == "hardware" {
 			cfg := tab.Config.(plugin.ObjectDetailConfig)
@@ -448,6 +493,24 @@ func TestProxmoxUXInformationArchitecture(t *testing.T) {
 			}
 		}
 	}
+}
+
+func metricStatUnit(cfg plugin.MetricsConfig, key string) string {
+	for _, stat := range cfg.Stats {
+		if stat.Key == key {
+			return stat.Unit
+		}
+	}
+	return ""
+}
+
+func columnType(columns []plugin.Column, key string) plugin.ColumnType {
+	for _, column := range columns {
+		if column.Key == key {
+			return column.Type
+		}
+	}
+	return ""
 }
 
 func TestProxmoxLiveOpsUXContract(t *testing.T) {
