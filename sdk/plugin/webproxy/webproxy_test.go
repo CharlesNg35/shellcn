@@ -2,6 +2,8 @@ package webproxy_test
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"io"
 	"net"
 	"net/http"
@@ -11,8 +13,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andybalholm/brotli"
+
 	"github.com/charlesng35/shellcn/sdk/plugin/webproxy"
 )
+
+// gzipBytes returns s gzip-compressed, for upstreams that serve precompressed
+// assets even though the proxy asked for identity.
+func gzipBytes(t *testing.T, s string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := io.WriteString(gz, s); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
 
 func TestIsTLSPort(t *testing.T) {
 	tls := []int{443, 8443, 9443, 10443, 4443}
@@ -74,6 +93,18 @@ func TestServeRewritesHTMLUnderPrefix(t *testing.T) {
 	}
 	if !strings.Contains(body, `location.protocol==="https:"?"wss://":"ws://"`) {
 		t.Fatalf("shim does not rewrite absolute WebSocket URLs for the public host: %s", body)
+	}
+	for _, want := range []string{
+		"function fixu(u)",
+		"var swr=function",
+		"u=fixu(u)",
+		"n.scope=fix(o.scope)",
+		"n2.scope=fixu(o.scope)",
+		`Object.defineProperty(swc,"register"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("service worker registration shim missing %q in %s", want, body)
+		}
 	}
 }
 
@@ -229,6 +260,241 @@ func TestServeRewritesCSSAndSrcset(t *testing.T) {
 	})
 	if b := html.Body.String(); !strings.Contains(b, `srcset="/proxy/x/a.png 1x, /proxy/x/b.png 2x"`) {
 		t.Fatalf("srcset rewrite wrong: %s", b)
+	}
+}
+
+func TestServeRewritesJavaScriptServiceWorkerImports(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = io.WriteString(w, "importScripts (`/workbox-v7.4.0/workbox-sw.js`);function escape(e){return e.replace(/\"/g,\"&quot;\")}")
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/sw.js", nil)
+	req.Header.Set("Service-Worker", "script")
+	webproxy.Serve(rec, req, webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/sw.js", PublicPrefix: "/proxy/x",
+	})
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "importScripts (`/proxy/x/workbox-v7.4.0/workbox-sw.js`)") {
+		t.Fatalf("service worker importScripts URL not prefixed: %s", body)
+	}
+	if !strings.Contains(body, `replace(/"/g,"&quot;")`) {
+		t.Fatalf("javascript regex literal was corrupted: %s", body)
+	}
+	if !strings.Contains(body, "self.importScripts=wi") {
+		t.Fatalf("service worker runtime importScripts shim not prepended: %s", body)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("service worker Cache-Control = %q, want no-store", got)
+	}
+	if got := rec.Header().Get("Service-Worker-Allowed"); got != "/proxy/x/" {
+		t.Fatalf("Service-Worker-Allowed = %q, want proxy scope", got)
+	}
+}
+
+// Runtime-built importScripts URLs need the worker shim before the first call.
+func TestServeShimsRuntimeConstructedImportScripts(t *testing.T) {
+	const worker = "function N(){return\"/\".endsWith(\"/\")?\"/\":\"//\"}" +
+		"const U=N(),T=\"v7.4.0\";importScripts(`${U}workbox-${T}/workbox-sw.js`);" +
+		"workbox.setConfig({modulePathPrefix:`${U}workbox-${T}`});"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript")
+		_, _ = io.WriteString(w, worker)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/sw.js", nil)
+	req.Header.Set("Service-Worker", "script")
+	webproxy.Serve(rec, req, webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/sw.js", PublicPrefix: "/proxy/x",
+	})
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "self.importScripts=wi") || !strings.Contains(body, "var p=\"/proxy/x\"") {
+		t.Fatalf("runtime shim missing or wrong prefix: %s", body)
+	}
+	shimAt := strings.Index(body, "self.importScripts=wi")
+	callAt := strings.Index(body, "importScripts(`${U}")
+	if shimAt < 0 || callAt < 0 || shimAt > callAt {
+		t.Fatalf("shim must be prepended before the worker's importScripts call: shim@%d call@%d", shimAt, callAt)
+	}
+	// The runtime-built URL is left intact — the shim, not a text rewrite, fixes it.
+	if !strings.Contains(body, "importScripts(`${U}workbox-${T}/workbox-sw.js`)") {
+		t.Fatalf("template-literal importScripts should be untouched: %s", body)
+	}
+}
+
+// Importless workers and non-worker /sw.js assets are not rewritten.
+func TestServeLeavesImportlessWorkerAndNonWorkerUntouched(t *testing.T) {
+	const worker = `"use strict";self.addEventListener("fetch",function(e){});`
+	t.Run("importless worker with header", func(t *testing.T) {
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/javascript")
+			_, _ = io.WriteString(w, worker)
+		}))
+		defer upstream.Close()
+		base, _ := url.Parse(upstream.URL)
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/sw.js", nil)
+		req.Header.Set("Service-Worker", "script")
+		webproxy.Serve(rec, req, webproxy.Options{
+			Base: base, Transport: http.DefaultTransport, UpstreamPath: "/sw.js", PublicPrefix: "/proxy/x",
+		})
+		if body := rec.Body.String(); body != worker {
+			t.Fatalf("importless worker altered: %q", body)
+		}
+	})
+	t.Run("sw.js path without header is not a worker", func(t *testing.T) {
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/javascript")
+			_, _ = io.WriteString(w, `importScripts("/x.js");`)
+		}))
+		defer upstream.Close()
+		base, _ := url.Parse(upstream.URL)
+		rec := httptest.NewRecorder()
+		// No Service-Worker header: the filename alone must not trigger worker handling.
+		webproxy.Serve(rec, httptest.NewRequest(http.MethodGet, "/sw.js", nil), webproxy.Options{
+			Base: base, Transport: http.DefaultTransport, UpstreamPath: "/sw.js", PublicPrefix: "/proxy/x",
+		})
+		if body := rec.Body.String(); body != `importScripts("/x.js");` {
+			t.Fatalf("non-worker /sw.js was rewritten: %q", body)
+		}
+		if got := rec.Header().Get("Service-Worker-Allowed"); got != "" {
+			t.Fatalf("non-worker got worker headers: %q", got)
+		}
+	})
+}
+
+func TestServeDoesNotRewriteNormalJavaScriptBundle(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript")
+		_, _ = io.WriteString(w, `importScripts("/worker-helper.js");function escape(e){return e.replace(/"/g,"&quot;")}`)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	rec := httptest.NewRecorder()
+	webproxy.Serve(rec, httptest.NewRequest(http.MethodGet, "/assets/app.js", nil), webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/assets/app.js", PublicPrefix: "/proxy/x",
+	})
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `importScripts("/worker-helper.js")`) {
+		t.Fatalf("normal javascript bundle should not be rewritten: %s", body)
+	}
+	if !strings.Contains(body, `replace(/"/g,"&quot;")`) {
+		t.Fatalf("normal javascript regex literal was corrupted: %s", body)
+	}
+}
+
+// An upstream that ignores Accept-Encoding: identity and serves a gzip-compressed
+// body must still be decoded, rewritten, and re-emitted as identity — otherwise the
+// browser inflates the untouched bytes back to the original, un-rewritten content.
+func TestServeDecodesGzippedServiceWorker(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript")
+		w.Header().Set("Content-Encoding", "gzip")
+		_, _ = w.Write(gzipBytes(t, `importScripts("/workbox-v7.4.0/workbox-sw.js");`))
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/sw.js", nil)
+	req.Header.Set("Service-Worker", "script")
+	webproxy.Serve(rec, req, webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/sw.js", PublicPrefix: "/proxy/x",
+	})
+
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("Content-Encoding = %q, want empty (re-emitted as identity)", got)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "importScripts(\"/proxy/x/workbox-v7.4.0/workbox-sw.js\")") {
+		t.Fatalf("gzipped service worker importScripts not prefixed: %q", body)
+	}
+}
+
+// A gzip-compressed HTML page must be decoded so the runtime shim is injected.
+func TestServeDecodesGzippedHTML(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Content-Encoding", "gzip")
+		_, _ = w.Write(gzipBytes(t, `<html><head></head><body><a href="/app">go</a></body></html>`))
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	rec := httptest.NewRecorder()
+	webproxy.Serve(rec, httptest.NewRequest(http.MethodGet, "/", nil), webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/", PublicPrefix: "/proxy/x",
+	})
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `href="/proxy/x/app"`) {
+		t.Fatalf("gzipped HTML not rewritten: %q", body)
+	}
+	if !strings.Contains(body, "<script>(function(){var p=") {
+		t.Fatalf("runtime shim not injected into gzipped HTML: %q", body)
+	}
+}
+
+// An encoding the proxy cannot decode is passed through untouched rather than
+// corrupted: the bytes and their Content-Encoding are left intact.
+func TestServePassesThroughUndecodableEncoding(t *testing.T) {
+	const raw = "zstd-compressed-bytes"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Content-Encoding", "zstd")
+		_, _ = io.WriteString(w, raw)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	rec := httptest.NewRecorder()
+	webproxy.Serve(rec, httptest.NewRequest(http.MethodGet, "/", nil), webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/", PublicPrefix: "/proxy/x",
+	})
+
+	if got := rec.Header().Get("Content-Encoding"); got != "zstd" {
+		t.Fatalf("Content-Encoding = %q, want zstd (left intact)", got)
+	}
+	if body := rec.Body.String(); body != raw {
+		t.Fatalf("undecodable body was altered: %q", body)
+	}
+}
+
+// A brotli-compressed body (common for precompressed Vite/webpack assets) is decoded,
+// rewritten, and re-emitted as identity.
+func TestServeDecodesBrotliHTML(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		var buf bytes.Buffer
+		bw := brotli.NewWriter(&buf)
+		_, _ = io.WriteString(bw, `<html><head></head><body><a href="/app">go</a></body></html>`)
+		_ = bw.Close()
+		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Content-Encoding", "br")
+		_, _ = w.Write(buf.Bytes())
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	rec := httptest.NewRecorder()
+	webproxy.Serve(rec, httptest.NewRequest(http.MethodGet, "/", nil), webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/", PublicPrefix: "/proxy/x",
+	})
+
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("Content-Encoding = %q, want empty (re-emitted as identity)", got)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, `href="/proxy/x/app"`) {
+		t.Fatalf("brotli HTML not rewritten: %q", body)
 	}
 }
 
@@ -469,9 +735,71 @@ func TestServeNormalizesStrictWebSocketUpgrade(t *testing.T) {
 			Transport:    http.DefaultTransport,
 			UpstreamPath: "/ws",
 			PublicPrefix: "/proxy/x",
+			// Default options: origin rewrite and Forwarded stripping are on.
+		})
+	}))
+	defer front.Close()
+	frontURL, _ := url.Parse(front.URL)
+
+	conn, err := net.DialTimeout("tcp", frontURL.Host, 2*time.Second)
+	if err != nil {
+		t.Fatalf("dial front proxy: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+	_, err = io.WriteString(conn, "GET /proxy/x/ws HTTP/1.1\r\n"+
+		"Host: gateway.local\r\n"+
+		"Origin: http://gateway.local\r\n"+
+		"Connection: Upgrade\r\n"+
+		"Upgrade: websocket\r\n"+
+		"Sec-WebSocket-Version: 13\r\n"+
+		"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n")
+	if err != nil {
+		t.Fatalf("write upgrade request: %v", err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	if err != nil {
+		t.Fatalf("read upgrade response: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusSwitchingProtocols {
+		t.Fatalf("status = %s, want 101", resp.Status)
+	}
+}
+
+// Opting out preserves the browser's Origin and the gateway's Forwarded headers.
+func TestServeWebSocketOptOutPreservesContext(t *testing.T) {
+	var base *url.URL
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Origin"); got != "http://gateway.local" {
+			http.Error(w, "origin rewritten: "+got, http.StatusForbidden)
+			return
+		}
+		if got := r.Header.Get("X-Forwarded-Host"); got != "gateway.local" {
+			http.Error(w, "forwarded stripped: "+got, http.StatusForbidden)
+			return
+		}
+		conn, rw, err := http.NewResponseController(w).Hijack()
+		if err != nil {
+			t.Errorf("hijack upstream: %v", err)
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		_, _ = rw.WriteString("HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n")
+		_ = rw.Flush()
+	}))
+	defer upstream.Close()
+	base, _ = url.Parse(upstream.URL)
+
+	front := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		webproxy.Serve(w, r, webproxy.Options{
+			Base:         base,
+			Transport:    http.DefaultTransport,
+			UpstreamPath: "/ws",
+			PublicPrefix: "/proxy/x",
 			WebSocket: webproxy.WebSocketOptions{
-				RewriteOrigin:         true,
-				StripForwardedHeaders: true,
+				KeepBrowserOrigin:    true,
+				KeepForwardedHeaders: true,
 			},
 		})
 	}))
