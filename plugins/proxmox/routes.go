@@ -818,8 +818,6 @@ func guestNetwork(kind string) plugin.Handler {
 	}
 }
 
-// guestInterfaces is best-effort: a stopped guest or a VM without the QEMU guest
-// agent has no interfaces to report, which reads as an empty panel rather than error.
 func guestInterfaces(ctx context.Context, s *Session, kind, node, vmid string) []plugin.TableRow {
 	if kind == "qemu" {
 		obj, err := s.object(ctx, pvePath("nodes", node, "qemu", vmid, "agent", "network-get-interfaces"))

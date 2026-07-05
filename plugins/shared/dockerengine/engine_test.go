@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/moby/moby/api/types/events"
+	"github.com/moby/moby/api/types/volume"
 	dockerclient "github.com/moby/moby/client"
 	"github.com/moby/moby/client/pkg/versions"
 
@@ -41,6 +42,24 @@ func TestSortRowsOrdersNumericColumnsByValue(t *testing.T) {
 	sortRows(rows, []plugin.SortKey{{Field: "size", Desc: true}})
 	if rows[0]["size"] != int64(1000) {
 		t.Fatalf("descending size sort head = %v, want 1000", rows[0]["size"])
+	}
+}
+
+func TestVolumeRowUsesDiskUsageSize(t *testing.T) {
+	rows := VolumeRows(
+		[]volume.Volume{{Name: "data"}, {Name: "unsized"}},
+		map[string]int64{"data": 1},
+		map[string]int64{"data": 1234},
+	)
+	byName := map[string]Row{}
+	for _, r := range rows {
+		byName[r["name"].(string)] = r
+	}
+	if byName["data"]["size"] != int64(1234) {
+		t.Fatalf("data size = %v, want 1234", byName["data"]["size"])
+	}
+	if byName["unsized"]["size"] != int64(-1) {
+		t.Fatalf("unsized volume = %v, want -1", byName["unsized"]["size"])
 	}
 }
 

@@ -104,7 +104,7 @@ func ListVolumes(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, DockerErr(err)
 	}
-	return PageRows(rc, VolumeRows(res.Items, refs))
+	return PageRows(rc, VolumeRows(res.Items, refs, volumeSizes(rc.Ctx, s)))
 }
 
 func ListNetworks(rc *plugin.RequestContext) (any, error) {
@@ -240,7 +240,7 @@ func VolumeOverview(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, DockerErr(err)
 	}
-	return volumeOverviewRow(res.Volume, refs), nil
+	return volumeOverviewRow(res.Volume, refs, volumeSizes(rc.Ctx, s)), nil
 }
 
 func NetworkOverview(rc *plugin.RequestContext) (any, error) {
@@ -992,10 +992,10 @@ func ImageRows(items []image.Summary) []Row {
 	return rows
 }
 
-func VolumeRows(items []volume.Volume, refCounts map[string]int64) []Row {
+func VolumeRows(items []volume.Volume, refCounts, sizes map[string]int64) []Row {
 	rows := make([]Row, 0, len(items))
 	for _, v := range items {
-		rows = append(rows, volumeRowFromVolume(v, refCounts))
+		rows = append(rows, volumeRowFromVolume(v, refCounts, sizes))
 	}
 	return rows
 }
@@ -1112,10 +1112,27 @@ func volumeRefCounts(ctx context.Context, s *Session) (map[string]int64, error) 
 	return counts, nil
 }
 
-func volumeUsage(v volume.Volume, refCounts map[string]int64) (int64, int64, string) {
+func volumeSizes(ctx context.Context, s *Session) map[string]int64 {
+	res, err := s.cli.DiskUsage(ctx, dockerclient.DiskUsageOptions{Volumes: true})
+	if err != nil {
+		return nil
+	}
+	sizes := make(map[string]int64, len(res.Volumes.Items))
+	for _, v := range res.Volumes.Items {
+		if v.UsageData != nil && v.UsageData.Size >= 0 {
+			sizes[v.Name] = v.UsageData.Size
+		}
+	}
+	return sizes
+}
+
+func volumeUsage(v volume.Volume, refCounts, sizes map[string]int64) (int64, int64, string) {
 	size := int64(-1)
 	if v.UsageData != nil {
 		size = v.UsageData.Size
+	}
+	if sz, ok := sizes[v.Name]; ok {
+		size = sz
 	}
 	refs := int64(-1)
 	if refCounts != nil {
@@ -1126,8 +1143,8 @@ func volumeUsage(v volume.Volume, refCounts map[string]int64) (int64, int64, str
 	return size, refs, volumeUsageStatus(refs)
 }
 
-func volumeOverviewRow(v volume.Volume, refCounts map[string]int64) Row {
-	size, refs, status := volumeUsage(v, refCounts)
+func volumeOverviewRow(v volume.Volume, refCounts, sizes map[string]int64) Row {
+	size, refs, status := volumeUsage(v, refCounts, sizes)
 	return Row{
 		"name":       v.Name,
 		"driver":     v.Driver,
@@ -1142,8 +1159,8 @@ func volumeOverviewRow(v volume.Volume, refCounts map[string]int64) Row {
 	}
 }
 
-func volumeRowFromVolume(v volume.Volume, refCounts map[string]int64) Row {
-	size, refs, status := volumeUsage(v, refCounts)
+func volumeRowFromVolume(v volume.Volume, refCounts, sizes map[string]int64) Row {
+	size, refs, status := volumeUsage(v, refCounts, sizes)
 	return Row{
 		"id":         v.Name,
 		"name":       v.Name,
