@@ -5,6 +5,7 @@
 package webproxy
 
 import (
+	"compress/gzip"
 	"io"
 	"net"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/andybalholm/brotli"
 )
 
 // SWFile is the in-scope service worker that re-routes the app's root-absolute
@@ -54,22 +57,23 @@ type Options struct {
 	UpstreamRawPath string
 	// PublicPrefix is the gateway path the app is served under (for rewriting).
 	PublicPrefix string
-	// SourcePrefix is a prefix the upstream itself injects into the app's links
-	// and that must be mapped back to PublicPrefix. Empty when proxying straight
-	// to an app that emits its own root-relative paths.
+	// SourcePrefix is a prefix the upstream injects into the app's links and must be
+	// mapped back to PublicPrefix. Empty when the app emits its own root-relative paths.
 	SourcePrefix string
-	// WebSocket controls optional request normalization for upstreams that apply
-	// strict browser-origin checks during WebSocket upgrades.
+	// WebSocket tunes how WebSocket upgrades are forwarded (see WebSocketOptions).
 	WebSocket WebSocketOptions
 }
 
+// WebSocketOptions tunes WebSocket upgrade forwarding. Both normalizations are on by
+// default because they let the common upstream accept a gateway-proxied upgrade; set
+// a field to opt out for an upstream that needs the original values.
 type WebSocketOptions struct {
-	// RewriteOrigin maps the browser's Origin to the upstream origin for WebSocket
-	// upgrades. This is needed by apps that reject gateway-origin upgrades.
-	RewriteOrigin bool
-	// StripForwardedHeaders removes gateway Forwarded/X-Forwarded-* context from
-	// WebSocket upgrades. Some upstream apps reject upgrades when these are present.
-	StripForwardedHeaders bool
+	// KeepBrowserOrigin forwards the browser's Origin unchanged instead of mapping it
+	// to the upstream origin.
+	KeepBrowserOrigin bool
+	// KeepForwardedHeaders forwards the gateway's Forwarded/X-Forwarded-* headers
+	// instead of stripping them.
+	KeepForwardedHeaders bool
 }
 
 // Serve reverse-proxies r to the upstream and rewrites the response so the app's
@@ -103,7 +107,7 @@ func applyWebSocketOptions(req *http.Request, opts WebSocketOptions) {
 	if !strings.EqualFold(req.Header.Get("Upgrade"), "websocket") || req.URL == nil || req.URL.Host == "" {
 		return
 	}
-	if opts.RewriteOrigin {
+	if !opts.KeepBrowserOrigin {
 		scheme := req.URL.Scheme
 		if scheme == "" {
 			scheme = "http"
@@ -113,7 +117,7 @@ func applyWebSocketOptions(req *http.Request, opts WebSocketOptions) {
 		}
 		req.Host = req.URL.Host
 	}
-	if opts.StripForwardedHeaders {
+	if !opts.KeepForwardedHeaders {
 		req.Header.Del("Forwarded")
 		req.Header["X-Forwarded-For"] = nil
 		req.Header.Del("X-Forwarded-Host")
@@ -139,6 +143,8 @@ var (
 	scriptBlock       = regexp.MustCompile(`(?is)(<script\b[^>]*>)(.*?)(</script>)`)
 	jsRootDouble      = regexp.MustCompile(`"(/[^/"'<>\s][^"'<>\s]*)"`)
 	jsRootSingle      = regexp.MustCompile(`'(/[^/"'<>\s][^"'<>\s]*)'`)
+	jsRootBacktick    = regexp.MustCompile("`(/[^/\"'<>\\s][^`\"'<>\\s]*)`")
+	importScriptsCall = regexp.MustCompile(`\bimportScripts\s*\(`)
 )
 
 // rewriteResponse maps an upstream response back under prefix: Location, Set-Cookie,
@@ -166,10 +172,21 @@ func rewriteResponse(base *url.URL, sourcePrefix, prefix, publicHost, prefixMark
 		ct := resp.Header.Get("Content-Type")
 		isHTML := strings.Contains(ct, "text/html")
 		isCSS := strings.Contains(ct, "text/css")
-		if !isHTML && !isCSS {
+		isSW := isServiceWorkerScriptResponse(resp)
+		if !isHTML && !isCSS && !isSW {
 			return nil
 		}
-		body, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+		if isSW {
+			resp.Header.Set("Cache-Control", "no-store")
+			resp.Header.Set("Service-Worker-Allowed", prefix+"/")
+		}
+		// Upstreams may serve precompressed assets despite the identity request;
+		// decode so the rewriter sees real text.
+		src, ok := decodedBody(resp)
+		if !ok {
+			return nil
+		}
+		body, err := io.ReadAll(io.LimitReader(src, 16<<20))
 		_ = resp.Body.Close()
 		if err != nil {
 			return err
@@ -180,14 +197,53 @@ func rewriteResponse(base *url.URL, sourcePrefix, prefix, publicHost, prefixMark
 		}
 		if isHTML {
 			out = rewriteHTML(out, sourcePrefix, upstreamOrigin, prefix)
-		} else {
+		} else if isCSS {
 			out = rewriteCSS(out, upstreamOrigin, prefix)
+		} else if isSW {
+			out = rewriteServiceWorkerImports(out, upstreamOrigin, prefix)
+		} else {
+			return nil
 		}
+		resp.Header.Del("Content-Encoding")
 		resp.Body = io.NopCloser(strings.NewReader(out))
 		resp.ContentLength = int64(len(out))
 		resp.Header.Set("Content-Length", strconv.Itoa(len(out)))
 		return nil
 	}
+}
+
+// decodedBody returns a reader over the response's decoded body, reporting ok=false
+// for an encoding it cannot decode so the caller passes the response through
+// unmodified instead of shipping bytes the browser would inflate back to the
+// un-rewritten original. The decoder needs no close; the caller closes resp.Body.
+func decodedBody(resp *http.Response) (io.Reader, bool) {
+	switch strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding"))) {
+	case "", "identity":
+		return resp.Body, true
+	case "gzip", "x-gzip":
+		gz, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return nil, false
+		}
+		return gz, true
+	case "br":
+		return brotli.NewReader(resp.Body), true
+	default:
+		return nil, false
+	}
+}
+
+func isServiceWorkerScriptResponse(resp *http.Response) bool {
+	if resp.Request != nil {
+		if strings.EqualFold(resp.Request.Header.Get("Service-Worker"), "script") {
+			return true
+		}
+		if resp.Request.URL != nil {
+			path := strings.ToLower(resp.Request.URL.Path)
+			return strings.HasSuffix(path, "/sw.js") || strings.HasSuffix(path, "/service-worker.js")
+		}
+	}
+	return false
 }
 
 // mapLocation rewrites a redirect Location to stay under prefix. It maps targets on
@@ -349,15 +405,58 @@ func rewriteInlineJS(html, prefix string) string {
 	})
 }
 
+func rewriteServiceWorkerImports(js, upstreamOrigin, prefix string) string {
+	return serviceWorkerShim(prefix) + rewriteImportScripts(js, upstreamOrigin, prefix)
+}
+
+// serviceWorkerShim keeps worker-built root URLs under the proxy prefix.
+func serviceWorkerShim(prefix string) string {
+	return `(function(){var p=` + jsString(prefix) + `;function fix(u){if(typeof u!=="string")return u;if(u.charAt(0)==="/"&&u.charAt(1)!=="/"&&u.indexOf(p)!==0)return p+u;var o=self.location&&self.location.origin;if(o&&u.indexOf(o+"/")===0&&u.slice(o.length).indexOf(p)!==0)return o+p+u.slice(o.length);return u;}
+var oi=self.importScripts;if(oi){var wi=function(){return oi.apply(self,[].map.call(arguments,fix));};try{self.importScripts=wi;}catch(e){}try{Object.defineProperty(self,"importScripts",{configurable:true,value:wi});}catch(e){}}
+var of=self.fetch;if(of){var wf=function(i,o){try{if(typeof i==="string")i=fix(i);else if(i&&i.url)i=new Request(fix(i.url),i);}catch(e){}return of.call(self,i,o);};try{self.fetch=wf;}catch(e){}}
+})();
+`
+}
+
 func rewriteJSRootStrings(js, prefix string) string {
 	js = jsRootDouble.ReplaceAllStringFunc(js, func(m string) string {
 		g := jsRootDouble.FindStringSubmatch(m)
 		return `"` + prefixRootRel(g[1], prefix) + `"`
 	})
-	return jsRootSingle.ReplaceAllStringFunc(js, func(m string) string {
+	js = jsRootSingle.ReplaceAllStringFunc(js, func(m string) string {
 		g := jsRootSingle.FindStringSubmatch(m)
 		return `'` + prefixRootRel(g[1], prefix) + `'`
 	})
+	return jsRootBacktick.ReplaceAllStringFunc(js, func(m string) string {
+		g := jsRootBacktick.FindStringSubmatch(m)
+		return "`" + prefixRootRel(g[1], prefix) + "`"
+	})
+}
+
+func rewriteImportScripts(js, upstreamOrigin, prefix string) string {
+	var b strings.Builder
+	rest := js
+	for {
+		loc := importScriptsCall.FindStringIndex(rest)
+		if loc == nil {
+			b.WriteString(rest)
+			break
+		}
+		b.WriteString(rest[:loc[0]])
+		rest = rest[loc[0]:]
+		end := strings.IndexByte(rest, ')')
+		if end < 0 {
+			b.WriteString(rest)
+			break
+		}
+		call := rest[:end+1]
+		if upstreamOrigin != "" {
+			call = strings.ReplaceAll(call, upstreamOrigin, prefix)
+		}
+		b.WriteString(rewriteJSRootStrings(call, prefix))
+		rest = rest[end+1:]
+	}
+	return b.String()
 }
 
 func rewriteRefreshHeader(refresh, prefix string) string {
@@ -472,10 +571,11 @@ func rewriteCookiePath(cookie, prefix string) string {
 func injectShim(html, prefix string) string {
 	shim := `<script>(function(){var p=` + jsString(prefix) + `;
 function fix(u){if(typeof u!=="string")return u;if(u.charAt(0)==="/"&&u.charAt(1)!=="/"&&u.indexOf(p)!==0)return p+u;var o=location.origin;if(u.indexOf(o+"/")===0&&u.slice(o.length).indexOf(p)!==0)return o+p+u.slice(o.length);var wo=(location.protocol==="https:"?"wss://":"ws://")+location.host;if(u.indexOf(wo+"/")===0&&u.slice(wo.length).indexOf(p)!==0)return wo+p+u.slice(wo.length);return u;}
+function fixu(u){if(typeof u==="string")return fix(u);if(u&&typeof u.href==="string"){var h=fix(u.href);if(h!==u.href)return h;}return u;}
 var of=window.fetch;if(of){window.fetch=function(i,o){try{if(typeof i==="string")i=fix(i);else if(i&&i.url)i=new Request(fix(i.url),i);}catch(e){}return of.call(this,i,o);};}
 var ox=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){return ox.apply(this,[m,fix(u)].concat([].slice.call(arguments,2)));};
 var owo=window.open;if(owo)window.open=function(u,n,f){return owo.call(window,typeof u==="string"?fix(u):u,n,f);};
-function wrap(C){if(!C)return C;function W(){var a=[].slice.call(arguments);if(a.length)a[0]=fix(a[0]);return new (Function.prototype.bind.apply(C,[null].concat(a)))();}W.prototype=C.prototype;["CONNECTING","OPEN","CLOSING","CLOSED"].forEach(function(k){if(k in C)W[k]=C[k];});return W;}
+function wrap(C){if(!C)return C;function W(){var a=[].slice.call(arguments);if(a.length)a[0]=fixu(a[0]);return new (Function.prototype.bind.apply(C,[null].concat(a)))();}W.prototype=C.prototype;["CONNECTING","OPEN","CLOSING","CLOSED"].forEach(function(k){if(k in C)W[k]=C[k];});return W;}
 try{window.WebSocket=wrap(window.WebSocket);window.EventSource=wrap(window.EventSource);window.Worker=wrap(window.Worker);}catch(e){}
 function patch(proto,prop){var d=Object.getOwnPropertyDescriptor(proto,prop);if(d&&d.set)Object.defineProperty(proto,prop,{configurable:true,enumerable:d.enumerable,get:function(){return d.get.call(this);},set:function(v){d.set.call(this,fix(v));}});}
 try{patch(HTMLScriptElement.prototype,"src");patch(HTMLLinkElement.prototype,"href");patch(HTMLImageElement.prototype,"src");patch(HTMLAnchorElement.prototype,"href");}catch(e){}
@@ -485,6 +585,7 @@ var sa=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,
 try{var lh=Object.getOwnPropertyDescriptor(Location.prototype,"href");if(lh&&lh.set)Object.defineProperty(location,"href",{configurable:true,get:function(){return lh.get.call(location);},set:function(v){lh.set.call(location,fix(v));}});}catch(e){}
 document.addEventListener("click",function(e){var t=e.target;var a=t&&t.closest?t.closest("a[href],area[href]"):null;if(!a)return;var raw=a.getAttribute("href");if(!raw)return;var g=fix(raw);if(g!==raw)a.setAttribute("href",g);},true);
 document.addEventListener("submit",function(e){var f=e.target;if(!f||f.tagName!=="FORM")return;var raw=f.getAttribute("action");if(!raw)return;var g=fix(raw);if(g!==raw)f.setAttribute("action",g);},true);
+if(navigator.serviceWorker&&navigator.serviceWorker.register){try{var swc=navigator.serviceWorker;var oswr=swc.register.bind(swc);var swr=function(u,o){try{u=fixu(u);if(o&&typeof o.scope==="string"){var n={};for(var k in o)n[k]=o[k];n.scope=fix(o.scope);o=n;}else if(o&&o.scope&&typeof o.scope.href==="string"){var n2={};for(var k2 in o)n2[k2]=o[k2];n2.scope=fixu(o.scope);o=n2;}}catch(e){}return oswr(u,o);};try{swc.register=swr;}catch(e){}try{Object.defineProperty(swc,"register",{configurable:true,value:swr});}catch(e){}}catch(e){}}
 if(navigator.serviceWorker){try{navigator.serviceWorker.register(p+"/` + SWFile + `").then(function(){if(!navigator.serviceWorker.controller){var k="scnsw:"+p;if(!sessionStorage.getItem(k)){sessionStorage.setItem(k,"1");navigator.serviceWorker.ready.then(function(){location.reload();});}}});}catch(e){}}
 })();</script>`
 	if i := headInsertIndex(html); i >= 0 {

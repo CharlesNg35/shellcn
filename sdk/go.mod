@@ -3,6 +3,7 @@ module github.com/charlesng35/shellcn/sdk
 go 1.26.4
 
 require (
+	github.com/andybalholm/brotli v1.2.2
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/hashicorp/go-plugin v1.8.0
 	google.golang.org/grpc v1.79.3
