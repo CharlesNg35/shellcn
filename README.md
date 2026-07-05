@@ -87,8 +87,12 @@ export SHELLCN_BOOTSTRAP_ADMIN_PASSWORD=change-me
 
 It serves on `:8081` and keeps its data in the working directory.
 
-> **Early days.** ShellCN is in active development, so expect a few rough edges. Please feel
-> free to take it for a spin and tell us what breaks. Issues and feedback are very welcome.
+For the full configuration surface, see [`config.example.yaml`](config.example.yaml) or
+[`.env.sample`](.env.sample).
+
+> **Early days.** ShellCN is in active development, so expect a few rough edges.
+> Take it for a spin and tell us what breaks. Issues, feedback, and contributions
+> are very welcome.
 
 ## Extending it
 
