@@ -104,6 +104,34 @@ func TestCloneBody(t *testing.T) {
 	})
 }
 
+func TestGuestInterfaceMappers(t *testing.T) {
+	t.Run("qemu agent groups v4/v6 and drops loopback", func(t *testing.T) {
+		obj := plugin.TableRow{"result": []any{
+			map[string]any{"name": "lo", "ip-addresses": []any{map[string]any{"ip-address": "127.0.0.1", "ip-address-type": "ipv4"}}},
+			map[string]any{"name": "eth0", "hardware-address": "aa:bb:cc:dd:ee:ff", "ip-addresses": []any{
+				map[string]any{"ip-address": "10.0.0.5", "ip-address-type": "ipv4"},
+				map[string]any{"ip-address": "fe80::1", "ip-address-type": "ipv6"},
+			}},
+		}}
+		rows := qemuAgentInterfaces(obj)
+		if len(rows) != 1 {
+			t.Fatalf("expected loopback dropped, got %d rows", len(rows))
+		}
+		if rows[0]["name"] != "eth0" || rows[0]["hwaddr"] != "aa:bb:cc:dd:ee:ff" || rows[0]["ipv4"] != "10.0.0.5" || rows[0]["ipv6"] != "fe80::1" {
+			t.Fatalf("row = %+v", rows[0])
+		}
+	})
+	t.Run("lxc maps inet fields", func(t *testing.T) {
+		rows := lxcInterfaces([]plugin.TableRow{
+			{"name": "lo"},
+			{"name": "eth0", "hwaddr": "12:34:56:78:9a:bc", "inet": "10.0.0.9/24", "inet6": "fe80::9/64"},
+		})
+		if len(rows) != 1 || rows[0]["ipv4"] != "10.0.0.9/24" || rows[0]["ipv6"] != "fe80::9/64" {
+			t.Fatalf("rows = %+v", rows)
+		}
+	})
+}
+
 func TestRestoreBody(t *testing.T) {
 	t.Run("qemu uses archive", func(t *testing.T) {
 		b, err := restoreBody("qemu", "300", "local:backup/vzdump-qemu-100.vma.zst", "local-lvm", true)

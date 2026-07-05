@@ -385,6 +385,29 @@ func TestStorageColumnsExposeCapacityUsage(t *testing.T) {
 	}
 }
 
+func TestSortRowsOrdersNumericColumnsByValue(t *testing.T) {
+	rows := []plugin.TableRow{
+		{"name": "big", "mem": numInt(float64(10_000_000_000)), "vmid": numInt(float64(100))},
+		{"name": "small", "mem": numInt(float64(9_000_000_000)), "vmid": numInt(float64(9))},
+	}
+	sortRows(rows, []plugin.SortKey{{Field: "mem"}})
+	if rows[0]["name"] != "small" || rows[1]["name"] != "big" {
+		t.Fatalf("mem ascending order wrong: %v, %v", rows[0]["name"], rows[1]["name"])
+	}
+	sortRows(rows, []plugin.SortKey{{Field: "vmid", Desc: true}})
+	if rows[0]["name"] != "big" {
+		t.Fatalf("vmid descending should put vmid 100 first, got %v", rows[0]["name"])
+	}
+	ts := []plugin.TableRow{
+		{"name": "later", "starttime": "2026-07-05T10:00:00Z"},
+		{"name": "earlier", "starttime": "2026-07-05T09:00:00Z"},
+	}
+	sortRows(ts, []plugin.SortKey{{Field: "starttime"}})
+	if ts[0]["name"] != "earlier" {
+		t.Fatalf("timestamp ascending order wrong: %v first", ts[0]["name"])
+	}
+}
+
 func TestBackupSchemaUsesStoragePicker(t *testing.T) {
 	var field *plugin.Field
 	for _, group := range backupSchema().Groups {
