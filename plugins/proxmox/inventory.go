@@ -109,7 +109,7 @@ func nodeStatusConfig() plugin.ObjectDetailConfig {
 				{Key: "node", Label: "Node"},
 				{Key: "pveversion", Label: "PVE version"},
 				{Key: "kversion", Label: "Kernel"},
-				{Key: "uptime", Label: "Uptime", Type: plugin.ColumnNumber},
+				{Key: "uptime", Label: "Uptime", Type: plugin.ColumnDuration},
 			}},
 			{Title: "Runtime", Fields: []plugin.ObjectDetailField{
 				{Key: "cpu", Label: "CPU usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpu", WarnAt: 75, CriticalAt: 90}},

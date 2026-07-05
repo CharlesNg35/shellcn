@@ -137,7 +137,7 @@ func guestColumns() []plugin.Column {
 		{Key: "cpu", Label: "CPU", Type: plugin.ColumnPercent, Sortable: true, Precision: oneDecimal()},
 		{Key: "mem", Label: "Memory used", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "maxmem", Label: "Memory limit", Type: plugin.ColumnBytes, Sortable: true},
-		{Key: "uptime", Label: "Uptime", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "uptime", Label: "Uptime", Type: plugin.ColumnDuration, Sortable: true},
 		{Key: "tags", Label: "Tags"},
 	}
 }
@@ -225,7 +225,7 @@ func nodeResource() plugin.ResourceType {
 		{Key: "cpu", Label: "CPU", Type: plugin.ColumnPercent, Sortable: true, Precision: oneDecimal()},
 		{Key: "mem", Label: "Memory", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "maxmem", Label: "Total", Type: plugin.ColumnBytes, Sortable: true},
-		{Key: "uptime", Label: "Uptime", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "uptime", Label: "Uptime", Type: plugin.ColumnDuration, Sortable: true},
 	}
 	nodeParam := map[string]string{"node": "${resource.uid}"}
 	return plugin.ResourceType{
@@ -337,7 +337,7 @@ func guestOverviewConfig() plugin.ObjectDetailConfig {
 			{Title: "Runtime", Fields: []plugin.ObjectDetailField{
 				{Key: "cpu", Label: "CPU usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpu", TotalKey: "cpuTotal", TotalType: plugin.ColumnNumber, TotalLabel: "of", Unit: "CPU(s)", WarnAt: 75, CriticalAt: 90}},
 				{Key: "memPct", Label: "Memory usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "memPct", UsedKey: "mem", TotalKey: "maxmem", UsedType: plugin.ColumnBytes, TotalType: plugin.ColumnBytes, WarnAt: 80, CriticalAt: 95}},
-				{Key: "uptime", Label: "Uptime", Type: plugin.ColumnNumber},
+				{Key: "uptime", Label: "Uptime", Type: plugin.ColumnDuration},
 				{Key: "lock", Label: "Lock"},
 				{Key: "ha", Label: "HA state"},
 			}},
@@ -457,11 +457,11 @@ func mountFields() []plugin.ObjectDetailField {
 func cpuMemMetrics() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
 		Stats: []plugin.MetricStat{
-			{Key: "uptime", Label: "Uptime"},
-			{Key: "diskRead", Label: "Disk read", Unit: "B"},
-			{Key: "diskWrite", Label: "Disk write", Unit: "B"},
-			{Key: "netIn", Label: "Net in", Unit: "B"},
-			{Key: "netOut", Label: "Net out", Unit: "B"},
+			{Key: "uptime", Label: "Uptime", Unit: "s"},
+			{Key: "diskRead", Label: "Disk read", Unit: "bytes"},
+			{Key: "diskWrite", Label: "Disk write", Unit: "bytes"},
+			{Key: "netIn", Label: "Net in", Unit: "bytes"},
+			{Key: "netOut", Label: "Net out", Unit: "bytes"},
 		},
 		Usage: []plugin.MetricUsage{
 			{Key: "cpu", Label: "CPU usage", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpu", TotalKey: "cpuTotal", TotalType: plugin.ColumnNumber, TotalLabel: "of", Unit: "CPU(s)", WarnAt: 75, CriticalAt: 90}},

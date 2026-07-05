@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,8 @@ import (
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
+
+const statusClientClosedRequest = 499
 
 type errorEnvelope struct {
 	Error string `json:"error"`
@@ -31,6 +34,10 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 // statusFor maps a sentinel error to an HTTP status (the boundary normalization).
 func statusFor(err error) int {
 	switch {
+	case errors.Is(err, context.Canceled):
+		return statusClientClosedRequest
+	case errors.Is(err, context.DeadlineExceeded):
+		return http.StatusGatewayTimeout
 	case errors.Is(err, plugin.ErrInvalidInput), errors.Is(err, models.ErrInvalidInput):
 		return http.StatusBadRequest
 	case errors.Is(err, plugin.ErrUnauthorized), errors.Is(err, auth.ErrInvalidCredentials):

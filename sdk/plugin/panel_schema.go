@@ -539,7 +539,7 @@ func columnObject() PanelConfigProperty {
 			prop("key", stringProp()),
 			prop("label", stringProp()),
 			prop("sortable", boolProp()),
-			prop("type", enum("text", "badge", "bytes", "datetime", "relative_time", "number", "percent", "bool", "json", "icon")),
+			prop("type", enum("text", "badge", "bytes", "datetime", "relative_time", "duration", "number", "percent", "bool", "json", "icon")),
 			prop("width", stringProp()),
 			prop("editable", boolProp()),
 			prop("editor", enum("text", "textarea", "number", "toggle", "select", "json")),

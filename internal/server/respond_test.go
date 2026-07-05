@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -55,5 +56,26 @@ func TestWriteErrorServerFaultHidesDetail(t *testing.T) {
 	}
 	if body := rec.Body.String(); strings.Contains(body, "secret internal detail") {
 		t.Errorf("internal detail leaked: %s", body)
+	}
+}
+
+func TestWriteErrorContextCanceledIsClientClosed(t *testing.T) {
+	rec := httptest.NewRecorder()
+	writeError(rec, nil, fmt.Errorf("upstream request: %w", context.Canceled))
+
+	if rec.Code != statusClientClosedRequest {
+		t.Fatalf("status: want %d, got %d", statusClientClosedRequest, rec.Code)
+	}
+}
+
+func TestWriteErrorDeadlineExceededIsGatewayTimeout(t *testing.T) {
+	rec := httptest.NewRecorder()
+	writeError(rec, nil, fmt.Errorf("upstream request: %w", context.DeadlineExceeded))
+
+	if rec.Code != http.StatusGatewayTimeout {
+		t.Fatalf("status: want 504, got %d", rec.Code)
+	}
+	if body := rec.Body.String(); strings.Contains(body, "upstream request") {
+		t.Errorf("timeout detail leaked: %s", body)
 	}
 }

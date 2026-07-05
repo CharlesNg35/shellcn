@@ -52,14 +52,18 @@ func mapErr(err error) error {
 		return nil
 	}
 	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return err
 	case errors.Is(err, pmox.ErrNotFound):
 		return fmt.Errorf("%w: %v", plugin.ErrNotFound, err)
 	case errors.Is(err, pmox.ErrNotAuthorized):
 		return fmt.Errorf("%w: %v", plugin.ErrForbidden, err)
 	case errors.Is(err, pmox.ErrTimeout):
 		return fmt.Errorf("%w: %v", plugin.ErrUnavailable, err)
+	case strings.HasPrefix(err.Error(), "bad request:"):
+		return fmt.Errorf("%w: %v", plugin.ErrInvalidInput, err)
 	default:
-		return err
+		return fmt.Errorf("%w: proxmox api: %v", plugin.ErrUnavailable, err)
 	}
 }
 

@@ -16,8 +16,11 @@ const metricsInterval = 10 * time.Second
 // ClusterMetrics streams cluster-wide CPU/memory/pod usage vs capacity. Frames
 // degrade gracefully (metricsAvailable=false) when metrics-server is absent.
 func ClusterMetrics(rc *plugin.RequestContext, client plugin.ClientStream) error {
+	s, err := sess(rc)
+	if err != nil {
+		return err
+	}
 	return metricsLoop(rc, client, func(ctx context.Context) map[string]any {
-		s, _ := sess(rc)
 		return s.clusterFrame(ctx)
 	})
 }
@@ -25,8 +28,11 @@ func ClusterMetrics(rc *plugin.RequestContext, client plugin.ClientStream) error
 // NodeMetrics streams one node's CPU/memory usage vs capacity.
 func NodeMetrics(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	node := rc.Param("name")
+	s, err := sess(rc)
+	if err != nil {
+		return err
+	}
 	return metricsLoop(rc, client, func(ctx context.Context) map[string]any {
-		s, _ := sess(rc)
 		return s.nodeFrame(ctx, node)
 	})
 }
@@ -35,8 +41,11 @@ func NodeMetrics(rc *plugin.RequestContext, client plugin.ClientStream) error {
 // context when metrics-server is installed.
 func PodMetrics(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	namespace, name := rc.Param("namespace"), rc.Param("name")
+	s, err := sess(rc)
+	if err != nil {
+		return err
+	}
 	return metricsLoop(rc, client, func(ctx context.Context) map[string]any {
-		s, _ := sess(rc)
 		return s.podFrame(ctx, namespace, name)
 	})
 }

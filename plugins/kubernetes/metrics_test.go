@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"testing"
 
@@ -41,6 +42,13 @@ func TestClusterFrameWithMetrics(t *testing.T) {
 	}
 	if cpuPct, _ := frame["cpuPct"].(float64); cpuPct < 49 || cpuPct > 51 {
 		t.Fatalf("cpuPct = %v, want ~50", frame["cpuPct"])
+	}
+}
+
+func TestPodMetricsReturnsSessionError(t *testing.T) {
+	err := PodMetrics(rc(nil, map[string]string{"namespace": "default", "name": "web"}), &captureClient{ctx: context.Background()})
+	if !errors.Is(err, plugin.ErrUnavailable) {
+		t.Fatalf("PodMetrics error = %v, want ErrUnavailable", err)
 	}
 }
 

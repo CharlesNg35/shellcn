@@ -48,6 +48,7 @@ import {
 } from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import { formatBytes } from "../file/fileTypes";
+import { formatDurationSeconds } from "../specialized/objectDetailFormat";
 import { dialogRoot, inputClass } from "@/primevue/preset";
 import { cn } from "@/utils/cn";
 import {
@@ -227,6 +228,7 @@ const TYPE_COLUMN_WIDTH: Partial<
   [ColumnType.Bool]: "8rem",
   [ColumnType.Bytes]: "9rem",
   [ColumnType.DateTime]: "14rem",
+  [ColumnType.Duration]: "9rem",
   [ColumnType.Icon]: "3rem",
   [ColumnType.Number]: "9rem",
   [ColumnType.Json]: "22rem",
@@ -773,6 +775,8 @@ function display(row: Row, col: ColumnSpec): string {
   }
   if (col.type === ColumnType.Bytes && typeof v === "number")
     return formatBytes(v);
+  if (col.type === ColumnType.Duration && typeof v === "number")
+    return formatDurationSeconds(v);
   if (
     (col.type === ColumnType.Number || col.type === ColumnType.Percent) &&
     typeof v === "number"

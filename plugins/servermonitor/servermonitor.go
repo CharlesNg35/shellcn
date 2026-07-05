@@ -136,7 +136,7 @@ func systemOverviewConfig() plugin.ObjectDetailConfig {
 				{Key: "hostname", Label: "Name", Copy: true},
 				{Key: "platform", Label: "Platform"},
 				{Key: "platformVersion", Label: "Version"},
-				{Key: "uptimeSeconds", Label: "Uptime (seconds)", Type: plugin.ColumnNumber},
+				{Key: "uptimeSeconds", Label: "Uptime", Type: plugin.ColumnDuration},
 			}},
 			{Title: "Usage", Fields: []plugin.ObjectDetailField{
 				{Key: "cpuPct", Label: "CPU", Type: plugin.ColumnPercent, Usage: &plugin.UsageSpec{PercentKey: "cpuPct", WarnAt: 75, CriticalAt: 90}},

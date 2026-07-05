@@ -53,6 +53,7 @@ export const ColumnType = {
   Bytes: "bytes",
   DateTime: "datetime",
   RelativeTime: "relative_time",
+  Duration: "duration",
   Number: "number",
   Percent: "percent",
   Bool: "bool",

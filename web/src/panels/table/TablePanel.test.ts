@@ -864,6 +864,36 @@ describe("TablePanel staged edits", () => {
     w.unmount();
   });
 
+  it("formats duration columns from seconds", async () => {
+    installFetch(() => ({
+      body: {
+        items: [
+          {
+            ref: { kind: "qemu", name: "Win11", uid: "100" },
+            uptime: 3_093_695,
+          },
+        ],
+        nextCursor: "",
+        total: 1,
+      },
+    }));
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "proxmox.qemu.list" },
+        config: {
+          columns: [
+            { key: "name", label: "Name" },
+            { key: "uptime", label: "Uptime", type: "duration" },
+          ],
+        },
+      },
+    });
+    await flushPromises();
+    expect(w.text()).toContain("35d 19h");
+    w.unmount();
+  });
+
   it("updates relative-time columns without refetching rows", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-05T12:00:00Z"));
