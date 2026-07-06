@@ -296,11 +296,14 @@ describe("primeVuePassthrough", () => {
   it("styles PrimeVue tooltip directive overlays", () => {
     expect(primeVuePassthrough.directives.tooltip.root).toContain("absolute");
     expect(primeVuePassthrough.directives.tooltip.root).toContain("z-[1100]");
+    expect(primeVuePassthrough.directives.tooltip.root).toContain("isolate");
     expect(primeVuePassthrough.directives.tooltip.text).toContain(
       "bg-surface-950",
     );
     expect(primeVuePassthrough.directives.tooltip.text).toContain("text-xs");
+    expect(primeVuePassthrough.directives.tooltip.text).toContain("z-10");
     expect(primeVuePassthrough.directives.tooltip.arrow).toContain("rotate-45");
+    expect(primeVuePassthrough.directives.tooltip.arrow).toContain("z-0");
   });
 
   it("styles autocomplete token mode before it is used by scope controls", () => {

@@ -555,9 +555,10 @@ export const primeVuePassthrough = {
 
   directives: {
     tooltip: {
-      root: "pointer-events-none absolute z-[1100] max-w-xs",
-      text: "rounded-md bg-surface-950 px-2 py-1 text-xs font-medium text-surface-0 shadow-lg ring-1 ring-surface-0/10 dark:bg-surface-100 dark:text-surface-950 dark:ring-surface-950/10",
-      arrow: "absolute h-2 w-2 rotate-45 bg-surface-950 dark:bg-surface-100",
+      root: "pointer-events-none absolute isolate z-[1100] max-w-xs",
+      text: "relative z-10 rounded-md bg-surface-950 px-2 py-1 text-xs font-medium text-surface-0 shadow-lg ring-1 ring-surface-0/10 dark:bg-surface-100 dark:text-surface-950 dark:ring-surface-950/10",
+      arrow:
+        "absolute z-0 h-2 w-2 rotate-45 bg-surface-950 dark:bg-surface-100",
     },
   },
 
