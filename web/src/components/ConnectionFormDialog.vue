@@ -5,6 +5,7 @@ import Select from "primevue/select";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
 import Tag from "primevue/tag";
+import Tooltip from "primevue/tooltip";
 import { useRouter } from "vue-router";
 import { ApiError } from "../api/client";
 import { connectionsApi } from "../api/connections";
@@ -35,6 +36,7 @@ const emit = defineEmits<{
 const conns = useConnectionsStore();
 const notify = useNotify();
 const router = useRouter();
+const vTooltip = Tooltip;
 
 const isEdit = computed(() => Boolean(props.connectionId));
 const protocol = ref("");
@@ -78,6 +80,10 @@ const transportLabel = computed(
     transportChoices.value.find((choice) => choice.value === transport.value)
       ?.label ?? (transport.value === "agent" ? "Agent" : "Direct"),
 );
+const transportTooltip = computed(() => ({
+  value: `Transport: ${transportLabel.value}`,
+  showDelay: 300,
+}));
 const schemaContext = computed(() => ({
   $protocol: protocol.value,
   $transport: transport.value,
@@ -319,7 +325,13 @@ async function onConfig(
               }}</span>
             </span>
           </span>
-          <Tag :value="transportLabel" severity="secondary" class="shrink-0" />
+          <Tag
+            v-tooltip.bottom="transportTooltip"
+            :value="transportLabel"
+            severity="secondary"
+            class="shrink-0 cursor-default"
+            :aria-label="transportTooltip.value"
+          />
         </nav>
 
         <div class="flex min-w-0 flex-col gap-1.5">

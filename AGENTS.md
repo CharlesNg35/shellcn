@@ -13,13 +13,13 @@ projection — **adding a plugin requires zero frontend changes.**
 
 **Authoritative docs (read before coding):**
 
-- [`specs/project.md`](specs/project.md) — architecture (source of truth).
+- [`docs/specs/project.md`](docs/specs/project.md) — architecture (source of truth).
 - [`specs/plans/`](specs/plans/) — phased, numbered build steps (each with a sub-task checklist + Definition of Done).
 - [`specs/plugins.md`](specs/plugins.md) — plugin roadmap.
 
 ## How to work here
 
-1. Read `specs/project.md` (relevant section) + the current phase's step files first.
+1. Read `docs/specs/project.md` (relevant section) + the current phase's step files first.
 2. Follow the **phase order** (UI-first: M0 declarative UI on fixtures → M1 core →
    M2 SSH → …). Don't jump ahead.
 3. After finishing a step: tick its sub-tasks, set the step file's

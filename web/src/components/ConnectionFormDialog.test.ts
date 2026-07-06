@@ -322,6 +322,9 @@ describe("ConnectionFormDialog", () => {
     await flushPromises();
 
     expect(wrapper.findComponent(Tag).props("value")).toBe("Direct");
+    expect(wrapper.findComponent(Tag).attributes("aria-label")).toBe(
+      "Transport: Direct",
+    );
     expect(wrapper.findAllComponents(Select)).toHaveLength(0);
   });
 
@@ -352,11 +355,17 @@ describe("ConnectionFormDialog", () => {
     await flushPromises();
 
     expect(wrapper.findComponent(Tag).props("value")).toBe("Direct");
+    expect(wrapper.findComponent(Tag).attributes("aria-label")).toBe(
+      "Transport: Direct",
+    );
 
     wrapper.findComponent(Select).vm.$emit("update:modelValue", "agent");
     await flushPromises();
 
     expect(wrapper.findComponent(Tag).props("value")).toBe("Agent");
+    expect(wrapper.findComponent(Tag).attributes("aria-label")).toBe(
+      "Transport: Agent",
+    );
   });
 
   it("posts connection AI auto-approval settings", async () => {
