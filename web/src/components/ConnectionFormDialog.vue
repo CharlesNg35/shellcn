@@ -4,6 +4,7 @@ import Dialog from "primevue/dialog";
 import Select from "primevue/select";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
+import Tag from "primevue/tag";
 import { useRouter } from "vue-router";
 import { ApiError } from "../api/client";
 import { connectionsApi } from "../api/connections";
@@ -71,6 +72,11 @@ const transportChoices = computed(() =>
     label: t === "agent" ? "Agent" : "Direct",
     value: t,
   })),
+);
+const transportLabel = computed(
+  () =>
+    transportChoices.value.find((choice) => choice.value === transport.value)
+      ?.label ?? (transport.value === "agent" ? "Agent" : "Direct"),
 );
 const schemaContext = computed(() => ({
   $protocol: protocol.value,
@@ -290,22 +296,30 @@ async function onConfig(
       </div>
 
       <template v-if="projection">
-        <nav aria-label="Breadcrumb" class="flex items-center gap-1.5 text-sm">
-          <Button v-if="!isEdit" link @click="clearProtocol">
-            Protocols
-          </Button>
-          <span v-if="!isEdit" class="text-surface-400" aria-hidden="true"
-            >/</span
-          >
-          <span
-            class="inline-flex items-center gap-1.5 font-medium text-surface-900 dark:text-surface-100"
-          >
-            <AppIcon
-              :icon="selectedPlugin?.icon ?? projection.icon"
-              :size="15"
-            />
-            {{ selectedPlugin?.title ?? projection.title }}
+        <nav
+          aria-label="Breadcrumb"
+          class="flex min-w-0 items-center justify-between gap-3 text-sm"
+        >
+          <span class="inline-flex min-w-0 items-center gap-1.5">
+            <Button v-if="!isEdit" link @click="clearProtocol">
+              Protocols
+            </Button>
+            <span v-if="!isEdit" class="text-surface-400" aria-hidden="true"
+              >/</span
+            >
+            <span
+              class="inline-flex min-w-0 items-center gap-1.5 font-medium text-surface-900 dark:text-surface-100"
+            >
+              <AppIcon
+                :icon="selectedPlugin?.icon ?? projection.icon"
+                :size="15"
+              />
+              <span class="truncate">{{
+                selectedPlugin?.title ?? projection.title
+              }}</span>
+            </span>
           </span>
+          <Tag :value="transportLabel" severity="secondary" class="shrink-0" />
         </nav>
 
         <div class="flex min-w-0 flex-col gap-1.5">
@@ -341,7 +355,6 @@ async function onConfig(
             @update:model-value="transport = $event"
           />
         </div>
-
         <SchemaForm
           :key="`${protocol}:${isEdit ? 'edit' : 'create'}`"
           ref="formRef"

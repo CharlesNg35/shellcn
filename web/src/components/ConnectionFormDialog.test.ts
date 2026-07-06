@@ -4,6 +4,7 @@ import { setActivePinia, createPinia } from "pinia";
 import Select from "primevue/select";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
+import Tag from "primevue/tag";
 import { installFetch } from "../test/fetchMock";
 import { useConnectionsStore } from "../stores/connections";
 import { useAuthStore } from "../stores/auth";
@@ -296,6 +297,66 @@ describe("ConnectionFormDialog", () => {
     // Protocol is a card picker and there's no recording select for an
     // unsupported plugin, so no Select is rendered at all.
     expect(wrapper.findAllComponents(Select)).toHaveLength(0);
+  });
+
+  it("shows the selected transport badge in the protocol header", async () => {
+    installFetch((url) => {
+      if (url.endsWith("/api/plugins/tester")) return { body: projection };
+      return { body: [] };
+    });
+    const conns = useConnectionsStore();
+    conns.plugins = [
+      {
+        name: "tester",
+        title: "Tester",
+        icon: { type: "lucide", value: "box" },
+        category: projection.category,
+      },
+    ];
+
+    const wrapper = mount(ConnectionFormDialog, { props: { visible: true } });
+    await flushPromises();
+    await wrapper
+      .findComponent(ProtocolPicker)
+      .vm.$emit("update:modelValue", "tester");
+    await flushPromises();
+
+    expect(wrapper.findComponent(Tag).props("value")).toBe("Direct");
+    expect(wrapper.findAllComponents(Select)).toHaveLength(0);
+  });
+
+  it("updates the transport badge when the selector changes", async () => {
+    const multiTransport: PluginProjection = {
+      ...projection,
+      supportedTransports: ["direct", "agent"],
+    };
+    installFetch((url) => {
+      if (url.endsWith("/api/plugins/tester")) return { body: multiTransport };
+      return { body: [] };
+    });
+    const conns = useConnectionsStore();
+    conns.plugins = [
+      {
+        name: "tester",
+        title: "Tester",
+        icon: { type: "lucide", value: "box" },
+        category: projection.category,
+      },
+    ];
+
+    const wrapper = mount(ConnectionFormDialog, { props: { visible: true } });
+    await flushPromises();
+    await wrapper
+      .findComponent(ProtocolPicker)
+      .vm.$emit("update:modelValue", "tester");
+    await flushPromises();
+
+    expect(wrapper.findComponent(Tag).props("value")).toBe("Direct");
+
+    wrapper.findComponent(Select).vm.$emit("update:modelValue", "agent");
+    await flushPromises();
+
+    expect(wrapper.findComponent(Tag).props("value")).toBe("Agent");
   });
 
   it("posts connection AI auto-approval settings", async () => {
