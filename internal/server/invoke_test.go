@@ -138,6 +138,29 @@ func TestInvokeRouteResolvesPathParams(t *testing.T) {
 	}
 }
 
+func TestInvokeRouteRedactsSecretAuditParams(t *testing.T) {
+	h := newHarness(t)
+	_, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "tester.redact", map[string]string{
+		"name":     "visible",
+		"password": "correct-horse",
+	}, nil)
+	if err != nil {
+		t.Fatalf("invoke tester.redact: %v", err)
+	}
+	for _, r := range auditRows(t, h, "c-op") {
+		if r.RouteID == "tester.redact" && r.Result == models.AuditAllowed {
+			if got := r.Params["password"]; got != "***" {
+				t.Fatalf("password audit param = %q, want redacted placeholder", got)
+			}
+			if got := r.Params["name"]; got != "visible" {
+				t.Fatalf("name audit param = %q, want visible", got)
+			}
+			return
+		}
+	}
+	t.Fatal("missing allowed audit row for tester.redact")
+}
+
 func TestInvokeRouteRejectsStreamRoutes(t *testing.T) {
 	h := newHarness(t)
 	if _, err := h.srv.InvokeRoute(context.Background(), h.user(t, "op"), "c-op", "tester.ws", nil, nil); !errors.Is(err, plugin.ErrNotSupported) {

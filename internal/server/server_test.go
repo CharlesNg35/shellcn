@@ -112,6 +112,17 @@ func (testPlugin) Routes() []plugin.Route {
 			Handle: func(rc *plugin.RequestContext) (any, error) { return map[string]string{"name": rc.Param("name")}, nil },
 		},
 		{
+			ID: "tester.redact", Method: plugin.MethodGet, Permission: "tester.read", Risk: plugin.RiskSafe, AuditEvent: "tester.redact",
+			Path: "/redact/{password}",
+			Input: &plugin.Schema{Groups: []plugin.Group{{Name: "Params", Fields: []plugin.Field{
+				{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true},
+				{Key: "name", Label: "Name", Type: plugin.FieldText},
+			}}}},
+			Handle: func(rc *plugin.RequestContext) (any, error) {
+				return map[string]string{"password": rc.Param("password"), "name": rc.Param("name")}, nil
+			},
+		},
+		{
 			ID: "tester.danger", Method: plugin.MethodDelete, Permission: "tester.delete", Risk: plugin.RiskDestructive, AuditEvent: "tester.danger",
 			Handle: func(*plugin.RequestContext) (any, error) { return map[string]bool{"ok": true}, nil },
 		},

@@ -14,18 +14,13 @@ projection — **adding a plugin requires zero frontend changes.**
 **Authoritative docs (read before coding):**
 
 - [`docs/specs/project.md`](docs/specs/project.md) — architecture (source of truth).
-- [`specs/plans/`](specs/plans/) — phased, numbered build steps (each with a sub-task checklist + Definition of Done).
-- [`specs/plugins.md`](specs/plugins.md) — plugin roadmap.
 
 ## How to work here
 
-1. Read `docs/specs/project.md` (relevant section) + the current phase's step files first.
-2. Follow the **phase order** (UI-first: M0 declarative UI on fixtures → M1 core →
-   M2 SSH → …). Don't jump ahead.
-3. After finishing a step: tick its sub-tasks, set the step file's
-   **`Status: ✅ Done`**
-4. A step is done only when its **tests pass**; a phase only when its e2e is green.
-5. **After implementing anything, always run `make fmt`, then `make lint` and
+1. Read `docs/specs/project.md` (relevant section) before coding.
+2. Keep changes aligned with the manifest-driven architecture and existing plugin/core boundaries.
+3. A change is done only when its tests pass.
+4. **After implementing anything, always run `make fmt`, then `make lint` and
    `make test` — all must be green before you finish or hand off.** Never leave
    code unformatted or tests/lint failing. See [Commands](#commands).
 
@@ -45,7 +40,7 @@ projection — **adding a plugin requires zero frontend changes.**
   - **No references to the spec, milestones, tasks, or PRs in source files** —
     e.g. never write `(v2 §14)`, `// per M0`, or `// added for issue #12`. That
     metadata rots as the code evolves; keep it in the PR description or docs.
-    Spec citations belong in `specs/`, not in `.go`/`.ts`/`.vue` files.
+    Spec citations belong in docs, not in `.go`/`.ts`/`.vue` files.
 - **Small, focused units.** No god-components, no mixing concerns in one file —
   split into small components + composables (frontend) and small packages +
   functions (Go). DX matters.
@@ -116,7 +111,7 @@ projection — **adding a plugin requires zero frontend changes.**
 - `make dev-web` / `make dev-api` — Vite HMR / Go server (`--dev`, proxies `/api`)
 - `make fmt` — format Go (gofumpt) + frontend (Prettier)
 - `make lint` — golangci-lint + ESLint · `make test` — `go test -race` + Vitest
-- **Run `make fmt && make lint && make test` after every change** (see [How to work here](#how-to-work-here), step 5).
+- **Run `make fmt && make lint && make test` after every change** (see [How to work here](#how-to-work-here), step 4).
 - GORM runs `AutoMigrate` on startup — no codegen, no migrate target.
 
 ## Stack

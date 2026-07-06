@@ -8,7 +8,7 @@ import { Layout, type PluginProjection } from "../types/projection";
 import { useWorkspaceUrlSync } from "./useWorkspaceUrlSync";
 
 const projection: PluginProjection = {
-  apiVersion: 2,
+  apiVersion: 1,
   name: "docker",
   version: "0.1.0",
   title: "Docker",
