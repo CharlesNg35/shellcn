@@ -1,4 +1,4 @@
-# ShellCN — Platform Manifest (v2)
+# ShellCN — Platform Manifest (document v2, plugin API v1)
 
 > An open-source **infrastructure access gateway / operations cockpit**: a single
 > Go binary (with an embedded Vue frontend) through which users reach their SSH
@@ -12,7 +12,8 @@
 This document is the canonical spec. It supersedes the earlier design transcript.
 Where the transcript contradicted itself (the `Plugin` interface was redefined
 ~6 times, behavior was dispatched three different ways), this manifest fixes one
-authoritative model.
+authoritative model. The document revision is v2; the current manifest wire/API
+version accepted by the core is `APIVersion: 1`.
 
 **Plugin model in one line:** every protocol is a **first-party, compiled-in Go
 plugin** that exposes one **versioned manifest** (declarative data) plus typed

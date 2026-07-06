@@ -26,6 +26,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/recording"
+	"github.com/charlesng35/shellcn/internal/secrets"
 	"github.com/charlesng35/shellcn/internal/session"
 	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -234,8 +235,36 @@ func (s *Server) auditEventParams(ctx context.Context, res resolved, result mode
 	s.deps.Audit.Record(ctx, audit.Event{
 		User: res.user, Event: res.route.AuditEvent, ConnectionID: res.conn.ID,
 		RouteID: res.route.ID, Risk: string(res.route.Risk), Result: result,
-		Params: params, Err: err,
+		Params: secrets.RedactParams(params, routeSecretKeys(res.route)), Err: err,
 	})
+}
+
+func routeSecretKeys(route plugin.Route) map[string]bool {
+	if route.Input == nil {
+		return nil
+	}
+	keys := map[string]bool{}
+	for _, group := range route.Input.Groups {
+		for _, field := range group.Fields {
+			collectSecretKeys(keys, field)
+		}
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	return keys
+}
+
+func collectSecretKeys(keys map[string]bool, field plugin.Field) {
+	if field.Secret || field.Type == plugin.FieldPassword {
+		keys[field.Key] = true
+	}
+	for _, child := range field.Fields {
+		collectSecretKeys(keys, child)
+	}
+	if field.Item != nil {
+		collectSecretKeys(keys, *field.Item)
+	}
 }
 
 // handleRoute runs a plugin route through authz, session resolve, validation,

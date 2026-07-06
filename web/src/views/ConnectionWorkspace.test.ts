@@ -1,3 +1,4 @@
+/* eslint-disable vue/one-component-per-file -- local stubs keep this integration spec readable. */
 import { defineComponent, nextTick } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
@@ -17,7 +18,7 @@ import { Layout, PanelType, RiskLevel } from "../types/projection";
 import ConnectionWorkspace from "./ConnectionWorkspace.vue";
 
 const projection: PluginProjection = {
-  apiVersion: 2,
+  apiVersion: 1,
   name: "docker",
   version: "0.1.0",
   title: "Docker",
