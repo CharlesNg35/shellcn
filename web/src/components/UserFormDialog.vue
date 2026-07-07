@@ -10,7 +10,7 @@ import { ApiError } from "../api/client";
 import { adminUsersApi } from "../api/admin";
 import { useNotify } from "../composables/useNotify";
 import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
-import { Role, ROLE_OPTIONS } from "../constants/roles";
+import { Role, ROLE_OPTIONS, roleDescription } from "../constants/roles";
 import type { AdminUser } from "../types/projection";
 
 const props = defineProps<{ visible: boolean; user?: AdminUser | null }>();
@@ -23,9 +23,7 @@ const notify = useNotify();
 
 const roleOptions = ROLE_OPTIONS;
 
-const roleHint = computed(
-  () => roleOptions.find((o) => o.value === role.value)?.description ?? "",
-);
+const roleHint = computed(() => roleDescription(role.value));
 
 const isEdit = computed(() => Boolean(props.user));
 const protectedUser = computed(() => props.user?.protected ?? false);

@@ -33,6 +33,15 @@ export interface AuditPage {
   total: number;
 }
 
+export interface AuditFilters {
+  event?: string;
+  remoteAddr?: string;
+  result?: string;
+  risk?: string;
+  since?: string;
+  until?: string;
+}
+
 export interface InvitationSummary {
   id: string;
   email: string;

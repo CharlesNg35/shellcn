@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 
 	"github.com/charlesng35/shellcn/internal/audit"
@@ -157,10 +158,8 @@ func forwardedValue(header, key string) string {
 	return ""
 }
 
-// withRemoteAddr stashes the direct peer address on the request context so every
-// audit event recorded during the request carries the caller's source IP. The
-// non-spoofable RemoteAddr is used (not X-Forwarded-For) so the audit trail
-// cannot be forged by a client header.
+// withRemoteAddr stashes the request source on the context so every audit event
+// recorded during the request carries the caller's source IP.
 func (s *Server) withRemoteAddr(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := audit.WithRemoteAddr(r.Context(), clientIP(r))
@@ -170,8 +169,53 @@ func (s *Server) withRemoteAddr(next http.Handler) http.Handler {
 }
 
 func clientIP(r *http.Request) string {
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+	peer := remoteHost(r.RemoteAddr)
+	if !trustedProxyPeer(peer) {
+		return peer
+	}
+	for _, value := range []string{
+		forwardedValue(r.Header.Get("Forwarded"), "for"),
+		firstHeaderValue(r.Header.Get("X-Forwarded-For")),
+		firstHeaderValue(r.Header.Get("X-Real-IP")),
+	} {
+		if ip := forwardedIP(value); ip != "" {
+			return ip
+		}
+	}
+	return peer
+}
+
+func remoteHost(remoteAddr string) string {
+	if host, _, err := net.SplitHostPort(remoteAddr); err == nil {
 		return host
 	}
-	return r.RemoteAddr
+	return remoteAddr
+}
+
+func trustedProxyPeer(host string) bool {
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return false
+	}
+	return addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast()
+}
+
+func forwardedIP(value string) string {
+	value = strings.Trim(strings.TrimSpace(value), `"`)
+	if value == "" || strings.EqualFold(value, "unknown") {
+		return ""
+	}
+	if strings.HasPrefix(value, "[") {
+		if end := strings.IndexByte(value, ']'); end > 0 {
+			value = value[1:end]
+		}
+	} else if host, _, err := net.SplitHostPort(value); err == nil {
+		value = host
+	}
+	value = strings.Trim(value, "[]")
+	addr, err := netip.ParseAddr(value)
+	if err != nil {
+		return ""
+	}
+	return addr.String()
 }

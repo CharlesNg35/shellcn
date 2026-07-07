@@ -1,8 +1,10 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -42,6 +44,35 @@ func toAuditEntryDTO(e models.AuditEntry) auditEntryDTO {
 	}
 }
 
+func auditFilterFromRequest(r *http.Request, userID string, limit, offset int) (store.AuditFilter, error) {
+	q := r.URL.Query()
+	filter := store.AuditFilter{
+		UserID: userID, Limit: limit, Offset: offset,
+		Event: strings.TrimSpace(q.Get("event")), RemoteAddr: strings.TrimSpace(q.Get("remoteAddr")),
+		Risk: strings.TrimSpace(q.Get("risk")), Result: strings.TrimSpace(q.Get("result")),
+	}
+	var err error
+	if filter.Since, err = auditTimeParam(q.Get("since"), "since"); err != nil {
+		return store.AuditFilter{}, err
+	}
+	if filter.Until, err = auditTimeParam(q.Get("until"), "until"); err != nil {
+		return store.AuditFilter{}, err
+	}
+	return filter, nil
+}
+
+func auditTimeParam(value, name string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%w: invalid %s", plugin.ErrInvalidInput, name)
+	}
+	return t, nil
+}
+
 // writeAuditPage serves a paginated audit slice for one user.
 func (s *Server) writeAuditPage(w http.ResponseWriter, r *http.Request, userID string) {
 	limit := defaultAuditPageSize
@@ -53,12 +84,17 @@ func (s *Server) writeAuditPage(w http.ResponseWriter, r *http.Request, userID s
 		offset = v
 	}
 
-	entries, err := s.deps.Store.Audit.List(r.Context(), store.AuditFilter{UserID: userID, Limit: limit, Offset: offset})
+	filter, err := auditFilterFromRequest(r, userID, limit, offset)
 	if err != nil {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	total, err := s.deps.Store.Audit.Count(r.Context(), store.AuditFilter{UserID: userID})
+	entries, err := s.deps.Store.Audit.List(r.Context(), filter)
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	total, err := s.deps.Store.Audit.Count(r.Context(), filter)
 	if err != nil {
 		writeError(w, s.deps.Logger, err)
 		return

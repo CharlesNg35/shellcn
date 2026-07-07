@@ -1,7 +1,9 @@
 import { api } from "./client";
+import { auditQuery } from "./activity";
 import type { Role } from "../constants/roles";
 import type {
   AdminUser,
+  AuditFilters,
   AuditPage,
   MarketList,
   ProtocolAdminList,
@@ -40,9 +42,9 @@ export const adminUsersApi = {
     api.post<AdminUser>(`/admin/users/${id}/reset-2fa`),
   connections: (id: string) =>
     api.get<UserConnectionSummary[]>(`/admin/users/${id}/connections`),
-  audit: (id: string, limit: number, offset: number) =>
+  audit: (id: string, limit: number, offset: number, filters?: AuditFilters) =>
     api.get<AuditPage>(
-      `/admin/users/${id}/audit?limit=${limit}&offset=${offset}`,
+      `/admin/users/${id}/audit?${auditQuery(limit, offset, filters)}`,
     ),
   // Directory lookup for the share picker (admin-only enumeration).
   search: (query: string) => {

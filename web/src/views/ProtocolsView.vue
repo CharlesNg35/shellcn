@@ -8,13 +8,18 @@ import TabPanels from "primevue/tabpanels";
 import TabPanel from "primevue/tabpanel";
 import AppIcon from "../components/AppIcon.vue";
 import AppBreadcrumb from "../components/AppBreadcrumb.vue";
+import AppPage from "../components/AppPage.vue";
 import ProtocolTable from "./protocols/ProtocolTable.vue";
 import MarketTable from "./protocols/MarketTable.vue";
 import { useProtocolsAdmin } from "../composables/useProtocolsAdmin";
 import { useMarketAdmin } from "../composables/useMarketAdmin";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { useConnectionsStore } from "../stores/connections";
-import type { MarketEntry } from "../types/projection";
+import type {
+  MarketEntry,
+  ProtocolAdminItem,
+  ProtocolAvailability,
+} from "../types/projection";
 
 const crumbs = [
   { label: "Settings", to: { name: "settings" } },
@@ -49,6 +54,15 @@ const {
 
 async function refreshAfterMarketChange(): Promise<void> {
   await Promise.all([load(), conns.refreshPlugins()]);
+}
+
+async function setProtocolAvailability(
+  item: ProtocolAdminItem,
+  next: ProtocolAvailability,
+): Promise<void> {
+  const previous = item.availability;
+  await setAvailability(item, next);
+  if (next !== previous) await conns.refreshPlugins();
 }
 
 const {
@@ -98,7 +112,7 @@ onMounted(() => {
 
 <template>
   <div class="h-full overflow-y-auto">
-    <div class="mx-auto flex max-w-6xl flex-col gap-5 p-8">
+    <AppPage :fill="false">
       <AppBreadcrumb :items="crumbs" />
 
       <div class="flex flex-col gap-1">
@@ -147,7 +161,7 @@ onMounted(() => {
                 :loading="loading"
                 :saving="saving"
                 empty-text="No built-in protocols."
-                @set-availability="setAvailability"
+                @set-availability="setProtocolAvailability"
               />
             </div>
           </TabPanel>
@@ -191,7 +205,7 @@ onMounted(() => {
                 :saving="saving"
                 show-status
                 empty-text="No plugin protocols installed."
-                @set-availability="setAvailability"
+                @set-availability="setProtocolAvailability"
               />
             </div>
           </TabPanel>
@@ -233,6 +247,6 @@ onMounted(() => {
           </TabPanel>
         </TabPanels>
       </Tabs>
-    </div>
+    </AppPage>
   </div>
 </template>

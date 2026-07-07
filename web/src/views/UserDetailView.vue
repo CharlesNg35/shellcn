@@ -14,12 +14,14 @@ import { useNotify } from "../composables/useNotify";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import AppIcon from "../components/AppIcon.vue";
 import AppBreadcrumb from "../components/AppBreadcrumb.vue";
+import AppPage from "../components/AppPage.vue";
 import SkeletonList from "../components/SkeletonList.vue";
 import AuditTable from "../components/admin/AuditTable.vue";
 import { Role } from "../constants/roles";
 import type {
   AdminUser,
   AuditEntry,
+  AuditFilters,
   UserConnectionSummary,
 } from "../types/projection";
 
@@ -49,6 +51,7 @@ const auditFirst = ref(0);
 const auditRows = ref(25);
 const auditLoaded = ref(false);
 const auditLoading = ref(false);
+const auditFilters = ref<AuditFilters>({});
 
 async function loadUser(): Promise<void> {
   loading.value = true;
@@ -75,6 +78,7 @@ async function loadAudit(): Promise<void> {
       props.id,
       auditRows.value,
       auditFirst.value,
+      auditFilters.value,
     );
     audit.value = page.items;
     auditTotal.value = page.total;
@@ -87,6 +91,12 @@ async function loadAudit(): Promise<void> {
 function onAuditPage(e: { first: number; rows: number }): void {
   auditFirst.value = e.first;
   auditRows.value = e.rows;
+  void loadAudit();
+}
+
+function onAuditFilter(next: AuditFilters): void {
+  auditFilters.value = next;
+  auditFirst.value = 0;
   void loadAudit();
 }
 
@@ -157,7 +167,7 @@ function formatDate(iso: string): string {
 </script>
 
 <template>
-  <div class="mx-auto flex h-full max-w-4xl flex-col gap-5 p-8">
+  <AppPage>
     <AppBreadcrumb :items="crumbs" />
     <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
       {{ user?.displayName || user?.username || "User" }}
@@ -285,11 +295,13 @@ function formatDate(iso: string): string {
             :total="auditTotal"
             :rows="auditRows"
             :first="auditFirst"
+            :filters="auditFilters"
             :loading="auditLoading"
             @page="onAuditPage"
+            @filter="onAuditFilter"
           />
         </TabPanel>
       </TabPanels>
     </Tabs>
-  </div>
+  </AppPage>
 </template>

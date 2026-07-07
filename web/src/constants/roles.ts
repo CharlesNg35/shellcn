@@ -31,3 +31,9 @@ export const ROLE_OPTIONS: RoleOption[] = [
     description: "Manages user accounts; no access to others' resources.",
   },
 ];
+
+export function roleDescription(role: Role): string {
+  return (
+    ROLE_OPTIONS.find((option) => option.value === role)?.description ?? ""
+  );
+}

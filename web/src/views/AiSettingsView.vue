@@ -10,6 +10,7 @@ import { ApiError } from "../api/client";
 import { aiApi, type AiProviderSummary } from "../api/ai";
 import AppBreadcrumb from "../components/AppBreadcrumb.vue";
 import AppIcon from "../components/AppIcon.vue";
+import AppPage from "../components/AppPage.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { useNotify } from "../composables/useNotify";
 import { useAiProvidersStore } from "../stores/aiProviders";
@@ -100,14 +101,14 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="mx-auto flex h-full max-w-4xl flex-col gap-5 p-8">
+  <AppPage>
     <AppBreadcrumb :items="crumbs" />
 
     <div>
       <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
         AI providers
       </h1>
-      <p class="mt-1 max-w-4xl text-sm text-surface-500 dark:text-surface-400">
+      <p class="mt-1 max-w-3xl text-sm text-surface-500 dark:text-surface-400">
         Configure personal providers and view the shared workspace provider.
       </p>
     </div>
@@ -155,5 +156,5 @@ onMounted(load);
       :provider="editingProvider"
       @saved="afterSave"
     />
-  </div>
+  </AppPage>
 </template>

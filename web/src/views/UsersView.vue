@@ -16,6 +16,7 @@ import { useNotify } from "../composables/useNotify";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import AppIcon from "../components/AppIcon.vue";
 import AppBreadcrumb from "../components/AppBreadcrumb.vue";
+import AppPage from "../components/AppPage.vue";
 import UserFormDialog from "../components/UserFormDialog.vue";
 import InviteDialog from "../components/InviteDialog.vue";
 import { Role } from "../constants/roles";
@@ -120,7 +121,7 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
 </script>
 
 <template>
-  <div class="mx-auto flex h-full max-w-4xl flex-col gap-5 p-8">
+  <AppPage>
     <AppBreadcrumb :items="crumbs" />
 
     <Tabs
@@ -331,5 +332,5 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
       @saved="loadUsers"
     />
     <InviteDialog v-model:visible="showInvite" @created="loadInvitations" />
-  </div>
+  </AppPage>
 </template>

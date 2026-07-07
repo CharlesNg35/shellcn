@@ -128,6 +128,12 @@ type RecordingFilter struct {
 type AuditFilter struct {
 	UserID       string
 	ConnectionID string
+	Event        string
+	RemoteAddr   string
+	Risk         string
+	Result       string
+	Since        time.Time
+	Until        time.Time
 	Limit        int
 	Offset       int
 }
