@@ -341,12 +341,7 @@ func (s *gormAuditStore) Append(ctx context.Context, e *models.AuditEntry) error
 
 func (s *gormAuditStore) List(ctx context.Context, f AuditFilter) ([]models.AuditEntry, error) {
 	q := s.db.WithContext(ctx).Model(&models.AuditEntry{}).Order("time DESC")
-	if f.UserID != "" {
-		q = q.Where("user_id = ?", f.UserID)
-	}
-	if f.ConnectionID != "" {
-		q = q.Where("connection_id = ?", f.ConnectionID)
-	}
+	q = applyAuditFilter(q, f)
 	if f.Limit > 0 {
 		q = q.Limit(f.Limit)
 	}
@@ -362,14 +357,37 @@ func (s *gormAuditStore) List(ctx context.Context, f AuditFilter) ([]models.Audi
 
 func (s *gormAuditStore) Count(ctx context.Context, f AuditFilter) (int64, error) {
 	q := s.db.WithContext(ctx).Model(&models.AuditEntry{})
+	q = applyAuditFilter(q, f)
+	var n int64
+	return n, q.Count(&n).Error
+}
+
+func applyAuditFilter(q *gorm.DB, f AuditFilter) *gorm.DB {
 	if f.UserID != "" {
 		q = q.Where("user_id = ?", f.UserID)
 	}
 	if f.ConnectionID != "" {
 		q = q.Where("connection_id = ?", f.ConnectionID)
 	}
-	var n int64
-	return n, q.Count(&n).Error
+	if f.Event != "" {
+		q = q.Where("LOWER(event) LIKE ?", "%"+strings.ToLower(f.Event)+"%")
+	}
+	if f.RemoteAddr != "" {
+		q = q.Where("LOWER(remote_addr) LIKE ?", "%"+strings.ToLower(f.RemoteAddr)+"%")
+	}
+	if f.Risk != "" {
+		q = q.Where("risk = ?", f.Risk)
+	}
+	if f.Result != "" {
+		q = q.Where("result = ?", f.Result)
+	}
+	if !f.Since.IsZero() {
+		q = q.Where("time >= ?", f.Since)
+	}
+	if !f.Until.IsZero() {
+		q = q.Where("time < ?", f.Until)
+	}
+	return q
 }
 
 func (s *gormAuditStore) DeleteBefore(ctx context.Context, before time.Time) (int64, error) {

@@ -3,7 +3,7 @@ import { onMounted, ref } from "vue";
 import { activityApi } from "../api/activity";
 import AppBreadcrumb from "../components/AppBreadcrumb.vue";
 import AuditTable from "../components/admin/AuditTable.vue";
-import type { AuditEntry } from "../types/projection";
+import type { AuditEntry, AuditFilters } from "../types/projection";
 
 const crumbs = [
   { label: "Settings", to: { name: "settings" } },
@@ -15,11 +15,12 @@ const total = ref(0);
 const first = ref(0);
 const rows = ref(25);
 const loading = ref(false);
+const filters = ref<AuditFilters>({});
 
 async function load(): Promise<void> {
   loading.value = true;
   try {
-    const page = await activityApi.mine(rows.value, first.value);
+    const page = await activityApi.mine(rows.value, first.value, filters.value);
     items.value = page.items;
     total.value = page.total;
   } finally {
@@ -30,6 +31,12 @@ async function load(): Promise<void> {
 function onPage(e: { first: number; rows: number }): void {
   first.value = e.first;
   rows.value = e.rows;
+  void load();
+}
+
+function onFilter(next: AuditFilters): void {
+  filters.value = next;
+  first.value = 0;
   void load();
 }
 
@@ -47,8 +54,10 @@ onMounted(load);
       :total="total"
       :rows="rows"
       :first="first"
+      :filters="filters"
       :loading="loading"
       @page="onPage"
+      @filter="onFilter"
     />
   </div>
 </template>

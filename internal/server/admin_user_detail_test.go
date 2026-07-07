@@ -34,6 +34,16 @@ func TestAdminUserDetailEndpoints(t *testing.T) {
 		!strings.Contains(string(resp.Body), `"total"`) {
 		t.Fatalf("user audit: status=%d body=%s", resp.Status, resp.Body)
 	}
+	resp = h.do(t, http.MethodGet, "/api/admin/users/op/audit?event=tester.list&risk=safe&result=allowed", "admin", nil)
+	if resp.Status != http.StatusOK ||
+		!strings.Contains(string(resp.Body), `"event":"tester.list"`) ||
+		!strings.Contains(string(resp.Body), `"total":1`) {
+		t.Fatalf("filtered user audit: status=%d body=%s", resp.Status, resp.Body)
+	}
+	resp = h.do(t, http.MethodGet, "/api/admin/users/op/audit?event=credential", "admin", nil)
+	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), `"total":0`) {
+		t.Fatalf("empty filtered user audit: status=%d body=%s", resp.Status, resp.Body)
+	}
 
 	// Non-admins cannot reach the admin user-detail endpoints.
 	for _, path := range []string{

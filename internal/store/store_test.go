@@ -713,7 +713,7 @@ func testAudit(t *testing.T, s *store.Store) {
 			ID: "a" + string(rune('0'+i)), Time: now.Add(time.Duration(i) * time.Second),
 			UserID: "u1", Username: "alice", Event: "vm.start", ConnectionID: "c1",
 			RouteID: "proxmox.vm.start", Risk: "write", Result: models.AuditAllowed,
-			Params: map[string]string{"vmid": "101"},
+			Params: map[string]string{"vmid": "101"}, RemoteAddr: "203.0.113." + string(rune('1'+i)),
 		}
 		if err := s.Audit.Append(ctx, e); err != nil {
 			t.Fatalf("append: %v", err)
@@ -730,6 +730,19 @@ func testAudit(t *testing.T, s *store.Store) {
 	limited, _ := s.Audit.List(ctx, store.AuditFilter{UserID: "u1", Limit: 2})
 	if len(limited) != 2 {
 		t.Errorf("limit: want 2, got %d", len(limited))
+	}
+	filter := store.AuditFilter{
+		UserID: "u1", Event: "START", RemoteAddr: "203.0.113.2",
+		Risk: "write", Result: string(models.AuditAllowed),
+		Since: now.Add(500 * time.Millisecond), Until: now.Add(2500 * time.Millisecond),
+	}
+	filtered, err := s.Audit.List(ctx, filter)
+	if err != nil || len(filtered) != 1 || filtered[0].ID != "a1" {
+		t.Fatalf("filtered audit: got %#v err=%v", filtered, err)
+	}
+	total, err := s.Audit.Count(ctx, filter)
+	if err != nil || total != 1 {
+		t.Fatalf("filtered audit count: got %d err=%v", total, err)
 	}
 	removed, err := s.Audit.DeleteBefore(ctx, now.Add(1500*time.Millisecond))
 	if err != nil {

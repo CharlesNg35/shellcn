@@ -821,6 +821,24 @@ func (s *memAuditStore) matches(e models.AuditEntry, f AuditFilter) bool {
 	if f.ConnectionID != "" && e.ConnectionID != f.ConnectionID {
 		return false
 	}
+	if f.Event != "" && !strings.Contains(strings.ToLower(e.Event), strings.ToLower(f.Event)) {
+		return false
+	}
+	if f.RemoteAddr != "" && !strings.Contains(strings.ToLower(e.RemoteAddr), strings.ToLower(f.RemoteAddr)) {
+		return false
+	}
+	if f.Risk != "" && e.Risk != f.Risk {
+		return false
+	}
+	if f.Result != "" && string(e.Result) != f.Result {
+		return false
+	}
+	if !f.Since.IsZero() && e.Time.Before(f.Since) {
+		return false
+	}
+	if !f.Until.IsZero() && !e.Time.Before(f.Until) {
+		return false
+	}
 	return true
 }
 
