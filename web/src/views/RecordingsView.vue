@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { recordingsApi } from "../api/recordings";
 import AppIcon from "../components/AppIcon.vue";
+import AppPage from "../components/AppPage.vue";
 import SkeletonList from "../components/SkeletonList.vue";
 import RecordingsTable from "../components/recordings/RecordingsTable.vue";
 import type { RecordingFilters, RecordingSummary } from "../types/projection";
@@ -40,7 +41,7 @@ const hasItems = computed(() => items.value.length > 0);
 </script>
 
 <template>
-  <div class="mx-auto flex h-full max-w-5xl flex-col gap-5 p-8">
+  <AppPage>
     <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
       My Recordings
     </h1>
@@ -61,5 +62,5 @@ const hasItems = computed(() => items.value.length > 0);
     </div>
 
     <RecordingsTable v-else :items="items" @changed="load" />
-  </div>
+  </AppPage>
 </template>

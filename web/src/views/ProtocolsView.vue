@@ -8,6 +8,7 @@ import TabPanels from "primevue/tabpanels";
 import TabPanel from "primevue/tabpanel";
 import AppIcon from "../components/AppIcon.vue";
 import AppBreadcrumb from "../components/AppBreadcrumb.vue";
+import AppPage from "../components/AppPage.vue";
 import ProtocolTable from "./protocols/ProtocolTable.vue";
 import MarketTable from "./protocols/MarketTable.vue";
 import { useProtocolsAdmin } from "../composables/useProtocolsAdmin";
@@ -111,7 +112,7 @@ onMounted(() => {
 
 <template>
   <div class="h-full overflow-y-auto">
-    <div class="mx-auto flex max-w-6xl flex-col gap-5 p-8">
+    <AppPage :fill="false">
       <AppBreadcrumb :items="crumbs" />
 
       <div class="flex flex-col gap-1">
@@ -246,6 +247,6 @@ onMounted(() => {
           </TabPanel>
         </TabPanels>
       </Tabs>
-    </div>
+    </AppPage>
   </div>
 </template>

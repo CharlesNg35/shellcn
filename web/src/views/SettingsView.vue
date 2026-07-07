@@ -6,6 +6,7 @@ import { useAuthStore } from "../stores/auth";
 import { adminSettingsApi } from "../api/admin";
 import RoleGate from "../components/RoleGate.vue";
 import AppIcon from "../components/AppIcon.vue";
+import AppPage from "../components/AppPage.vue";
 
 const { isDark, toggle } = useTheme();
 const auth = useAuthStore();
@@ -26,7 +27,7 @@ const linkClass =
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-4xl flex-col gap-4 p-8">
+  <AppPage :fill="false">
     <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
       Settings
     </h1>
@@ -166,5 +167,5 @@ const linkClass =
         </span>
       </div>
     </RoleGate>
-  </div>
+  </AppPage>
 </template>

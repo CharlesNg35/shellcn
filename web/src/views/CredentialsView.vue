@@ -8,6 +8,7 @@ import { credentialsApi } from "../api/credentials";
 import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
+import AppPage from "../components/AppPage.vue";
 import SkeletonList from "../components/SkeletonList.vue";
 import CredentialFormDialog from "../components/CredentialFormDialog.vue";
 import CredentialProtocolBadges from "../components/CredentialProtocolBadges.vue";
@@ -114,7 +115,7 @@ const hasItems = computed(() => items.value.length > 0);
 </script>
 
 <template>
-  <div class="mx-auto flex h-full max-w-4xl flex-col gap-5 p-8">
+  <AppPage>
     <div class="flex items-center justify-between">
       <div>
         <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
@@ -240,5 +241,5 @@ const hasItems = computed(() => items.value.length > 0);
       :resource-id="shareTarget.id"
       :resource-name="shareTarget.name"
     />
-  </div>
+  </AppPage>
 </template>

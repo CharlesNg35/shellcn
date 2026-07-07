@@ -8,6 +8,7 @@ import { authApi } from "../api/auth";
 import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import { btnPrimary } from "../primevue/preset";
+import AppPage from "../components/AppPage.vue";
 import TwoFactorSection from "../components/auth/TwoFactorSection.vue";
 
 const auth = useAuthStore();
@@ -69,7 +70,7 @@ async function savePassword(): Promise<void> {
 </script>
 
 <template>
-  <div class="mx-auto flex h-full max-w-4xl flex-col gap-6 overflow-auto p-8">
+  <AppPage scroll>
     <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
       My Profile
     </h1>
@@ -202,5 +203,5 @@ async function savePassword(): Promise<void> {
         />
       </div>
     </section>
-  </div>
+  </AppPage>
 </template>

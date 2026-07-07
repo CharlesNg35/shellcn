@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import { activityApi } from "../api/activity";
 import AppBreadcrumb from "../components/AppBreadcrumb.vue";
+import AppPage from "../components/AppPage.vue";
 import AuditTable from "../components/admin/AuditTable.vue";
 import type { AuditEntry, AuditFilters } from "../types/projection";
 
@@ -44,7 +45,7 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="mx-auto flex h-full max-w-4xl flex-col gap-5 p-8">
+  <AppPage>
     <AppBreadcrumb :items="crumbs" />
     <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
       My activity
@@ -59,5 +60,5 @@ onMounted(load);
       @page="onPage"
       @filter="onFilter"
     />
-  </div>
+  </AppPage>
 </template>
