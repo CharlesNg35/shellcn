@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import Dialog from "primevue/dialog";
 import Select from "primevue/select";
 import InputText from "primevue/inputtext";
@@ -8,7 +8,7 @@ import { ApiError } from "../api/client";
 import { invitationsApi } from "../api/invitations";
 import AppIcon from "./AppIcon.vue";
 import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
-import { Role, ROLE_OPTIONS } from "../constants/roles";
+import { Role, ROLE_OPTIONS, roleDescription } from "../constants/roles";
 import type { InviteResult } from "../types/projection";
 
 const props = defineProps<{ visible: boolean }>();
@@ -19,6 +19,7 @@ const emit = defineEmits<{
 
 const email = ref("");
 const role = ref<Role>(Role.Viewer);
+const roleHint = computed(() => roleDescription(role.value));
 const result = ref<InviteResult | null>(null);
 const error = ref<string | null>(null);
 const busy = ref(false);
@@ -121,6 +122,7 @@ onUnmounted(clearCopiedTimer);
           option-value="value"
           @update:model-value="role = $event"
         />
+        <p class="text-xs text-surface-400">{{ roleHint }}</p>
       </div>
       <p v-if="error" class="text-xs text-red-500">{{ error }}</p>
     </div>
