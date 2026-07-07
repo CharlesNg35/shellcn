@@ -14,7 +14,11 @@ import { useProtocolsAdmin } from "../composables/useProtocolsAdmin";
 import { useMarketAdmin } from "../composables/useMarketAdmin";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { useConnectionsStore } from "../stores/connections";
-import type { MarketEntry } from "../types/projection";
+import type {
+  MarketEntry,
+  ProtocolAdminItem,
+  ProtocolAvailability,
+} from "../types/projection";
 
 const crumbs = [
   { label: "Settings", to: { name: "settings" } },
@@ -49,6 +53,15 @@ const {
 
 async function refreshAfterMarketChange(): Promise<void> {
   await Promise.all([load(), conns.refreshPlugins()]);
+}
+
+async function setProtocolAvailability(
+  item: ProtocolAdminItem,
+  next: ProtocolAvailability,
+): Promise<void> {
+  const previous = item.availability;
+  await setAvailability(item, next);
+  if (next !== previous) await conns.refreshPlugins();
 }
 
 const {
@@ -147,7 +160,7 @@ onMounted(() => {
                 :loading="loading"
                 :saving="saving"
                 empty-text="No built-in protocols."
-                @set-availability="setAvailability"
+                @set-availability="setProtocolAvailability"
               />
             </div>
           </TabPanel>
@@ -191,7 +204,7 @@ onMounted(() => {
                 :saving="saving"
                 show-status
                 empty-text="No plugin protocols installed."
-                @set-availability="setAvailability"
+                @set-availability="setProtocolAvailability"
               />
             </div>
           </TabPanel>
