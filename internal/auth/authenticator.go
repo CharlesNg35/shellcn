@@ -74,7 +74,6 @@ func (a *LocalAuthenticator) Authenticate(ctx context.Context, username, passwor
 // OIDCAuthenticator holds the OIDC interface in place; it has no implementation.
 type OIDCAuthenticator struct{}
 
-// Authenticate always reports not-implemented.
 func (OIDCAuthenticator) Authenticate(context.Context, string, string) (models.User, error) {
 	return models.User{}, ErrNotImplemented
 }

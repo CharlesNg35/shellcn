@@ -20,7 +20,8 @@ func tree() []plugin.TreeGroup {
 	for _, key := range []string{"workloads", "config", "network", "storage"} {
 		groups = append(groups, categoryGroup(key))
 	}
-	groups = append(groups,
+	groups = append(
+		groups,
 		kindGroup("namespace", "Namespaces", "box"),
 		kindGroup("event", "Events", "bell"),
 		plugin.TreeGroup{

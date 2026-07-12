@@ -46,7 +46,6 @@ type User struct {
 
 func (User) TableName() string { return "users" }
 
-// HasRole reports whether the user holds the given role.
 func (u User) HasRole(r Role) bool {
 	return slices.Contains(u.Roles, r)
 }

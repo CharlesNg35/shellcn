@@ -154,13 +154,15 @@ func TestRedeemTransientErrorIsNotRejection(t *testing.T) {
 	boom := errors.New("store unavailable")
 
 	svcGet := service.NewEnrollmentService(
-		faultEnrollmentStore{EnrollmentStore: st.Enrollments, getErr: boom}, st.Connections, reg)
+		faultEnrollmentStore{EnrollmentStore: st.Enrollments, getErr: boom}, st.Connections, reg,
+	)
 	if _, _, err := svcGet.Redeem(ctx, token); !errors.Is(err, boom) || errors.Is(err, service.ErrEnrollmentInvalid) {
 		t.Fatalf("transient lookup error = %v; want the store error, not a rejection", err)
 	}
 
 	svcConsume := service.NewEnrollmentService(
-		faultEnrollmentStore{EnrollmentStore: st.Enrollments, consumeErr: boom}, st.Connections, reg)
+		faultEnrollmentStore{EnrollmentStore: st.Enrollments, consumeErr: boom}, st.Connections, reg,
+	)
 	if _, _, err := svcConsume.Redeem(ctx, token); !errors.Is(err, boom) || errors.Is(err, service.ErrEnrollmentInvalid) {
 		t.Fatalf("transient consume error = %v; want the store error, not a rejection", err)
 	}

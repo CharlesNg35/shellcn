@@ -97,18 +97,21 @@ func Routes() []plugin.Route {
 
 	// Lifecycle (per guest kind).
 	for _, kind := range []string{"qemu", "lxc"} {
-		routes = append(routes,
+		routes = append(
+			routes,
 			statusRoute(kind, "start", plugin.RiskWrite, false),
 			statusRoute(kind, "shutdown", plugin.RiskWrite, true),
 			statusRoute(kind, "stop", plugin.RiskDestructive, true),
 			statusRoute(kind, "reboot", plugin.RiskWrite, true),
 		)
-		routes = append(routes,
+		routes = append(
+			routes,
 			snapshotRoutes(kind)...,
 		)
 	}
 	// QEMU-only suspend/resume.
-	routes = append(routes,
+	routes = append(
+		routes,
 		statusRoute("qemu", "suspend", plugin.RiskWrite, true),
 		statusRoute("qemu", "resume", plugin.RiskWrite, false),
 	)

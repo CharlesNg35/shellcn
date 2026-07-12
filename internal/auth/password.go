@@ -36,7 +36,8 @@ func HashPassword(password string) (string, error) {
 		return "", err
 	}
 	key := argon2.IDKey([]byte(password), salt, p.time, p.memory, p.threads, p.keyLen)
-	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
+	return fmt.Sprintf(
+		"$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, p.memory, p.time, p.threads,
 		base64.RawStdEncoding.EncodeToString(salt),
 		base64.RawStdEncoding.EncodeToString(key),

@@ -62,7 +62,8 @@ func TestConnectorResolvesCredentialRefFieldsFromSchema(t *testing.T) {
 	}
 
 	connector := service.NewConnector(reg, creds, vault, transport.NewRegistry())
-	cfg, _, err := connector.Build(ctx,
+	cfg, _, err := connector.Build(
+		ctx,
 		models.User{ID: "u1"},
 		models.Connection{
 			ID:        "c1",
@@ -114,7 +115,8 @@ func TestConnectorResolvesSharedConnectionCredentialAsConnectionOwner(t *testing
 	}
 
 	connector := service.NewConnector(reg, creds, vault, transport.NewRegistry())
-	cfg, _, err := connector.Build(ctx,
+	cfg, _, err := connector.Build(
+		ctx,
 		models.User{ID: "viewer"},
 		models.Connection{
 			ID:        "c1",
@@ -175,7 +177,8 @@ func TestConnectorTransportAllowlistExcludesSecrets(t *testing.T) {
 	}
 
 	connector := service.NewConnector(reg, creds, vault, transport.NewRegistry())
-	cfg, _, err := connector.Build(ctx,
+	cfg, _, err := connector.Build(
+		ctx,
 		models.User{ID: "u1"},
 		models.Connection{
 			ID:        "c1",

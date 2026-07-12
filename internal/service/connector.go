@@ -58,7 +58,6 @@ func (c *Connector) Build(ctx context.Context, user models.User, conn models.Con
 	// (non-secret) fields only — secret material must never seed dialable hosts.
 	transportCfg := maps.Clone(cfg)
 
-	// Decrypt inline secrets into the config.
 	inline, err := secrets.DecryptMap(ctx, c.vault, conn.Secrets)
 	if err != nil {
 		return plugin.ConnectConfig{}, nil, fmt.Errorf("decrypt inline secrets: %w", err)

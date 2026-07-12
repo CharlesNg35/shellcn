@@ -82,7 +82,6 @@ type Service struct {
 	models *modelreg.Registry
 }
 
-// New wires the provider store, the secret vault, and the global config.
 func New(s store.AIProviderStore, vault secrets.SecretStore, global config.AIConfig) *Service {
 	return &Service{store: s, vault: vault, global: global}
 }

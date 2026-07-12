@@ -15,8 +15,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/models"
 )
 
-// Buffering thresholds: flush accumulated text every ~40ms or once it reaches
-// ~160 chars, whichever comes first, so the UI gets smooth batched updates.
+// Flush buffered text deltas at whichever threshold comes first.
 const (
 	flushInterval = 40 * time.Millisecond
 	flushChars    = 160

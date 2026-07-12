@@ -123,5 +123,4 @@ func (w *Writer) Record(ctx context.Context, ev Event) {
 // Noop discards events — used by the route wrapper until the real writer is wired.
 type Noop struct{}
 
-// Record does nothing.
 func (Noop) Record(context.Context, Event) {}

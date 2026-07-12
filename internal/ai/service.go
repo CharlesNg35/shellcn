@@ -47,8 +47,6 @@ type Service struct {
 	factory   ProviderFactory
 }
 
-// New wires the config service, global config, route source, secure invoker,
-// conversation memory, and the model-limit registry.
 func New(providers *aiconfig.Service, global config.AIConfig, routes tools.RouteSource, invoker tools.Invoker, mem *memory.Store, models *modelreg.Registry) *Service {
 	if models == nil {
 		models = modelreg.New()

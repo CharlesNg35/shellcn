@@ -42,7 +42,6 @@ type Store struct {
 	now  func() time.Time
 }
 
-// New wires the conversation and message repos.
 func New(conv store.AIConversationStore, msg store.AIMessageStore) *Store {
 	return &Store{conv: conv, msg: msg, now: time.Now}
 }
@@ -120,7 +119,6 @@ func (s *Store) Delete(ctx context.Context, ownerID, id string) error {
 // DefaultTitle is shown until the first successful automatic or manual title.
 const DefaultTitle = "New conversation"
 
-// AppendUser stores a user message.
 func (s *Store) AppendUser(ctx context.Context, convID, content string) error {
 	return s.msg.Append(ctx, &models.AIMessage{
 		ID: uuid.NewString(), ConversationID: convID, Seq: -1,
@@ -128,7 +126,6 @@ func (s *Store) AppendUser(ctx context.Context, convID, content string) error {
 	})
 }
 
-// MessageCount returns how many messages a conversation has.
 func (s *Store) MessageCount(ctx context.Context, convID string) int {
 	msgs, err := s.msg.List(ctx, convID)
 	if err != nil {
