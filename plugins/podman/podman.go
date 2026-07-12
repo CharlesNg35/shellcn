@@ -37,7 +37,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				Kind:       "docker-run",
 				ConnectURL: plugin.ArtifactConnectURL{LocalhostHost: "host.containers.internal"},
 				// Host networking lets the agent reach container IPs when proxying.
-				Template: "podman run --rm --name " + plugin.AgentBinary + " --network host " +
+				Template: "podman run -d --restart unless-stopped --name " + plugin.AgentBinary + " --network host " +
 					"{{if .LocalhostHostRequired}}--add-host={{.LocalhostHost}}:host-gateway {{end}}" +
 					"--security-opt label=disable " +
 					"-e SHELLCN_CONNECT_URL={{shellquote .ConnectURL}} " +

@@ -35,6 +35,12 @@ const (
 
 var errAgentHandshakeRequired = errors.New("agent handshake required")
 
+// isEnrollmentRejection reports whether retrying with the presented credential
+// can never succeed.
+func isEnrollmentRejection(err error) bool {
+	return errors.Is(err, service.ErrEnrollmentInvalid)
+}
+
 // canAdminConnection reports whether the user may mutate the saved connection
 // record or its control-plane lifecycle. Admin confers no implicit access.
 func (s *Server) canAdminConnection(user models.User, conn models.Connection) bool {
@@ -244,6 +250,12 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 	connID, proxy, err := s.deps.Enrollments.Redeem(r.Context(), hello.Token)
 	if err != nil {
 		agentUser := models.User{ID: "agent", Username: app.AgentUsername}
+		if !isEnrollmentRejection(err) {
+			s.auditAgentEvent(r.Context(), agentUser, "", agentConnectEvent, models.AuditError, err)
+			_ = wsjson.Write(handshakeCtx, c, transport.AgentConnectResponse{OK: false, Retryable: true, Error: "gateway temporarily unavailable"})
+			_ = c.Close(websocket.StatusTryAgainLater, "gateway temporarily unavailable")
+			return
+		}
 		s.auditAgentEvent(r.Context(), agentUser, "", agentConnectEvent, models.AuditDenied, err)
 		_ = wsjson.Write(handshakeCtx, c, transport.AgentConnectResponse{OK: false, Error: "enrollment rejected"})
 		_ = c.Close(websocket.StatusPolicyViolation, "enrollment rejected")

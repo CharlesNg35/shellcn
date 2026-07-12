@@ -12,8 +12,53 @@ import (
 	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/internal/store"
 	"github.com/charlesng35/shellcn/plugins/docker"
+	"github.com/charlesng35/shellcn/plugins/podman"
+	"github.com/charlesng35/shellcn/plugins/servermonitor"
+	"github.com/charlesng35/shellcn/plugins/swarm"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
+
+func TestContainerEnrollmentCommandsAreSupervised(t *testing.T) {
+	tests := []struct {
+		name   string
+		plugin plugin.Plugin
+		prefix string
+	}{
+		{name: "docker", plugin: docker.New(), prefix: "docker run -d --restart unless-stopped"},
+		{name: "podman", plugin: podman.New(), prefix: "podman run -d --restart unless-stopped"},
+		{name: "server monitor", plugin: servermonitor.New(), prefix: "docker run -d --restart unless-stopped"},
+		{name: "swarm", plugin: swarm.New(), prefix: "docker run -d --restart unless-stopped"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			st := store.NewMemory()
+			reg := pluginregistry.New()
+			reg.MustRegister(tt.plugin)
+			manifest := tt.plugin.Manifest()
+			if err := st.Connections.Create(ctx, &models.Connection{
+				ID: "agent-conn", Name: tt.name, Protocol: manifest.Name, OwnerID: "owner",
+				Transport: string(plugin.TransportAgent),
+			}); err != nil {
+				t.Fatalf("create connection: %v", err)
+			}
+
+			enr, err := service.NewEnrollmentService(st.Enrollments, st.Connections, reg).
+				Create(ctx, "agent-conn", "wss://shellcn.test/api/agent/connect", nil)
+			if err != nil {
+				t.Fatalf("create enrollment: %v", err)
+			}
+			cmd := enr.Artifacts[0].Command
+			if !strings.HasPrefix(cmd, tt.prefix) {
+				t.Fatalf("command = %q; want prefix %q", cmd, tt.prefix)
+			}
+			if strings.Contains(cmd, "--rm") {
+				t.Fatalf("supervised command must not use --rm: %s", cmd)
+			}
+		})
+	}
+}
 
 func TestEnrollmentCommandUsesPublishedAgentImage(t *testing.T) {
 	ctx := context.Background()
@@ -34,7 +79,7 @@ func TestEnrollmentCommandUsesPublishedAgentImage(t *testing.T) {
 	}
 	cmd := enr.Artifacts[0].Command
 	for _, want := range []string{
-		"docker run --rm --name " + app.AgentBinary,
+		"docker run -d --restart unless-stopped --name " + app.AgentBinary,
 		"--network host",
 		`--group-add "$(stat -c '%g' /var/run/docker.sock)"`,
 		"-e SHELLCN_CONNECT_URL='wss://shellcn.test/api/agent/connect'",
@@ -48,6 +93,9 @@ func TestEnrollmentCommandUsesPublishedAgentImage(t *testing.T) {
 	}
 	if strings.Contains(cmd, "shellcn-proxy") || strings.Contains(cmd, "SHELLCN_INSECURE=1") || strings.Contains(cmd, "host.docker.internal") {
 		t.Fatalf("production command contains unexpected dev/proxy content: %s", cmd)
+	}
+	if strings.Contains(cmd, "--rm") {
+		t.Fatalf("durable agent command must not remove the container on exit: %s", cmd)
 	}
 }
 

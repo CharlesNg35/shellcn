@@ -79,9 +79,12 @@ func ReadStreamTarget(r io.Reader) (network, addr string, err error) {
 // AgentConnectResponse is the gateway's reply to AgentHello. On OK the tunnel
 // switches to multiplexed streaming; otherwise the agent disconnects.
 type AgentConnectResponse struct {
-	OK    bool             `json:"ok"`
-	Error string           `json:"error,omitempty"`
-	Proxy AgentProxyTarget `json:"proxy,omitzero"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+	// Retryable marks an OK:false failure as transient (gateway-side): the agent
+	// reconnects instead of treating its token as permanently rejected.
+	Retryable bool             `json:"retryable,omitempty"`
+	Proxy     AgentProxyTarget `json:"proxy,omitzero"`
 }
 
 // ServeGatewayTunnel runs the gateway side of an agent tunnel over an already

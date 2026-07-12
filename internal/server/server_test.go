@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -792,6 +793,46 @@ func TestRejectedAgentConnectIsAudited(t *testing.T) {
 		}
 	}
 	t.Fatalf("missing denied agent.connect audit row: %+v", rows)
+}
+
+type faultRedeemStore struct {
+	store.EnrollmentStore
+	err error
+}
+
+func (f faultRedeemStore) GetByTokenHash(context.Context, string) (models.AgentEnrollment, error) {
+	return models.AgentEnrollment{}, f.err
+}
+
+func TestTransientRedeemErrorTellsAgentToRetry(t *testing.T) {
+	h := newHarness(t, func(d *server.Deps) {
+		faulty := faultRedeemStore{EnrollmentStore: d.Store.Enrollments, err: errors.New("store unavailable")}
+		d.Enrollments = service.NewEnrollmentService(faulty, d.Store.Connections, d.Plugins)
+	})
+
+	c, resp, err := websocket.Dial(context.Background(), h.wsURL("/api/agent/connect"), nil)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	if err != nil {
+		t.Fatalf("dial agent connect: %v", err)
+	}
+	defer func() { _ = c.CloseNow() }()
+
+	if err := wsjson.Write(context.Background(), c, transport.AgentHello{Token: "any-token"}); err != nil {
+		t.Fatalf("write hello: %v", err)
+	}
+	var agentResp transport.AgentConnectResponse
+	if err := wsjson.Read(context.Background(), c, &agentResp); err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	if agentResp.OK || !agentResp.Retryable {
+		t.Fatalf("transient error should be reported as retryable, got %+v", agentResp)
+	}
+
+	waitForAudit(t, h, func(row models.AuditEntry) bool {
+		return row.RouteID == "agent.connect" && row.Result == models.AuditError
+	})
 }
 
 func TestMalformedAgentConnectIsAudited(t *testing.T) {

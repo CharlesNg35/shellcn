@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/pem"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -9,8 +11,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/transport"
@@ -182,6 +188,46 @@ func TestBuildHTTPProxyRejectsBadCA(t *testing.T) {
 	if _, err := buildHTTPProxy(slog.New(slog.NewTextHandler(io.Discard, nil)),
 		transport.AgentProxyTarget{Mode: transport.AgentModeHTTP, Address: "https://example.internal:443", CAFile: filepath.Join(t.TempDir(), "missing-ca")}); err == nil {
 		t.Fatal("buildHTTPProxy must fail when the declared CA file is unreadable (no insecure fallback)")
+	}
+}
+
+func TestServeExitsOnlyOnPermanentRejection(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		retryable    bool
+		wantRejected bool
+	}{
+		{name: "permanent rejection", retryable: false, wantRejected: true},
+		{name: "transient gateway error", retryable: true, wantRejected: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				c, err := websocket.Accept(w, r, nil)
+				if err != nil {
+					return
+				}
+				defer func() { _ = c.CloseNow() }()
+				ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+				defer cancel()
+				var hello transport.AgentHello
+				if err := wsjson.Read(ctx, c, &hello); err != nil {
+					return
+				}
+				_ = wsjson.Write(ctx, c, transport.AgentConnectResponse{OK: false, Retryable: tc.retryable, Error: "x"})
+				_ = c.Close(websocket.StatusPolicyViolation, "x")
+			}))
+			defer srv.Close()
+
+			wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			err := serve(context.Background(), logger, wsURL, "tok", true)
+			if err == nil {
+				t.Fatal("serve should return an error on rejection")
+			}
+			if got := errors.Is(err, errEnrollmentRejected); got != tc.wantRejected {
+				t.Fatalf("errEnrollmentRejected = %v, want %v (err=%v)", got, tc.wantRejected, err)
+			}
+		})
 	}
 }
 

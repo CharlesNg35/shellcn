@@ -2,9 +2,11 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/models"
@@ -13,6 +15,28 @@ import (
 	"github.com/charlesng35/shellcn/internal/store"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
+
+// faultEnrollmentStore injects transient errors into an EnrollmentStore so tests
+// can prove Redeem does not mistake a store failure for a rejected token.
+type faultEnrollmentStore struct {
+	store.EnrollmentStore
+	getErr     error
+	consumeErr error
+}
+
+func (f faultEnrollmentStore) GetByTokenHash(ctx context.Context, hash string) (models.AgentEnrollment, error) {
+	if f.getErr != nil {
+		return models.AgentEnrollment{}, f.getErr
+	}
+	return f.EnrollmentStore.GetByTokenHash(ctx, hash)
+}
+
+func (f faultEnrollmentStore) Consume(ctx context.Context, id string, now time.Time) (bool, error) {
+	if f.consumeErr != nil {
+		return false, f.consumeErr
+	}
+	return f.EnrollmentStore.Consume(ctx, id, now)
+}
 
 type agentTestPlugin struct{}
 
@@ -106,6 +130,43 @@ func TestEnrollmentArtifactsAndRedeem(t *testing.T) {
 	}
 	if state := svc.State(ctx, "agent-conn"); state.Status != string(models.EnrollmentOnline) {
 		t.Fatalf("state after reconnect = %+v", state)
+	}
+}
+
+func TestRedeemTransientErrorIsNotRejection(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	reg := pluginregistry.New()
+	reg.MustRegister(agentTestPlugin{})
+	if err := st.Connections.Create(ctx, &models.Connection{
+		ID: "agent-conn", Name: "Agent", Protocol: "agenttest", OwnerID: "owner",
+		Transport: string(plugin.TransportAgent),
+	}); err != nil {
+		t.Fatalf("create connection: %v", err)
+	}
+	svc := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
+	enr, err := svc.Create(ctx, "agent-conn", "wss://shellcn.test/api/agent/connect", nil)
+	if err != nil {
+		t.Fatalf("create enrollment: %v", err)
+	}
+	token := extractToken(t, enr.Artifacts[0].Command)
+
+	boom := errors.New("store unavailable")
+
+	svcGet := service.NewEnrollmentService(
+		faultEnrollmentStore{EnrollmentStore: st.Enrollments, getErr: boom}, st.Connections, reg)
+	if _, _, err := svcGet.Redeem(ctx, token); !errors.Is(err, boom) || errors.Is(err, service.ErrEnrollmentInvalid) {
+		t.Fatalf("transient lookup error = %v; want the store error, not a rejection", err)
+	}
+
+	svcConsume := service.NewEnrollmentService(
+		faultEnrollmentStore{EnrollmentStore: st.Enrollments, consumeErr: boom}, st.Connections, reg)
+	if _, _, err := svcConsume.Redeem(ctx, token); !errors.Is(err, boom) || errors.Is(err, service.ErrEnrollmentInvalid) {
+		t.Fatalf("transient consume error = %v; want the store error, not a rejection", err)
+	}
+
+	if _, _, err := svc.Redeem(ctx, "not-a-token"); !errors.Is(err, service.ErrEnrollmentInvalid) {
+		t.Fatalf("unknown token = %v; want ErrEnrollmentInvalid", err)
 	}
 }
 
