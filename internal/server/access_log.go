@@ -32,7 +32,8 @@ func (s *Server) accessLog(next http.Handler) http.Handler {
 		case status >= 400:
 			level = slog.LevelWarn
 		}
-		s.deps.Logger.LogAttrs(r.Context(), level, "request",
+		s.deps.Logger.LogAttrs(
+			r.Context(), level, "request",
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),
 			slog.Int("status", status),

@@ -974,7 +974,8 @@ func (s *gormEnrollmentStore) UpdateToken(ctx context.Context, id, tokenHash str
 
 func (s *gormEnrollmentStore) Consume(ctx context.Context, id string, now time.Time) (bool, error) {
 	res := s.db.WithContext(ctx).Model(&models.AgentEnrollment{}).
-		Where("id = ? AND (status IN ? OR (status = ? AND expires_at > ?))",
+		Where(
+			"id = ? AND (status IN ? OR (status = ? AND expires_at > ?))",
 			id,
 			[]string{string(models.EnrollmentOffline), string(models.EnrollmentOnline)},
 			string(models.EnrollmentPending),

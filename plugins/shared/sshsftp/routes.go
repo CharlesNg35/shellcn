@@ -97,7 +97,8 @@ func Routes(prefix, protocol string, includeShell bool) []plugin.Route {
 			Permission: protocol + ".shell", Risk: plugin.RiskPrivileged,
 			AuditEvent: protocol + ".shell", Input: terminalSchema(), Stream: shell,
 		}}, routes...)
-		routes = append(routes,
+		routes = append(
+			routes,
 			plugin.Route{ID: prefix + ".snippet.list", Method: plugin.MethodGet, Path: "/snippets", Permission: protocol + ".snippets.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".snippet.list", Handle: snippetList()},
 			plugin.Route{ID: prefix + ".snippet.create", Method: plugin.MethodPost, Path: "/snippets", Permission: protocol + ".snippets.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".snippet.create", Input: snippetSchema(), Handle: snippetCreate()},
 			plugin.Route{ID: prefix + ".snippet.run", Method: plugin.MethodPost, Path: "/snippets/{id}/run", Permission: protocol + ".snippets.run", Risk: plugin.RiskPrivileged, AuditEvent: protocol + ".snippet.run", Timeout: 30 * time.Second, Handle: snippetRun()},

@@ -62,7 +62,6 @@ func WithoutRegistryFetch() Option {
 // WithLogger sets the logger.
 func WithLogger(l *slog.Logger) Option { return func(r *Registry) { r.logger = l } }
 
-// New builds a registry.
 func New(opts ...Option) *Registry {
 	r := &Registry{
 		http:     &http.Client{Timeout: fetchTimeout},

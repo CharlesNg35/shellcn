@@ -1,8 +1,6 @@
 // Package budget computes a turn's token budgeting. The history budget is the
 // model's context window minus the system prompt, the tool schemas, a safety
-// margin, and the reserved output tokens, clamped to sane bounds. Token counts
-// use a deterministic heuristic (Estimate); a real tokenizer can replace it
-// behind the same function without touching callers.
+// margin, and the reserved output tokens, clamped to sane bounds.
 package budget
 
 import (

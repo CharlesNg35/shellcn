@@ -487,7 +487,8 @@ func cpuMemMetrics() plugin.MetricsConfig {
 
 func actions() []plugin.Action {
 	acts := append(lifecycleActions("qemu"), lifecycleActions("lxc")...)
-	acts = append(acts,
+	acts = append(
+		acts,
 		plugin.Action{
 			ID: "act.node.power", Label: "Power", Icon: icon("power"), RouteID: "proxmox.node.power",
 			Params:  map[string]string{"node": "${resource.uid}"},
@@ -530,14 +531,16 @@ func lifecycleActions(kind string) []plugin.Action {
 		{ID: "act." + kind + ".destroy", Label: "Destroy", Icon: icon("trash-2"), RouteID: "proxmox." + kind + ".destroy", Params: gp, Confirm: true, ConfirmText: "Destroy this guest and all its disks? This cannot be undone.", EnabledWhen: whenStatus("stopped")},
 	}
 	if kind == "qemu" {
-		acts = append(acts,
+		acts = append(
+			acts,
 			plugin.Action{ID: "act.qemu.suspend", Label: "Suspend", Icon: icon("power-off"), RouteID: "proxmox.qemu.suspend", Params: gp, Confirm: true, ConfirmText: "Suspend this VM to disk?", EnabledWhen: whenStatus("running"), VisibleWhen: instanceOnly(), Group: "Power"},
 			plugin.Action{ID: "act.qemu.resume", Label: "Resume", Icon: icon("play"), RouteID: "proxmox.qemu.resume", Params: gp, VisibleWhen: instanceOnly(), Group: "Power"},
 			plugin.Action{ID: "act.qemu.resize", Label: "Resize disk", Icon: icon("scaling"), RouteID: "proxmox.qemu.resize", Params: gp, VisibleWhen: instanceOnly(), Group: "Manage"},
 		)
 	}
 	snapParams := map[string]string{"node": "${resource.namespace}", "vmid": "${resource.name}", "snapname": "${resource.uid}"}
-	return append(acts,
+	return append(
+		acts,
 		plugin.Action{ID: "act." + kind + ".snapshot.rollback", Label: "Rollback", Icon: icon("rotate-cw"), RouteID: "proxmox." + kind + ".snapshot.rollback", Params: snapParams, Confirm: true, ConfirmText: "Roll back to this snapshot? Current state is lost.", VisibleWhen: instanceOnly()},
 		plugin.Action{ID: "act." + kind + ".snapshot.delete", Label: "Delete", Icon: icon("trash"), RouteID: "proxmox." + kind + ".snapshot.delete", Params: snapParams, Confirm: true, ConfirmText: "Delete this snapshot?", VisibleWhen: instanceOnly(), Bulk: true},
 		plugin.Action{ID: "act." + kind + ".backup.restore", Label: "Restore", Icon: icon("upload"), RouteID: "proxmox." + kind + ".restore", Params: map[string]string{"node": "${resource.namespace}", "archive": "${resource.uid}"}, Confirm: true, ConfirmText: "Restore this backup archive. Existing guests can be overwritten only when enabled in the form.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "content", Op: plugin.OpEq, Value: "backup"}, {Field: "guestType", Op: plugin.OpEq, Value: kind}}}},

@@ -8,7 +8,7 @@ RUN pnpm install --frozen-lockfile
 COPY web/ ./
 RUN pnpm build
 
-FROM golang:1.26.4-bookworm AS go-build
+FROM golang:1.26.5-bookworm AS go-build
 WORKDIR /src
 # The root module replaces github.com/charlesng35/shellcn/sdk with the nested
 # ./sdk module, so its go.mod must be present before `go mod download`.

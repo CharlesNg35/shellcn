@@ -354,15 +354,23 @@ func shellQuote(value string) string {
 // Redeem validates an agent-presented token and returns the connection it binds
 // to plus the target the agent should proxy. An unused pending token must still
 // be within its install window; an already-enrolled agent may reconnect with the
-// same token until that enrollment is revoked.
+// same token until that enrollment is revoked. It returns ErrEnrollmentInvalid /
+// ErrNoAgentSupport only for genuine rejections; transient store errors are
+// returned as-is so callers can retry instead of giving up.
 func (s *EnrollmentService) Redeem(ctx context.Context, token string) (connectionID string, proxy plugin.ProxyTarget, err error) {
 	enr, err := s.store.GetByTokenHash(ctx, hashToken(token))
 	if err != nil {
-		return "", plugin.ProxyTarget{}, ErrEnrollmentInvalid
+		if errors.Is(err, store.ErrNotFound) {
+			return "", plugin.ProxyTarget{}, ErrEnrollmentInvalid
+		}
+		return "", plugin.ProxyTarget{}, err
 	}
 	conn, err := s.conns.Get(ctx, enr.ConnectionID)
 	if err != nil {
-		return "", plugin.ProxyTarget{}, ErrEnrollmentInvalid
+		if errors.Is(err, store.ErrNotFound) {
+			return "", plugin.ProxyTarget{}, ErrEnrollmentInvalid
+		}
+		return "", plugin.ProxyTarget{}, err
 	}
 	m, ok := s.plugins.Manifest(conn.Protocol)
 	if !ok || m.Agent == nil {

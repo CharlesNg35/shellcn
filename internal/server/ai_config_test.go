@@ -79,7 +79,8 @@ func TestConnectionAIModePersistsAndClearsDestructive(t *testing.T) {
 	h := newHarness(t)
 
 	resp := h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(
-		`{"name":"ai-rw","protocol":"tester","config":{"host":"h"},"aiMode":"read_write","aiAllowDestructive":true,"aiAutoApprove":true}`))
+		`{"name":"ai-rw","protocol":"tester","config":{"host":"h"},"aiMode":"read_write","aiAllowDestructive":true,"aiAutoApprove":true}`,
+	))
 	if resp.Status != http.StatusCreated {
 		t.Fatalf("create: %d (%s)", resp.Status, resp.Body)
 	}
@@ -98,7 +99,8 @@ func TestConnectionAIModePersistsAndClearsDestructive(t *testing.T) {
 	}
 
 	resp = h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(
-		`{"name":"ai-ro","protocol":"tester","config":{"host":"h"},"aiMode":"read_only","aiAllowDestructive":true,"aiAutoApprove":true}`))
+		`{"name":"ai-ro","protocol":"tester","config":{"host":"h"},"aiMode":"read_only","aiAllowDestructive":true,"aiAutoApprove":true}`,
+	))
 	if resp.Status != http.StatusCreated {
 		t.Fatalf("create read_only: %d (%s)", resp.Status, resp.Body)
 	}
@@ -110,7 +112,8 @@ func TestConnectionAIModePersistsAndClearsDestructive(t *testing.T) {
 	}
 
 	if resp := h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(
-		`{"name":"ai-bad","protocol":"tester","config":{"host":"h"},"aiMode":"bogus"}`)); resp.Status != http.StatusBadRequest {
+		`{"name":"ai-bad","protocol":"tester","config":{"host":"h"},"aiMode":"bogus"}`,
+	)); resp.Status != http.StatusBadRequest {
 		t.Fatalf("invalid ai mode: want 400, got %d", resp.Status)
 	}
 }
@@ -140,7 +143,8 @@ func TestPreviewAIProviderModels(t *testing.T) {
 	defer models.Close()
 
 	resp := h.do(t, http.MethodPost, "/api/me/ai/models", "op", strings.NewReader(
-		`{"kind":"openai_compatible","name":"Local","baseUrl":"`+models.URL+`","model":"llama3"}`))
+		`{"kind":"openai_compatible","name":"Local","baseUrl":"`+models.URL+`","model":"llama3"}`,
+	))
 	if resp.Status != http.StatusOK {
 		t.Fatalf("preview models: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
@@ -158,7 +162,8 @@ func TestPreviewAIProviderModels(t *testing.T) {
 	defer anthropic.Close()
 
 	resp = h.do(t, http.MethodPost, "/api/me/ai/models", "op", strings.NewReader(
-		`{"kind":"anthropic","name":"Anthropic","baseUrl":"`+anthropic.URL+`","model":"claude-sonnet-4-5"}`))
+		`{"kind":"anthropic","name":"Anthropic","baseUrl":"`+anthropic.URL+`","model":"claude-sonnet-4-5"}`,
+	))
 	if resp.Status != http.StatusBadRequest || !strings.Contains(string(resp.Body), "provider returned HTTP 401 Unauthorized") {
 		t.Fatalf("provider HTTP error: want clear 400, got %d (%s)", resp.Status, resp.Body)
 	}
@@ -183,13 +188,15 @@ func TestDraftAIProviderTestValidation(t *testing.T) {
 		}
 	}
 	resp := h.do(t, http.MethodPost, "/api/me/ai/test", "op", strings.NewReader(
-		`{"kind":"openrouter","name":"OpenRouter","model":"z-ai/glm-4.5-air","models":["z-ai/glm-4.5-air"]}`))
+		`{"kind":"openrouter","name":"OpenRouter","model":"z-ai/glm-4.5-air","models":["z-ai/glm-4.5-air"]}`,
+	))
 	if resp.Status != http.StatusBadRequest || !strings.Contains(string(resp.Body), "api key is required") {
 		t.Fatalf("missing openrouter key: want clear 400, got %d (%s)", resp.Status, resp.Body)
 	}
 
 	resp = h.do(t, http.MethodPost, "/api/me/ai/test", "op", strings.NewReader(
-		`{"kind":"openai_compatible","baseUrl":"`+models.URL+`","model":"llama3"}`))
+		`{"kind":"openai_compatible","baseUrl":"`+models.URL+`","model":"llama3"}`,
+	))
 	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), `"ok":true`) {
 		t.Fatalf("valid draft test: status=%d body=%s", resp.Status, resp.Body)
 	}
@@ -199,7 +206,8 @@ func TestAIConversationRoutesAreConnectionScoped(t *testing.T) {
 	h := newHarness(t)
 
 	resp := h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(
-		`{"name":"other-ai","protocol":"tester","config":{"host":"h"}}`))
+		`{"name":"other-ai","protocol":"tester","config":{"host":"h"}}`,
+	))
 	if resp.Status != http.StatusCreated {
 		t.Fatalf("create other connection: %d (%s)", resp.Status, resp.Body)
 	}

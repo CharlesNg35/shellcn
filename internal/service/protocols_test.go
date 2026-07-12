@@ -14,8 +14,8 @@ func TestProtocolAvailabilityAllows(t *testing.T) {
 		state          models.ProtocolAvailability
 		admin, regular bool
 	}{
-		{"", true, true},                        // unset defaults to enabled
-		{models.ProtocolEnabled, true, true},    //
+		{"", true, true}, // unset defaults to enabled
+		{models.ProtocolEnabled, true, true},
 		{models.ProtocolAdminOnly, true, false}, // admins only
 		{models.ProtocolDisabled, false, false}, // nobody
 	}

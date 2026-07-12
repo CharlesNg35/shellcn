@@ -458,7 +458,7 @@ func TestEngineConcurrentStopAndFinalize(t *testing.T) {
 	wg.Add(2)
 	go func() { defer wg.Done(); _ = e.Stop(ctx, key) }()
 	go func() { defer wg.Done(); finalize() }()
-	wg.Wait() // -race + finishOnce prove there is no double-finalize panic
+	wg.Wait() // -race + the live-atomic guard prove there is no double-finalize panic
 }
 
 // TestEngineRecordsResizeControlFrames asserts that once a terminal recording is

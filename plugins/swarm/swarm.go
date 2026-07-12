@@ -53,7 +53,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				Label:      "Docker Swarm",
 				Kind:       "docker-run",
 				ConnectURL: plugin.ArtifactConnectURL{LocalhostHost: "host.docker.internal"},
-				Template: "docker run --rm --name " + plugin.AgentBinary + " " +
+				Template: "docker run -d --restart unless-stopped --name " + plugin.AgentBinary + " " +
 					"{{if .LocalhostHostRequired}}--add-host={{.LocalhostHost}}:host-gateway {{end}}" +
 					`--group-add "$(stat -c '%g' /var/run/docker.sock)" ` +
 					"-e SHELLCN_CONNECT_URL={{shellquote .ConnectURL}} " +

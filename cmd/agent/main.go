@@ -186,6 +186,9 @@ func serve(ctx context.Context, logger *slog.Logger, connectURL, token string, i
 	}
 
 	if !resp.OK {
+		if resp.Retryable {
+			return fmt.Errorf("gateway unavailable, retrying: %s", resp.Error)
+		}
 		return fmt.Errorf("%w: %s", errEnrollmentRejected, resp.Error)
 	}
 
