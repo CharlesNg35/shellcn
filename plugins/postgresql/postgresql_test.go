@@ -511,6 +511,7 @@ func assertColumnsArray(t *testing.T, p plugin.Plugin, routeID string, wantKeys 
 	}
 	if columns == nil {
 		t.Fatalf("%s: no columns field", routeID)
+		return
 	}
 	if columns.Type != plugin.FieldArray {
 		t.Fatalf("%s: columns is %q, want array", routeID, columns.Type)

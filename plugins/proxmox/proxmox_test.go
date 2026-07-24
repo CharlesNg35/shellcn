@@ -312,6 +312,7 @@ func TestMigrateUsesNodeOptions(t *testing.T) {
 	}
 	if field == nil {
 		t.Fatal("target field missing")
+		return
 	}
 	if field.Type != plugin.FieldSelect {
 		t.Fatalf("target field type = %q", field.Type)
@@ -379,6 +380,7 @@ func TestStorageColumnsExposeCapacityUsage(t *testing.T) {
 	}
 	if usedPct == nil {
 		t.Fatal("storage columns missing usedPct")
+		return
 	}
 	if usedPct.Type != plugin.ColumnPercent || usedPct.Precision == nil || *usedPct.Precision != 1 {
 		t.Fatalf("storage usedPct column = %+v", usedPct)
@@ -419,6 +421,7 @@ func TestBackupSchemaUsesStoragePicker(t *testing.T) {
 	}
 	if field == nil {
 		t.Fatal("storage field missing")
+		return
 	}
 	if field.Type != plugin.FieldSelect {
 		t.Fatalf("storage field type = %q", field.Type)
