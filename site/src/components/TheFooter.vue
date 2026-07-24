@@ -34,8 +34,8 @@ import { REPO } from "../data";
       <span>Shell<span class="text-accent">CN</span></span>
     </div>
     <p class="mx-auto mb-4.5 max-w-[52ch] text-[14.5px]">
-      An open-source infrastructure access gateway. Early days — take it for a spin and tell us what
-      breaks.
+      An open-source infrastructure access gateway. It's still early, so take it for a spin and tell
+      us what breaks.
     </p>
     <div class="flex items-center justify-center gap-5.5 text-sm">
       <a :href="REPO" target="_blank" rel="noreferrer" class="hover:text-ink">GitHub</a>

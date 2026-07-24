@@ -9,7 +9,7 @@ import { FEATURES } from "../data";
       <div class="mb-3.5 text-[13px] font-bold tracking-wider text-accent uppercase">
         Secure & auditable from day one
       </div>
-      <h2 class="text-[clamp(28px,4vw,40px)] font-extrabold">Built like infrastructure, not a toy.</h2>
+      <h2 class="text-[clamp(28px,4vw,40px)] font-extrabold">Built for real infrastructure.</h2>
     </div>
 
     <div class="grid gap-[18px] sm:grid-cols-2 lg:grid-cols-3">

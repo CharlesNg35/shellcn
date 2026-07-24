@@ -1,11 +1,11 @@
 export const CAT_COLOR: Record<string, string> = {
   Shell: "#38bdf8",
   Files: "#22d3ee",
-  Containers: "#60a5fa",
-  Virtualization: "#a78bfa",
-  Desktop: "#f472b6",
+  Containers: "#3b82f6",
+  Virtualization: "#6366f1",
+  Desktop: "#2dd4bf",
   Databases: "#34d399",
-  Observability: "#fbbf24",
+  Observability: "#0ea5e9",
   Directory: "#94a3b8",
 };
 
@@ -22,9 +22,9 @@ export type Feature = { icon: string; title: string; body: string };
 export const FEATURES: Feature[] = [
   { icon: "shield", title: "RBAC & ownership grants", body: "Every route carries a permission and risk tier, enforced by Casbin plus per-connection ownership and sharing grants. Secrets are AES-256-GCM encrypted and write-only." },
   { icon: "record", title: "Session recording", body: "Terminal sessions record as asciicast v2; remote desktops capture graphically. Plugin-declared, off by default, and private to their creator." },
-  { icon: "network", title: "Reach private networks", body: "A tiny reverse-tunnel agent dials back from inside a target behind NAT or a firewall — transport is orthogonal to protocol, invisible to the plugin." },
-  { icon: "binary", title: "Single self-contained binary", body: "Pure-Go dependencies, an embedded Vue frontend, SQLite by default. Even RDP decodes in-process — no external daemon required." },
-  { icon: "globe", title: "Browser-native everything", body: "xterm.js terminals, noVNC desktops, CodeMirror editors, live metrics and log tails — all rendered from the manifest projection." },
+  { icon: "network", title: "Reach private networks", body: "A small reverse-tunnel agent dials back from inside a target that sits behind NAT or a firewall. The plugin never knows the difference." },
+  { icon: "binary", title: "Single self-contained binary", body: "Pure-Go dependencies, an embedded Vue frontend, SQLite by default. Even RDP decodes in-process, so there's no external daemon to run." },
+  { icon: "globe", title: "Browser-native everything", body: "xterm.js terminals, noVNC desktops, CodeMirror editors, live metrics and log tails, all rendered from the manifest projection." },
   { icon: "plug", title: "Extensible & audited", body: "Out-of-tree plugins run as sandboxed gRPC subprocesses with no ambient authority. Every action is authn → authz → validate → audit → handler." },
 ];
 

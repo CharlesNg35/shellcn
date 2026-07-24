@@ -19,9 +19,9 @@ import { REPO } from "../data";
         One gateway for <span class="text-accent">everything</span> you log into.
       </h1>
       <p class="mt-5 mb-7 max-w-[46ch] text-lg text-muted">
-        SSH, containers, Kubernetes, databases and remote desktops — behind one
-        secure, audited, browser-based control plane. Every protocol is a
-        compiled-in Go plugin; the core owns rendering, sessions, and audit.
+        Every server, container, cluster, database, and desktop you manage,
+        reachable from a single browser tab. Nothing to install, and every
+        session is logged.
       </p>
       <div class="flex flex-wrap gap-3.5">
         <a

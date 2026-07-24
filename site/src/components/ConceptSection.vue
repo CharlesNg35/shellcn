@@ -9,10 +9,10 @@ import AppIcon from "./AppIcon.vue";
       <h2 class="text-[clamp(28px,4vw,40px)] font-extrabold">Plugins declare. The core owns.</h2>
       <p class="mt-4 text-[17px] text-muted">
         A plugin ships one versioned <b class="text-ink">manifest</b> (config schema, views,
-        actions, streams, routes) plus typed route handlers. The core owns auth, sessions,
-        transport, audit, and rendering — and serves the browser a projection of the manifest.
-        The frontend renders that projection, so
-        <b class="text-ink">adding a protocol needs zero frontend changes.</b>
+        actions, streams, routes) and a set of typed route handlers. The core handles auth,
+        sessions, transport, audit, and rendering, then sends the browser a projection of the
+        manifest. The frontend renders that projection, so
+        <b class="text-ink">adding a protocol takes no frontend changes.</b>
       </p>
     </div>
 
@@ -22,7 +22,7 @@ import AppIcon from "./AppIcon.vue";
           <AppIcon name="globe" />
         </div>
         <b class="text-base">Browser</b>
-        <span class="text-sm text-muted">Universal renderer — ~20 panel types. Terminals, tables, trees, desktops.</span>
+        <span class="text-sm text-muted">Universal renderer with ~20 panel types: terminals, tables, trees, desktops.</span>
       </div>
 
       <div class="grid place-items-center text-[22px] text-dim max-md:rotate-90">

@@ -65,7 +65,7 @@ async function copy() {
       </div>
       <p class="mt-4.5 text-center text-sm text-muted">
         Reuse the same master key on restart, or stored credentials can't be decrypted. Data and
-        recordings live in <code class="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[0.92em] text-ink">/data</code> — mount a volume there.
+        recordings live in <code class="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[0.92em] text-ink">/data</code>, so mount a volume there.
       </p>
     </div>
   </section>

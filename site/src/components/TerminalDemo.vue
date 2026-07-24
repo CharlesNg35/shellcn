@@ -31,7 +31,7 @@ onMounted(async () => {
   await typeInto(span("text-[#a78bfa]"), "ghcr.io/charlesng35/shellcn", 40);
   raw("\n\n");
   await sleep(420);
-  raw('<span class="text-muted">▸ shellcn — starting…</span>\n');
+  raw('<span class="text-muted">▸ starting shellcn…</span>\n');
   await sleep(480);
   raw('<span class="text-muted">▸ store: sqlite (embedded) · master key loaded</span>\n');
   await sleep(420);
@@ -41,12 +41,12 @@ onMounted(async () => {
   await sleep(360);
   raw('<span class="text-ok">✓ listening on <span class="text-accent underline">http://localhost:8081</span></span>\n\n');
   await sleep(520);
-  await typeInto(span("text-muted"), "# open a browser and sign in — you're in.", 42);
+  await typeInto(span("text-muted"), "# open a browser and sign in. you're in.", 42);
 });
 
 const STATIC = `<span class="text-ok">$ </span><span class="text-accent">docker run -d -p 8081:8081 </span><span class="text-[#a78bfa]">ghcr.io/charlesng35/shellcn</span>
 
-<span class="text-muted">▸ shellcn — starting…</span>
+<span class="text-muted">▸ starting shellcn…</span>
 <span class="text-ok">✓ 20 protocols registered</span>
 <span class="text-ok">✓ listening on <span class="text-accent underline">http://localhost:8081</span></span>`;
 </script>
@@ -60,7 +60,7 @@ const STATIC = `<span class="text-ok">$ </span><span class="text-accent">docker 
       <span class="h-3 w-3 rounded-full bg-[#ff5f57]"></span>
       <span class="h-3 w-3 rounded-full bg-[#febc2e]"></span>
       <span class="h-3 w-3 rounded-full bg-[#28c840]"></span>
-      <span class="ml-2.5 font-mono text-xs text-dim">bash — shellcn</span>
+      <span class="ml-2.5 font-mono text-xs text-dim">shellcn · bash</span>
     </div>
     <pre class="m-0 min-h-[300px] whitespace-pre-wrap break-words px-[18px] py-5 font-mono text-[13.5px] leading-[1.7] text-[#cfe0f5]"><code ref="out"></code><span class="blink text-accent">▊</span></pre>
   </div>
