@@ -293,7 +293,7 @@ export function wasmStageViewportClass(config: WasmPanelConfig): string {
 }
 
 export function wasmStageSandbox(config: WasmPanelConfig): string {
-  const tokens = ["allow-scripts"];
+  const tokens = ["allow-scripts", "allow-downloads"];
   if (config.capabilities?.pointerLock) tokens.push("allow-pointer-lock");
   return tokens.join(" ");
 }

@@ -47,7 +47,7 @@ describe("WasmPanel", () => {
 
     const iframe = document.body.querySelector("iframe");
     expect(iframe).toBeTruthy();
-    expect(iframe?.getAttribute("sandbox")).toBe("allow-scripts");
+    expect(iframe?.getAttribute("sandbox")).toBe("allow-scripts allow-downloads");
     expect(iframe?.getAttribute("sandbox")).not.toContain("allow-fullscreen");
     expect(iframe?.getAttribute("sandbox")).not.toContain("allow-same-origin");
     expect(iframe?.getAttribute("allow")).toBe("fullscreen; gamepad");
