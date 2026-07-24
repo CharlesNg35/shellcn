@@ -666,6 +666,31 @@ func TestValidateRejectsBadWasmPanel(t *testing.T) {
 	}
 }
 
+func TestValidateAllowsForwardAgentWithoutAddress(t *testing.T) {
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "x",
+		Title:      "X",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{
+			plugin.TransportAgent,
+		},
+		Agent: &plugin.AgentProfile{Proxy: plugin.ProxyTarget{
+			Mode:    plugin.AgentTCP,
+			Risk:    plugin.RiskPrivileged,
+			Forward: true,
+		}},
+	}
+	routes := []plugin.Route{
+		{ID: "x.list", Method: plugin.MethodGet, Permission: "x.read", Risk: plugin.RiskSafe, Handle: noop},
+	}
+	if err := plugin.Validate(m, routes); err != nil {
+		t.Fatalf("forwarded agent without fixed address should validate: %v", err)
+	}
+}
+
 func TestValidateRejectsBadWebProxyPanel(t *testing.T) {
 	base := func() plugin.Manifest {
 		return plugin.Manifest{

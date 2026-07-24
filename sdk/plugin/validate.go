@@ -130,7 +130,11 @@ func validateAgentProfile(agent *AgentProfile, add func(string, ...any)) {
 		add("AgentProfile proxy mode %q is not supported", agent.Proxy.Mode)
 	}
 	switch agent.Proxy.Mode {
-	case AgentTCP, AgentUDP, AgentUnix, AgentHTTP:
+	case AgentTCP, AgentUDP, AgentUnix:
+		if !agent.Proxy.Forward && strings.TrimSpace(agent.Proxy.Address) == "" {
+			add("AgentProfile proxy address is required for mode %q", agent.Proxy.Mode)
+		}
+	case AgentHTTP:
 		if strings.TrimSpace(agent.Proxy.Address) == "" {
 			add("AgentProfile proxy address is required for mode %q", agent.Proxy.Mode)
 		}
