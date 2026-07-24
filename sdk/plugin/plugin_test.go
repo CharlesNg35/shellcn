@@ -155,6 +155,14 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"agent without profile", "AgentProfile is required", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.SupportedTransports = []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent}
 		}},
+		{"agent with unknown proxy mode", "proxy mode \"wormhole\" is not supported", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.SupportedTransports = []plugin.Transport{plugin.TransportAgent}
+			m.Agent = &plugin.AgentProfile{Proxy: plugin.ProxyTarget{Mode: "wormhole", Address: "127.0.0.1:1"}}
+		}},
+		{"agent tcp without proxy address", "proxy address is required", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.SupportedTransports = []plugin.Transport{plugin.TransportAgent}
+			m.Agent = &plugin.AgentProfile{Proxy: plugin.ProxyTarget{Mode: plugin.AgentTCP}}
+		}},
 		{"duplicate route id", "duplicate route ID", func(_ *plugin.Manifest, r *[]plugin.Route) {
 			*r = append(*r, plugin.Route{ID: "x.list", Method: plugin.MethodGet, Permission: "p", Risk: plugin.RiskSafe, Handle: noop})
 		}},
@@ -658,6 +666,31 @@ func TestValidateRejectsBadWasmPanel(t *testing.T) {
 	}
 }
 
+func TestValidateAllowsForwardAgentWithoutAddress(t *testing.T) {
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "x",
+		Title:      "X",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{
+			plugin.TransportAgent,
+		},
+		Agent: &plugin.AgentProfile{Proxy: plugin.ProxyTarget{
+			Mode:    plugin.AgentTCP,
+			Risk:    plugin.RiskPrivileged,
+			Forward: true,
+		}},
+	}
+	routes := []plugin.Route{
+		{ID: "x.list", Method: plugin.MethodGet, Permission: "x.read", Risk: plugin.RiskSafe, Handle: noop},
+	}
+	if err := plugin.Validate(m, routes); err != nil {
+		t.Fatalf("forwarded agent without fixed address should validate: %v", err)
+	}
+}
+
 func TestValidateRejectsBadWebProxyPanel(t *testing.T) {
 	base := func() plugin.Manifest {
 		return plugin.Manifest{
@@ -669,7 +702,7 @@ func TestValidateRejectsBadWebProxyPanel(t *testing.T) {
 			SupportedTransports: []plugin.Transport{
 				plugin.TransportAgent,
 			},
-			Agent: &plugin.AgentProfile{},
+			Agent: &plugin.AgentProfile{Proxy: plugin.ProxyTarget{Mode: plugin.AgentHTTP, Address: "https://example.test"}},
 			Tabs: []plugin.Panel{{
 				Key:    "surface",
 				Label:  "Surface",

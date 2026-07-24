@@ -38,7 +38,7 @@ require (
 	github.com/x90skysn3k/grdp v1.0.2
 	go.mongodb.org/mongo-driver/v2 v2.6.0
 	golang.org/x/crypto v0.52.0
-	golang.org/x/text v0.37.0
+	golang.org/x/text v0.40.0
 	golang.org/x/time v0.15.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gorm.io/driver/mysql v1.6.0
@@ -210,7 +210,7 @@ require (
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/term v0.43.0
 	google.golang.org/api v0.197.0 // indirect

@@ -56,6 +56,7 @@ func TestEntryOverviewUsesObjectDetail(t *testing.T) {
 	}
 	if overview == nil {
 		t.Fatal("entry overview tab missing")
+		return
 	}
 	if overview.Type != plugin.PanelObjectDetail || overview.Source == nil || overview.Source.RouteID != "ldap.entry.overview" {
 		t.Fatalf("entry overview panel = %+v", overview)
@@ -101,6 +102,7 @@ func TestEntryResourceExposesDirectoryBrowserColumnsAndSubtreeNavigation(t *test
 	}
 	if subtree == nil {
 		t.Fatal("missing subtree tab")
+		return
 	}
 	cfg, ok := subtree.Config.(plugin.TableConfig)
 	if !ok || cfg.RowClick != plugin.RowClickNavigate || cfg.DefaultSort == nil || cfg.DefaultSort.Field != "dn" {
@@ -118,6 +120,7 @@ func TestRenameUsesParentDNAutocomplete(t *testing.T) {
 	}
 	if schema == nil {
 		t.Fatal("ldap.entry.rename has no input schema")
+		return
 	}
 	var parent *plugin.Field
 	for _, group := range schema.Groups {
@@ -350,6 +353,7 @@ func TestEntryAddUsesStructuredObjectClassAndAttributeFields(t *testing.T) {
 	}
 	if schema == nil {
 		t.Fatal("ldap.entry.add has no input schema")
+		return
 	}
 	var attributes *plugin.Field
 	var objectClass *plugin.Field
@@ -368,6 +372,7 @@ func TestEntryAddUsesStructuredObjectClassAndAttributeFields(t *testing.T) {
 	}
 	if attributes == nil {
 		t.Fatal("no attributes field")
+		return
 	}
 	if attributes.Type != plugin.FieldMap {
 		t.Fatalf("attributes is %q, want map", attributes.Type)

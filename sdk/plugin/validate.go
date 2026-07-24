@@ -94,6 +94,7 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 	if !m.SupportsTransport(TransportAgent) && m.Agent != nil {
 		add("AgentProfile declared but transport %q is not supported", TransportAgent)
 	}
+	validateAgentProfile(m.Agent, add)
 
 	routesByID := validateRoutes(m.Name, routes, add)
 	actionIDs := validateActions(m, routesByID, collectTabKeys(m), add)
@@ -117,6 +118,27 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 	}
 
 	return errors.Join(errs...)
+}
+
+func validateAgentProfile(agent *AgentProfile, add func(string, ...any)) {
+	if agent == nil {
+		return
+	}
+	switch agent.Proxy.Mode {
+	case AgentTCP, AgentUDP, AgentUnix, AgentHTTP, AgentHostMonitor:
+	default:
+		add("AgentProfile proxy mode %q is not supported", agent.Proxy.Mode)
+	}
+	switch agent.Proxy.Mode {
+	case AgentTCP, AgentUDP, AgentUnix:
+		if !agent.Proxy.Forward && strings.TrimSpace(agent.Proxy.Address) == "" {
+			add("AgentProfile proxy address is required for mode %q", agent.Proxy.Mode)
+		}
+	case AgentHTTP:
+		if strings.TrimSpace(agent.Proxy.Address) == "" {
+			add("AgentProfile proxy address is required for mode %q", agent.Proxy.Mode)
+		}
+	}
 }
 
 func validateCredentialSelectors(schema Schema, catalog CredentialKindCatalog, add func(string, ...any)) map[CredentialKind]bool {

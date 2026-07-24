@@ -106,6 +106,7 @@ func TestIndexCreateKeysIsMapOfDirectionSelect(t *testing.T) {
 	}
 	if schema == nil {
 		t.Fatal("mongodb.index.create has no input schema")
+		return
 	}
 	var field *plugin.Field
 	for _, g := range schema.Groups {
@@ -117,6 +118,7 @@ func TestIndexCreateKeysIsMapOfDirectionSelect(t *testing.T) {
 	}
 	if field == nil {
 		t.Fatal("no keys field")
+		return
 	}
 	if field.Type != plugin.FieldMap {
 		t.Fatalf("keys is %q, want map", field.Type)

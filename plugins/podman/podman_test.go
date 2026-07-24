@@ -94,6 +94,7 @@ func TestManifestDeclaresPodmanWorkspace(t *testing.T) {
 	}
 	if containerRes == nil {
 		t.Fatal("missing container resource")
+		return
 	}
 	wantTabs := []string{"overview", "stats", "processes", "logs", "terminal", "env", "mounts", "inspect"}
 	if len(containerRes.Detail.Tabs) != len(wantTabs) {

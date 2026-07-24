@@ -224,6 +224,7 @@ func TestDatabaseTablesTabHasCreate(t *testing.T) {
 	}
 	if input == nil {
 		t.Fatal("missing postgresql.table.create.in_database route")
+		return
 	}
 	var schema plugin.Field
 	for _, f := range input.Groups[0].Fields {
@@ -510,6 +511,7 @@ func assertColumnsArray(t *testing.T, p plugin.Plugin, routeID string, wantKeys 
 	}
 	if columns == nil {
 		t.Fatalf("%s: no columns field", routeID)
+		return
 	}
 	if columns.Type != plugin.FieldArray {
 		t.Fatalf("%s: columns is %q, want array", routeID, columns.Type)

@@ -312,7 +312,8 @@ func TestTableDataGridIsEditable(t *testing.T) {
 	}
 	for key, ds := range map[string]*plugin.DataSource{"insert": tc.Insert, "update": tc.Update, "delete": tc.Delete} {
 		if ds == nil {
-			t.Fatalf("Data tab missing %q mutation source", key)
+			t.Errorf("Data tab missing %q mutation source", key)
+			continue
 		}
 		if !routeIDs[ds.RouteID] {
 			t.Fatalf("Data tab %q points at missing route %q", key, ds.RouteID)
@@ -554,6 +555,7 @@ func assertColumnsArray(t *testing.T, p plugin.Plugin, routeID string, wantKeys 
 	}
 	if columns == nil {
 		t.Fatalf("%s: no columns field", routeID)
+		return
 	}
 	if columns.Type != plugin.FieldArray {
 		t.Fatalf("%s: columns is %q, want array", routeID, columns.Type)

@@ -60,6 +60,7 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	}
 	if containerRes == nil {
 		t.Fatal("missing container resource")
+		return
 	}
 	if !contains(containerRes.Actions.Toolbar, "docker.container.create") {
 		t.Fatalf("container list actions = %#v, want create action", containerRes.Actions.Toolbar)
@@ -119,6 +120,7 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	}
 	if composeRes == nil {
 		t.Fatal("missing compose resource")
+		return
 	}
 	wantComposeTabs := []string{"overview", "containers", "services"}
 	if len(composeRes.Detail.Tabs) != len(wantComposeTabs) {
