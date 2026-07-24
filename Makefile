@@ -1,4 +1,4 @@
-.PHONY: help install build build-go build-web ensure-web-dist test test-web test-e2e test-cover lint lint-go lint-web fmt format fmt-go fmt-web tidy run dev dev-web dev-api dev-server clean tools proto
+.PHONY: help install build build-go build-web ensure-web-dist test test-web test-e2e test-cover lint lint-go lint-web fmt format fmt-go fmt-web tidy run dev dev-web dev-site dev-api dev-server clean tools proto
 
 BIN_DIR ?= bin
 APP_NAME ?= shellcn
@@ -6,6 +6,7 @@ PKG ?= ./cmd/... ./internal/... ./plugins/...
 SDK_DIR := sdk
 WEB_DIR := web
 WEB_DIST := $(WEB_DIR)/dist
+SITE_DIR := site
 GO_LDFLAGS ?= -s -w
 GO_SOURCE_DIRS := cmd internal plugins sdk
 
@@ -22,6 +23,7 @@ help:
 	@echo "  dev         Run API + web dev servers concurrently"
 	@echo "  dev-api     Run the Go API (--dev) with live reload"
 	@echo "  dev-web     Run the Vite dev server"
+	@echo "  dev-site    Run the landing-site dev server (site/, http://localhost:5175)"
 	@echo "  install     Install Go + frontend dependencies"
 	@echo "  proto       Generate plugin protobuf stubs (buf generate)"
 	@echo "  tools       Install dev tools (wgo, gofumpt, buf, protoc-gen-go*)"
@@ -100,6 +102,10 @@ dev-server: dev-api
 
 dev-web:
 	@cd $(WEB_DIR) && pnpm dev
+
+dev-site:
+	@if [ ! -d "$(SITE_DIR)/node_modules" ]; then cd $(SITE_DIR) && pnpm install; fi
+	@cd $(SITE_DIR) && pnpm dev
 
 husky: tidy fmt lint test build
 	@echo "✓ husky pre-commit checks passed" 
