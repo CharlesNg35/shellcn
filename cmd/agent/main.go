@@ -419,7 +419,7 @@ func streamTarget(logger *slog.Logger, stream net.Conn, target transport.AgentPr
 	} else {
 		network, address = modeNetwork(target.Mode), target.Address
 	}
-	if network != "tcp" && network != "unix" {
+	if network != "tcp" && network != "unix" && !transport.IsUDPNetwork(network) {
 		logger.Warn("refusing unsupported proxy network", "network", network)
 		return "", ""
 	}
@@ -432,6 +432,8 @@ func modeNetwork(mode string) string {
 		return "tcp"
 	case transport.AgentModeUnix:
 		return "unix"
+	case transport.AgentModeUDP:
+		return "udp"
 	default:
 		return ""
 	}
@@ -453,10 +455,47 @@ func proxyStream(logger *slog.Logger, stream net.Conn, target transport.AgentPro
 
 	defer func() { _ = up.Close() }()
 
+	if transport.IsUDPNetwork(network) {
+		pumpDatagrams(stream, up)
+		return
+	}
+
 	done := make(chan error, 2)
 
 	go func() { _, e := io.Copy(up, stream); done <- e }()
 	go func() { _, e := io.Copy(stream, up); done <- e }()
 
+	<-done
+}
+
+// pumpDatagrams bridges a framed tunnel stream and a connected UDP socket in
+// both directions, returning when either side closes.
+func pumpDatagrams(stream, up net.Conn) {
+	done := make(chan struct{}, 2)
+	go func() {
+		defer func() { done <- struct{}{} }()
+		for {
+			dg, err := transport.ReadDatagram(stream)
+			if err != nil {
+				return
+			}
+			if _, err := up.Write(dg); err != nil {
+				return
+			}
+		}
+	}()
+	go func() {
+		defer func() { done <- struct{}{} }()
+		buf := make([]byte, 65535)
+		for {
+			n, err := up.Read(buf)
+			if err != nil {
+				return
+			}
+			if err := transport.WriteDatagram(stream, buf[:n]); err != nil {
+				return
+			}
+		}
+	}()
 	<-done
 }

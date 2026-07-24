@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 
 	"github.com/coder/websocket"
 	"github.com/hashicorp/yamux"
@@ -25,9 +26,16 @@ type AgentHello struct {
 const (
 	AgentModeTCP         = "tcp"
 	AgentModeUnix        = "unix"
+	AgentModeUDP         = "udp"
 	AgentModeHTTP        = "http_proxy"
 	AgentModeHostMonitor = "host_monitor"
 )
+
+// IsUDPNetwork reports whether a dial network is UDP; such streams are
+// datagram-framed over the tunnel, not copied as a byte stream.
+func IsUDPNetwork(network string) bool {
+	return network == "udp" || network == "udp4" || network == "udp6"
+}
 
 // AgentProxyTarget tells the agent what local endpoint to expose back. The L7
 // (http_proxy) fields are generic credential-injection knobs: a token file to
@@ -74,6 +82,68 @@ func ReadStreamTarget(r io.Reader) (network, addr string, err error) {
 		return "", "", fmt.Errorf("malformed stream target")
 	}
 	return netw, addr, nil
+}
+
+// maxDatagram is the largest framed payload the 2-byte length prefix allows.
+const maxDatagram = 0xffff
+
+// WriteDatagram frames one datagram (2-byte length + payload) in a single Write
+// so concurrent senders can't interleave header and body.
+func WriteDatagram(w io.Writer, p []byte) error {
+	if len(p) > maxDatagram {
+		return fmt.Errorf("datagram too large: %d bytes", len(p))
+	}
+	frame := make([]byte, 2+len(p))
+	binary.BigEndian.PutUint16(frame, uint16(len(p)))
+	copy(frame[2:], p)
+	n, err := w.Write(frame)
+	if err != nil {
+		return err
+	}
+	if n != len(frame) {
+		return io.ErrShortWrite
+	}
+	return nil
+}
+
+// ReadDatagram reads one frame written by WriteDatagram.
+func ReadDatagram(r io.Reader) ([]byte, error) {
+	var hdr [2]byte
+	if _, err := io.ReadFull(r, hdr[:]); err != nil {
+		return nil, err
+	}
+	buf := make([]byte, binary.BigEndian.Uint16(hdr[:]))
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
+// datagramConn gives a byte-stream tunnel stream connected-UDP semantics: one
+// framed datagram per Read/Write. Deadlines/Close/addresses delegate to the stream.
+type datagramConn struct {
+	net.Conn
+	writeMu sync.Mutex
+}
+
+// NewDatagramConn wraps a tunnel stream with datagram framing.
+func NewDatagramConn(c net.Conn) net.Conn { return &datagramConn{Conn: c} }
+
+func (d *datagramConn) Write(p []byte) (int, error) {
+	d.writeMu.Lock()
+	defer d.writeMu.Unlock()
+	if err := WriteDatagram(d.Conn, p); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+func (d *datagramConn) Read(p []byte) (int, error) {
+	dg, err := ReadDatagram(d.Conn)
+	if err != nil {
+		return 0, err
+	}
+	return copy(p, dg), nil // short buffer truncates, like *net.UDPConn.Read
 }
 
 // AgentConnectResponse is the gateway's reply to AgentHello. On OK the tunnel
@@ -130,6 +200,9 @@ func ServeGatewayTunnel(ctx context.Context, c *websocket.Conn, connectionID str
 				_ = st.Close()
 				return nil, err
 			}
+		}
+		if IsUDPNetwork(network) {
+			return NewDatagramConn(st), nil
 		}
 		return st, nil
 	})

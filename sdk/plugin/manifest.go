@@ -45,6 +45,7 @@ type AgentMode string
 
 const (
 	AgentTCP         AgentMode = "tcp"
+	AgentUDP         AgentMode = "udp"
 	AgentUnix        AgentMode = "unix"
 	AgentHTTP        AgentMode = "http_proxy"
 	AgentHostMonitor AgentMode = "host_monitor"

@@ -167,6 +167,7 @@ func TestS3RegionFieldsUseAutocomplete(t *testing.T) {
 	}
 	if createSchema == nil {
 		t.Fatal("s3.bucket.create should expose an input schema")
+		return
 	}
 	createRegion, ok := schemaField(*createSchema, "region")
 	if !ok {

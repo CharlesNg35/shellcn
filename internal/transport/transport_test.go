@@ -232,7 +232,7 @@ func TestBuildAgentWithTunnel(t *testing.T) {
 
 func TestBuildAgentL4ModesHaveNoHTTP(t *testing.T) {
 	reg := stubRegistry{dial: func(context.Context, string, string) (net.Conn, error) { return nil, errors.New("dialed") }}
-	for _, mode := range []plugin.AgentMode{plugin.AgentTCP, plugin.AgentUnix, ""} {
+	for _, mode := range []plugin.AgentMode{plugin.AgentTCP, plugin.AgentUDP, plugin.AgentUnix, ""} {
 		nt, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, reg, mode)
 		if err != nil {
 			t.Fatalf("build agent %q: %v", mode, err)

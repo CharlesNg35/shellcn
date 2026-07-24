@@ -224,6 +224,7 @@ func TestDatabaseTablesTabHasCreate(t *testing.T) {
 	}
 	if input == nil {
 		t.Fatal("missing postgresql.table.create.in_database route")
+		return
 	}
 	var schema plugin.Field
 	for _, f := range input.Groups[0].Fields {
