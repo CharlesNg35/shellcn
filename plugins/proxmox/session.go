@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	pmox "github.com/luthermonson/go-proxmox"
@@ -18,11 +20,22 @@ import (
 // Session holds the per-connection Proxmox VE client. REST traffic flows through
 // the go-proxmox client (wired to cfg.Net via a custom http.Client); the console
 // websocket is dialed separately so it shares the same transport.
+//
+// Password auth's ticket doubles as the console cookie and doesn't auto-refresh,
+// so do re-logins under s.mu when it expires.
 type Session struct {
+	mu     sync.RWMutex
 	client *pmox.Client
-	httpc  *http.Client
-	wsBase string
 	apply  func(http.Header)
+	ticket string
+
+	httpc   *http.Client
+	wsBase  string
+	baseURL string
+
+	// password-auth re-login credentials; empty for token auth.
+	username string
+	password string
 }
 
 func connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, error) {
@@ -41,28 +54,24 @@ func connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, err
 	}
 	baseURL := "https://" + opts.Addr + "/api2/json"
 
-	clientOpts := []pmox.Option{pmox.WithHTTPClient(httpc)}
-	var apply func(http.Header)
+	s := &Session{
+		httpc:   httpc,
+		wsBase:  "wss://" + opts.Addr + "/api2/json",
+		baseURL: baseURL,
+	}
 	switch opts.Method {
 	case authToken:
-		clientOpts = append(clientOpts, pmox.WithAPIToken(opts.TokenID, opts.TokenSecret))
 		header := "PVEAPIToken=" + opts.TokenID + "=" + opts.TokenSecret
-		apply = func(h http.Header) { h.Set("Authorization", header) }
+		s.client = pmox.NewClient(baseURL, pmox.WithHTTPClient(httpc), pmox.WithAPIToken(opts.TokenID, opts.TokenSecret))
+		s.apply = func(h http.Header) { h.Set("Authorization", header) }
 	case authPassword:
 		ticket, csrf, err := loginTicket(ctx, httpc, baseURL, opts.Username, opts.Password)
 		if err != nil {
 			return nil, err
 		}
-		clientOpts = append(clientOpts, pmox.WithSession(ticket, csrf))
-		cookie := "PVEAuthCookie=" + ticket
-		apply = func(h http.Header) { h.Set("Cookie", cookie) }
-	}
-
-	s := &Session{
-		client: pmox.NewClient(baseURL, clientOpts...),
-		httpc:  httpc,
-		wsBase: "wss://" + opts.Addr + "/api2/json",
-		apply:  apply,
+		s.username = opts.Username
+		s.password = opts.Password
+		s.setSession(ticket, csrf)
 	}
 	if err := s.HealthCheck(ctx); err != nil {
 		return nil, err
@@ -70,8 +79,52 @@ func connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, err
 	return s, nil
 }
 
+func (s *Session) setSession(ticket, csrf string) {
+	cookie := "PVEAuthCookie=" + ticket
+	s.client = pmox.NewClient(s.baseURL, pmox.WithHTTPClient(s.httpc), pmox.WithSession(ticket, csrf))
+	s.apply = func(h http.Header) { h.Set("Cookie", cookie) }
+	s.ticket = ticket
+}
+
+func (s *Session) do(ctx context.Context, fn func(*pmox.Client) error) error {
+	s.mu.RLock()
+	client, ticket := s.client, s.ticket
+	s.mu.RUnlock()
+	err := fn(client)
+	if err == nil || s.username == "" || !errors.Is(err, pmox.ErrNotAuthorized) {
+		return err
+	}
+	client, err = s.relogin(ctx, ticket)
+	if err != nil {
+		return err
+	}
+	return fn(client)
+}
+
+// relogin coalesces concurrent expired-ticket callers into a single refresh.
+func (s *Session) relogin(ctx context.Context, staleTicket string) (*pmox.Client, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ticket != staleTicket {
+		return s.client, nil
+	}
+	ticket, csrf, err := loginTicket(ctx, s.httpc, s.baseURL, s.username, s.password)
+	if err != nil {
+		return nil, err
+	}
+	s.setSession(ticket, csrf)
+	return s.client, nil
+}
+
+func (s *Session) authHeader(h http.Header) {
+	s.mu.RLock()
+	apply := s.apply
+	s.mu.RUnlock()
+	apply(h)
+}
+
 func (s *Session) HealthCheck(ctx context.Context) error {
-	if _, err := s.client.Version(ctx); err != nil {
+	if err := s.do(ctx, func(c *pmox.Client) error { _, err := c.Version(ctx); return err }); err != nil {
 		return fmt.Errorf("%w: reach proxmox api: %v", plugin.ErrUnavailable, err)
 	}
 	return nil

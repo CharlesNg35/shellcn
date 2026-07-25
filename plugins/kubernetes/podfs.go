@@ -33,6 +33,7 @@ func podFilesTab() plugin.Panel {
 				Download: "kubernetes.pod.files.download",
 				Write:    "kubernetes.pod.files.write",
 				Mkdir:    "kubernetes.pod.files.mkdir",
+				Rename:   "kubernetes.pod.files.rename",
 				Delete:   "kubernetes.pod.files.delete",
 			},
 			Upload:   plugin.FileUploadConfig{RouteID: "kubernetes.pod.files.upload", FieldName: "files", Multiple: true},
@@ -67,11 +68,16 @@ func podFileTarget(rc *plugin.RequestContext) (*Session, string, string, string,
 	return s, ns, pod, param(rc, "container"), nil
 }
 
+// podPath canonicalizes a pod file path to an absolute, traversal-free form.
 func podPath(p string) string {
-	if p == "" || p == "." {
+	if p = strings.TrimSpace(p); p == "" || p == "." {
 		return "/"
 	}
-	return p
+	clean := path.Clean("/" + strings.TrimPrefix(p, "/"))
+	if clean == "." {
+		clean = "/"
+	}
+	return clean
 }
 
 // cleanFileName rejects path separators and traversal so an upload/mkdir name can
@@ -125,10 +131,7 @@ func podFileContent(p string, raw []byte) filesystem.FileContent {
 	if size <= 0 {
 		size = int64(len(body))
 	}
-	mimeType := filesystem.MimeFor(p)
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
+	mimeType := filesystem.DetectMIME(p, body)
 	content := filesystem.FileContent{Path: p, MIME: mimeType, Size: size}
 	if filesystem.IsText(mimeType, body) {
 		content.Encoding = "utf8"
@@ -170,11 +173,20 @@ func PodFileDownload(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	return podDownload(p, rc.Param("inline") == "1", body), nil
+}
+
+// podDownload builds the streamed download response. Size is -1 because the byte
+// count is unknown up front (cat streams); a zero Size would be sent as
+// Content-Length: 0 and truncate the body, breaking downloads and inline
+// image/pdf/audio/video previews.
+func podDownload(p string, inline bool, body io.ReadCloser) *plugin.Download {
 	mimeType := filesystem.MimeFor(p)
 	if mimeType == "" {
-		mimeType = "application/octet-stream"
+		// Sniff so extensionless media carries a real Content-Type for inline preview.
+		mimeType, body = filesystem.SniffStream(body)
 	}
-	return &plugin.Download{Name: path.Base(p), MIME: mimeType, Inline: rc.Param("inline") == "1", Body: body}, nil
+	return &plugin.Download{Name: path.Base(p), MIME: mimeType, Size: -1, Inline: inline, Body: body}
 }
 
 func PodFileWrite(rc *plugin.RequestContext) (any, error) {
@@ -242,6 +254,34 @@ func PodFileMkdir(rc *plugin.RequestContext) (any, error) {
 	return map[string]bool{"ok": true}, nil
 }
 
+func PodFileRename(rc *plugin.RequestContext) (any, error) {
+	s, ns, pod, container, err := podFileTarget(rc)
+	if err != nil {
+		return nil, err
+	}
+	p := podPath(rc.Param("path"))
+	if p == "/" {
+		return nil, fmt.Errorf("%w: refusing to rename the root directory", plugin.ErrInvalidInput)
+	}
+	var req struct {
+		Name string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := cleanFileName(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	// src/dst are passed as separate argv elements, never interpolated, so a name
+	// can't inject shell; the cleaned name keeps the entry in its own directory.
+	dst := path.Join(path.Dir(p), name)
+	if _, err := s.execCapture(rc.Ctx, ns, pod, container, []string{"mv", "--", p, dst}, nil); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"ok": true}, nil
+}
+
 func PodFileDelete(rc *plugin.RequestContext) (any, error) {
 	s, ns, pod, container, err := podFileTarget(rc)
 	if err != nil {
@@ -281,20 +321,30 @@ func parseLsOutput(dir, out string) []filesystem.FileEntry {
 			continue
 		}
 		name := strings.Join(fields[8:], " ")
-		if i := strings.Index(name, " -> "); i >= 0 {
-			name = name[:i] // strip symlink target
+		symlink := ""
+		if strings.HasPrefix(fields[0], "l") {
+			if i := strings.Index(name, " -> "); i >= 0 {
+				symlink = name[i+len(" -> "):]
+				name = name[:i]
+			}
 		}
 		if name == "." || name == ".." {
 			continue
 		}
+		isDir := strings.HasPrefix(fields[0], "d")
 		size, _ := strconv.ParseInt(fields[4], 10, 64)
-		items = append(items, filesystem.FileEntry{
-			Name:  name,
-			Path:  path.Join(dir, name),
-			IsDir: strings.HasPrefix(fields[0], "d"),
-			Size:  size,
-			Mode:  fields[0],
-		})
+		entry := filesystem.FileEntry{
+			Name:    name,
+			Path:    path.Join(dir, name),
+			IsDir:   isDir,
+			Size:    size,
+			Mode:    fields[0],
+			Symlink: symlink,
+		}
+		if !isDir {
+			entry.MIME = filesystem.MimeFor(entry.Path)
+		}
+		items = append(items, entry)
 	}
 	return items
 }
@@ -309,7 +359,8 @@ func (s *Session) execCapture(ctx context.Context, ns, pod, container string, co
 		Stdout:    true,
 		Stderr:    true,
 	}
-	executor, err := s.podExecutor(ns, pod, opts)
+	// Writes carry bulk binary stdin; force SPDY (WS-first truncates large stdin).
+	executor, err := s.executorFor(ns, pod, opts, stdin != nil)
 	if err != nil {
 		return nil, err
 	}

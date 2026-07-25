@@ -427,6 +427,83 @@ func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 	}
 }
 
+func fakeSession(t *testing.T) *Session {
+	t.Helper()
+	srv, _ := fakeDockerDaemon(t)
+	t.Cleanup(srv.Close)
+	u, _ := url.Parse(srv.URL)
+	host, port, _ := net.SplitHostPort(u.Host)
+	sess, err := Connect(context.Background(), plugin.ConnectConfig{
+		Transport: plugin.TransportAgent,
+		Config:    map[string]any{"endpoint_type": "tcp", "host": host, "port": mustPort(t, port)},
+		Net:       directNet{},
+	}, "/var/run/docker.sock")
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	t.Cleanup(func() { _ = sess.Close() })
+	s, err := Unwrap(sess)
+	if err != nil {
+		t.Fatalf("Unwrap: %v", err)
+	}
+	return s
+}
+
+func TestImageResourceEventKeepsUsageStatus(t *testing.T) {
+	s := fakeSession(t)
+	ev := imageResourceEvent(context.Background(), s, events.Message{
+		Type:   events.ImageEventType,
+		Action: events.ActionTag,
+		Actor:  events.Actor{ID: "sha256:img"},
+	})
+	if ev == nil || ev.Type != "updated" {
+		t.Fatalf("image tag event = %+v, want updated", ev)
+	}
+	row := ev.Resource.(Row)
+	if row["status"] != "In use" || row["containers"] != int64(1) {
+		t.Fatalf("image event row = %+v, want In use with one container", row)
+	}
+}
+
+func TestImageResourceEventResolvesPullReference(t *testing.T) {
+	s := fakeSession(t)
+	// A pull event carries the image reference in Actor.ID, not the digest, so
+	// the row must still be found via RepoTags.
+	ev := imageResourceEvent(context.Background(), s, events.Message{
+		Type:   events.ImageEventType,
+		Action: events.ActionPull,
+		Actor:  events.Actor{ID: "nginx:latest", Attributes: map[string]string{"name": "nginx"}},
+	})
+	if ev == nil || ev.Type != "updated" {
+		t.Fatalf("image pull event = %+v, want updated", ev)
+	}
+	row := ev.Resource.(Row)
+	if row["id"] != "sha256:img" || row["status"] != "In use" {
+		t.Fatalf("pulled image row = %+v, want sha256:img In use", row)
+	}
+}
+
+func TestObjectEventKeepsComposeProjectOnMemberDestroy(t *testing.T) {
+	s := fakeSession(t)
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u"}, s, nil, url.Values{}, nil)
+	ev := objectEventForDocker(rc, s, eventKindCompose, "demo", events.Message{
+		Type:   events.ContainerEventType,
+		Action: events.ActionDestroy,
+		Actor:  events.Actor{ID: "abc123", Attributes: map[string]string{ComposeProjectLabel: "demo"}},
+	})
+	if ev == nil || ev.Type != "updated" {
+		t.Fatalf("compose member destroy event = %+v, want updated", ev)
+	}
+	ev = objectEventForDocker(rc, s, eventKindCompose, "ghost", events.Message{
+		Type:   events.ContainerEventType,
+		Action: events.ActionDestroy,
+		Actor:  events.Actor{ID: "zzz", Attributes: map[string]string{ComposeProjectLabel: "ghost"}},
+	})
+	if ev == nil || ev.Type != "deleted" {
+		t.Fatalf("vanished compose project event = %+v, want deleted", ev)
+	}
+}
+
 type directNet struct{}
 
 func (directNet) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {

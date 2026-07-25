@@ -460,12 +460,48 @@ func proxyStream(logger *slog.Logger, stream net.Conn, target transport.AgentPro
 		return
 	}
 
-	done := make(chan error, 2)
+	// A session teardown wakes the stream-side copy (yamux forceClose makes Read
+	// return EOF), but the target-side copy is parked on up.Read of a raw conn the
+	// session doesn't own, so it would hang past the tunnel — leaking a goroutine
+	// and fd. Closing up on session shutdown unblocks it so wg.Wait always returns.
+	if ys, ok := stream.(*yamux.Stream); ok {
+		stopped := make(chan struct{})
+		defer close(stopped)
+		go func() {
+			select {
+			case <-ys.Session().CloseChan():
+				_ = up.Close()
+			case <-stopped:
+			}
+		}()
+	}
 
-	go func() { _, e := io.Copy(up, stream); done <- e }()
-	go func() { _, e := io.Copy(stream, up); done <- e }()
+	var wg sync.WaitGroup
+	wg.Add(2)
+	// A clean EOF is a peer half-close: deliver EOF to the target but keep the
+	// reverse flowing (so an upload's stdin EOF doesn't kill stdout/exit). A read
+	// error is the stream dying (reset, or the target's write side gone): tear the
+	// target down so the reverse copy can't hang on it.
+	go func() {
+		defer wg.Done()
+		if _, err := io.Copy(up, stream); err != nil {
+			_ = up.Close()
+			return
+		}
+		halfCloseWrite(up)
+	}()
+	go func() { defer wg.Done(); _, _ = io.Copy(stream, up); halfCloseWrite(stream) }()
+	wg.Wait()
+}
 
-	<-done
+// halfCloseWrite closes c's write side so the peer sees EOF while the reverse
+// direction keeps flowing (a yamux stream's Close is itself a half-close).
+func halfCloseWrite(c net.Conn) {
+	if cw, ok := c.(interface{ CloseWrite() error }); ok {
+		_ = cw.CloseWrite()
+		return
+	}
+	_ = c.Close()
 }
 
 // pumpDatagrams bridges a framed tunnel stream and a connected UDP socket in

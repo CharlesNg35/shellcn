@@ -133,9 +133,20 @@ func runExec(ctx context.Context, client plugin.ClientStream, exec remotecommand
 	return exec.StreamWithContext(ctx, opts)
 }
 
-// podExecutor builds a fallback (WebSocket → SPDY) executor against the upgrade
-// config (the loopback bridge for agent transport, the kubeconfig for direct).
+// podExecutor builds a fallback (WebSocket → SPDY) executor for interactive exec
+// (terminal, cluster shell), where keystroke-sized stdin rides WS reliably.
 func (s *Session) podExecutor(ns, pod string, opts *corev1.PodExecOptions) (remotecommand.Executor, error) {
+	return s.executorFor(ns, pod, opts, false)
+}
+
+// executorFor builds the exec executor against the upgrade config (the loopback
+// bridge for agent transport, the kubeconfig for direct). spdyOnly forces the
+// SPDY executor: the WS-first fallback truncates large binary stdin, so bulk
+// writes/uploads (execCapture with stdin) must use SPDY, which streams it whole.
+func (s *Session) executorFor(ns, pod string, opts *corev1.PodExecOptions, spdyOnly bool) (remotecommand.Executor, error) {
+	if s.newExecutor != nil {
+		return s.newExecutor(ns, pod, opts, spdyOnly)
+	}
 	cfg, err := s.upgradeConfig()
 	if err != nil {
 		return nil, err
@@ -153,6 +164,9 @@ func (s *Session) podExecutor(ns, pod string, opts *corev1.PodExecOptions) (remo
 	spdyExec, err := remotecommand.NewSPDYExecutor(cfg, "POST", u)
 	if err != nil {
 		return nil, err
+	}
+	if spdyOnly {
+		return spdyExec, nil
 	}
 	wsExec, err := remotecommand.NewWebSocketExecutor(cfg, "GET", u.String())
 	if err != nil {

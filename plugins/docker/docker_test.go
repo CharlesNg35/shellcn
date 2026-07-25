@@ -65,7 +65,7 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	if !contains(containerRes.Actions.Toolbar, "docker.container.create") {
 		t.Fatalf("container list actions = %#v, want create action", containerRes.Actions.Toolbar)
 	}
-	wantTabs := []string{"overview", "stats", "processes", "logs", "terminal", "env", "mounts", "inspect"}
+	wantTabs := []string{"overview", "stats", "processes", "logs", "terminal", "files", "env", "mounts", "inspect"}
 	if len(containerRes.Detail.Tabs) != len(wantTabs) {
 		t.Fatalf("container detail tabs = %d, want %d", len(containerRes.Detail.Tabs), len(wantTabs))
 	}
@@ -93,17 +93,22 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	} else if terminal.VisibleWhen == nil {
 		t.Fatalf("container exec panel should only be visible for running containers")
 	}
-	if env := containerRes.Detail.Tabs[5]; env.Type != plugin.PanelTable {
+	if files := containerRes.Detail.Tabs[5]; files.Type != plugin.PanelFileBrowser || files.VisibleWhen == nil {
+		t.Fatalf("container files should render a running-only file browser, got panel=%s visible=%+v", files.Type, files.VisibleWhen)
+	} else if cfg, ok := files.Config.(plugin.FileBrowserConfig); !ok || cfg.Routes.Read != "docker.container.files.read" || !cfg.Writable {
+		t.Fatalf("container files config = %#v, want writable browser wired to docker.container.files.* routes", files.Config)
+	}
+	if env := containerRes.Detail.Tabs[6]; env.Type != plugin.PanelTable {
 		t.Fatalf("container env should render a table, got %s", env.Type)
 	} else if cfg, ok := env.Config.(plugin.TableConfig); !ok || cfg.EmptyText == "" {
 		t.Fatalf("container env table config = %#v, want empty text", env.Config)
 	}
-	if mounts := containerRes.Detail.Tabs[6]; mounts.Type != plugin.PanelTable || mounts.Source.RouteID != "docker.container.mounts" {
+	if mounts := containerRes.Detail.Tabs[7]; mounts.Type != plugin.PanelTable || mounts.Source.RouteID != "docker.container.mounts" {
 		t.Fatalf("container mounts should render a table from mounts route, got panel=%s source=%+v", mounts.Type, mounts.Source)
 	} else if cfg, ok := mounts.Config.(plugin.TableConfig); !ok || cfg.EmptyText == "" {
 		t.Fatalf("container mounts table config = %#v, want empty text", mounts.Config)
 	}
-	if inspect := containerRes.Detail.Tabs[7]; inspect.Type != plugin.PanelObjectDetail || inspect.Source.RouteID != "docker.container.inspect" {
+	if inspect := containerRes.Detail.Tabs[8]; inspect.Type != plugin.PanelObjectDetail || inspect.Source.RouteID != "docker.container.inspect" {
 		t.Fatalf("container inspect should render object details, got panel=%s source=%+v", inspect.Type, inspect.Source)
 	} else if cfg, ok := inspect.Config.(plugin.ObjectDetailConfig); !ok || !cfg.RawToggle {
 		t.Fatalf("container inspect config = %#v, want raw-toggle object detail", inspect.Config)

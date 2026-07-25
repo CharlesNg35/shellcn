@@ -3,10 +3,12 @@ package dockerengine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -725,23 +727,6 @@ func containerRowFromInspect(res dockerclient.ContainerInspectResult) Row {
 	return row
 }
 
-func imageRowFromInspect(id string, res dockerclient.ImageInspectResult) Row {
-	name := firstString(res.RepoTags, firstString(res.RepoDigests, shortID(res.ID)))
-	if name == "" {
-		name = shortID(id)
-	}
-	return Row{
-		"id":         res.ID,
-		"name":       name,
-		"tags":       strings.Join(res.RepoTags, ", "),
-		"status":     "Unknown",
-		"size":       res.Size,
-		"containers": int64(-1),
-		"createdAt":  res.Created,
-		"ref":        plugin.ResourceIdentity{Kind: "image", Name: name, UID: res.ID},
-	}
-}
-
 func networkRowFromInspect(res dockerclient.NetworkInspectResult) Row {
 	n := res.Network
 	return Row{
@@ -814,12 +799,20 @@ func imageResourceEvent(ctx context.Context, s *Session, msg events.Message) *pl
 	if msg.Action == events.ActionDelete || msg.Action == events.ActionUnTag {
 		return &plugin.ResourceEvent{Type: "deleted", Ref: ref}
 	}
-	inspect, err := s.cli.ImageInspect(ctx, id)
+	// Source rows from the image list so live updates carry the same usage and
+	// container count as the list (an inspect can't derive them).
+	res, err := s.cli.ImageList(ctx, dockerclient.ImageListOptions{All: true})
 	if err != nil {
 		return nil
 	}
-	row := imageRowFromInspect(id, inspect)
-	return &plugin.ResourceEvent{Type: "updated", Ref: row["ref"].(plugin.ResourceIdentity), Resource: row}
+	for _, img := range res.Items {
+		// Pull/push events set Actor.ID to a reference (e.g. "nginx:latest"), not the digest.
+		if img.ID == id || slices.Contains(img.RepoTags, id) || slices.Contains(img.RepoDigests, id) {
+			row := imageRow(img)
+			return &plugin.ResourceEvent{Type: "updated", Ref: row["ref"].(plugin.ResourceIdentity), Resource: row}
+		}
+	}
+	return nil
 }
 
 func volumeResourceEvent(ctx context.Context, s *Session, msg events.Message) *plugin.ResourceEvent {
@@ -881,7 +874,9 @@ func composeResourceEvent(ctx context.Context, s *Session, msg events.Message) *
 
 func objectEventForDocker(rc *plugin.RequestContext, s *Session, kind, id string, msg events.Message) *plugin.ResourceEvent {
 	ref := plugin.ResourceIdentity{Kind: kind, Name: id, UID: id}
-	if msg.Action == events.ActionDestroy || msg.Action == events.ActionRemove || msg.Action == events.ActionDelete {
+	// A Compose project is derived from its members, so one member's destroy isn't
+	// the project's deletion; recompute and let composeOverviewForProject decide.
+	if kind != eventKindCompose && (msg.Action == events.ActionDestroy || msg.Action == events.ActionRemove || msg.Action == events.ActionDelete) {
 		return &plugin.ResourceEvent{Type: "deleted", Ref: ref}
 	}
 	var resource any
@@ -897,6 +892,9 @@ func objectEventForDocker(rc *plugin.RequestContext, s *Session, kind, id string
 		resource, err = networkOverviewForID(rc.Ctx, s, id)
 	case eventKindCompose:
 		resource, err = composeOverviewForProject(rc.Ctx, s, id)
+		if errors.Is(err, plugin.ErrNotFound) {
+			return &plugin.ResourceEvent{Type: "deleted", Ref: ref}
+		}
 	}
 	if err != nil || resource == nil {
 		return nil

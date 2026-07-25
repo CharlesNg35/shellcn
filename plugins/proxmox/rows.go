@@ -22,7 +22,7 @@ func sess(rc *plugin.RequestContext) (*Session, error) {
 // list GETs a JSON array endpoint into rows.
 func (s *Session) list(ctx context.Context, path string) ([]plugin.TableRow, error) {
 	var out []plugin.TableRow
-	if err := s.client.Get(ctx, path, &out); err != nil {
+	if err := s.do(ctx, func(c *pmox.Client) error { return c.Get(ctx, path, &out) }); err != nil {
 		return nil, mapErr(err)
 	}
 	return out, nil
@@ -31,18 +31,18 @@ func (s *Session) list(ctx context.Context, path string) ([]plugin.TableRow, err
 // object GETs a single JSON object endpoint.
 func (s *Session) object(ctx context.Context, path string) (plugin.TableRow, error) {
 	var out plugin.TableRow
-	if err := s.client.Get(ctx, path, &out); err != nil {
+	if err := s.do(ctx, func(c *pmox.Client) error { return c.Get(ctx, path, &out) }); err != nil {
 		return nil, mapErr(err)
 	}
 	return out, nil
 }
 
 func (s *Session) post(ctx context.Context, path string, body any) error {
-	return mapErr(s.client.Post(ctx, path, body, nil))
+	return mapErr(s.do(ctx, func(c *pmox.Client) error { return c.Post(ctx, path, body, nil) }))
 }
 
 func (s *Session) del(ctx context.Context, path string) error {
-	return mapErr(s.client.Delete(ctx, path, nil))
+	return mapErr(s.do(ctx, func(c *pmox.Client) error { return c.Delete(ctx, path, nil) }))
 }
 
 // mapErr translates go-proxmox sentinels into the core's sentinel errors so the
@@ -80,6 +80,28 @@ func str(v any) string {
 		return strconv.FormatFloat(t, 'f', -1, 64)
 	default:
 		return fmt.Sprint(t)
+	}
+}
+
+// haState renders PVE's "ha" object ({"managed":0|1}, optional "state"/"hastate")
+// as a human string instead of the raw map.
+func haState(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case map[string]any:
+		if s := strings.TrimSpace(str(t["hastate"])); s != "" {
+			return s
+		}
+		if s := strings.TrimSpace(str(t["state"])); s != "" {
+			return s
+		}
+		if rowBool(t["managed"]) {
+			return "managed"
+		}
+		return ""
+	default:
+		return ""
 	}
 }
 

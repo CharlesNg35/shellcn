@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -44,6 +45,72 @@ func TestMapErrClassifiesProxmoxAPIFailures(t *testing.T) {
 	if err := mapErr(fmt.Errorf("request stopped: %w", context.Canceled)); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled error = %v, want context.Canceled", err)
 	}
+}
+
+func TestStorageStatusReflectsActivation(t *testing.T) {
+	cases := []struct {
+		name string
+		st   plugin.TableRow
+		want string
+	}{
+		{"cluster reported", plugin.TableRow{"status": "unavailable"}, "unavailable"},
+		{"node active", plugin.TableRow{"active": float64(1)}, "online"},
+		{"node inactive", plugin.TableRow{"active": float64(0)}, "inactive"},
+		{"node disabled", plugin.TableRow{"enabled": float64(0), "active": float64(0)}, "disabled"},
+		{"unknown", plugin.TableRow{}, "available"},
+	}
+	for _, tc := range cases {
+		if got := storageStatus(tc.st); got != tc.want {
+			t.Fatalf("%s: storageStatus = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestStorageActivationFailedDetection(t *testing.T) {
+	operational := []string{
+		"unavailable: proxmox api: 500 could not activate storage 'nvme-storage', zfs error: cannot import 'nvme-storage': no such pool available",
+		"500 storage 'x' is not online",
+	}
+	for _, msg := range operational {
+		if !storageActivationFailed(errors.New(msg)) {
+			t.Fatalf("expected operational classification for %q", msg)
+		}
+	}
+	transport := []string{
+		"unavailable: proxmox api: 500 Internal Server Error",
+		"not found: 404 Not Found",
+	}
+	for _, msg := range transport {
+		if storageActivationFailed(errors.New(msg)) {
+			t.Fatalf("did not expect operational classification for %q", msg)
+		}
+	}
+}
+
+func TestStorageContentToleratesInactiveStorage(t *testing.T) {
+	srv := fakeProxmox(t)
+	defer srv.Close()
+
+	host, port := splitHostPort(t, srv.URL)
+	sess := dialSession(t, host, port)
+
+	t.Run("active storage lists content", func(t *testing.T) {
+		page := callList(t, sess, listStorageContent, map[string]string{"node": "pve", "storage": "local"})
+		if len(page.Items) != 1 {
+			t.Fatalf("content rows = %+v", page.Items)
+		}
+	})
+
+	t.Run("inactive storage yields empty page not error", func(t *testing.T) {
+		result, err := listStorageContent(newRC(sess, map[string]string{"node": "pve", "storage": "nvme-storage"}))
+		if err != nil {
+			t.Fatalf("inactive storage should not error the panel: %v", err)
+		}
+		page := result.(plugin.Page[plugin.TableRow])
+		if len(page.Items) != 0 {
+			t.Fatalf("inactive storage content = %+v, want empty", page.Items)
+		}
+	})
 }
 
 func TestNodeStorageTabIsNodeScoped(t *testing.T) {
@@ -453,6 +520,203 @@ func TestGuestOverviewMemorySemantics(t *testing.T) {
 	}
 }
 
+func TestHAStateRendersHumanValue(t *testing.T) {
+	cases := []struct {
+		name string
+		in   any
+		want string
+	}{
+		{"unmanaged object", map[string]any{"managed": float64(0)}, ""},
+		{"managed object", map[string]any{"managed": float64(1)}, "managed"},
+		{"live hastate wins", map[string]any{"managed": float64(1), "hastate": "started"}, "started"},
+		{"state fallback", map[string]any{"state": "error"}, "error"},
+		{"string passthrough", "started", "started"},
+		{"absent", nil, ""},
+	}
+	for _, tc := range cases {
+		if got := haState(tc.in); got != tc.want {
+			t.Errorf("%s: haState(%v) = %q, want %q", tc.name, tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestGuestOverviewRendersHAObject(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api2/json/version", jsonHandler(`{"data":{"version":"8.1.0","release":"8"}}`))
+	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/status/current", jsonHandler(`{"data":{"status":"running","ha":{"managed":1}}}`))
+	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/config", jsonHandler(`{"data":{"name":"web","cores":1,"sockets":1}}`))
+	srv := httptest.NewTLSServer(mux)
+	defer srv.Close()
+
+	host, port := splitHostPort(t, srv.URL)
+	sess := dialSession(t, host, port)
+	result, err := guestOverview("qemu")(newRC(sess, map[string]string{"node": "pve", "vmid": "100"}))
+	if err != nil {
+		t.Fatalf("overview: %v", err)
+	}
+	if got := result.(plugin.TableRow)["ha"]; got != "managed" {
+		t.Fatalf("ha cell = %#v, want %q (never a raw map)", got, "managed")
+	}
+}
+
+func TestPasswordSessionRefreshesExpiredTicket(t *testing.T) {
+	var mu sync.Mutex
+	issued, logins := 0, 0
+	valid := ""
+	authOK := func(r *http.Request) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, c := range r.Cookies() {
+			if c.Name == "PVEAuthCookie" && c.Value == valid {
+				return true
+			}
+		}
+		return false
+	}
+	guard := func(body string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if !authOK(r) {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(body))
+		}
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api2/json/access/ticket", func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		issued++
+		logins++
+		valid = fmt.Sprintf("ticket-%d", issued)
+		tk := valid
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"data":{"ticket":%q,"CSRFPreventionToken":"csrf"}}`, tk)
+	})
+	mux.HandleFunc("/api2/json/version", guard(`{"data":{"version":"8.1.0","release":"8"}}`))
+	mux.HandleFunc("/api2/json/nodes", guard(`{"data":[{"node":"pve","status":"online"}]}`))
+	srv := httptest.NewTLSServer(mux)
+	defer srv.Close()
+
+	host, port := splitHostPort(t, srv.URL)
+	cfg := plugin.ConnectConfig{
+		Net: directNet{},
+		Config: map[string]any{
+			"host": host, "port": atoi(port), "verify_tls": false,
+			"auth": "password", "username": "root@pam", "password": "secret",
+		},
+	}
+	sp, err := connect(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	sess := sp.(*Session)
+
+	mu.Lock()
+	valid = "" // expire the ticket server-side
+	before := logins
+	mu.Unlock()
+
+	page := callList(t, sess, listNodes, nil)
+	if len(page.Items) != 1 {
+		t.Fatalf("nodes after refresh = %+v", page.Items)
+	}
+	mu.Lock()
+	after := logins
+	mu.Unlock()
+	if after != before+1 {
+		t.Fatalf("re-login count = %d, want exactly one refresh (%d)", after, before+1)
+	}
+}
+
+func TestPasswordSessionSingleFlightRelogin(t *testing.T) {
+	var mu sync.Mutex
+	issued, logins := 0, 0
+	valid := ""
+	authOK := func(r *http.Request) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, c := range r.Cookies() {
+			if c.Name == "PVEAuthCookie" && c.Value == valid {
+				return true
+			}
+		}
+		return false
+	}
+	guard := func(body string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if !authOK(r) {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(body))
+		}
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api2/json/access/ticket", func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		issued++
+		logins++
+		valid = fmt.Sprintf("ticket-%d", issued)
+		tk := valid
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"data":{"ticket":%q,"CSRFPreventionToken":"csrf"}}`, tk)
+	})
+	mux.HandleFunc("/api2/json/version", guard(`{"data":{"version":"8.1.0","release":"8"}}`))
+	mux.HandleFunc("/api2/json/nodes", guard(`{"data":[{"node":"pve","status":"online"}]}`))
+	srv := httptest.NewTLSServer(mux)
+	defer srv.Close()
+
+	host, port := splitHostPort(t, srv.URL)
+	cfg := plugin.ConnectConfig{
+		Net: directNet{},
+		Config: map[string]any{
+			"host": host, "port": atoi(port), "verify_tls": false,
+			"auth": "password", "username": "root@pam", "password": "secret",
+		},
+	}
+	sp, err := connect(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	sess := sp.(*Session)
+
+	mu.Lock()
+	valid = "" // expire the ticket server-side
+	before := logins
+	mu.Unlock()
+
+	const n = 16
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	start := make(chan struct{})
+	for i := range n {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			_, errs[i] = listNodes(newRC(sess, nil))
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	for i, e := range errs {
+		if e != nil {
+			t.Fatalf("concurrent list[%d]: %v", i, e)
+		}
+	}
+	mu.Lock()
+	after := logins
+	mu.Unlock()
+	if after != before+1 {
+		t.Fatalf("re-login count = %d, want exactly one single-flight refresh (%d)", after, before+1)
+	}
+}
+
 func TestProxmoxUXInformationArchitecture(t *testing.T) {
 	m := New().Manifest()
 	byKind := map[string]plugin.ResourceType{}
@@ -664,6 +928,22 @@ func fakeProxmox(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/status/current", jsonHandler(`{"data":{"status":"running","cpu":0.25,"mem":1073741824,"maxmem":2147483648,"uptime":3600}}`))
 	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/config", jsonHandler(`{"data":{"name":"web","memory":2048,"balloon":512,"cores":2,"sockets":1,"ostype":"l26","tags":"prod"}}`))
 	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/snapshot", jsonHandler(`{"data":[{"name":"pre-upgrade","description":"before update","snaptime":1700000000,"vmstate":1}]}`))
+	mux.HandleFunc("/api2/json/nodes/pve/storage/local/content", jsonHandler(`{"data":[{"volid":"local:backup/vzdump-qemu-100-2026_07_01-00_00_00.vma.zst","content":"backup","format":"vma.zst","size":1048576,"vmid":"100","ctime":1700000000}]}`))
+	// nvme-storage is offline on this node: PVE answers content requests with a 500
+	// whose reason phrase carries the activation failure, mirroring the wire format.
+	mux.HandleFunc("/api2/json/nodes/pve/storage/nvme-storage/content", func(w http.ResponseWriter, _ *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		_, _ = fmt.Fprint(conn, "HTTP/1.1 500 could not activate storage 'nvme-storage', zfs error: cannot import 'nvme-storage': no such pool available\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+	})
 	srv := httptest.NewTLSServer(mux)
 	return srv
 }

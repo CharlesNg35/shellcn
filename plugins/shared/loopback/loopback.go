@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 type Bridge struct {
@@ -56,10 +57,23 @@ func (b *Bridge) pipe(local net.Conn) {
 	}
 	b.track(up)
 	defer b.closeTracked(up)
-	done := make(chan struct{}, 2)
-	go func() { _, _ = io.Copy(up, local); done <- struct{}{} }()
-	go func() { _, _ = io.Copy(local, up); done <- struct{}{} }()
-	<-done
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); _, _ = io.Copy(up, local); closeWrite(up) }()
+	go func() { defer wg.Done(); _, _ = io.Copy(local, up); closeWrite(local) }()
+	wg.Wait()
+}
+
+// closeWrite half-closes c's write side so the peer sees EOF while the reverse
+// direction keeps flowing, instead of tearing the stream down on the first EOF.
+// A yamux stream has no CloseWrite; its Close is itself a half-close (sends FIN,
+// reads keep working), so it is the correct fallback.
+func closeWrite(c net.Conn) {
+	if cw, ok := c.(interface{ CloseWrite() error }); ok {
+		_ = cw.CloseWrite()
+		return
+	}
+	_ = c.Close()
 }
 
 func (b *Bridge) track(c net.Conn) {
@@ -87,6 +101,12 @@ func (b *Bridge) Close() error {
 		}
 		b.mu.Unlock()
 		for _, c := range conns {
+			// A yamux stream's Close is only a half-close and does not wake a copy
+			// parked on its Read; a past read deadline does. Without this a reverse
+			// copy over the tunnel outlives the bridge until yamux's own multi-minute
+			// stream-close timeout fires. Harmless for conns whose Close already
+			// unblocks reads.
+			_ = c.SetReadDeadline(time.Now())
 			_ = c.Close()
 		}
 	})

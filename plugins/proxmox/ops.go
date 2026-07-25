@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 
+	pmox "github.com/luthermonson/go-proxmox"
+
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
@@ -60,7 +62,7 @@ func validBackupVolume(storage, volume string) bool {
 // endpoints is the spawned task's UPID string.
 func (s *Session) postUPID(ctx context.Context, path string, body any) (string, error) {
 	var upid string
-	if err := s.client.Post(ctx, path, body, &upid); err != nil {
+	if err := s.do(ctx, func(c *pmox.Client) error { return c.Post(ctx, path, body, &upid) }); err != nil {
 		return "", mapErr(err)
 	}
 	return upid, nil
@@ -68,7 +70,7 @@ func (s *Session) postUPID(ctx context.Context, path string, body any) (string, 
 
 func (s *Session) putUPID(ctx context.Context, path string, body any) (string, error) {
 	var upid string
-	if err := s.client.Put(ctx, path, body, &upid); err != nil {
+	if err := s.do(ctx, func(c *pmox.Client) error { return c.Put(ctx, path, body, &upid) }); err != nil {
 		return "", mapErr(err)
 	}
 	return upid, nil
@@ -76,7 +78,7 @@ func (s *Session) putUPID(ctx context.Context, path string, body any) (string, e
 
 func (s *Session) delUPID(ctx context.Context, path string) (string, error) {
 	var upid string
-	if err := s.client.Delete(ctx, path, &upid); err != nil {
+	if err := s.do(ctx, func(c *pmox.Client) error { return c.Delete(ctx, path, &upid) }); err != nil {
 		return "", mapErr(err)
 	}
 	return upid, nil

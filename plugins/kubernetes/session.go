@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/discovery"
 	memory "k8s.io/client-go/discovery/cached/memory"
@@ -16,6 +17,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/remotecommand"
 	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"github.com/charlesng35/shellcn/plugins/shared/loopback"
@@ -40,6 +42,9 @@ type Session struct {
 
 	transport plugin.Transport
 	net       plugin.NetTransport
+
+	// newExecutor overrides exec executor construction in tests; nil in production.
+	newExecutor func(ns, pod string, opts *corev1.PodExecOptions, spdyOnly bool) (remotecommand.Executor, error)
 
 	mu           sync.Mutex
 	stopCh       chan struct{}

@@ -21,7 +21,7 @@ func New() *Plugin { return &Plugin{} }
 var statusSeverities = map[string]plugin.Severity{
 	"running": plugin.SeveritySuccess, "online": plugin.SeveritySuccess, "ok": plugin.SeveritySuccess, "available": plugin.SeveritySuccess, "active": plugin.SeveritySuccess, "success": plugin.SeveritySuccess,
 	"stopped": plugin.SeveritySecondary, "offline": plugin.SeveritySecondary, "disabled": plugin.SeveritySecondary,
-	"paused": plugin.SeverityWarn, "unknown": plugin.SeverityWarn, "warning": plugin.SeverityWarn, "warnings": plugin.SeverityWarn,
+	"paused": plugin.SeverityWarn, "unknown": plugin.SeverityWarn, "warning": plugin.SeverityWarn, "warnings": plugin.SeverityWarn, "inactive": plugin.SeverityWarn, "unavailable": plugin.SeverityWarn,
 	"error": plugin.SeverityDanger, "failed": plugin.SeverityDanger, "failure": plugin.SeverityDanger, "critical": plugin.SeverityDanger,
 }
 
@@ -265,7 +265,7 @@ func storageResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Panel{
-				{Key: "content", Label: "Content", Icon: icon("hard-drive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.storage.content", Params: map[string]string{"node": "${resource.namespace}", "storage": "${resource.uid}"}}, Config: refreshTableConfig(plugin.TableConfig{Columns: contentColumns(), RowActionIDs: []string{"act.qemu.backup.restore", "act.lxc.backup.restore", "act.backup.delete"}, RowClick: plugin.RowClickSelect, EmptyText: "This storage has no content visible to this connection."}, 10000)},
+				{Key: "content", Label: "Content", Icon: icon("hard-drive"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.storage.content", Params: map[string]string{"node": "${resource.namespace}", "storage": "${resource.uid}"}}, Config: refreshTableConfig(plugin.TableConfig{Columns: contentColumns(), RowActionIDs: []string{"act.qemu.backup.restore", "act.lxc.backup.restore", "act.backup.delete"}, RowClick: plugin.RowClickSelect, EmptyText: "No content to show. If this storage is inactive or offline on the node, its backend (for example a ZFS pool) may be unavailable here."}, 10000)},
 			},
 		},
 	}
