@@ -65,27 +65,55 @@ func TestParseLsOutput(t *testing.T) {
 	out := "total 20\n" +
 		"drwxr-xr-x    2 root     root          4096 Jun 19 12:00 bin\n" +
 		"-rw-r--r--    1 root     root           123 Jun 19 12:00 hello.txt\n" +
+		"-rw-r--r--    1 root     root           456 Jun 19 12:00 photo.png\n" +
+		"-rw-r--r--    1 root     root             0 Jun 19 12:00 a -> b.txt\n" +
 		"lrwxrwxrwx    1 root     root             7 Jun 19 12:00 link -> bin/sh\n" +
 		"drwxr-xr-x    1 root     root          4096 Jun 19 12:00 .\n" +
 		"drwxr-xr-x    1 root     root          4096 Jun 19 12:00 ..\n"
 	items := parseLsOutput("/data", out)
-	if len(items) != 3 {
-		t.Fatalf("got %d entries, want 3: %+v", len(items), items)
+	if len(items) != 5 {
+		t.Fatalf("got %d entries, want 5: %+v", len(items), items)
 	}
 	byName := map[string]int{}
 	for i, e := range items {
 		byName[e.Name] = i
 	}
 	bin := items[byName["bin"]]
-	if !bin.IsDir || bin.Size != 4096 || bin.Path != "/data/bin" {
+	if !bin.IsDir || bin.Size != 4096 || bin.Path != "/data/bin" || bin.MIME != "" {
 		t.Fatalf("bin entry = %+v", bin)
 	}
 	file := items[byName["hello.txt"]]
 	if file.IsDir || file.Size != 123 || file.Path != "/data/hello.txt" {
 		t.Fatalf("hello.txt entry = %+v", file)
 	}
-	if link, ok := byName["link"]; !ok || items[link].Path != "/data/link" {
-		t.Fatalf("symlink target should be stripped from name: %+v", items)
+	png := items[byName["photo.png"]]
+	if png.MIME != "image/png" || png.Size != 456 {
+		t.Fatalf("png entry should carry an image mime and real size: %+v", png)
+	}
+	link := items[byName["link"]]
+	if link.Path != "/data/link" || link.Symlink != "bin/sh" {
+		t.Fatalf("symlink target should be captured, not folded into the name: %+v", link)
+	}
+	// A regular file whose name literally contains " -> " must not be truncated;
+	// only symlink (mode l...) lines carry a target.
+	if _, ok := byName["a -> b.txt"]; !ok {
+		t.Fatalf("non-symlink name containing ' -> ' was mangled: %+v", items)
+	}
+}
+
+func TestPodDownload(t *testing.T) {
+	dl := podDownload("/app/assets/photo.png", true, nil)
+	if dl.Size != -1 {
+		t.Fatalf("streamed download must report Size=-1 (unknown), got %d; a 0 becomes Content-Length: 0 and truncates the body", dl.Size)
+	}
+	if dl.MIME != "image/png" {
+		t.Fatalf("mime = %q, want image/png", dl.MIME)
+	}
+	if !dl.Inline || dl.Name != "photo.png" {
+		t.Fatalf("download = %+v", dl)
+	}
+	if got := podDownload("/tmp/unknownext.zzz", false, nil); got.MIME != "application/octet-stream" {
+		t.Fatalf("unknown extension mime = %q, want octet-stream", got.MIME)
 	}
 }
 

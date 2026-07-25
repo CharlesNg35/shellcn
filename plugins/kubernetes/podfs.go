@@ -170,11 +170,19 @@ func PodFileDownload(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	return podDownload(p, rc.Param("inline") == "1", body), nil
+}
+
+// podDownload builds the streamed download response. Size is -1 because the byte
+// count is unknown up front (cat streams); a zero Size would be sent as
+// Content-Length: 0 and truncate the body, breaking downloads and inline
+// image/pdf/audio/video previews.
+func podDownload(p string, inline bool, body io.ReadCloser) *plugin.Download {
 	mimeType := filesystem.MimeFor(p)
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
-	return &plugin.Download{Name: path.Base(p), MIME: mimeType, Inline: rc.Param("inline") == "1", Body: body}, nil
+	return &plugin.Download{Name: path.Base(p), MIME: mimeType, Size: -1, Inline: inline, Body: body}
 }
 
 func PodFileWrite(rc *plugin.RequestContext) (any, error) {
@@ -281,20 +289,30 @@ func parseLsOutput(dir, out string) []filesystem.FileEntry {
 			continue
 		}
 		name := strings.Join(fields[8:], " ")
-		if i := strings.Index(name, " -> "); i >= 0 {
-			name = name[:i] // strip symlink target
+		symlink := ""
+		if strings.HasPrefix(fields[0], "l") {
+			if i := strings.Index(name, " -> "); i >= 0 {
+				symlink = name[i+len(" -> "):]
+				name = name[:i]
+			}
 		}
 		if name == "." || name == ".." {
 			continue
 		}
+		isDir := strings.HasPrefix(fields[0], "d")
 		size, _ := strconv.ParseInt(fields[4], 10, 64)
-		items = append(items, filesystem.FileEntry{
-			Name:  name,
-			Path:  path.Join(dir, name),
-			IsDir: strings.HasPrefix(fields[0], "d"),
-			Size:  size,
-			Mode:  fields[0],
-		})
+		entry := filesystem.FileEntry{
+			Name:    name,
+			Path:    path.Join(dir, name),
+			IsDir:   isDir,
+			Size:    size,
+			Mode:    fields[0],
+			Symlink: symlink,
+		}
+		if !isDir {
+			entry.MIME = filesystem.MimeFor(entry.Path)
+		}
+		items = append(items, entry)
 	}
 	return items
 }

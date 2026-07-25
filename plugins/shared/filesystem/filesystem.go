@@ -61,6 +61,7 @@ type FileEntry struct {
 	MIME    string    `json:"mime,omitempty"`
 	ModTime time.Time `json:"modTime,omitzero"`
 	Mode    string    `json:"mode,omitempty"`
+	Symlink string    `json:"symlink,omitempty"`
 }
 
 type FileContent struct {

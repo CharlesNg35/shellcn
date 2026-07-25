@@ -515,10 +515,6 @@ func storageRow(node string, st plugin.TableRow) (plugin.TableRow, bool) {
 	if total == 0 {
 		total = numInt(st["total"])
 	}
-	status := str(st["status"])
-	if status == "" {
-		status = nodeStorageStatus(st)
-	}
 	return plugin.TableRow{
 		"name":    storage,
 		"node":    node,
@@ -527,7 +523,7 @@ func storageRow(node string, st plugin.TableRow) (plugin.TableRow, bool) {
 		"usedPct": percent(used, total),
 		"used":    used,
 		"total":   total,
-		"status":  status,
+		"status":  storageStatus(st),
 		"ref":     plugin.ResourceIdentity{Kind: "storage", Namespace: node, Name: storage, UID: storage},
 	}, true
 }
@@ -539,14 +535,48 @@ func percent(used, total int64) float64 {
 	return round1(float64(used) / float64(total) * 100)
 }
 
-func nodeStorageStatus(st plugin.TableRow) string {
+// storageStatus derives a storage's operational state. /cluster/resources reports
+// a "status" ("available"/"unavailable"); the per-node index instead exposes the
+// raw "active"/"enabled" flags, so an offline backend (for example an unimported
+// ZFS pool) reads as "inactive" rather than a misleading "available".
+func storageStatus(st plugin.TableRow) string {
+	if reported := strings.TrimSpace(str(st["status"])); reported != "" {
+		return reported
+	}
 	if st["enabled"] != nil && numInt(st["enabled"]) == 0 {
 		return "disabled"
 	}
-	if numInt(st["active"]) == 1 {
-		return "online"
+	if st["active"] != nil {
+		if numInt(st["active"]) == 1 {
+			return "online"
+		}
+		return "inactive"
 	}
 	return "available"
+}
+
+// storageActivationFailed reports whether err is PVE refusing to bring an
+// offline/unavailable storage backend online — an expected operational state
+// (for example a ZFS pool that isn't imported on this node) rather than a
+// transport or server fault. Storages are enumerated per node, so one being
+// offline on a given node must not fault its content panel.
+func storageActivationFailed(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"could not activate storage",
+		"unable to activate storage",
+		"is not online",
+		"no such pool available",
+		"cannot import",
+	} {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func listStorageContent(rc *plugin.RequestContext) (any, error) {
@@ -560,6 +590,9 @@ func listStorageContent(rc *plugin.RequestContext) (any, error) {
 	}
 	items, err := s.list(rc.Ctx, pvePath("nodes", node, "storage", storage, "content"))
 	if err != nil {
+		if storageActivationFailed(err) {
+			return pageRows(rc, []plugin.TableRow{})
+		}
 		return nil, err
 	}
 	rows := make([]plugin.TableRow, 0, len(items))

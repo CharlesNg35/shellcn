@@ -46,6 +46,72 @@ func TestMapErrClassifiesProxmoxAPIFailures(t *testing.T) {
 	}
 }
 
+func TestStorageStatusReflectsActivation(t *testing.T) {
+	cases := []struct {
+		name string
+		st   plugin.TableRow
+		want string
+	}{
+		{"cluster reported", plugin.TableRow{"status": "unavailable"}, "unavailable"},
+		{"node active", plugin.TableRow{"active": float64(1)}, "online"},
+		{"node inactive", plugin.TableRow{"active": float64(0)}, "inactive"},
+		{"node disabled", plugin.TableRow{"enabled": float64(0), "active": float64(0)}, "disabled"},
+		{"unknown", plugin.TableRow{}, "available"},
+	}
+	for _, tc := range cases {
+		if got := storageStatus(tc.st); got != tc.want {
+			t.Fatalf("%s: storageStatus = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestStorageActivationFailedDetection(t *testing.T) {
+	operational := []string{
+		"unavailable: proxmox api: 500 could not activate storage 'nvme-storage', zfs error: cannot import 'nvme-storage': no such pool available",
+		"500 storage 'x' is not online",
+	}
+	for _, msg := range operational {
+		if !storageActivationFailed(errors.New(msg)) {
+			t.Fatalf("expected operational classification for %q", msg)
+		}
+	}
+	transport := []string{
+		"unavailable: proxmox api: 500 Internal Server Error",
+		"not found: 404 Not Found",
+	}
+	for _, msg := range transport {
+		if storageActivationFailed(errors.New(msg)) {
+			t.Fatalf("did not expect operational classification for %q", msg)
+		}
+	}
+}
+
+func TestStorageContentToleratesInactiveStorage(t *testing.T) {
+	srv := fakeProxmox(t)
+	defer srv.Close()
+
+	host, port := splitHostPort(t, srv.URL)
+	sess := dialSession(t, host, port)
+
+	t.Run("active storage lists content", func(t *testing.T) {
+		page := callList(t, sess, listStorageContent, map[string]string{"node": "pve", "storage": "local"})
+		if len(page.Items) != 1 {
+			t.Fatalf("content rows = %+v", page.Items)
+		}
+	})
+
+	t.Run("inactive storage yields empty page not error", func(t *testing.T) {
+		result, err := listStorageContent(newRC(sess, map[string]string{"node": "pve", "storage": "nvme-storage"}))
+		if err != nil {
+			t.Fatalf("inactive storage should not error the panel: %v", err)
+		}
+		page := result.(plugin.Page[plugin.TableRow])
+		if len(page.Items) != 0 {
+			t.Fatalf("inactive storage content = %+v, want empty", page.Items)
+		}
+	})
+}
+
 func TestNodeStorageTabIsNodeScoped(t *testing.T) {
 	var storageTab *plugin.Panel
 	for _, r := range New().Manifest().Resources {
@@ -664,6 +730,22 @@ func fakeProxmox(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/status/current", jsonHandler(`{"data":{"status":"running","cpu":0.25,"mem":1073741824,"maxmem":2147483648,"uptime":3600}}`))
 	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/config", jsonHandler(`{"data":{"name":"web","memory":2048,"balloon":512,"cores":2,"sockets":1,"ostype":"l26","tags":"prod"}}`))
 	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/snapshot", jsonHandler(`{"data":[{"name":"pre-upgrade","description":"before update","snaptime":1700000000,"vmstate":1}]}`))
+	mux.HandleFunc("/api2/json/nodes/pve/storage/local/content", jsonHandler(`{"data":[{"volid":"local:backup/vzdump-qemu-100-2026_07_01-00_00_00.vma.zst","content":"backup","format":"vma.zst","size":1048576,"vmid":"100","ctime":1700000000}]}`))
+	// nvme-storage is offline on this node: PVE answers content requests with a 500
+	// whose reason phrase carries the activation failure, mirroring the wire format.
+	mux.HandleFunc("/api2/json/nodes/pve/storage/nvme-storage/content", func(w http.ResponseWriter, _ *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		_, _ = fmt.Fprint(conn, "HTTP/1.1 500 could not activate storage 'nvme-storage', zfs error: cannot import 'nvme-storage': no such pool available\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+	})
 	srv := httptest.NewTLSServer(mux)
 	return srv
 }
