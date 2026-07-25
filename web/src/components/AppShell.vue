@@ -80,6 +80,30 @@ const activeId = computed(() =>
 const showCreate = ref(false);
 const sidebarMenuOpen = useStorage("shellcn:sidebar-menu:open", true);
 
+// Accordion the utility menu over its real content height so the motion tracks
+// the panel instead of animating toward a guessed max-height.
+function onMenuEnter(el: Element): void {
+  const node = el as HTMLElement;
+  node.style.height = "0";
+  node.style.opacity = "0";
+  void node.offsetHeight;
+  node.style.height = `${node.scrollHeight}px`;
+  node.style.opacity = "1";
+}
+function onMenuAfterEnter(el: Element): void {
+  const node = el as HTMLElement;
+  node.style.height = "";
+  node.style.opacity = "";
+}
+function onMenuLeave(el: Element): void {
+  const node = el as HTMLElement;
+  node.style.height = `${node.scrollHeight}px`;
+  node.style.opacity = "1";
+  void node.offsetHeight;
+  node.style.height = "0";
+  node.style.opacity = "0";
+}
+
 async function onConnectionSaved(payload: {
   id: string;
   created: boolean;
@@ -166,12 +190,11 @@ async function onConnectionSaved(payload: {
         </button>
 
         <Transition
-          enter-active-class="overflow-hidden transition-[max-height,opacity,transform] duration-150 ease-out"
-          enter-from-class="max-h-0 -translate-y-1 opacity-0"
-          enter-to-class="max-h-80 translate-y-0 opacity-100"
-          leave-active-class="overflow-hidden transition-[max-height,opacity,transform] duration-150 ease-in"
-          leave-from-class="max-h-80 translate-y-0 opacity-100"
-          leave-to-class="max-h-0 -translate-y-1 opacity-0"
+          enter-active-class="overflow-hidden transition-[height,opacity] duration-200 ease-out"
+          leave-active-class="overflow-hidden transition-[height,opacity] duration-200 ease-in"
+          @enter="onMenuEnter"
+          @after-enter="onMenuAfterEnter"
+          @leave="onMenuLeave"
         >
           <div
             v-show="sidebarMenuOpen"

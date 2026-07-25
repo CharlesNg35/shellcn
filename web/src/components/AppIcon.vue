@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useAttrs } from "vue";
+import { computed, ref, useAttrs, watchEffect } from "vue";
 import DOMPurify from "dompurify";
 import { FALLBACK_ICON, resolveLucideIcon } from "./lucideIconRegistry";
 import type { Icon } from "../types/projection";
@@ -63,6 +63,25 @@ const safeSvg = computed(() => {
     USE_PROFILES: { svg: true, svgFilters: true },
   });
 });
+
+// Render into a shadow root so a manifest SVG's <style>, classes and ids stay
+// scoped to this one icon instead of leaking across every inline SVG on the page.
+const svgHost = ref<HTMLElement | null>(null);
+const SVG_SHADOW_STYLE =
+  ":host{display:inline-flex;width:100%;height:100%;line-height:0}svg{width:100%;height:100%;display:block}";
+
+watchEffect(
+  () => {
+    const markup = safeSvg.value;
+    const host = svgHost.value;
+    if (!host) return;
+    const root = host.shadowRoot ?? host.attachShadow({ mode: "open" });
+    root.innerHTML = markup
+      ? `<style>${SVG_SHADOW_STYLE}</style>${markup}`
+      : "";
+  },
+  { flush: "post" },
+);
 </script>
 
 <template>
@@ -86,15 +105,13 @@ const safeSvg = computed(() => {
     >
       {{ resolvedIcon?.value }}
     </span>
-    <!-- eslint-disable vue/no-v-html -- safeSvg is sanitized with DOMPurify's SVG profile. -->
     <span
       v-else-if="kind === 'svg'"
+      ref="svgHost"
       class="app-icon-svg inline-flex"
       :style="{ width: `${size}px`, height: `${size}px` }"
       aria-hidden="true"
-      v-html="safeSvg"
     />
-    <!-- eslint-enable vue/no-v-html -->
     <img
       v-else-if="kind === 'image'"
       :src="resolvedIcon?.value"
@@ -107,10 +124,3 @@ const safeSvg = computed(() => {
     />
   </span>
 </template>
-
-<style scoped>
-.app-icon-svg :deep(svg) {
-  width: 100%;
-  height: 100%;
-}
-</style>

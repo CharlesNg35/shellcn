@@ -13,29 +13,42 @@ export function useMarketAdmin(onChanged?: () => Promise<void> | void) {
   const installing = ref<Record<string, boolean>>({});
   const uninstalling = ref<Record<string, boolean>>({});
 
-  async function load(): Promise<void> {
-    loading.value = true;
+  async function load({ silent = false } = {}): Promise<void> {
+    if (!silent) loading.value = true;
     try {
       const res = await adminMarketApi.list();
       enabled.value = res.enabled;
       entries.value = res.plugins;
     } catch {
-      enabled.value = false;
-      entries.value = [];
+      if (!silent) {
+        enabled.value = false;
+        entries.value = [];
+      }
     } finally {
-      loading.value = false;
+      if (!silent) loading.value = false;
     }
+  }
+
+  function patchEntry(name: string, patch: Partial<MarketEntry>): void {
+    entries.value = entries.value.map((entry) =>
+      entry.name === name ? { ...entry, ...patch } : entry,
+    );
   }
 
   async function install(entry: MarketEntry): Promise<void> {
     installing.value = { ...installing.value, [entry.name]: true };
     try {
       const res = await adminMarketApi.install(entry.name);
+      patchEntry(entry.name, {
+        managed: true,
+        installedVersion: res.version,
+        updateAvailable: false,
+      });
       notify.success(
         res.updated ? "Plugin updated" : "Plugin installed",
         `${entry.displayName} v${res.version}`,
       );
-      await Promise.all([load(), onChanged?.()]);
+      await Promise.all([load({ silent: true }), onChanged?.()]);
     } catch {
       notify.error("Installation failed", entry.displayName);
     } finally {
@@ -47,8 +60,13 @@ export function useMarketAdmin(onChanged?: () => Promise<void> | void) {
     uninstalling.value = { ...uninstalling.value, [entry.name]: true };
     try {
       await adminMarketApi.uninstall(entry.name);
+      patchEntry(entry.name, {
+        managed: false,
+        installedVersion: undefined,
+        updateAvailable: false,
+      });
       notify.success("Plugin uninstalled", entry.displayName);
-      await Promise.all([load(), onChanged?.()]);
+      await Promise.all([load({ silent: true }), onChanged?.()]);
     } catch {
       notify.error("Uninstall failed", entry.displayName);
     } finally {

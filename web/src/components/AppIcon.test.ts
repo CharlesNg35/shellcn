@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mount } from "@vue/test-utils";
+import { mount, flushPromises } from "@vue/test-utils";
 import AppIcon from "./AppIcon.vue";
 import { iconExists, toPascalCase } from "./lucideIconRegistry";
 
@@ -79,21 +79,27 @@ describe("AppIcon", () => {
     ).toBe(true);
   });
 
-  it("renders sanitized inline svg markup", () => {
+  it("renders sanitized inline svg into an isolated shadow root", async () => {
     const w = mount(AppIcon, {
       props: {
         icon: {
           type: "svg",
-          value: '<svg viewBox="0 0 24 24"><circle r="8"/></svg>',
+          value:
+            '<svg viewBox="0 0 24 24"><style>.st0{fill:red}</style><circle class="st0" r="8"/></svg>',
         },
       },
     });
-    const html = w.html();
-    expect(html).toContain("<svg");
-    expect(html).toContain("circle");
+    await flushPromises();
+    const host = w.find("span.app-icon-svg").element as HTMLElement;
+    const shadow = host.shadowRoot;
+    expect(shadow).not.toBeNull();
+    expect(shadow!.innerHTML).toContain("<svg");
+    expect(shadow!.innerHTML).toContain("circle");
+    expect(shadow!.innerHTML).toContain(".st0");
+    expect(w.html()).not.toContain(".st0");
   });
 
-  it("strips scripts/handlers from inline svg (XSS guard)", () => {
+  it("strips scripts/handlers from inline svg before it reaches the shadow root (XSS guard)", async () => {
     const w = mount(AppIcon, {
       props: {
         icon: {
@@ -103,7 +109,10 @@ describe("AppIcon", () => {
         },
       },
     });
-    const html = w.html();
+    await flushPromises();
+    const shadow = (w.find("span.app-icon-svg").element as HTMLElement)
+      .shadowRoot;
+    const html = shadow?.innerHTML ?? "";
     expect(html).not.toContain("onload");
     expect(html).not.toContain("<script");
     expect(html).not.toContain("alert");
