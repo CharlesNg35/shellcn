@@ -42,7 +42,7 @@ func TestPodWriteFileDeliversFullStdin(t *testing.T) {
 	var gotCommand []string
 	var gotStdin []byte
 	s := &Session{
-		newExecutor: func(ns, pod string, opts *corev1.PodExecOptions, spdyOnly bool) (remotecommand.Executor, error) {
+		newExecutor: func(_, _ string, opts *corev1.PodExecOptions, spdyOnly bool) (remotecommand.Executor, error) {
 			gotSPDY = spdyOnly
 			gotCommand = opts.Command
 			return drainExecutor{fn: func(_ context.Context, o remotecommand.StreamOptions) error {
