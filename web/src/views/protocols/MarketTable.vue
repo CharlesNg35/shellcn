@@ -57,6 +57,34 @@ const installedCount = computed(
 const updateCount = computed(
   () => props.entries.filter((entry) => entry.updateAvailable).length,
 );
+
+const sections = computed(() =>
+  [
+    {
+      key: "installed",
+      label: "Installed",
+      entries: filteredEntries.value
+        .filter((entry) => entry.managed)
+        .sort(
+          (a, b) => Number(b.updateAvailable) - Number(a.updateAvailable),
+        ),
+    },
+    {
+      key: "available",
+      label: "Available",
+      entries: filteredEntries.value.filter(
+        (entry) => !entry.managed && entry.compatible,
+      ),
+    },
+    {
+      key: "unavailable",
+      label: "Unavailable",
+      entries: filteredEntries.value.filter(
+        (entry) => !entry.managed && !entry.compatible,
+      ),
+    },
+  ].filter((section) => section.entries.length),
+);
 </script>
 
 <template>
@@ -103,11 +131,14 @@ const updateCount = computed(
       </div>
     </div>
 
-    <div v-if="props.loading" class="flex flex-col gap-3">
+    <div
+      v-if="props.loading && !props.entries.length"
+      class="flex flex-col gap-3"
+    >
       <div
         v-for="i in 6"
         :key="i"
-        class="grid animate-pulse gap-3 rounded-lg border border-surface-200 bg-surface-0 p-4 lg:grid-cols-[minmax(0,1fr)_10rem] lg:items-center dark:border-surface-800 dark:bg-surface-950"
+        class="grid animate-pulse gap-3 rounded-lg border border-surface-200 bg-surface-0 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center dark:border-surface-800 dark:bg-surface-950"
       >
         <div class="flex gap-3">
           <div
@@ -121,20 +152,41 @@ const updateCount = computed(
             <div class="h-3 w-2/3 rounded bg-surface-100 dark:bg-surface-800" />
           </div>
         </div>
-        <div class="h-8 rounded bg-surface-100 dark:bg-surface-800" />
+        <div class="flex items-center justify-end gap-2 sm:min-w-72">
+          <div class="h-8 w-9 rounded bg-surface-100 dark:bg-surface-800" />
+          <div class="h-8 w-28 rounded bg-surface-100 dark:bg-surface-800" />
+        </div>
       </div>
     </div>
 
-    <div v-else-if="filteredEntries.length" class="flex flex-col gap-3">
-      <MarketPluginRow
-        v-for="entry in filteredEntries"
-        :key="entry.name"
-        :entry="entry"
-        :installing="props.installing[entry.name] ?? false"
-        :uninstalling="props.uninstalling[entry.name] ?? false"
-        @install="emit('install', $event)"
-        @uninstall="emit('uninstall', $event)"
-      />
+    <div v-else-if="sections.length" class="flex flex-col gap-5">
+      <section
+        v-for="section in sections"
+        :key="section.key"
+        class="flex flex-col gap-2.5"
+      >
+        <div class="flex items-center gap-2 px-0.5">
+          <h3
+            class="text-xs font-semibold tracking-wide text-surface-500 uppercase dark:text-surface-400"
+          >
+            {{ section.label }}
+          </h3>
+          <span
+            class="rounded-full bg-surface-100 px-1.5 text-xs leading-5 text-surface-500 dark:bg-surface-800 dark:text-surface-400"
+          >
+            {{ section.entries.length }}
+          </span>
+        </div>
+        <MarketPluginRow
+          v-for="entry in section.entries"
+          :key="entry.name"
+          :entry="entry"
+          :installing="props.installing[entry.name] ?? false"
+          :uninstalling="props.uninstalling[entry.name] ?? false"
+          @install="emit('install', $event)"
+          @uninstall="emit('uninstall', $event)"
+        />
+      </section>
     </div>
 
     <div

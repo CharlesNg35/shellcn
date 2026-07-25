@@ -60,6 +60,46 @@ describe("MarketTable", () => {
     expect(wrapper.text()).not.toContain("Cassandra");
   });
 
+  it("groups installed and available plugins into separate sections", () => {
+    const wrapper = mount(MarketTable, {
+      props: {
+        entries: [
+          entry({ name: "avail", displayName: "AvailablePlugin" }),
+          entry({
+            name: "inst",
+            displayName: "InstalledPlugin",
+            managed: true,
+            installedVersion: "0.1.0",
+          }),
+        ],
+        loading: false,
+        installing: {},
+        uninstalling: {},
+      },
+    });
+
+    const groups = wrapper.findAll("section");
+    expect(groups).toHaveLength(2);
+    expect(groups[0].text()).toContain("Installed");
+    expect(groups[0].text()).toContain("InstalledPlugin");
+    expect(groups[1].text()).toContain("Available");
+    expect(groups[1].text()).toContain("AvailablePlugin");
+  });
+
+  it("keeps the list visible during a background refresh instead of showing skeletons", () => {
+    const wrapper = mount(MarketTable, {
+      props: {
+        entries: [entry()],
+        loading: true,
+        installing: {},
+        uninstalling: {},
+      },
+    });
+
+    expect(wrapper.find(".animate-pulse").exists()).toBe(false);
+    expect(wrapper.text()).toContain("Cassandra");
+  });
+
   it("emits install and uninstall actions for managed entries", async () => {
     const wrapper = mount(MarketTable, {
       props: {

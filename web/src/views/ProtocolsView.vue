@@ -234,7 +234,7 @@ onMounted(() => {
                 on the server to enable it.
               </p>
             </div>
-            <div v-else>
+            <div v-else class="min-h-112">
               <MarketTable
                 :entries="marketEntries"
                 :loading="marketLoading"

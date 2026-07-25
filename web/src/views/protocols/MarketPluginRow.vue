@@ -5,7 +5,7 @@ import Popover from "primevue/popover";
 import Tag from "primevue/tag";
 import AppIcon from "@/components/AppIcon.vue";
 import type { MarketEntry } from "@/types/projection";
-import { marketAction, marketStatus, marketVersionLabel } from "./market";
+import { marketAction, marketVersionLabel } from "./market";
 import MarketPluginDetails from "./MarketPluginDetails.vue";
 
 const props = defineProps<{
@@ -54,8 +54,14 @@ function toggleDetails(event: Event): void {
             {{ props.entry.displayName }}
           </h3>
           <Tag
-            :value="marketStatus(props.entry).value"
-            :severity="marketStatus(props.entry).severity"
+            v-if="props.entry.updateAvailable"
+            value="Update available"
+            severity="warn"
+          />
+          <Tag
+            v-else-if="!props.entry.compatible"
+            value="Incompatible"
+            severity="secondary"
           />
         </div>
 
@@ -101,14 +107,6 @@ function toggleDetails(event: Event): void {
         :disabled="props.uninstalling"
         :aria-label="`${marketAction(props.entry)} ${props.entry.displayName}`"
         @click="emit('install', props.entry)"
-      />
-      <Button
-        v-else-if="!props.entry.compatible"
-        class="w-28 shrink-0 justify-center"
-        label="Unavailable"
-        size="small"
-        severity="secondary"
-        disabled
       />
 
       <Button
