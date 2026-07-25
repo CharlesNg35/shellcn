@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"bytes"
+	"io"
 	"strconv"
 	"testing"
 
@@ -59,6 +60,55 @@ func TestPodFileContent(t *testing.T) {
 			t.Fatalf("fallback size = %d", c.Size)
 		}
 	})
+
+	t.Run("extensionless image sniffs to an image mime as binary", func(t *testing.T) {
+		png := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00}
+		c := podFileContent("/app/logo", sizeProbe(len(png), png))
+		if c.MIME != "image/png" || c.Encoding != "binary" || c.Content != "" {
+			t.Fatalf("extensionless image = %+v", c)
+		}
+	})
+
+	t.Run("extensionless script sniffs to text and inlines content", func(t *testing.T) {
+		body := []byte("#!/bin/sh\necho hi\n")
+		c := podFileContent("/usr/local/bin/run", sizeProbe(len(body), body))
+		if c.Encoding != "utf8" || c.Content != string(body) {
+			t.Fatalf("extensionless script = %+v", c)
+		}
+		if c.MIME == "" || c.MIME == "application/octet-stream" {
+			t.Fatalf("extensionless text should carry a text mime, got %q", c.MIME)
+		}
+	})
+}
+
+func TestPodPath(t *testing.T) {
+	cases := map[string]string{
+		"":                 "/",
+		".":                "/",
+		"  ":               "/",
+		"/":                "/",
+		"app/data":         "/app/data",
+		"/app/data":        "/app/data",
+		"/app//data/":      "/app/data",
+		"/app/../etc/motd": "/etc/motd",
+		"/app/./sub":       "/app/sub",
+	}
+	for in, want := range cases {
+		if got := podPath(in); got != want {
+			t.Errorf("podPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestPodDownloadSniffsExtensionlessMedia(t *testing.T) {
+	png := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00}
+	dl := podDownload("/app/logo", true, io.NopCloser(bytes.NewReader(png)))
+	if dl.MIME != "image/png" {
+		t.Fatalf("extensionless download MIME = %q, want image/png", dl.MIME)
+	}
+	if body, _ := io.ReadAll(dl.Body); !bytes.Equal(body, png) {
+		t.Fatalf("sniffed download dropped bytes: got %d, want %d", len(body), len(png))
+	}
 }
 
 func TestParseLsOutput(t *testing.T) {
@@ -112,8 +162,12 @@ func TestPodDownload(t *testing.T) {
 	if !dl.Inline || dl.Name != "photo.png" {
 		t.Fatalf("download = %+v", dl)
 	}
-	if got := podDownload("/tmp/unknownext.zzz", false, nil); got.MIME != "application/octet-stream" {
+	got := podDownload("/tmp/unknownext.zzz", false, io.NopCloser(bytes.NewReader([]byte{0x00, 0x01, 0x02, 0xff})))
+	if got.MIME != "application/octet-stream" {
 		t.Fatalf("unknown extension mime = %q, want octet-stream", got.MIME)
+	}
+	if body, _ := io.ReadAll(got.Body); !bytes.Equal(body, []byte{0x00, 0x01, 0x02, 0xff}) {
+		t.Fatalf("unknown extension download dropped bytes: %v", body)
 	}
 }
 

@@ -26,7 +26,9 @@ func (s *Session) openVMConsole(ctx context.Context, node, vmid string) (plugin.
 		return nil, fmt.Errorf("%w: invalid node or vmid", plugin.ErrInvalidInput)
 	}
 	var vnc pmox.VNC
-	if err := s.client.Post(ctx, pvePath("nodes", node, "qemu", vmid, "vncproxy"), pmox.VNCConfig{Websocket: true}, &vnc); err != nil {
+	if err := s.do(ctx, func(c *pmox.Client) error {
+		return c.Post(ctx, pvePath("nodes", node, "qemu", vmid, "vncproxy"), pmox.VNCConfig{Websocket: true}, &vnc)
+	}); err != nil {
 		return nil, fmt.Errorf("%w: open vnc proxy: %v", plugin.ErrUnavailable, err)
 	}
 	wsPath := pvePath("nodes", node, "qemu", vmid, "vncwebsocket") + fmt.Sprintf("?port=%d&vncticket=%s", int(vnc.Port), url.QueryEscape(vnc.Ticket))
@@ -70,7 +72,7 @@ func (s *Session) openTerminal(ctx context.Context, params map[string]string) (p
 	}
 
 	var term pmox.Term
-	if err := s.client.Post(ctx, proxyPath, nil, &term); err != nil {
+	if err := s.do(ctx, func(c *pmox.Client) error { return c.Post(ctx, proxyPath, nil, &term) }); err != nil {
 		return nil, fmt.Errorf("%w: open term proxy: %v", plugin.ErrUnavailable, err)
 	}
 	wsPath = fmt.Sprintf("%s?port=%d&vncticket=%s", wsPath, int(term.Port), url.QueryEscape(term.Ticket))
@@ -90,7 +92,7 @@ func (s *Session) openTerminal(ctx context.Context, params map[string]string) (p
 
 func (s *Session) dialWS(ctx context.Context, path string) (*websocket.Conn, error) {
 	header := http.Header{}
-	s.apply(header)
+	s.authHeader(header)
 	c, resp, err := websocket.Dial(ctx, s.wsBase+path, &websocket.DialOptions{
 		HTTPClient:   s.httpc,
 		HTTPHeader:   header,

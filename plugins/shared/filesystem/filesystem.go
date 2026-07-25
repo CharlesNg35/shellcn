@@ -3,12 +3,14 @@
 package filesystem
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"mime"
+	"net/http"
 	"os"
 	"path"
 	"sort"
@@ -266,10 +268,7 @@ func read(rc *plugin.RequestContext) (any, error) {
 		return nil, mapClientError(fs, rerr)
 	}
 	buf = buf[:n]
-	mimeType := MimeFor(p)
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
+	mimeType := DetectMIME(p, buf)
 	content := FileContent{Path: p, MIME: mimeType, Size: info.Size()}
 	if IsText(mimeType, buf) {
 		content.Encoding = "utf8"
@@ -323,6 +322,9 @@ func download(rc *plugin.RequestContext) (any, error) {
 		f, err := fs.Open(rc.Ctx, p)
 		if err != nil {
 			return nil, mapClientError(fs, err)
+		}
+		if dl.MIME == "" {
+			dl.MIME, f = SniffStream(f)
 		}
 		dl.Body = f
 	}
@@ -559,6 +561,32 @@ func cursorOffset(cursor string) int {
 func MimeFor(p string) string {
 	return mime.TypeByExtension(strings.ToLower(path.Ext(p)))
 }
+
+// DetectMIME resolves a preview MIME, preferring the extension type and sniffing
+// leading bytes when it's unknown. Never returns "" (unknown → octet-stream).
+func DetectMIME(p string, buf []byte) string {
+	if m := MimeFor(p); m != "" && m != "application/octet-stream" {
+		return m
+	}
+	return http.DetectContentType(buf)
+}
+
+// SniffStream is the streaming counterpart to DetectMIME: it peeks a stream's
+// leading bytes for the MIME and returns a reader that replays them so the body
+// streams whole. Never returns "".
+func SniffStream(r io.ReadCloser) (string, io.ReadCloser) {
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(r, head)
+	head = head[:n]
+	return http.DetectContentType(head), &prefixReadCloser{Reader: io.MultiReader(bytes.NewReader(head), r), closer: r}
+}
+
+type prefixReadCloser struct {
+	io.Reader
+	closer io.Closer
+}
+
+func (p *prefixReadCloser) Close() error { return p.closer.Close() }
 
 // IsText reports whether a preview buffer should be served as editable text.
 func IsText(mimeType string, buf []byte) bool {

@@ -67,11 +67,16 @@ func podFileTarget(rc *plugin.RequestContext) (*Session, string, string, string,
 	return s, ns, pod, param(rc, "container"), nil
 }
 
+// podPath canonicalizes a pod file path to an absolute, traversal-free form.
 func podPath(p string) string {
-	if p == "" || p == "." {
+	if p = strings.TrimSpace(p); p == "" || p == "." {
 		return "/"
 	}
-	return p
+	clean := path.Clean("/" + strings.TrimPrefix(p, "/"))
+	if clean == "." {
+		clean = "/"
+	}
+	return clean
 }
 
 // cleanFileName rejects path separators and traversal so an upload/mkdir name can
@@ -125,10 +130,7 @@ func podFileContent(p string, raw []byte) filesystem.FileContent {
 	if size <= 0 {
 		size = int64(len(body))
 	}
-	mimeType := filesystem.MimeFor(p)
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
+	mimeType := filesystem.DetectMIME(p, body)
 	content := filesystem.FileContent{Path: p, MIME: mimeType, Size: size}
 	if filesystem.IsText(mimeType, body) {
 		content.Encoding = "utf8"
@@ -180,7 +182,8 @@ func PodFileDownload(rc *plugin.RequestContext) (any, error) {
 func podDownload(p string, inline bool, body io.ReadCloser) *plugin.Download {
 	mimeType := filesystem.MimeFor(p)
 	if mimeType == "" {
-		mimeType = "application/octet-stream"
+		// Sniff so extensionless media carries a real Content-Type for inline preview.
+		mimeType, body = filesystem.SniffStream(body)
 	}
 	return &plugin.Download{Name: path.Base(p), MIME: mimeType, Size: -1, Inline: inline, Body: body}
 }

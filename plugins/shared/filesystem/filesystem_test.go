@@ -198,6 +198,93 @@ func TestFilesystemHandlersRoundTrip(t *testing.T) {
 	}
 }
 
+var pngBytes = []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00}
+
+func TestDetectMIME(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		buf  []byte
+		want string
+	}{
+		{"known extension wins over content", "/x/a.txt", pngBytes, "text/plain; charset=utf-8"},
+		{"extensionless image sniffed", "/x/logo", pngBytes, "image/png"},
+		{"extensionless script sniffed as text", "/x/run", []byte("#!/bin/sh\necho hi\n"), "text/plain; charset=utf-8"},
+		{"extensionless binary stays octet-stream", "/x/blob", []byte{0x00, 0x01, 0x02, 0xff}, "application/octet-stream"},
+		{"empty extensionless treated as text", "/x/empty", nil, "text/plain; charset=utf-8"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := DetectMIME(tc.path, tc.buf); got != tc.want {
+				t.Fatalf("DetectMIME(%q) = %q, want %q", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestReadPreviewsExtensionlessFiles(t *testing.T) {
+	fs := newMemFS()
+	fs.files["/logo"] = pngBytes
+	fs.files["/run"] = []byte("#!/bin/sh\necho hi\n")
+	route := map[string]plugin.Route{}
+	for _, r := range Routes("test", "test") {
+		route[r.ID] = r
+	}
+	read := func(p string) FileContent {
+		out, err := route["test.files.read"].Handle(plugin.NewRequestContext(context.Background(), plugin.User{}, fs, map[string]string{"path": p}, nil, nil))
+		if err != nil {
+			t.Fatalf("read %s: %v", p, err)
+		}
+		return out.(FileContent)
+	}
+
+	img := read("/logo")
+	if img.MIME != "image/png" || img.Encoding != "binary" || img.Content != "" {
+		t.Fatalf("extensionless image must sniff to an image mime served as binary: %+v", img)
+	}
+	script := read("/run")
+	if !strings.HasPrefix(script.MIME, "text/plain") || script.Encoding != "utf8" || script.Content == "" {
+		t.Fatalf("extensionless text must sniff to text and inline its content: %+v", script)
+	}
+}
+
+func TestDownloadSniffsExtensionlessMIME(t *testing.T) {
+	fs := newMemFS()
+	fs.files["/logo"] = pngBytes
+	fs.files["/photo.png"] = pngBytes
+	route := map[string]plugin.Route{}
+	for _, r := range Routes("test", "test") {
+		route[r.ID] = r
+	}
+	get := func(p string) *plugin.Download {
+		out, err := route["test.files.download"].Handle(plugin.NewRequestContext(context.Background(), plugin.User{}, fs, map[string]string{"path": p}, nil, nil))
+		if err != nil {
+			t.Fatalf("download %s: %v", p, err)
+		}
+		return out.(*plugin.Download)
+	}
+
+	// Extensionless: the download must sniff so its Content-Type matches the read
+	// preview's MIME, or the inline viewer the frontend picks renders nothing.
+	dl := get("/logo")
+	if dl.MIME != "image/png" {
+		t.Fatalf("extensionless download MIME = %q, want image/png", dl.MIME)
+	}
+	body, err := io.ReadAll(dl.Body)
+	_ = dl.Body.Close()
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if !bytes.Equal(body, pngBytes) {
+		t.Fatalf("sniffed download replayed %d bytes, want the whole %d-byte file", len(body), len(pngBytes))
+	}
+
+	// Known extension: unchanged, no sniff round-trip.
+	if got := get("/photo.png").MIME; got != "image/png" {
+		t.Fatalf("extensioned download MIME = %q, want image/png", got)
+	}
+}
+
 func TestNameSchemasGuideSingleNameInputs(t *testing.T) {
 	routes := map[string]plugin.Route{}
 	for _, r := range Routes("test", "test") {

@@ -977,19 +977,23 @@ func ContainerRows(items []container.Summary) []Row {
 func ImageRows(items []image.Summary) []Row {
 	rows := make([]Row, 0, len(items))
 	for _, img := range items {
-		name := firstString(img.RepoTags, firstString(img.RepoDigests, shortID(img.ID)))
-		rows = append(rows, Row{
-			"id":         img.ID,
-			"name":       name,
-			"tags":       strings.Join(img.RepoTags, ", "),
-			"status":     imageUsageStatus(img.Containers),
-			"size":       img.Size,
-			"containers": img.Containers,
-			"createdAt":  unixTime(img.Created),
-			"ref":        plugin.ResourceIdentity{Kind: "image", Name: name, UID: img.ID},
-		})
+		rows = append(rows, imageRow(img))
 	}
 	return rows
+}
+
+func imageRow(img image.Summary) Row {
+	name := firstString(img.RepoTags, firstString(img.RepoDigests, shortID(img.ID)))
+	return Row{
+		"id":         img.ID,
+		"name":       name,
+		"tags":       strings.Join(img.RepoTags, ", "),
+		"status":     imageUsageStatus(img.Containers),
+		"size":       img.Size,
+		"containers": img.Containers,
+		"createdAt":  unixTime(img.Created),
+		"ref":        plugin.ResourceIdentity{Kind: "image", Name: name, UID: img.ID},
+	}
 }
 
 func VolumeRows(items []volume.Volume, refCounts, sizes map[string]int64) []Row {

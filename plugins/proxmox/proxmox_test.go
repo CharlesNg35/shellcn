@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -516,6 +517,203 @@ func TestGuestOverviewMemorySemantics(t *testing.T) {
 	}
 	if got["memoryConfigured"] != int64(2147483648) || got["memoryMinimum"] != int64(536870912) || got["memoryCurrent"] != int64(2147483648) {
 		t.Fatalf("configured memory fields = %+v", got)
+	}
+}
+
+func TestHAStateRendersHumanValue(t *testing.T) {
+	cases := []struct {
+		name string
+		in   any
+		want string
+	}{
+		{"unmanaged object", map[string]any{"managed": float64(0)}, ""},
+		{"managed object", map[string]any{"managed": float64(1)}, "managed"},
+		{"live hastate wins", map[string]any{"managed": float64(1), "hastate": "started"}, "started"},
+		{"state fallback", map[string]any{"state": "error"}, "error"},
+		{"string passthrough", "started", "started"},
+		{"absent", nil, ""},
+	}
+	for _, tc := range cases {
+		if got := haState(tc.in); got != tc.want {
+			t.Errorf("%s: haState(%v) = %q, want %q", tc.name, tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestGuestOverviewRendersHAObject(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api2/json/version", jsonHandler(`{"data":{"version":"8.1.0","release":"8"}}`))
+	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/status/current", jsonHandler(`{"data":{"status":"running","ha":{"managed":1}}}`))
+	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/config", jsonHandler(`{"data":{"name":"web","cores":1,"sockets":1}}`))
+	srv := httptest.NewTLSServer(mux)
+	defer srv.Close()
+
+	host, port := splitHostPort(t, srv.URL)
+	sess := dialSession(t, host, port)
+	result, err := guestOverview("qemu")(newRC(sess, map[string]string{"node": "pve", "vmid": "100"}))
+	if err != nil {
+		t.Fatalf("overview: %v", err)
+	}
+	if got := result.(plugin.TableRow)["ha"]; got != "managed" {
+		t.Fatalf("ha cell = %#v, want %q (never a raw map)", got, "managed")
+	}
+}
+
+func TestPasswordSessionRefreshesExpiredTicket(t *testing.T) {
+	var mu sync.Mutex
+	issued, logins := 0, 0
+	valid := ""
+	authOK := func(r *http.Request) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, c := range r.Cookies() {
+			if c.Name == "PVEAuthCookie" && c.Value == valid {
+				return true
+			}
+		}
+		return false
+	}
+	guard := func(body string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if !authOK(r) {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(body))
+		}
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api2/json/access/ticket", func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		issued++
+		logins++
+		valid = fmt.Sprintf("ticket-%d", issued)
+		tk := valid
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"data":{"ticket":%q,"CSRFPreventionToken":"csrf"}}`, tk)
+	})
+	mux.HandleFunc("/api2/json/version", guard(`{"data":{"version":"8.1.0","release":"8"}}`))
+	mux.HandleFunc("/api2/json/nodes", guard(`{"data":[{"node":"pve","status":"online"}]}`))
+	srv := httptest.NewTLSServer(mux)
+	defer srv.Close()
+
+	host, port := splitHostPort(t, srv.URL)
+	cfg := plugin.ConnectConfig{
+		Net: directNet{},
+		Config: map[string]any{
+			"host": host, "port": atoi(port), "verify_tls": false,
+			"auth": "password", "username": "root@pam", "password": "secret",
+		},
+	}
+	sp, err := connect(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	sess := sp.(*Session)
+
+	mu.Lock()
+	valid = "" // expire the ticket server-side
+	before := logins
+	mu.Unlock()
+
+	page := callList(t, sess, listNodes, nil)
+	if len(page.Items) != 1 {
+		t.Fatalf("nodes after refresh = %+v", page.Items)
+	}
+	mu.Lock()
+	after := logins
+	mu.Unlock()
+	if after != before+1 {
+		t.Fatalf("re-login count = %d, want exactly one refresh (%d)", after, before+1)
+	}
+}
+
+func TestPasswordSessionSingleFlightRelogin(t *testing.T) {
+	var mu sync.Mutex
+	issued, logins := 0, 0
+	valid := ""
+	authOK := func(r *http.Request) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, c := range r.Cookies() {
+			if c.Name == "PVEAuthCookie" && c.Value == valid {
+				return true
+			}
+		}
+		return false
+	}
+	guard := func(body string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if !authOK(r) {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(body))
+		}
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api2/json/access/ticket", func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		issued++
+		logins++
+		valid = fmt.Sprintf("ticket-%d", issued)
+		tk := valid
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"data":{"ticket":%q,"CSRFPreventionToken":"csrf"}}`, tk)
+	})
+	mux.HandleFunc("/api2/json/version", guard(`{"data":{"version":"8.1.0","release":"8"}}`))
+	mux.HandleFunc("/api2/json/nodes", guard(`{"data":[{"node":"pve","status":"online"}]}`))
+	srv := httptest.NewTLSServer(mux)
+	defer srv.Close()
+
+	host, port := splitHostPort(t, srv.URL)
+	cfg := plugin.ConnectConfig{
+		Net: directNet{},
+		Config: map[string]any{
+			"host": host, "port": atoi(port), "verify_tls": false,
+			"auth": "password", "username": "root@pam", "password": "secret",
+		},
+	}
+	sp, err := connect(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	sess := sp.(*Session)
+
+	mu.Lock()
+	valid = "" // expire the ticket server-side
+	before := logins
+	mu.Unlock()
+
+	const n = 16
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	start := make(chan struct{})
+	for i := range n {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			_, errs[i] = listNodes(newRC(sess, nil))
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	for i, e := range errs {
+		if e != nil {
+			t.Fatalf("concurrent list[%d]: %v", i, e)
+		}
+	}
+	mu.Lock()
+	after := logins
+	mu.Unlock()
+	if after != before+1 {
+		t.Fatalf("re-login count = %d, want exactly one single-flight refresh (%d)", after, before+1)
 	}
 }
 

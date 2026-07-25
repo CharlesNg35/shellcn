@@ -806,7 +806,7 @@ func guestOverview(kind string) plugin.Handler {
 			"memPct":           memoryPercent(status["mem"], status["maxmem"]),
 			"uptime":           numInt(status["uptime"]),
 			"lock":             str(status["lock"]),
-			"ha":               str(status["ha"]),
+			"ha":               haState(status["ha"]),
 			"tags":             str(cfg["tags"]),
 			"cores":            cores,
 			"sockets":          sockets,
