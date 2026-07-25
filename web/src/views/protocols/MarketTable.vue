@@ -175,15 +175,25 @@ const sections = computed(() =>
             {{ section.entries.length }}
           </span>
         </div>
-        <MarketPluginRow
-          v-for="entry in section.entries"
-          :key="entry.name"
-          :entry="entry"
-          :installing="props.installing[entry.name] ?? false"
-          :uninstalling="props.uninstalling[entry.name] ?? false"
-          @install="emit('install', $event)"
-          @uninstall="emit('uninstall', $event)"
-        />
+        <TransitionGroup
+          tag="div"
+          class="relative flex flex-col gap-2.5"
+          enter-active-class="transition duration-300 ease-out"
+          enter-from-class="-translate-y-1 opacity-0"
+          leave-active-class="absolute inset-x-0 transition duration-300 ease-in"
+          leave-to-class="translate-y-1 opacity-0"
+          move-class="transition-transform duration-300 ease-out"
+        >
+          <MarketPluginRow
+            v-for="entry in section.entries"
+            :key="entry.name"
+            :entry="entry"
+            :installing="props.installing[entry.name] ?? false"
+            :uninstalling="props.uninstalling[entry.name] ?? false"
+            @install="emit('install', $event)"
+            @uninstall="emit('uninstall', $event)"
+          />
+        </TransitionGroup>
       </section>
     </div>
 

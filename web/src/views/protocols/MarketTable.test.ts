@@ -44,6 +44,9 @@ describe("MarketTable", () => {
         installing: {},
         uninstalling: {},
       },
+      // Stub the list transition so a filtered-out row leaves synchronously;
+      // jsdom never fires transitionend, so otherwise it lingers in the DOM.
+      global: { stubs: { "transition-group": true } },
     });
 
     const search = wrapper.get(
