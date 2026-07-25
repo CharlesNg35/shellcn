@@ -33,6 +33,7 @@ func podFilesTab() plugin.Panel {
 				Download: "kubernetes.pod.files.download",
 				Write:    "kubernetes.pod.files.write",
 				Mkdir:    "kubernetes.pod.files.mkdir",
+				Rename:   "kubernetes.pod.files.rename",
 				Delete:   "kubernetes.pod.files.delete",
 			},
 			Upload:   plugin.FileUploadConfig{RouteID: "kubernetes.pod.files.upload", FieldName: "files", Multiple: true},
@@ -253,6 +254,34 @@ func PodFileMkdir(rc *plugin.RequestContext) (any, error) {
 	return map[string]bool{"ok": true}, nil
 }
 
+func PodFileRename(rc *plugin.RequestContext) (any, error) {
+	s, ns, pod, container, err := podFileTarget(rc)
+	if err != nil {
+		return nil, err
+	}
+	p := podPath(rc.Param("path"))
+	if p == "/" {
+		return nil, fmt.Errorf("%w: refusing to rename the root directory", plugin.ErrInvalidInput)
+	}
+	var req struct {
+		Name string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := cleanFileName(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	// src/dst are passed as separate argv elements, never interpolated, so a name
+	// can't inject shell; the cleaned name keeps the entry in its own directory.
+	dst := path.Join(path.Dir(p), name)
+	if _, err := s.execCapture(rc.Ctx, ns, pod, container, []string{"mv", "--", p, dst}, nil); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"ok": true}, nil
+}
+
 func PodFileDelete(rc *plugin.RequestContext) (any, error) {
 	s, ns, pod, container, err := podFileTarget(rc)
 	if err != nil {
@@ -330,7 +359,8 @@ func (s *Session) execCapture(ctx context.Context, ns, pod, container string, co
 		Stdout:    true,
 		Stderr:    true,
 	}
-	executor, err := s.podExecutor(ns, pod, opts)
+	// Writes carry bulk binary stdin; force SPDY (WS-first truncates large stdin).
+	executor, err := s.executorFor(ns, pod, opts, stdin != nil)
 	if err != nil {
 		return nil, err
 	}

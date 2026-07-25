@@ -56,6 +56,7 @@ func Routes() []plugin.Route {
 		{ID: "kubernetes.pod.files.write", Method: plugin.MethodPut, Path: "/pods/files/write/{path}", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.files.write", Handle: PodFileWrite},
 		{ID: "kubernetes.pod.files.upload", Method: plugin.MethodPost, Path: "/pods/files/upload/{path}", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.files.upload", Input: podUploadSchema(), Handle: PodFileUpload},
 		{ID: "kubernetes.pod.files.mkdir", Method: plugin.MethodPost, Path: "/pods/files/mkdir/{path}", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.files.mkdir", Handle: PodFileMkdir},
+		{ID: "kubernetes.pod.files.rename", Method: plugin.MethodPatch, Path: "/pods/files/rename/{path}", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.files.rename", Handle: PodFileRename},
 		{ID: "kubernetes.pod.files.delete", Method: plugin.MethodDelete, Path: "/pods/files/delete/{path}", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.files.delete", Handle: PodFileDelete},
 		{ID: "kubernetes.cluster.shell", Method: plugin.MethodWS, Path: "/cluster/shell", Permission: permClusterShell, Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.cluster.shell", Stream: ClusterShellStream},
 

@@ -2,12 +2,76 @@ package kubernetes
 
 import (
 	"bytes"
+	"context"
+	"crypto/rand"
 	"io"
 	"strconv"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/tools/remotecommand"
+
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
+
+// drainExecutor stands in for a remotecommand.Executor so the exec write path can
+// be tested without a cluster: it drains StreamOptions.Stdin exactly as a real
+// executor would.
+type drainExecutor struct {
+	fn func(context.Context, remotecommand.StreamOptions) error
+}
+
+func (f drainExecutor) Stream(o remotecommand.StreamOptions) error {
+	return f.fn(context.Background(), o)
+}
+
+func (f drainExecutor) StreamWithContext(ctx context.Context, o remotecommand.StreamOptions) error {
+	return f.fn(ctx, o)
+}
+
+// TestPodWriteFileDeliversFullStdin proves the write/upload path streams the
+// entire binary payload to the executor with no truncation, and that it selects
+// the SPDY executor (spdyOnly), not the WS-first fallback that truncates.
+func TestPodWriteFileDeliversFullStdin(t *testing.T) {
+	payload := make([]byte, 2<<20) // 2 MiB, the size that reproduced the bug
+	if _, err := rand.Read(payload); err != nil {
+		t.Fatalf("seed payload: %v", err)
+	}
+
+	var gotSPDY bool
+	var gotCommand []string
+	var gotStdin []byte
+	s := &Session{
+		newExecutor: func(ns, pod string, opts *corev1.PodExecOptions, spdyOnly bool) (remotecommand.Executor, error) {
+			gotSPDY = spdyOnly
+			gotCommand = opts.Command
+			return drainExecutor{fn: func(_ context.Context, o remotecommand.StreamOptions) error {
+				var err error
+				gotStdin, err = io.ReadAll(o.Stdin) // drain fully, as the pod's `cat` would
+				return err
+			}}, nil
+		},
+	}
+
+	if _, err := podWriteFile(context.Background(), s, "default", "web-1", "app", "/tmp/x.zip", bytes.NewReader(payload)); err != nil {
+		t.Fatalf("podWriteFile: %v", err)
+	}
+	if !gotSPDY {
+		t.Fatalf("write path must use the SPDY executor (spdyOnly) for bulk stdin")
+	}
+	if len(gotStdin) != len(payload) || !bytes.Equal(gotStdin, payload) {
+		t.Fatalf("stdin truncated: delivered %d of %d bytes", len(gotStdin), len(payload))
+	}
+	want := []string{"sh", "-c", `cat > "$1"`, "sh", "/tmp/x.zip"}
+	if len(gotCommand) != len(want) {
+		t.Fatalf("command = %v", gotCommand)
+	}
+	for i := range want {
+		if gotCommand[i] != want[i] {
+			t.Fatalf("command = %v, want %v", gotCommand, want)
+		}
+	}
+}
 
 func sizeProbe(size int, body []byte) []byte {
 	out := append([]byte(strconv.Itoa(size)), '\n')
@@ -79,6 +143,39 @@ func TestPodFileContent(t *testing.T) {
 			t.Fatalf("extensionless text should carry a text mime, got %q", c.MIME)
 		}
 	})
+}
+
+func TestPodFileRename(t *testing.T) {
+	var gotCommand []string
+	s := &Session{
+		newExecutor: func(_, _ string, opts *corev1.PodExecOptions, _ bool) (remotecommand.Executor, error) {
+			gotCommand = opts.Command
+			return drainExecutor{fn: func(context.Context, remotecommand.StreamOptions) error { return nil }}, nil
+		},
+	}
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, s,
+		map[string]string{"namespace": "default", "name": "web-1", "container": "app", "path": "/data/old.txt"},
+		nil, []byte(`{"name":"new.txt"}`))
+	if _, err := PodFileRename(rc); err != nil {
+		t.Fatalf("PodFileRename: %v", err)
+	}
+	want := []string{"mv", "--", "/data/old.txt", "/data/new.txt"}
+	if len(gotCommand) != len(want) {
+		t.Fatalf("command = %v, want %v", gotCommand, want)
+	}
+	for i := range want {
+		if gotCommand[i] != want[i] {
+			t.Fatalf("command = %v, want %v", gotCommand, want)
+		}
+	}
+
+	// A name with a path separator must be rejected before any exec runs.
+	rc = plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, s,
+		map[string]string{"namespace": "default", "name": "web-1", "path": "/data/old.txt"},
+		nil, []byte(`{"name":"../escape"}`))
+	if _, err := PodFileRename(rc); err == nil {
+		t.Fatal("rename with a traversal name must fail")
+	}
 }
 
 func TestPodPath(t *testing.T) {
@@ -190,6 +287,7 @@ func TestPodFilesWired(t *testing.T) {
 		"kubernetes.pod.files.write":    plugin.MethodPut,
 		"kubernetes.pod.files.upload":   plugin.MethodPost,
 		"kubernetes.pod.files.mkdir":    plugin.MethodPost,
+		"kubernetes.pod.files.rename":   plugin.MethodPatch,
 		"kubernetes.pod.files.delete":   plugin.MethodDelete,
 	}
 	for _, r := range Routes() {
