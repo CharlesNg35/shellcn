@@ -65,9 +65,7 @@ const sections = computed(() =>
       label: "Installed",
       entries: filteredEntries.value
         .filter((entry) => entry.managed)
-        .sort(
-          (a, b) => Number(b.updateAvailable) - Number(a.updateAvailable),
-        ),
+        .sort((a, b) => Number(b.updateAvailable) - Number(a.updateAvailable)),
     },
     {
       key: "available",

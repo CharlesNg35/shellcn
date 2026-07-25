@@ -156,7 +156,9 @@ function riskBadge(
                 .hidden.map(labelize)
                 .join(', ')
             "
-            >+{{ capabilitySummary(data as ProtocolAdminItem).hidden.length }}</span
+            >+{{
+              capabilitySummary(data as ProtocolAdminItem).hidden.length
+            }}</span
           >
           <span
             v-if="(data as ProtocolAdminItem).recording?.length"
