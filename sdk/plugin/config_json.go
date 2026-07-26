@@ -115,3 +115,20 @@ func (a *ProjectedAction) UnmarshalJSON(data []byte) error {
 	a.Config = cfg
 	return nil
 }
+
+func (o *OpenPanelEffect) UnmarshalJSON(data []byte) error {
+	type wire OpenPanelEffect
+	aux := struct {
+		*wire
+		Config json.RawMessage `json:"config,omitempty"`
+	}{wire: (*wire)(o)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	cfg, err := decodePanelConfig(o.Panel, aux.Config)
+	if err != nil {
+		return err
+	}
+	o.Config = cfg
+	return nil
+}
