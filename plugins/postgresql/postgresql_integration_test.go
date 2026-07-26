@@ -278,6 +278,167 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	}
 }
 
+// TestPostgreSQLBoundedTableRowsIntegration pins the bounded-loading contract of
+// tableRows: a big table is served one LIMIT+1 page at a time with a working
+// offset cursor and no COUNT(*) per page, while a small table still reports an
+// exact total and an exact count stays available on request.
+func TestPostgreSQLBoundedTableRowsIntegration(t *testing.T) {
+	if os.Getenv("SHELLCN_POSTGRESQL_INTEGRATION") != "1" {
+		t.Skip("set SHELLCN_POSTGRESQL_INTEGRATION=1 to run against PostgreSQL")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	cfg := integrationConfig(ctx, t)
+	cfg["row_limit"] = 500
+	cfg["query_timeout"] = "10s"
+
+	sess, err := connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+	s := sess.(*Session)
+	pool, err := s.poolFor(ctx, "")
+	if err != nil {
+		t.Fatalf("pool: %v", err)
+	}
+
+	const seeded = 250
+	const limit = 25
+	if _, err := pool.Exec(ctx, `
+DROP TABLE IF EXISTS public.shellcn_paging;
+DROP TABLE IF EXISTS public.shellcn_paging_small;
+CREATE TABLE public.shellcn_paging (id bigint PRIMARY KEY, label text NOT NULL);
+INSERT INTO public.shellcn_paging (id, label)
+  SELECT g, 'row-' || g FROM generate_series(1, `+strconv.Itoa(seeded)+`) AS g;
+CREATE TABLE public.shellcn_paging_small (id bigint PRIMARY KEY, label text NOT NULL);
+INSERT INTO public.shellcn_paging_small (id, label)
+  SELECT g, 'small-' || g FROM generate_series(1, 3) AS g`); err != nil {
+		t.Fatalf("seed paging tables: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_, _ = pool.Exec(cleanupCtx, `DROP TABLE IF EXISTS public.shellcn_paging; DROP TABLE IF EXISTS public.shellcn_paging_small`)
+	})
+	var seedCount int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM public.shellcn_paging`).Scan(&seedCount); err != nil {
+		t.Fatalf("verify seed: %v", err)
+	}
+	if seedCount != seeded {
+		t.Fatalf("seed is incomplete: want %d rows, got %d", seeded, seedCount)
+	}
+
+	bigParams := map[string]string{"schema": "public", "table": "shellcn_paging"}
+	fetch := func(table, cursor string) plugin.Page[plugin.TableRow] {
+		t.Helper()
+		q := url.Values{"limit": {strconv.Itoa(limit)}, "sort": {"id"}}
+		if cursor != "" {
+			q.Set("cursor", cursor)
+		}
+		res, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s,
+			map[string]string{"schema": "public", "table": table}, q, nil))
+		if err != nil {
+			t.Fatalf("table rows (%s cursor=%q): %v", table, cursor, err)
+		}
+		return res.(plugin.Page[plugin.TableRow])
+	}
+
+	// One bounded page: the handler returns exactly `limit` rows out of 250, and
+	// hands back a cursor instead of loading the rest.
+	first := fetch("shellcn_paging", "")
+	if len(first.Items) != limit {
+		t.Fatalf("expected exactly one bounded page of %d rows, got %d", limit, len(first.Items))
+	}
+	if first.NextCursor == "" {
+		t.Fatal("expected a non-empty NextCursor while more rows remain")
+	}
+	// The fix: no COUNT(*) per page, so the total is omitted unless asked for.
+	if first.Total != nil {
+		t.Fatalf("expected Total to be omitted for a multi-page table, got %d", *first.Total)
+	}
+
+	// Walk the cursor to exhaustion: pages must be distinct, contiguous and cover
+	// every seeded row, and paging must terminate with an empty cursor.
+	seen := map[int64]int{}
+	var order []int64
+	cursor, pages := first.NextCursor, 1
+	collect := func(page plugin.Page[plugin.TableRow]) {
+		t.Helper()
+		for _, item := range page.Items {
+			id, ok := item["id"].(int64)
+			if !ok {
+				t.Fatalf("expected int64 id, got %#v", item["id"])
+			}
+			seen[id]++
+			order = append(order, id)
+		}
+	}
+	collect(first)
+	for cursor != "" {
+		if pages > seeded {
+			t.Fatal("paging did not terminate")
+		}
+		page := fetch("shellcn_paging", cursor)
+		pages++
+		if len(page.Items) == 0 {
+			t.Fatalf("page %d after a non-empty cursor was empty", pages)
+		}
+		if page.NextCursor != "" && len(page.Items) != limit {
+			t.Fatalf("page %d is short (%d rows) but still advertises a next cursor", pages, len(page.Items))
+		}
+		if page.NextCursor == cursor {
+			t.Fatalf("cursor %q did not advance", cursor)
+		}
+		if page.Total != nil {
+			t.Fatalf("expected Total to stay omitted on page %d, got %d", pages, *page.Total)
+		}
+		collect(page)
+		cursor = page.NextCursor
+	}
+	if pages != seeded/limit {
+		t.Fatalf("expected %d pages of %d rows, got %d", seeded/limit, limit, pages)
+	}
+	if len(order) != seeded {
+		t.Fatalf("expected paging to cover %d rows, got %d", seeded, len(order))
+	}
+	for id, n := range seen {
+		if n != 1 {
+			t.Fatalf("row id %d returned %d times across pages (overlap)", id, n)
+		}
+	}
+	for i := range order {
+		if order[i] != int64(i+1) {
+			t.Fatalf("gap at position %d: expected id %d, got %d", i, i+1, order[i])
+		}
+	}
+
+	// A small table still fits in one page, so its size is exact and free.
+	small := fetch("shellcn_paging_small", "")
+	if len(small.Items) != 3 || small.NextCursor != "" {
+		t.Fatalf("expected the small table in one terminal page, got %d rows cursor=%q", len(small.Items), small.NextCursor)
+	}
+	if small.Total == nil || *small.Total != 3 {
+		t.Fatalf("expected an exact total of 3 for the small table, got %v", small.Total)
+	}
+
+	// The exact count is still reachable, but only when the caller opts in.
+	exact, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, bigParams,
+		url.Values{"limit": {strconv.Itoa(limit)}, "sort": {"id"},
+			"filter." + sqldb.CountFilterKey: {sqldb.CountExact}}, nil))
+	if err != nil {
+		t.Fatalf("table rows with exact count: %v", err)
+	}
+	counted := exact.(plugin.Page[plugin.TableRow])
+	if counted.Total == nil || *counted.Total != seeded {
+		t.Fatalf("expected an opt-in exact total of %d, got %v", seeded, counted.Total)
+	}
+	if len(counted.Items) != limit {
+		t.Fatalf("an exact count must not widen the page: got %d rows", len(counted.Items))
+	}
+}
+
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
 	raw, _ := json.Marshal(body)
 	return plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, params, nil, raw)

@@ -110,8 +110,8 @@ func (l *Local) Overview(ctx context.Context) (map[string]any, error) {
 		out["swapUsed"] = sm.Used
 		out["swapPct"] = sm.UsedPercent
 	}
-	if procs, err := process.ProcessesWithContext(ctx); err == nil {
-		out["processes"] = len(procs)
+	if pids, err := process.PidsWithContext(ctx); err == nil {
+		out["processes"] = len(pids)
 	}
 	if users, err := host.UsersWithContext(ctx); err == nil {
 		out["sessions"] = len(users)
@@ -152,8 +152,10 @@ func (l *Local) Metrics(ctx context.Context) (map[string]any, error) {
 		out["diskReadBytes"] = read
 		out["diskWriteBytes"] = written
 	}
-	if procs, err := process.ProcessesWithContext(ctx); err == nil {
-		out["processes"] = len(procs)
+	// The count comes from the pid list rather than from constructing a process
+	// object per pid: this runs on every metrics tick, for every connection.
+	if pids, err := process.PidsWithContext(ctx); err == nil {
+		out["processes"] = len(pids)
 	}
 	if users, err := host.UsersWithContext(ctx); err == nil {
 		out["sessions"] = len(users)
@@ -162,13 +164,34 @@ func (l *Local) Metrics(ctx context.Context) (map[string]any, error) {
 	return out, nil
 }
 
+// Processes returns the host's processes, heaviest first, capped at ProcessLimit.
+// Ranking needs memory for every process, but the remaining per-process reads
+// (each its own /proc lookup) are issued only for those that survive the cap.
 func (l *Local) Processes(ctx context.Context) ([]Row, error) {
 	procs, err := process.ProcessesWithContext(ctx)
 	if err != nil {
 		return []Row{}, nil
 	}
-	rows := make([]Row, 0, len(procs))
+	type ranked struct {
+		proc *process.Process
+		rss  uint64
+		vms  uint64
+	}
+	ranking := make([]ranked, 0, len(procs))
 	for _, p := range procs {
+		entry := ranked{proc: p}
+		if mi, err := p.MemoryInfoWithContext(ctx); err == nil && mi != nil {
+			entry.rss, entry.vms = mi.RSS, mi.VMS
+		}
+		ranking = append(ranking, entry)
+	}
+	sort.Slice(ranking, func(i, j int) bool { return ranking[i].rss > ranking[j].rss })
+	if l.opts.ProcessLimit > 0 && len(ranking) > l.opts.ProcessLimit {
+		ranking = ranking[:l.opts.ProcessLimit]
+	}
+	rows := make([]Row, 0, len(ranking))
+	for _, entry := range ranking {
+		p := entry.proc
 		name, _ := p.NameWithContext(ctx)
 		status, _ := p.StatusWithContext(ctx)
 		user, _ := p.UsernameWithContext(ctx)
@@ -177,10 +200,6 @@ func (l *Local) Processes(ctx context.Context) ([]Row, error) {
 		threads, _ := p.NumThreadsWithContext(ctx)
 		memPct, _ := p.MemoryPercentWithContext(ctx)
 		cpuPct, _ := p.CPUPercentWithContext(ctx)
-		var rss, vms uint64
-		if mi, err := p.MemoryInfoWithContext(ctx); err == nil && mi != nil {
-			rss, vms = mi.RSS, mi.VMS
-		}
 		rows = append(rows, Row{
 			"_id":       strconv.Itoa(int(p.Pid)),
 			"pid":       p.Pid,
@@ -189,18 +208,12 @@ func (l *Local) Processes(ctx context.Context) ([]Row, error) {
 			"user":      user,
 			"cpuPct":    cpuPct,
 			"memPct":    memPct,
-			"rss":       rss,
-			"vms":       vms,
+			"rss":       entry.rss,
+			"vms":       entry.vms,
 			"threads":   threads,
 			"createdAt": unixMillis(created),
 			"cmdline":   cmdline,
 		})
-	}
-	sort.Slice(rows, func(i, j int) bool {
-		return numeric(rows[i]["rss"]) > numeric(rows[j]["rss"])
-	})
-	if l.opts.ProcessLimit > 0 && len(rows) > l.opts.ProcessLimit {
-		rows = rows[:l.opts.ProcessLimit]
 	}
 	return rows, nil
 }
@@ -430,6 +443,14 @@ func (l *Local) Connections(ctx context.Context) ([]Row, error) {
 	if err != nil {
 		return []Row{}, nil
 	}
+	// A busy host holds far more sockets than the grid ever shows, so order and
+	// cap the raw connections before turning them into rows.
+	sort.Slice(conns, func(i, j int) bool {
+		return endpoint(conns[i].Laddr.IP, conns[i].Laddr.Port) < endpoint(conns[j].Laddr.IP, conns[j].Laddr.Port)
+	})
+	if l.opts.ConnectionLimit > 0 && len(conns) > l.opts.ConnectionLimit {
+		conns = conns[:l.opts.ConnectionLimit]
+	}
 	rows := make([]Row, 0, len(conns))
 	for _, c := range conns {
 		uid := fmt.Sprintf("%d:%s:%d:%s:%d:%s", c.Pid, c.Laddr.IP, c.Laddr.Port, c.Raddr.IP, c.Raddr.Port, c.Status)
@@ -443,12 +464,6 @@ func (l *Local) Connections(ctx context.Context) ([]Row, error) {
 			"status":     strings.ToLower(c.Status),
 			"uids":       joinInts(c.Uids),
 		})
-	}
-	sort.Slice(rows, func(i, j int) bool {
-		return fmt.Sprint(rows[i]["localAddr"]) < fmt.Sprint(rows[j]["localAddr"])
-	})
-	if l.opts.ConnectionLimit > 0 && len(rows) > l.opts.ConnectionLimit {
-		rows = rows[:l.opts.ConnectionLimit]
 	}
 	return rows, nil
 }
@@ -650,28 +665,6 @@ func unixMillis(ms int64) string {
 		return ""
 	}
 	return time.UnixMilli(ms).UTC().Format(time.RFC3339)
-}
-
-func numeric(v any) float64 {
-	switch n := v.(type) {
-	case int:
-		return float64(n)
-	case int32:
-		return float64(n)
-	case int64:
-		return float64(n)
-	case uint64:
-		return float64(n)
-	case float32:
-		return float64(n)
-	case float64:
-		return n
-	case json.Number:
-		f, _ := strconv.ParseFloat(string(n), 64)
-		return f
-	default:
-		return 0
-	}
 }
 
 func endpoint(ip string, port uint32) string {

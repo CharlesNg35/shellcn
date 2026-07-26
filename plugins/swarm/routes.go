@@ -75,23 +75,29 @@ func overviewMetrics(rc *plugin.RequestContext, stream plugin.ClientStream) erro
 	})
 }
 
+// swarmFrame builds the cluster count tiles. One service listing answers services,
+// stacks (a service label) and tasks: the daemon reports each service's live task
+// count, so the tile never pulls the task inventory, which retains terminated
+// tasks per replica.
 func swarmFrame(rc *plugin.RequestContext) map[string]any {
 	frame := map[string]any{}
 	cli, err := client(rc)
 	if err != nil {
 		return frame
 	}
-	if res, err := cli.ServiceList(rc.Ctx, dockerclient.ServiceListOptions{}); err == nil {
+	if res, err := cli.ServiceList(rc.Ctx, dockerclient.ServiceListOptions{Status: true}); err == nil {
+		var tasks uint64
+		for _, svc := range res.Items {
+			if svc.ServiceStatus != nil {
+				tasks += svc.ServiceStatus.RunningTasks
+			}
+		}
 		frame["services"] = len(res.Items)
+		frame["tasks"] = tasks
+		frame["stacks"] = len(stackRowsFromServices(res.Items))
 	}
 	if res, err := cli.NodeList(rc.Ctx, dockerclient.NodeListOptions{}); err == nil {
 		frame["nodes"] = len(res.Items)
-	}
-	if res, err := cli.TaskList(rc.Ctx, dockerclient.TaskListOptions{}); err == nil {
-		frame["tasks"] = len(res.Items)
-	}
-	if rows, err := stackRows(rc); err == nil {
-		frame["stacks"] = len(rows)
 	}
 	return frame
 }
@@ -657,8 +663,12 @@ func stackRows(rc *plugin.RequestContext) ([]dockerengine.Row, error) {
 	if err != nil {
 		return nil, dockerengine.DockerErr(err)
 	}
+	return stackRowsFromServices(res.Items), nil
+}
+
+func stackRowsFromServices(items []swarm.Service) []dockerengine.Row {
 	stacks := map[string]dockerengine.Row{}
-	for _, s := range res.Items {
+	for _, s := range items {
 		ns := s.Spec.Labels[stackNamespaceLabel]
 		if ns == "" {
 			continue
@@ -674,23 +684,33 @@ func stackRows(rc *plugin.RequestContext) ([]dockerengine.Row, error) {
 	for _, r := range stacks {
 		rows = append(rows, r)
 	}
-	return rows, nil
+	return rows
 }
+
+// serviceNameCache holds the ID→name mapping per session: every task grid and
+// task refresh needs it, so the listing is shared instead of rebuilt per request.
+var serviceNameCache = dockerengine.SessionCache[map[string]string]{TTL: 5 * time.Second}
 
 // serviceNames maps service ID to its name for task display. Failures degrade to
 // an empty map (tasks then show short service IDs).
 func serviceNames(rc *plugin.RequestContext) map[string]string {
-	cli, err := client(rc)
+	s, err := dockerengine.Unwrap(rc.Session)
 	if err != nil {
 		return nil
 	}
-	res, err := cli.ServiceList(rc.Ctx, dockerclient.ServiceListOptions{})
+	names, err := serviceNameCache.Get(s, func() (map[string]string, error) {
+		res, err := s.Client().ServiceList(rc.Ctx, dockerclient.ServiceListOptions{})
+		if err != nil {
+			return nil, err
+		}
+		names := make(map[string]string, len(res.Items))
+		for _, svc := range res.Items {
+			names[svc.ID] = svc.Spec.Name
+		}
+		return names, nil
+	})
 	if err != nil {
 		return nil
-	}
-	names := make(map[string]string, len(res.Items))
-	for _, s := range res.Items {
-		names[s.ID] = s.Spec.Name
 	}
 	return names
 }

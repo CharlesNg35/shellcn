@@ -27,6 +27,15 @@ import (
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
+const (
+	// deleteBatchSize is the DeleteObjects per-request object limit, and the
+	// listing page size recursive operations stream in.
+	deleteBatchSize = 1000
+	// maxWalkEntries caps a whole-prefix ReadDir so a walk over a huge prefix
+	// fails loudly instead of accumulating the bucket in memory.
+	maxWalkEntries = 50000
+)
+
 type Options struct {
 	Endpoint      string
 	Region        string
@@ -182,53 +191,90 @@ func (c *Client) Home(context.Context) (string, error) {
 	return "/", nil
 }
 
+// ReadDir collects a whole prefix through bounded pages. The file browser pages
+// through ReadDirPage instead; this serves the recursive walks that need every
+// child, and refuses a prefix past maxWalkEntries rather than growing unbounded.
 func (c *Client) ReadDir(ctx context.Context, p string) ([]os.FileInfo, error) {
-	prefix := c.dirPrefix(p)
-	pager := awss3.NewListObjectsV2Paginator(c.s3, &awss3.ListObjectsV2Input{
-		Bucket:    aws.String(c.bucket),
-		Prefix:    aws.String(prefix),
-		Delimiter: aws.String("/"),
-	})
 	var infos []os.FileInfo
-	seen := map[string]bool{}
-	for pager.HasMorePages() {
-		out, err := pager.NextPage(ctx)
+	for cursor := ""; ; {
+		page, next, err := c.ReadDirPage(ctx, p, cursor, plugin.MaxPageLimit)
 		if err != nil {
 			return nil, err
 		}
-		for _, common := range out.CommonPrefixes {
-			key := aws.ToString(common.Prefix)
-			name := path.Base(strings.TrimSuffix(key, "/"))
-			if name == "" || seen[name] {
-				continue
-			}
-			seen[name] = true
-			infos = append(infos, objectInfo{name: name, dir: true, modTime: time.Now()})
+		infos = append(infos, page...)
+		if len(infos) > maxWalkEntries {
+			return nil, fmt.Errorf("%w: directory holds more than %d objects", plugin.ErrInvalidInput, maxWalkEntries)
 		}
-		for _, obj := range out.Contents {
-			key := aws.ToString(obj.Key)
-			if key == prefix {
-				continue
-			}
-			name := strings.TrimPrefix(key, prefix)
-			if strings.Contains(name, "/") || name == "" || seen[name] {
-				continue
-			}
-			seen[name] = true
-			modTime := time.Time{}
-			if obj.LastModified != nil {
-				modTime = *obj.LastModified
-			}
-			infos = append(infos, objectInfo{name: name, size: aws.ToInt64(obj.Size), modTime: modTime})
+		if next == "" {
+			sortInfos(infos)
+			return infos, nil
 		}
+		cursor = next
 	}
+}
+
+// ReadDirPage implements filesystem.DirPager with a single ListObjectsV2 call:
+// the server truncates at MaxKeys and hands back the continuation token used as
+// the page cursor. Entries are sorted within the page only.
+func (c *Client) ReadDirPage(ctx context.Context, p, cursor string, limit int) ([]os.FileInfo, string, error) {
+	prefix := c.dirPrefix(p)
+	if limit <= 0 {
+		limit = plugin.DefaultPageLimit
+	}
+	if limit > plugin.MaxPageLimit {
+		limit = plugin.MaxPageLimit
+	}
+	in := &awss3.ListObjectsV2Input{
+		Bucket:    aws.String(c.bucket),
+		Prefix:    aws.String(prefix),
+		Delimiter: aws.String("/"),
+		MaxKeys:   aws.Int32(int32(limit)),
+	}
+	if cursor != "" {
+		in.ContinuationToken = aws.String(cursor)
+	}
+	out, err := c.s3.ListObjectsV2(ctx, in)
+	if err != nil {
+		return nil, "", err
+	}
+	infos := make([]os.FileInfo, 0, len(out.CommonPrefixes)+len(out.Contents))
+	seen := map[string]bool{}
+	for _, common := range out.CommonPrefixes {
+		key := aws.ToString(common.Prefix)
+		name := path.Base(strings.TrimSuffix(key, "/"))
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		infos = append(infos, objectInfo{name: name, dir: true, modTime: time.Now()})
+	}
+	for _, obj := range out.Contents {
+		key := aws.ToString(obj.Key)
+		if key == prefix {
+			continue
+		}
+		name := strings.TrimPrefix(key, prefix)
+		if strings.Contains(name, "/") || name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		modTime := time.Time{}
+		if obj.LastModified != nil {
+			modTime = *obj.LastModified
+		}
+		infos = append(infos, objectInfo{name: name, size: aws.ToInt64(obj.Size), modTime: modTime})
+	}
+	sortInfos(infos)
+	return infos, aws.ToString(out.NextContinuationToken), nil
+}
+
+func sortInfos(infos []os.FileInfo) {
 	sort.Slice(infos, func(i, j int) bool {
 		if infos[i].IsDir() != infos[j].IsDir() {
 			return infos[i].IsDir()
 		}
 		return strings.ToLower(infos[i].Name()) < strings.ToLower(infos[j].Name())
 	})
-	return infos, nil
 }
 
 func (c *Client) Stat(ctx context.Context, p string) (os.FileInfo, error) {
@@ -355,31 +401,21 @@ func (c *Client) MapError(err error) error {
 }
 
 func (c *Client) renamePrefix(ctx context.Context, fromPrefix, toPrefix string) error {
-	keys, err := c.listKeys(ctx, fromPrefix)
-	if err != nil {
+	if err := c.copyPrefix(ctx, fromPrefix, toPrefix); err != nil {
 		return err
 	}
-	for _, key := range keys {
-		dst := toPrefix + strings.TrimPrefix(key, fromPrefix)
-		if err := c.copyObject(ctx, key, dst); err != nil {
-			return err
-		}
-	}
-	return c.deleteKeys(ctx, keys)
+	return c.deletePrefix(ctx, fromPrefix)
 }
 
 func (c *Client) copyPrefix(ctx context.Context, fromPrefix, toPrefix string) error {
-	keys, err := c.listKeys(ctx, fromPrefix)
-	if err != nil {
-		return err
-	}
-	for _, key := range keys {
-		dst := toPrefix + strings.TrimPrefix(key, fromPrefix)
-		if err := c.copyObject(ctx, key, dst); err != nil {
-			return err
+	return c.eachKeyPage(ctx, fromPrefix, func(keys []string) error {
+		for _, key := range keys {
+			if err := c.copyObject(ctx, key, toPrefix+strings.TrimPrefix(key, fromPrefix)); err != nil {
+				return err
+			}
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func (c *Client) copyObject(ctx context.Context, fromKey, toKey string) error {
@@ -392,33 +428,46 @@ func (c *Client) copyObject(ctx context.Context, fromKey, toKey string) error {
 }
 
 func (c *Client) deletePrefix(ctx context.Context, prefix string) error {
-	keys, err := c.listKeys(ctx, prefix)
-	if err != nil {
-		return err
-	}
-	return c.deleteKeys(ctx, keys)
+	return c.eachKeyPage(ctx, prefix, func(keys []string) error {
+		return c.deleteKeys(ctx, keys)
+	})
 }
 
-func (c *Client) listKeys(ctx context.Context, prefix string) ([]string, error) {
-	var keys []string
-	p := awss3.NewListObjectsV2Paginator(c.s3, &awss3.ListObjectsV2Input{Bucket: aws.String(c.bucket), Prefix: aws.String(prefix)})
+// eachKeyPage streams a prefix one listing page at a time so a recursive operation
+// holds at most one batch of keys in memory. The page size matches the
+// DeleteObjects batch limit, and cancellation is checked between pages.
+func (c *Client) eachKeyPage(ctx context.Context, prefix string, fn func(keys []string) error) error {
+	p := awss3.NewListObjectsV2Paginator(c.s3,
+		&awss3.ListObjectsV2Input{Bucket: aws.String(c.bucket), Prefix: aws.String(prefix)},
+		func(o *awss3.ListObjectsV2PaginatorOptions) { o.Limit = deleteBatchSize },
+	)
 	for p.HasMorePages() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		page, err := p.NextPage(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
+		if len(page.Contents) == 0 {
+			continue
+		}
+		keys := make([]string, 0, len(page.Contents))
 		for _, obj := range page.Contents {
 			keys = append(keys, aws.ToString(obj.Key))
 		}
+		if err := fn(keys); err != nil {
+			return err
+		}
 	}
-	return keys, nil
+	return nil
 }
 
 func (c *Client) deleteKeys(ctx context.Context, keys []string) error {
 	for len(keys) > 0 {
 		n := len(keys)
-		if n > 1000 {
-			n = 1000
+		if n > deleteBatchSize {
+			n = deleteBatchSize
 		}
 		batch := keys[:n]
 		keys = keys[n:]

@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import Button from "primevue/button";
 import ProgressBar from "primevue/progressbar";
+import VirtualScroller from "primevue/virtualscroller";
 import { runAction } from "@/api/dataSource";
 import { useStream } from "@/composables/useStream";
 import type { PanelProps } from "../core/types";
@@ -9,13 +10,18 @@ import type { TaskProgressPanelConfig } from "@/types/projection";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import AppIcon from "@/components/AppIcon.vue";
 import PanelLoader from "@/components/PanelLoader.vue";
+import { useLogBuffer, type LogLine } from "./useLogBuffer";
 
 const props = defineProps<PanelProps>();
+
+const MAX = 1000;
+const VIRTUAL_THRESHOLD = 200;
+const LINE_HEIGHT = 18;
 
 const cfg = computed(
   () => (props.config as TaskProgressPanelConfig | undefined) ?? {},
 );
-const lines = ref<string[]>([]);
+const { lines, append: appendLine } = useLogBuffer(MAX);
 const taskStatus = ref("Running");
 const percent = ref<number | null>(null);
 const busy = ref(false);
@@ -36,12 +42,9 @@ function append(frame: string): void {
     else if (typeof parsed.progress === "number")
       percent.value = parsed.progress;
     const line = parsed.line ?? parsed.message ?? parsed.error;
-    if (line) lines.value.push(line);
+    if (line) appendLine(line);
   } catch {
-    lines.value.push(frame);
-  }
-  if (lines.value.length > 1000) {
-    lines.value.splice(0, lines.value.length - 1000);
+    appendLine(frame);
   }
 }
 
@@ -61,6 +64,7 @@ const progressValue = computed(() =>
 const showInitialLoader = computed(
   () => !lines.value.length && status.value === "connecting",
 );
+const virtualized = computed(() => lines.value.length > VIRTUAL_THRESHOLD);
 const emptyText = computed(() =>
   status.value === "open" ? "No task output yet." : "No task output received.",
 );
@@ -156,15 +160,33 @@ async function onReconnect(): Promise<void> {
     </div>
 
     <div
-      class="min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed text-surface-700 dark:text-surface-200"
+      class="min-h-0 flex-1 p-3 font-mono text-xs leading-relaxed text-surface-700 dark:text-surface-200"
+      :class="virtualized ? 'overflow-hidden' : 'overflow-auto'"
     >
-      <div
-        v-for="(line, i) in lines"
-        :key="i"
-        class="wrap-break-word whitespace-pre-wrap"
+      <VirtualScroller
+        :items="lines"
+        :item-size="LINE_HEIGHT"
+        :disabled="!virtualized"
+        scroll-height="100%"
+        class="h-full"
       >
-        {{ line }}
-      </div>
+        <template #content="{ items, styleClass, contentRef, contentStyle }">
+          <div :ref="contentRef" :class="styleClass" :style="contentStyle">
+            <div
+              v-for="line in items as LogLine[]"
+              :key="line.id"
+              :class="
+                virtualized
+                  ? 'whitespace-pre'
+                  : 'wrap-break-word whitespace-pre-wrap'
+              "
+              :style="virtualized ? { height: `${LINE_HEIGHT}px` } : undefined"
+            >
+              {{ line.text }}
+            </div>
+          </div>
+        </template>
+      </VirtualScroller>
       <PanelLoader v-if="showInitialLoader" />
       <div v-else-if="!lines.length" class="text-surface-500">
         {{ emptyText }}

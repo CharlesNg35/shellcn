@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Button from "primevue/button";
@@ -17,8 +17,14 @@ import {
   type RecordingSummary,
 } from "@/types/projection";
 
-defineProps<{ items: RecordingSummary[] }>();
+// Past one page the table paginates so the mounted row count stays bounded
+// however wide the loaded window gets.
+const PAGE_ROWS = 25;
+
+const props = defineProps<{ items: RecordingSummary[] }>();
 const emit = defineEmits<{ changed: [] }>();
+
+const paginated = computed(() => props.items.length > PAGE_ROWS);
 
 const auth = useAuthStore();
 const notify = useNotify();
@@ -99,7 +105,14 @@ function formatTime(iso: string): string {
 </script>
 
 <template>
-  <DataTable :value="items" scrollable scroll-height="flex">
+  <DataTable
+    :value="items"
+    scrollable
+    scroll-height="flex"
+    :paginator="paginated"
+    :rows="PAGE_ROWS"
+    :rows-per-page-options="[25, 50, 100]"
+  >
     <Column header="Connection">
       <template #body="{ data }">
         <span class="font-medium text-surface-800 dark:text-surface-100">{{

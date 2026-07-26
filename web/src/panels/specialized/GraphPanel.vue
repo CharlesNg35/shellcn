@@ -153,7 +153,14 @@ async function expand(nodeId: string): Promise<void> {
       { routeId, params: { ...props.source?.params, [param]: nodeId } },
       { resource: props.resource, record: props.record },
     );
-    payload.value = mergeGraph(payload.value, incoming);
+    const merged = mergeGraph(payload.value, incoming);
+    payload.value = { nodes: merged.nodes, edges: merged.edges };
+    if (merged.truncated) {
+      notify.info(
+        "Graph is at its display limit",
+        "Collapse or refresh the graph before expanding further.",
+      );
+    }
   } catch {
     // Best effort: a failed expansion leaves the current graph intact.
   } finally {
@@ -341,6 +348,7 @@ watch(
         :fit-view-on-init="graphConfig?.fitView ?? true"
         :min-zoom="0.1"
         :nodes-connectable="false"
+        :only-render-visible-elements="true"
         class="h-full bg-surface-50 dark:bg-surface-950"
         @node-click="selectNode"
         @node-double-click="expand($event.node.id)"

@@ -147,6 +147,170 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 	}
 }
 
+func TestMongoDBListDocumentsBoundedPagingIntegration(t *testing.T) {
+	if os.Getenv("SHELLCN_MONGODB_INTEGRATION") != "1" {
+		t.Skip("set SHELLCN_MONGODB_INTEGRATION=1 to run against MongoDB")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	cfg := integrationConfig(ctx, t)
+	sess, err := connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+	s := sess.(*Session)
+
+	const (
+		database   = "shellcn_paging"
+		collection = "docs"
+		seeded     = 250
+		limit      = 100
+	)
+	coll := s.client.Database(database).Collection(collection)
+	_ = coll.Drop(ctx)
+	t.Cleanup(func() { _ = s.client.Database(database).Drop(context.Background()) })
+
+	want := make([]string, 0, seeded)
+	batch := make([]any, 0, seeded)
+	for i := 0; i < seeded; i++ {
+		id := "doc-" + strconv.Itoa(1000+i)
+		want = append(want, id)
+		group := "b"
+		if i%2 == 0 {
+			group = "a"
+		}
+		batch = append(batch, bson.M{"_id": id, "group": group, "n": i})
+	}
+	if _, err := coll.InsertMany(ctx, batch); err != nil {
+		t.Fatalf("seed documents: %v", err)
+	}
+
+	first := documentPage(ctx, t, s, database, collection, url.Values{"limit": {strconv.Itoa(limit)}})
+	if len(first.Items) != limit {
+		t.Fatalf("first page is not bounded: got %d items, want %d", len(first.Items), limit)
+	}
+	if !strings.HasPrefix(first.NextCursor, documentCursorPrefix) {
+		t.Fatalf("first page cursor: got %q, want %q prefix", first.NextCursor, documentCursorPrefix)
+	}
+	if first.Total == nil {
+		t.Fatal("unfiltered listing should report the estimated total")
+	}
+	if *first.Total != seeded {
+		t.Fatalf("unfiltered total: got %d, want %d", *first.Total, seeded)
+	}
+
+	got, sizes := drainDocuments(ctx, t, s, database, collection, url.Values{"limit": {strconv.Itoa(limit)}})
+	if diff := comparePagedIDs(got, want); diff != "" {
+		t.Fatalf("keyset paging: %s", diff)
+	}
+	if len(sizes) != 3 || sizes[0] != limit || sizes[1] != limit || sizes[2] != seeded-2*limit {
+		t.Fatalf("page sizes: got %v, want [%d %d %d]", sizes, limit, limit, seeded-2*limit)
+	}
+
+	filtered := url.Values{"limit": {"50"}, "filter": {`{"group":"a"}`}}
+	filteredFirst := documentPage(ctx, t, s, database, collection, filtered)
+	if len(filteredFirst.Items) != 50 {
+		t.Fatalf("filtered page is not bounded: got %d items, want 50", len(filteredFirst.Items))
+	}
+	if filteredFirst.NextCursor == "" {
+		t.Fatal("filtered page should carry a next cursor")
+	}
+	if filteredFirst.Total != nil {
+		t.Fatalf("filtered listing must omit the total instead of counting, got %d", *filteredFirst.Total)
+	}
+
+	filteredWant := make([]string, 0, seeded/2)
+	for i := 0; i < seeded; i += 2 {
+		filteredWant = append(filteredWant, want[i])
+	}
+	filteredGot, filteredSizes := drainDocuments(ctx, t, s, database, collection, filtered)
+	if diff := comparePagedIDs(filteredGot, filteredWant); diff != "" {
+		t.Fatalf("filtered paging: %s", diff)
+	}
+	if len(filteredSizes) != 3 || filteredSizes[2] != 25 {
+		t.Fatalf("filtered page sizes: got %v, want [50 50 25]", filteredSizes)
+	}
+
+	exact := url.Values{"limit": {"50"}, "filter": {`{"group":"a"}`}, "count": {"exact"}}
+	exactPage := documentPage(ctx, t, s, database, collection, exact)
+	if exactPage.Total == nil || *exactPage.Total != len(filteredWant) {
+		t.Fatalf("explicit exact count: got %v, want %d", exactPage.Total, len(filteredWant))
+	}
+	if len(exactPage.Items) != 50 {
+		t.Fatalf("exact count page is not bounded: got %d items, want 50", len(exactPage.Items))
+	}
+}
+
+func documentPage(ctx context.Context, t *testing.T, s *Session, database, collection string, query url.Values) plugin.Page[plugin.TableRow] {
+	t.Helper()
+	params := map[string]string{"database": database, "collection": collection}
+	res, err := listDocuments(plugin.NewRequestContext(ctx, plugin.User{}, s, params, query, nil))
+	if err != nil {
+		t.Fatalf("list documents %v: %v", query, err)
+	}
+	page, ok := res.(plugin.Page[plugin.TableRow])
+	if !ok {
+		t.Fatalf("unexpected list result type %T", res)
+	}
+	return page
+}
+
+func drainDocuments(ctx context.Context, t *testing.T, s *Session, database, collection string, query url.Values) ([]string, []int) {
+	t.Helper()
+	ids := []string{}
+	sizes := []int{}
+	cursor := ""
+	for i := 0; ; i++ {
+		if i > 20 {
+			t.Fatal("paging did not terminate")
+		}
+		next := url.Values{}
+		for key, vals := range query {
+			next[key] = vals
+		}
+		if cursor != "" {
+			next.Set("cursor", cursor)
+		}
+		page := documentPage(ctx, t, s, database, collection, next)
+		sizes = append(sizes, len(page.Items))
+		for _, item := range page.Items {
+			id, ok := item["_id"].(string)
+			if !ok {
+				t.Fatalf("unexpected _id %#v", item["_id"])
+			}
+			ids = append(ids, id)
+		}
+		if page.NextCursor == "" {
+			return ids, sizes
+		}
+		if page.NextCursor == cursor {
+			t.Fatalf("cursor did not advance: %q", cursor)
+		}
+		cursor = page.NextCursor
+	}
+}
+
+func comparePagedIDs(got, want []string) string {
+	seen := map[string]int{}
+	for _, id := range got {
+		seen[id]++
+		if seen[id] > 1 {
+			return "duplicate id " + id + " across pages"
+		}
+	}
+	if len(got) != len(want) {
+		return "paged " + strconv.Itoa(len(got)) + " documents, want " + strconv.Itoa(len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			return "position " + strconv.Itoa(i) + ": got " + got[i] + ", want " + want[i]
+		}
+	}
+	return ""
+}
+
 func mustQuery(raw string) url.Values {
 	v, _ := url.ParseQuery(raw)
 	return v

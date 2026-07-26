@@ -61,7 +61,28 @@ func rowRef(k kind, o obj) plugin.ResourceIdentity {
 	return ref
 }
 
-// ListResource lists any kind via the dynamic client (built-in GVR or CRD).
+// continuePrefix tags a cursor as an apiserver continue token. A cursor the grid
+// synthesized from a row offset carries no prefix and restarts the window, rather
+// than being handed to the apiserver, which would reject it.
+const continuePrefix = "k8s:"
+
+func continueToken(cursor string) string {
+	token, ok := strings.CutPrefix(cursor, continuePrefix)
+	if !ok {
+		return ""
+	}
+	return token
+}
+
+func continueCursor(token string) string {
+	if token == "" {
+		return ""
+	}
+	return continuePrefix + token
+}
+
+// ListResource lists any kind via the dynamic client (built-in GVR or CRD),
+// returning one bounded page plus the apiserver's cursor for the next.
 func ListResource(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
@@ -71,16 +92,25 @@ func ListResource(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	page, err := rc.Page()
+	if err != nil {
+		return nil, err
+	}
 	// CRDs render their own server-side printer columns via the Table API.
 	if isCRD(k) {
-		_, rows, err := s.tableList(rc.Ctx, k, s.listNamespace(rc, k), 0)
+		_, rows, next, err := s.tableList(rc.Ctx, k, s.listNamespace(rc, k), listPageSize(k, page.Limit), continueToken(page.Cursor))
 		if err != nil {
 			return nil, err
 		}
-		return pageRows(rc, rows)
+		return pageWindow(rc, rows, continueCursor(next))
+	}
+	// Newest-first kinds order across their whole window, so they fetch the kind's
+	// ceiling once and page that in memory; the rest page on the continue token.
+	opts := metav1.ListOptions{Limit: listPageSize(k, page.Limit), Continue: continueToken(page.Cursor)}
+	if k.recentFirst {
+		opts = metav1.ListOptions{Limit: listCap(k)}
 	}
 	ri := s.Dynamic().Resource(k.gvr)
-	opts := metav1.ListOptions{Limit: k.listLimit}
 	var list *unstructured.UnstructuredList
 	if ns := s.listNamespace(rc, k); k.namespaced && ns != "" {
 		list, err = ri.Namespace(ns).List(rc.Ctx, opts)
@@ -93,8 +123,9 @@ func ListResource(rc *plugin.RequestContext) (any, error) {
 	rows := mapList(k, list)
 	if k.recentFirst {
 		sortRecentFirst(rows)
+		return pageSlice(rc, rows, list.GetContinue() == "")
 	}
-	return pageRows(rc, rows)
+	return pageWindow(rc, rows, continueCursor(list.GetContinue()))
 }
 
 // sortRecentFirst orders rows newest-first; k8s RFC3339 UTC stamps sort

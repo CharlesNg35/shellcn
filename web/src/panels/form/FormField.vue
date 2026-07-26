@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import InputText from "primevue/inputtext";
 import InputNumber from "primevue/inputnumber";
 import Slider from "primevue/slider";
@@ -44,10 +44,25 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: unknown] }>();
 
+// A route-sourced option set is bounded to one page; once truncated the control
+// stops pretending the list is complete and searches the server instead.
+const OPTION_PAGE_LIMIT = 500;
+const SEARCH_DEBOUNCE_MS = 250;
+const VIRTUAL_THRESHOLD = 100;
+const OPTION_HEIGHT = 32;
+
 const fetchedOptions = ref<Option[] | null>(null);
+const optionsTruncated = ref(false);
 const options = computed<Option[]>(
   () => fetchedOptions.value ?? props.field.options ?? [],
 );
+const optionScroller = computed(() =>
+  options.value.length > VIRTUAL_THRESHOLD
+    ? { itemSize: OPTION_HEIGHT }
+    : undefined,
+);
+let optionsRequest = 0;
+let searchHandle: ReturnType<typeof setTimeout> | undefined;
 
 function rowOption(row: Row): Option {
   const r = row as Record<string, unknown>;
@@ -57,6 +72,40 @@ function rowOption(row: Row): Option {
   return { value, label: String(r.label ?? r.name ?? value) };
 }
 
+async function loadOptions(query = ""): Promise<void> {
+  const src = props.field.optionsSource;
+  if (!src || !props.connectionId) return;
+  const request = ++optionsRequest;
+  try {
+    const page = await fetchPage<Row>(
+      props.connectionId,
+      src,
+      { resource: props.resource ?? null, record: props.record ?? null },
+      {
+        limit: OPTION_PAGE_LIMIT,
+        filter: query ? { q: query } : undefined,
+      },
+    );
+    if (request !== optionsRequest) return;
+    fetchedOptions.value = page.items.map(rowOption);
+    if (!query) optionsTruncated.value = Boolean(page.nextCursor);
+  } catch {
+    if (request !== optionsRequest) return;
+    fetchedOptions.value = [];
+  }
+}
+
+// Only a truncated option set needs the server; a complete one is already
+// loaded and PrimeVue's own filter handles it without a round trip.
+function searchOptions(query: string): void {
+  if (!optionsTruncated.value) return;
+  if (searchHandle) clearTimeout(searchHandle);
+  searchHandle = setTimeout(
+    () => void loadOptions(query.trim()),
+    SEARCH_DEBOUNCE_MS,
+  );
+}
+
 watch(
   () => [
     props.field.optionsSource,
@@ -64,23 +113,16 @@ watch(
     props.resource?.uid,
     props.record,
   ],
-  async () => {
-    const src = props.field.optionsSource;
-    if (!src || !props.connectionId) return;
-    try {
-      const page = await fetchPage<Row>(
-        props.connectionId,
-        src,
-        { resource: props.resource ?? null, record: props.record ?? null },
-        { limit: 500 },
-      );
-      fetchedOptions.value = page.items.map(rowOption);
-    } catch {
-      fetchedOptions.value = [];
-    }
+  () => {
+    optionsTruncated.value = false;
+    void loadOptions();
   },
   { immediate: true },
 );
+
+onUnmounted(() => {
+  if (searchHandle) clearTimeout(searchHandle);
+});
 
 const editingSecret = ref(false);
 const showSecretValue = computed(
@@ -182,11 +224,20 @@ function updateFiles(event: FileUploadSelectEvent): void {
       :options="options"
       option-label="label"
       option-value="value"
+      :filter="optionsTruncated"
+      :virtual-scroller-options="optionScroller"
       :placeholder="field.placeholder ?? 'Select…'"
       :aria-invalid="ariaInvalid"
       :aria-describedby="describedBy"
+      @filter="searchOptions(String($event.value ?? ''))"
       @update:model-value="update"
-    />
+    >
+      <template v-if="optionsTruncated" #footer>
+        <p class="px-3 py-2 text-xs text-surface-400">
+          Showing first {{ OPTION_PAGE_LIMIT }} — type to search
+        </p>
+      </template>
+    </Select>
 
     <MultiSelect
       v-else-if="field.type === FieldType.MultiSelect"
@@ -197,12 +248,20 @@ function updateFiles(event: FileUploadSelectEvent): void {
       option-value="value"
       display="chip"
       filter
+      :virtual-scroller-options="optionScroller"
       :max-selected-labels="3"
       :placeholder="field.placeholder ?? 'Select…'"
       :aria-invalid="ariaInvalid"
       :aria-describedby="describedBy"
+      @filter="searchOptions(String($event.value ?? ''))"
       @update:model-value="update"
-    />
+    >
+      <template v-if="optionsTruncated" #footer>
+        <p class="px-3 py-2 text-xs text-surface-400">
+          Showing first {{ OPTION_PAGE_LIMIT }} — type to search
+        </p>
+      </template>
+    </MultiSelect>
 
     <ToggleSwitch
       v-else-if="field.type === FieldType.Toggle"

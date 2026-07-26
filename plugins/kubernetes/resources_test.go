@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"testing"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -73,6 +74,77 @@ func TestListResourceNamespacedPods(t *testing.T) {
 	ref, ok := r["ref"].(plugin.ResourceIdentity)
 	if !ok || ref.Kind != "pod" || ref.Name != "web-1" || ref.Namespace != "default" {
 		t.Fatalf("pod row ref = %+v (ok=%v)", r["ref"], ok)
+	}
+}
+
+// queryRC is rc with query parameters (paging), which rc leaves empty.
+func queryRC(sess plugin.Session, params map[string]string, query url.Values) *plugin.RequestContext {
+	return plugin.NewRequestContext(context.Background(), plugin.User{ID: "u1"}, sess, params, query, nil).
+		WithProxyPrefix("/api/connections/c1/proxy")
+}
+
+func TestListResourceFetchesOneBoundedPage(t *testing.T) {
+	var gotLimit, gotContinue string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/pods", func(w http.ResponseWriter, r *http.Request) {
+		gotLimit, gotContinue = r.URL.Query().Get("limit"), r.URL.Query().Get("continue")
+		writeJSON(w, obj{
+			"apiVersion": "v1", "kind": "PodList",
+			"metadata": obj{"continue": "tok-2"},
+			"items":    []any{obj{"metadata": obj{"name": "web-1", "namespace": "default"}}},
+		})
+	})
+	sess := connectTo(t, mux)
+	params := map[string]string{"kind": "pod", "namespace": "default"}
+
+	out, err := ListResource(queryRC(sess, params, url.Values{"limit": {"25"}}))
+	if err != nil {
+		t.Fatalf("list pods: %v", err)
+	}
+	if gotLimit != "25" || gotContinue != "" {
+		t.Fatalf("first page asked for limit=%q continue=%q", gotLimit, gotContinue)
+	}
+	page := out.(plugin.Page[Row])
+	if page.NextCursor != continuePrefix+"tok-2" {
+		t.Fatalf("nextCursor = %q, want the apiserver continue token", page.NextCursor)
+	}
+	// A truncated list has no knowable size, so the window must not be reported
+	// as the total.
+	if page.Total != nil {
+		t.Fatalf("truncated page reported total = %d", *page.Total)
+	}
+
+	if _, err := ListResource(queryRC(sess, params, url.Values{"cursor": {page.NextCursor}})); err != nil {
+		t.Fatalf("second page: %v", err)
+	}
+	if gotContinue != "tok-2" {
+		t.Fatalf("second page continue = %q", gotContinue)
+	}
+
+	// A cursor the grid synthesized from a row offset is not a continue token; it
+	// must never reach the apiserver, which would reject it.
+	if _, err := ListResource(queryRC(sess, params, url.Values{"cursor": {"25"}})); err != nil {
+		t.Fatalf("offset cursor: %v", err)
+	}
+	if gotContinue != "" {
+		t.Fatalf("offset cursor leaked to the apiserver as continue = %q", gotContinue)
+	}
+}
+
+func TestListResourceCapsRequestedLimit(t *testing.T) {
+	var gotLimit string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/nodes", func(w http.ResponseWriter, r *http.Request) {
+		gotLimit = r.URL.Query().Get("limit")
+		writeJSON(w, obj{"apiVersion": "v1", "kind": "NodeList", "items": []any{}})
+	})
+	sess := connectTo(t, mux)
+
+	if _, err := ListResource(queryRC(sess, map[string]string{"kind": "node"}, url.Values{"limit": {"100000"}})); err != nil {
+		t.Fatalf("list nodes: %v", err)
+	}
+	if gotLimit != strconv.Itoa(plugin.MaxPageLimit) {
+		t.Fatalf("limit = %q, want it clamped to %d", gotLimit, plugin.MaxPageLimit)
 	}
 }
 

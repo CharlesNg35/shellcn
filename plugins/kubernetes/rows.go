@@ -12,17 +12,32 @@ type Row map[string]any
 
 func ptr[T any](v T) *T { return &v }
 
-// pageRows applies offset-cursor pagination over an in-memory row slice, the
-// same contract the generic table panel expects (items + nextCursor + total).
-// Kubernetes lists are fetched whole (and kept live by watch); this slices them
-// for the grid without a second server round-trip.
+// maxMaterializedRows caps how many rows a handler may hold in memory for one
+// page. It matches the SDK's page ceiling, so anything larger is a fetch that
+// was never bounded in the first place.
+const maxMaterializedRows = plugin.MaxPageLimit
+
+// pageRows applies offset-cursor pagination over rows a handler already holds,
+// the same contract the generic table panel expects (items + nextCursor + total).
+// Callers must fetch a bounded window; rows past the cap are dropped, so this can
+// never turn into a whole-collection read.
 func pageRows(rc *plugin.RequestContext, rows []Row) (plugin.Page[Row], error) {
+	return pageSlice(rc, rows, true)
+}
+
+// pageSlice is pageRows with an explicit statement of whether rows is the whole
+// collection. When it isn't, Total is omitted so the grid pages forward through a
+// window instead of rendering a partial count as the collection size.
+func pageSlice(rc *plugin.RequestContext, rows []Row, complete bool) (plugin.Page[Row], error) {
 	page, err := rc.Page()
 	if err != nil {
 		return plugin.Page[Row]{}, err
 	}
 	rows = filterRows(rows, page.Search())
 	rows = plugin.SortRows(rows, sortKeys(page.Sort))
+	if len(rows) > maxMaterializedRows {
+		rows, complete = rows[:maxMaterializedRows], false
+	}
 	start := 0
 	if page.Cursor != "" {
 		start, err = strconv.Atoi(page.Cursor)
@@ -42,7 +57,31 @@ func pageRows(rc *plugin.RequestContext, rows []Row) (plugin.Page[Row], error) {
 	if end < total {
 		next = strconv.Itoa(end)
 	}
-	return plugin.Page[Row]{Items: rows[start:end], NextCursor: next, Total: &total}, nil
+	out := plugin.Page[Row]{Items: rows[start:end], NextCursor: next}
+	if complete {
+		out.Total = &total
+	}
+	return out, nil
+}
+
+// pageWindow returns a page the server already bounded, with next being the
+// driver's own cursor. Filter and sort therefore apply to that window, not the
+// collection, and Total is reported only when the window held everything.
+func pageWindow(rc *plugin.RequestContext, rows []Row, next string) (plugin.Page[Row], error) {
+	page, err := rc.Page()
+	if err != nil {
+		return plugin.Page[Row]{}, err
+	}
+	rows = filterRows(rows, page.Search())
+	rows = plugin.SortRows(rows, sortKeys(page.Sort))
+	if rows == nil {
+		rows = []Row{}
+	}
+	out := plugin.Page[Row]{Items: rows, NextCursor: next}
+	if next == "" && page.Cursor == "" {
+		out.Total = ptr(len(rows))
+	}
+	return out, nil
 }
 
 // filterRows keeps rows whose string fields contain the query (case-insensitive),

@@ -2,6 +2,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useStorage } from "@vueuse/core";
 import Button from "primevue/button";
+import Column from "primevue/column";
+import DataTable from "primevue/datatable";
 import Dialog from "primevue/dialog";
 import Menu from "primevue/menu";
 import { fetchDoc, interpolate, runAction } from "@/api/dataSource";
@@ -69,6 +71,26 @@ const emptyText = computed(
 );
 const canExport = computed(() => queryConfig.value?.exportable === true);
 const baselineQuery = ref(query.value);
+
+// A plugin that forgets its own row cap must not be able to take the grid down,
+// so the panel renders at most this many rows and says so; export still writes
+// the full result set.
+const MAX_RESULT_ROWS = 5000;
+const VIRTUAL_THRESHOLD = 100;
+const ROW_HEIGHT = 30;
+
+const resultRows = computed(() => results.value?.rows ?? []);
+const truncated = computed(() => resultRows.value.length > MAX_RESULT_ROWS);
+const displayRows = computed(() =>
+  truncated.value
+    ? resultRows.value.slice(0, MAX_RESULT_ROWS)
+    : resultRows.value,
+);
+const resultVirtualScroller = computed(() =>
+  displayRows.value.length > VIRTUAL_THRESHOLD
+    ? { itemSize: ROW_HEIGHT }
+    : undefined,
+);
 
 // The editor keeps a compact default (~5 lines) so results own most of the
 // panel; the drag handle below it stores the preferred height per browser.
@@ -514,43 +536,42 @@ onUnmounted(() => {
           · {{ results.elapsedMs }} ms</span
         >
       </span>
+      <span v-if="truncated" data-test="query-result-truncated" class="ml-auto">
+        Showing the first {{ MAX_RESULT_ROWS }} of {{ resultRows.length }} rows
+        — refine the query or export.
+      </span>
     </div>
 
-    <div class="min-h-0 flex-1 overflow-auto">
-      <table v-if="results" class="w-full border-collapse text-xs">
-        <thead class="sticky top-0 bg-surface-50 dark:bg-surface-900">
-          <tr>
-            <th
-              v-for="c in results.columns"
-              :key="c"
-              scope="col"
-              class="border-b border-surface-200 px-3 py-1.5 text-left font-medium text-surface-500 dark:border-surface-800"
+    <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <DataTable
+        v-if="results"
+        :value="displayRows"
+        size="small"
+        scrollable
+        scroll-height="flex"
+        :virtual-scroller-options="resultVirtualScroller"
+        class="min-h-0 flex-1 text-xs"
+      >
+        <Column
+          v-for="(c, j) in results.columns"
+          :key="`${c}-${j}`"
+          :header="c"
+        >
+          <template #body="{ data }">
+            <span
+              class="block max-w-96 truncate"
+              :title="
+                (data as unknown[])[j] == null
+                  ? 'NULL'
+                  : String((data as unknown[])[j])
+              "
             >
-              {{ c }}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="(row, i) in results.rows"
-            :key="i"
-            class="border-b border-surface-100 dark:border-surface-800/60"
-          >
-            <td
-              v-for="(cell, j) in row"
-              :key="j"
-              class="px-3 py-1 text-surface-700 dark:text-surface-200"
-            >
-              <span
-                class="block max-w-96 truncate"
-                :title="cell == null ? 'NULL' : String(cell)"
-              >
-                {{ cell === null || cell === undefined ? "NULL" : cell }}
-              </span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              {{ (data as unknown[])[j] ?? "NULL" }}
+            </span>
+          </template>
+        </Column>
+        <template #empty>No rows.</template>
+      </DataTable>
       <p v-else class="p-4 text-sm text-surface-400">{{ emptyText }}</p>
     </div>
 

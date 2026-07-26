@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 
@@ -113,7 +114,13 @@ func WorkloadLogsStream(rc *plugin.RequestContext, client plugin.ClientStream) e
 		_, err = fmt.Fprintf(client, "No pod selector found for %s/%s.\n", k.name, name)
 		return err
 	}
-	pods, err := s.Clientset().CoreV1().Pods(o.GetNamespace()).List(rc.Ctx, metav1.ListOptions{LabelSelector: selector})
+	// Every pod × container becomes its own long-lived apiserver stream, so a
+	// DaemonSet on a large cluster would otherwise open hundreds from one panel.
+	// One pod past the cap is fetched so the truncation can be reported.
+	pods, err := s.Clientset().CoreV1().Pods(o.GetNamespace()).List(rc.Ctx, metav1.ListOptions{
+		LabelSelector: selector,
+		Limit:         maxLogPods + 1,
+	})
 	if err != nil {
 		return apiErr(err)
 	}
@@ -125,6 +132,19 @@ func WorkloadLogsStream(rc *plugin.RequestContext, client plugin.ClientStream) e
 	opts := podLogOptions(rc)
 	containerFilter := strings.TrimSpace(opts.Container)
 	opts.Container = ""
+	// A merged workload view replays every pod's history at once, so cap the
+	// backlog unless the caller asked for a specific depth.
+	if opts.TailLines == nil {
+		tail := int64(workloadTailLines)
+		opts.TailLines = &tail
+	}
+
+	targets, streamed, truncated := logTargets(pods.Items, containerFilter)
+	if truncated {
+		if _, err := fmt.Fprintf(client, "Showing %d pods of %s/%s — more matched; open a single pod for its full logs.\n", streamed, k.name, name); err != nil {
+			return err
+		}
+	}
 
 	var mu sync.Mutex
 	write := func(p []byte) (int, error) {
@@ -134,26 +154,57 @@ func WorkloadLogsStream(rc *plugin.RequestContext, client plugin.ClientStream) e
 	}
 
 	var wg sync.WaitGroup
-	for i := range pods.Items {
-		pod := pods.Items[i]
-		for _, container := range logContainers(pod, containerFilter) {
-			opts := *opts
-			opts.Container = container
-			wg.Add(1)
-			go func(podName, containerName string, opts corev1.PodLogOptions) {
-				defer wg.Done()
-				stream, err := s.Clientset().CoreV1().Pods(o.GetNamespace()).GetLogs(podName, &opts).Stream(rc.Ctx)
-				if err != nil {
-					_, _ = write([]byte(fmt.Sprintf("[%s/%s] %s\n", podName, containerName, apiErr(err))))
-					return
-				}
-				defer func() { _ = stream.Close() }()
-				_ = copyPrefixedLog(rc.Ctx, write, stream, "["+podName+"/"+containerName+"] ")
-			}(pod.Name, container, opts)
-		}
+	for _, target := range targets {
+		opts := *opts
+		opts.Container = target.container
+		wg.Add(1)
+		go func(podName, containerName string, opts corev1.PodLogOptions) {
+			defer wg.Done()
+			stream, err := s.Clientset().CoreV1().Pods(o.GetNamespace()).GetLogs(podName, &opts).Stream(rc.Ctx)
+			if err != nil {
+				_, _ = write([]byte(fmt.Sprintf("[%s/%s] %s\n", podName, containerName, apiErr(err))))
+				return
+			}
+			defer func() { _ = stream.Close() }()
+			_ = copyPrefixedLog(rc.Ctx, write, stream, "["+podName+"/"+containerName+"] ")
+		}(target.pod, target.container, opts)
 	}
 	wg.Wait()
 	return nil
+}
+
+const (
+	// maxLogPods caps how many pods of a workload are streamed at once.
+	maxLogPods = 10
+	// maxLogStreams caps the total open log streams, since one pod contributes a
+	// stream per container.
+	maxLogStreams = 30
+	// workloadTailLines is the backlog a merged workload view replays per container
+	// when the caller names no depth of its own.
+	workloadTailLines = 500
+)
+
+type logTarget struct{ pod, container string }
+
+// logTargets picks the bounded set of streams a workload view opens: newest pods
+// first, capped at maxLogPods and maxLogStreams.
+func logTargets(pods []corev1.Pod, filter string) (targets []logTarget, streamed int, truncated bool) {
+	ordered := slices.SortedStableFunc(slices.Values(pods), func(a, b corev1.Pod) int {
+		return b.CreationTimestamp.Time.Compare(a.CreationTimestamp.Time)
+	})
+	for i := range ordered {
+		if i >= maxLogPods || len(targets) >= maxLogStreams {
+			return targets, streamed, true
+		}
+		for _, container := range logContainers(ordered[i], filter) {
+			if len(targets) >= maxLogStreams {
+				return targets, streamed, true
+			}
+			targets = append(targets, logTarget{pod: ordered[i].Name, container: container})
+		}
+		streamed++
+	}
+	return targets, streamed, false
 }
 
 func podLogOptions(rc *plugin.RequestContext) *corev1.PodLogOptions {

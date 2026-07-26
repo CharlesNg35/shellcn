@@ -32,6 +32,10 @@ const crumbs = [
   { label: "Users" },
 ];
 
+// The directory endpoints return the whole set, so pagination is what bounds the
+// mounted rows: an enterprise directory would otherwise render in full on open.
+const PAGE_SIZE = 50;
+
 const tab = ref("users");
 const users = ref<AdminUser[]>([]);
 const invitations = ref<InvitationSummary[]>([]);
@@ -151,6 +155,9 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
           <div class="min-h-0 flex-1">
             <DataTable
               :value="users"
+              paginator
+              :rows="PAGE_SIZE"
+              :rows-per-page-options="[25, 50, 100]"
               scrollable
               scroll-height="flex"
               @row-click="viewUser($event.data as AdminUser)"
@@ -275,7 +282,14 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
             </Button>
           </div>
           <div class="min-h-0 flex-1">
-            <DataTable :value="invitations" scrollable scroll-height="flex">
+            <DataTable
+              :value="invitations"
+              paginator
+              :rows="PAGE_SIZE"
+              :rows-per-page-options="[25, 50, 100]"
+              scrollable
+              scroll-height="flex"
+            >
               <Column field="email" header="Email" />
               <Column header="Role">
                 <template #body="{ data }">

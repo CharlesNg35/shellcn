@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, toRef, watch } from "vue";
 import { useRouter } from "vue-router";
-import { useEventListener, useStorage, useTimeoutFn } from "@vueuse/core";
+import {
+  refDebounced,
+  useEventListener,
+  useStorage,
+  useTimeoutFn,
+} from "@vueuse/core";
 import Button from "primevue/button";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
@@ -69,6 +74,8 @@ const expanded = useStorage<Record<string, boolean>>(
   { mergeDefaults: true },
 );
 const activeOnly = ref(false);
+// Every keystroke would otherwise rebuild and re-filter the whole tree.
+const searchQuery = refDebounced(toRef(props, "query"), 150);
 
 const filtering = computed(
   () => Boolean(props.query.trim()) || activeOnly.value,
@@ -95,7 +102,7 @@ watch(
     [
       conns.connections,
       conns.folders,
-      props.query,
+      searchQuery.value,
       activeOnly.value,
       ws.connected,
     ] as const,
@@ -144,7 +151,7 @@ watch(
 );
 
 function rebuildLists(): void {
-  const q = props.query.trim().toLowerCase();
+  const q = searchQuery.value.trim().toLowerCase();
   const sortItems = (a: ConnectionTreeItem, b: ConnectionTreeItem) =>
     itemSortOrder(a) - itemSortOrder(b) ||
     itemLabel(a).localeCompare(itemLabel(b));

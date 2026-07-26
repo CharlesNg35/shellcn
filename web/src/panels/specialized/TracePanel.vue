@@ -37,6 +37,12 @@ type SpanRow = TraceSpan & {
 
 const props = defineProps<PanelProps>();
 
+// A distributed trace has no natural bound, so the panel renders a prefix of the
+// waterfall and says how much it dropped.
+const MAX_SPANS = 2000;
+const VIRTUAL_THRESHOLD = 100;
+const ROW_HEIGHT = 42;
+
 const filterText = ref("");
 const selected = ref<SpanRow | null>(null);
 const traceConfig = computed(
@@ -74,12 +80,14 @@ function spanStart(span: TraceSpan): number {
   return 0;
 }
 
-const rows = computed<SpanRow[]>(() => {
+const allRows = computed<SpanRow[]>(() => {
   const spans = payload.value.spans ?? [];
   const byParent = new Map<string, TraceSpan[]>();
   for (const span of spans) {
     const key = span.parentId ?? "";
-    byParent.set(key, [...(byParent.get(key) ?? []), span]);
+    const group = byParent.get(key);
+    if (group) group.push(span);
+    else byParent.set(key, [span]);
   }
   for (const group of byParent.values()) {
     group.sort((a, b) => spanStart(a) - spanStart(b));
@@ -107,6 +115,11 @@ const rows = computed<SpanRow[]>(() => {
   return out;
 });
 
+const truncated = computed(() => allRows.value.length > MAX_SPANS);
+const rows = computed(() =>
+  truncated.value ? allRows.value.slice(0, MAX_SPANS) : allRows.value,
+);
+
 const visibleRows = computed(() => {
   const q = filterText.value.trim().toLowerCase();
   if (!q) return rows.value;
@@ -118,6 +131,11 @@ const visibleRows = computed(() => {
     ),
   );
 });
+const rowVirtualScroller = computed(() =>
+  visibleRows.value.length > VIRTUAL_THRESHOLD
+    ? { itemSize: ROW_HEIGHT }
+    : undefined,
+);
 
 const tags = computed(() =>
   selected.value?.tags
@@ -176,6 +194,14 @@ watch(
         class="w-56"
       />
       <span class="text-xs text-surface-400">{{ rows.length }} spans</span>
+      <span
+        v-if="truncated"
+        data-test="trace-truncated"
+        class="text-xs text-amber-600 dark:text-amber-400"
+      >
+        Showing the first {{ MAX_SPANS }} of {{ allRows.length }} — filter to
+        narrow the trace.
+      </span>
       <Button
         type="button"
         severity="secondary"
@@ -213,6 +239,7 @@ watch(
           scrollable
           scroll-height="flex"
           selection-mode="single"
+          :virtual-scroller-options="rowVirtualScroller"
           @row-click="selectRow"
         >
           <template v-if="error" #header>

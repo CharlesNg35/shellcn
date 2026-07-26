@@ -9,6 +9,7 @@ import { fetchPage, watch as watchResource } from "@/api/dataSource";
 import { SCOPE_SEPARATOR, useScopeStore } from "@/stores/scope";
 import type {
   FilterOption,
+  Page,
   ResourceEvent,
   Row,
   ScopeFilter,
@@ -21,10 +22,20 @@ const props = defineProps<{
   scope: ScopeFilter[];
 }>();
 
+// Scope pickers sit in front of the largest collections a plugin exposes, so the
+// bar asks for one page; once truncated the control switches to server-side
+// search instead of pretending the list is complete.
+const MAX_OPTIONS = 500;
+const SEARCH_DEBOUNCE_MS = 250;
+const VIRTUAL_THRESHOLD = 100;
+const OPTION_HEIGHT = 32;
+
 const store = useScopeStore();
 const options = reactive<Record<string, FilterOption[]>>({});
 const suggestions = reactive<Record<string, FilterOption[]>>({});
+const truncated = reactive<Record<string, boolean>>({});
 const loading = ref(false);
+const searchHandles = new Map<string, ReturnType<typeof setTimeout>>();
 const scopeControlOverlayStyle = {
   width: "13rem",
   maxWidth: "calc(100vw - 2rem)",
@@ -101,26 +112,81 @@ function setOptions(f: ScopeFilter, rows: Row[]): void {
   ensureDefault(f);
 }
 
+function fetchOptionPage(f: ScopeFilter, query = ""): Promise<Page<Row>> {
+  return fetchPage<Row>(
+    props.connectionId,
+    f.optionsSource!,
+    {},
+    { limit: MAX_OPTIONS, filter: query ? { q: query } : undefined },
+  );
+}
+
+// One round trip per sourced filter, all in flight together, so the bar renders
+// after a single wait instead of N sequential ones.
 async function loadOptions(): Promise<void> {
   const version = ++loadVersion;
   loading.value = true;
   try {
+    const sourced: ScopeFilter[] = [];
     for (const f of props.scope) {
       if (f.options) {
-        if (version !== loadVersion) return;
         options[f.param] = f.options;
         suggestions[f.param] = choicesForControl(f);
         ensureDefault(f);
         continue;
       }
       if (!f.optionsSource || !f.valueField) continue;
-      const page = await fetchPage<Row>(props.connectionId, f.optionsSource);
-      if (version !== loadVersion) return;
-      setOptions(f, page.items);
+      sourced.push(f);
     }
+    if (!sourced.length) return;
+    const pages = await Promise.allSettled(
+      sourced.map((f) => fetchOptionPage(f)),
+    );
+    if (version !== loadVersion) return;
+    sourced.forEach((f, index) => {
+      const result = pages[index]!;
+      if (result.status !== "fulfilled") return;
+      truncated[f.param] = Boolean(result.value.nextCursor);
+      setOptions(f, result.value.items);
+    });
   } finally {
     if (version === loadVersion) loading.value = false;
   }
+}
+
+// Only a truncated option set needs the server; everything else is already
+// loaded and PrimeVue's own filter handles it without a round trip.
+function searchOptions(f: ScopeFilter, query: string): void {
+  if (!truncated[f.param] || !f.optionsSource || !f.valueField) return;
+  const pending = searchHandles.get(f.param);
+  if (pending) clearTimeout(pending);
+  searchHandles.set(
+    f.param,
+    setTimeout(() => {
+      const version = loadVersion;
+      void fetchOptionPage(f, query.trim())
+        .then((page) => {
+          if (version !== loadVersion) return;
+          const selected = new Set(multiple(f) ? members(f) : [value(f)]);
+          const kept = loaded(f).filter(
+            (option) => option.value && selected.has(option.value),
+          );
+          setOptions(f, page.items);
+          const present = new Set(loaded(f).map((option) => option.value));
+          const missing = kept.filter((option) => !present.has(option.value));
+          if (!missing.length) return;
+          options[f.param] = [...missing, ...loaded(f)];
+          suggestions[f.param] = choicesForControl(f);
+        })
+        .catch(() => undefined);
+    }, SEARCH_DEBOUNCE_MS),
+  );
+}
+
+function optionScroller(f: ScopeFilter): { itemSize: number } | undefined {
+  return loaded(f).length > VIRTUAL_THRESHOLD
+    ? { itemSize: OPTION_HEIGHT }
+    : undefined;
 }
 
 function applyOptionEvent(f: ScopeFilter, ev: ResourceEvent): boolean {
@@ -222,6 +288,8 @@ function valueForFilter(f: ScopeFilter): string {
 function stopWatches(): void {
   for (const stop of stops) stop();
   stops = [];
+  for (const handle of searchHandles.values()) clearTimeout(handle);
+  searchHandles.clear();
 }
 
 function startWatches(): void {
@@ -295,9 +363,17 @@ onUnmounted(stopWatches);
           :placeholder="f.allLabel ?? f.label"
           :loading="loading"
           :overlay-style="scopeControlOverlayStyle"
+          :virtual-scroller-options="optionScroller(f)"
           :aria-label="f.label"
+          @filter="searchOptions(f, String($event.value ?? ''))"
           @update:model-value="setMembers(f, $event)"
-        />
+        >
+          <template v-if="truncated[f.param]" #footer>
+            <p class="px-3 py-2 text-xs text-surface-400">
+              Showing first {{ MAX_OPTIONS }} — type to search
+            </p>
+          </template>
+        </MultiSelect>
 
         <AutoComplete
           v-else-if="f.control === ScopeControl.AutoComplete"
@@ -325,9 +401,17 @@ onUnmounted(stopWatches);
           :placeholder="f.allLabel ?? f.label"
           :loading="loading"
           :overlay-style="scopeControlOverlayStyle"
+          :virtual-scroller-options="optionScroller(f)"
           :aria-label="f.label"
+          @filter="searchOptions(f, String($event.value ?? ''))"
           @update:model-value="set(f, $event ?? '')"
-        />
+        >
+          <template v-if="truncated[f.param]" #footer>
+            <p class="px-3 py-2 text-xs text-surface-400">
+              Showing first {{ MAX_OPTIONS }} — type to search
+            </p>
+          </template>
+        </Select>
       </div>
     </div>
   </div>

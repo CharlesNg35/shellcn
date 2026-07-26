@@ -27,12 +27,13 @@ type keyEntry struct {
 }
 
 type keyDetail struct {
-	Key      string `json:"key"`
-	Type     string `json:"type,omitempty"`
-	TTL      int64  `json:"ttl,omitempty"`
-	Size     int64  `json:"size,omitempty"`
-	Encoding string `json:"encoding,omitempty"`
-	Value    any    `json:"value,omitempty"`
+	Key       string `json:"key"`
+	Type      string `json:"type,omitempty"`
+	TTL       int64  `json:"ttl,omitempty"`
+	Size      int64  `json:"size,omitempty"`
+	Encoding  string `json:"encoding,omitempty"`
+	Value     any    `json:"value,omitempty"`
+	Truncated bool   `json:"truncated,omitempty"`
 }
 
 type actionResult struct {
@@ -822,52 +823,83 @@ func keyValue(ctx context.Context, s *Session, client *redisclient.Client, key s
 		return keyDetail{}, redisErr(err)
 	}
 	encoding, _ := client.ObjectEncoding(ctx, key).Result()
-	value, err := readValue(ctx, s, client, key, kind)
+	value, truncated, err := readValue(ctx, s, client, key, kind)
 	if err != nil {
 		return keyDetail{}, err
 	}
 	size, _ := keySize(ctx, client, key, kind)
-	return keyDetail{Key: key, Type: kind, TTL: int64(ttl.Seconds()), Size: size, Encoding: encoding, Value: value}, nil
+	return keyDetail{Key: key, Type: kind, TTL: int64(ttl.Seconds()), Size: size, Encoding: encoding, Value: value, Truncated: truncated}, nil
 }
 
-func readValue(ctx context.Context, s *Session, client *redisclient.Client, key, kind string) (any, error) {
+func readValue(ctx context.Context, s *Session, client *redisclient.Client, key, kind string) (any, bool, error) {
 	limit := int64(s.opts.ValueLimit)
 	switch kind {
 	case "string":
-		return client.Get(ctx, key).Result()
+		value, err := client.Get(ctx, key).Result()
+		return value, false, err
 	case "hash":
-		return client.HGetAll(ctx, key).Result()
-	case "list":
-		return client.LRange(ctx, key, 0, limit-1).Result()
-	case "set":
-		values, err := client.SMembers(ctx, key).Result()
-		sort.Strings(values)
-		return values, err
-	case "zset":
-		values, err := client.ZRangeWithScores(ctx, key, 0, limit-1).Result()
+		fields, cursor, err := client.HScan(ctx, key, 0, "", limit).Result()
 		if err != nil {
-			return nil, redisErr(err)
+			return nil, false, redisErr(err)
+		}
+		out := make(map[string]string, len(fields)/2)
+		for i := 0; i+1 < len(fields); i += 2 {
+			if int64(len(out)) >= limit {
+				return out, true, nil
+			}
+			out[fields[i]] = fields[i+1]
+		}
+		return out, cursor != 0, nil
+	case "list":
+		values, err := client.LRange(ctx, key, 0, limit).Result()
+		if err != nil {
+			return nil, false, redisErr(err)
+		}
+		if int64(len(values)) > limit {
+			return values[:limit], true, nil
+		}
+		return values, false, nil
+	case "set":
+		values, cursor, err := client.SScan(ctx, key, 0, "", limit).Result()
+		if err != nil {
+			return nil, false, redisErr(err)
+		}
+		truncated := cursor != 0
+		if int64(len(values)) > limit {
+			values, truncated = values[:limit], true
+		}
+		sort.Strings(values)
+		return values, truncated, nil
+	case "zset":
+		values, err := client.ZRangeWithScores(ctx, key, 0, limit).Result()
+		if err != nil {
+			return nil, false, redisErr(err)
+		}
+		truncated := false
+		if int64(len(values)) > limit {
+			values, truncated = values[:limit], true
 		}
 		out := make([]map[string]any, 0, len(values))
 		for _, v := range values {
 			out = append(out, map[string]any{"member": fmt.Sprint(v.Member), "score": v.Score})
 		}
-		return out, nil
+		return out, truncated, nil
 	case "stream":
-		values, err := client.XRange(ctx, key, "-", "+").Result()
+		values, err := client.XRangeN(ctx, key, "-", "+", limit+1).Result()
 		if err != nil {
-			return nil, redisErr(err)
+			return nil, false, redisErr(err)
 		}
-		if len(values) > s.opts.ValueLimit {
-			values = values[:s.opts.ValueLimit]
+		truncated := false
+		if int64(len(values)) > limit {
+			values, truncated = values[:limit], true
 		}
 		out := make([]map[string]any, 0, len(values))
 		for _, msg := range values {
 			out = append(out, map[string]any{"id": msg.ID, "values": msg.Values})
 		}
-		return out, nil
+		return out, truncated, nil
 	default:
-		return nil, fmt.Errorf("%w: Redis key type %q is not supported by the key browser", plugin.ErrNotSupported, kind)
+		return nil, false, fmt.Errorf("%w: Redis key type %q is not supported by the key browser", plugin.ErrNotSupported, kind)
 	}
 }
 

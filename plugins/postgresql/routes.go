@@ -593,10 +593,7 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	limit := req.Limit
-	if limit <= 0 || limit > s.opts.RowLimit {
-		limit = s.opts.RowLimit
-	}
+	limit := sqldb.PageLimit(req.Limit, s.opts.RowLimit)
 	offset, err := cursorOffset(req.Cursor)
 	if err != nil {
 		return nil, err
@@ -609,15 +606,21 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if filter != "" {
 		where = " WHERE t::text ILIKE "
 	}
-	var total int
-	countArgs := []any{}
-	countSQL := "SELECT COUNT(*) FROM " + qualified + " AS t"
-	if filter != "" {
-		countSQL += where + "$1"
-		countArgs = append(countArgs, "%"+filter+"%")
-	}
-	if err := pool.QueryRow(rc.Ctx, countSQL, countArgs...).Scan(&total); err != nil {
-		return nil, pgErr(err)
+	// COUNT(*) is a full sequential scan in PostgreSQL, so the total is only
+	// computed on request; otherwise an over-fetched row answers "is there more".
+	var total *int
+	if sqldb.ExactCountRequested(req) {
+		countArgs := []any{}
+		countSQL := "SELECT COUNT(*) FROM " + qualified + " AS t"
+		if filter != "" {
+			countSQL += where + "$1"
+			countArgs = append(countArgs, "%"+filter+"%")
+		}
+		var n int
+		if err := pool.QueryRow(rc.Ctx, countSQL, countArgs...).Scan(&n); err != nil {
+			return nil, pgErr(err)
+		}
+		total = &n
 	}
 	orderBy := ""
 	if len(req.Sort) > 0 {
@@ -631,17 +634,18 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 		}
 		orderBy = " ORDER BY " + sqldb.QuoteIdent(col) + " " + dir
 	}
-	dataArgs := []any{limit, offset}
+	dataArgs := []any{sqldb.OverFetch(limit), offset}
 	dataWhere := ""
 	if filter != "" {
 		dataWhere = where + "$3"
 		dataArgs = append(dataArgs, "%"+filter+"%")
 	}
 	sqlText := "SELECT * FROM " + qualified + " AS t" + dataWhere + orderBy + " LIMIT $1 OFFSET $2"
-	rows, err := queryRows(rc.Ctx, pool, s.opts.QueryTimeout, sqlText, dataArgs)
+	fetched, err := queryRows(rc.Ctx, pool, s.opts.QueryTimeout, sqlText, dataArgs)
 	if err != nil {
 		return nil, err
 	}
+	rows, more := sqldb.TrimOverFetch(fetched, limit)
 	pk, err := primaryKeyColumns(rc.Ctx, pool, s.opts.QueryTimeout, schema, table)
 	if err != nil {
 		return nil, err
@@ -653,11 +657,7 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	}
 	attachForeignKeys(rows, fks)
 	redactRows(rows, s.opts.RedactPatterns)
-	next := ""
-	if offset+len(rows) < total {
-		next = strconv.Itoa(offset + len(rows))
-	}
-	return plugin.Page[plugin.TableRow]{Items: rows, NextCursor: next, Total: &total}, nil
+	return sqldb.OffsetPage(rows, offset, more, total), nil
 }
 
 // foreignKeys maps each FK column of a table to the ResourceIdentity of the table it

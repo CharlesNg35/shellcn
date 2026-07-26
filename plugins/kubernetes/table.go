@@ -15,10 +15,11 @@ import (
 
 func isCRD(k kind) bool { return strings.HasPrefix(k.name, crdParamPrefix) }
 
-// tableList fetches a kind via the server-side Table API, returning the server's
-// column names (in order) and rows keyed by those names. This gives custom
-// resources their own printer columns (Lens/kubectl parity) with no hardcoding.
-func (s *Session) tableList(ctx context.Context, k kind, ns string, limit int64) (cols []string, rows []Row, err error) {
+// tableList fetches one bounded page of a kind via the server-side Table API,
+// returning the server's column names (in order), rows keyed by those names, and
+// the apiserver's continue token for the next page. This gives custom resources
+// their own printer columns (Lens/kubectl parity) with no hardcoding.
+func (s *Session) tableList(ctx context.Context, k kind, ns string, limit int64, cursor string) (cols []string, rows []Row, next string, err error) {
 	cfg := rest.CopyConfig(s.rest)
 	gv := k.gvr.GroupVersion()
 	cfg.GroupVersion = &gv
@@ -29,7 +30,7 @@ func (s *Session) tableList(ctx context.Context, k kind, ns string, limit int64)
 	cfg.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 	rc, err := rest.RESTClientFor(cfg)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	req := rc.Get().Resource(k.gvr.Resource).SetHeader("Accept", "application/json;as=Table;v=v1;g=meta.k8s.io")
 	if ns != "" {
@@ -38,13 +39,16 @@ func (s *Session) tableList(ctx context.Context, k kind, ns string, limit int64)
 	if limit > 0 {
 		req = req.Param("limit", strconv.FormatInt(limit, 10))
 	}
+	if cursor != "" {
+		req = req.Param("continue", cursor)
+	}
 	raw, err := req.DoRaw(ctx)
 	if err != nil {
-		return nil, nil, apiErr(err)
+		return nil, nil, "", apiErr(err)
 	}
 	var table metav1.Table
 	if err := json.Unmarshal(raw, &table); err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	for i := range table.ColumnDefinitions {
 		cols = append(cols, table.ColumnDefinitions[i].Name)
@@ -61,7 +65,7 @@ func (s *Session) tableList(ctx context.Context, k kind, ns string, limit int64)
 		row["ref"] = plugin.ResourceIdentity{Kind: customResourceKind, Scope: k.name, Namespace: namespace, Name: name, UID: uid}
 		rows = append(rows, row)
 	}
-	return cols, rows, nil
+	return cols, rows, table.Continue, nil
 }
 
 func rowObjectMeta(raw []byte) (name, namespace, uid string) {
@@ -93,7 +97,7 @@ func ColumnsForKind(rc *plugin.RequestContext) (any, error) {
 	}
 	var rows []Row
 	if isCRD(k) {
-		cols, _, err := s.tableList(rc.Ctx, k, "", 1)
+		cols, _, _, err := s.tableList(rc.Ctx, k, "", 1, "")
 		if err != nil {
 			return nil, err
 		}

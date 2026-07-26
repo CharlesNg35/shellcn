@@ -367,6 +367,167 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	}
 }
 
+func TestMySQLBoundedRowPagingIntegration(t *testing.T) {
+	if os.Getenv("SHELLCN_MYSQL_INTEGRATION") != "1" {
+		t.Skip("set SHELLCN_MYSQL_INTEGRATION=1 to run against MySQL or MariaDB")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	cfg := integrationConfig(ctx, t)
+	cfg["read_only"] = false
+	cfg["row_limit"] = 500
+	cfg["query_timeout"] = "30s"
+
+	sess, err := connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+	s := sess.(*Session)
+
+	const (
+		seeded    = 240
+		pageLimit = 25
+	)
+	database := cfg["database"].(string)
+	table := "shellcn_paging"
+
+	if _, err := s.db.ExecContext(ctx, "DROP TABLE IF EXISTS "+qualified(database, table)); err != nil {
+		t.Fatalf("drop seed table: %v", err)
+	}
+	if _, err := s.db.ExecContext(ctx, "CREATE TABLE "+qualified(database, table)+" (id bigint unsigned PRIMARY KEY, label varchar(64) NOT NULL)"); err != nil {
+		t.Fatalf("create seed table: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_, _ = s.db.ExecContext(cleanupCtx, "DROP TABLE IF EXISTS "+qualified(database, table))
+	})
+	var values []string
+	var args []any
+	for i := 1; i <= seeded; i++ {
+		values = append(values, "(?, ?)")
+		args = append(args, i, "row-"+strconv.Itoa(i))
+	}
+	if _, err := s.db.ExecContext(ctx, "INSERT INTO "+qualified(database, table)+" (id, label) VALUES "+strings.Join(values, ","), args...); err != nil {
+		t.Fatalf("seed rows: %v", err)
+	}
+
+	params := map[string]string{"database": database, "table": table}
+	pageAt := func(cursor string, extra url.Values) plugin.Page[plugin.TableRow] {
+		t.Helper()
+		q := url.Values{"limit": {strconv.Itoa(pageLimit)}, "sort": {"id"}}
+		if cursor != "" {
+			q.Set("cursor", cursor)
+		}
+		for k, v := range extra {
+			q[k] = v
+		}
+		out, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, params, q, nil))
+		if err != nil {
+			t.Fatalf("table rows (cursor %q): %v", cursor, err)
+		}
+		return out.(plugin.Page[plugin.TableRow])
+	}
+
+	first := pageAt("", nil)
+	if len(first.Items) != pageLimit {
+		t.Fatalf("first page must be bounded to %d rows, got %d", pageLimit, len(first.Items))
+	}
+	if first.NextCursor == "" {
+		t.Fatal("first page of a multi-page table must carry a NextCursor")
+	}
+	if first.Total != nil {
+		t.Fatalf("Total must be omitted by default (no COUNT(*) per page), got %d", *first.Total)
+	}
+
+	seen := map[int64]int{}
+	cursor := ""
+	pages := 0
+	for {
+		page := pageAt(cursor, nil)
+		pages++
+		if pages > seeded {
+			t.Fatal("paging did not terminate")
+		}
+		if len(page.Items) > pageLimit {
+			t.Fatalf("page %d exceeded the limit: %d rows", pages, len(page.Items))
+		}
+		if page.NextCursor != "" && len(page.Items) != pageLimit {
+			t.Fatalf("page %d is short (%d rows) but claims a next page", pages, len(page.Items))
+		}
+		if page.NextCursor != "" && page.Total != nil {
+			t.Fatalf("Total must stay omitted while paging, got %d on page %d", *page.Total, pages)
+		}
+		for _, row := range page.Items {
+			id, ok := rowID(row["id"])
+			if !ok {
+				t.Fatalf("unexpected id value %#v", row["id"])
+			}
+			seen[id]++
+			if seen[id] > 1 {
+				t.Fatalf("row id %d returned on more than one page", id)
+			}
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		if page.NextCursor == cursor {
+			t.Fatalf("cursor did not advance past %q", cursor)
+		}
+		cursor = page.NextCursor
+	}
+	if want := (seeded + pageLimit - 1) / pageLimit; pages != want {
+		t.Fatalf("expected %d bounded pages, walked %d", want, pages)
+	}
+	if len(seen) != seeded {
+		t.Fatalf("paging covered %d distinct rows, want %d", len(seen), seeded)
+	}
+	for i := int64(1); i <= seeded; i++ {
+		if seen[i] != 1 {
+			t.Fatalf("row id %d was seen %d times across pages", i, seen[i])
+		}
+	}
+
+	// The exact count stays available, but only when the caller opts in.
+	counted := pageAt("", url.Values{"filter." + sqldb.CountFilterKey: {sqldb.CountExact}})
+	if counted.Total == nil || *counted.Total != seeded {
+		t.Fatalf("filter.%s=%s must return the exact total %d, got %v", sqldb.CountFilterKey, sqldb.CountExact, seeded, counted.Total)
+	}
+	if len(counted.Items) != pageLimit || counted.NextCursor == "" {
+		t.Fatalf("an exact count must not widen the page: %d rows, cursor %q", len(counted.Items), counted.NextCursor)
+	}
+
+	// A collection that fits in one page reports a free, exact total.
+	whole, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, params, url.Values{"limit": {"500"}, "sort": {"id"}}, nil))
+	if err != nil {
+		t.Fatalf("single page: %v", err)
+	}
+	single := whole.(plugin.Page[plugin.TableRow])
+	if single.NextCursor != "" || single.Total == nil || *single.Total != seeded {
+		t.Fatalf("a fully contained collection must report an exact total: cursor %q total %v", single.NextCursor, single.Total)
+	}
+}
+
+func rowID(value any) (int64, bool) {
+	switch v := value.(type) {
+	case int64:
+		return v, true
+	case uint64:
+		return int64(v), true
+	case float64:
+		return int64(v), true
+	case string:
+		n, err := strconv.ParseInt(v, 10, 64)
+		return n, err == nil
+	case []byte:
+		n, err := strconv.ParseInt(string(v), 10, 64)
+		return n, err == nil
+	}
+	return 0, false
+}
+
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
 	raw, _ := json.Marshal(body)
 	return plugin.NewRequestContext(ctx, plugin.User{ID: "u1"}, s, params, nil, raw)

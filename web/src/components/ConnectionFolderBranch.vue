@@ -14,6 +14,11 @@ import type { ConnectionSummary, FolderColor } from "../types/projection";
 
 defineOptions({ name: "ConnectionFolderBranch" });
 
+// A branch mounts one component per row, so a long list is trimmed and search
+// becomes the way to reach the rest. Reordering is off while trimmed: Sortable
+// would emit only the rendered slice and silently drop everything past the cut.
+const MAX_RENDERED_ITEMS = 200;
+
 const props = defineProps<{
   modelValue: ConnectionTreeItem[];
   activeId: string | null;
@@ -38,6 +43,17 @@ const items = computed({
   get: () => props.modelValue,
   set: (value) => emit("update:modelValue", value),
 });
+
+const trimmed = computed(() => props.modelValue.length > MAX_RENDERED_ITEMS);
+const visibleItems = computed(() =>
+  trimmed.value ? props.modelValue.slice(0, MAX_RENDERED_ITEMS) : items.value,
+);
+const hiddenCount = computed(
+  () => props.modelValue.length - visibleItems.value.length,
+);
+const reorderDisabled = computed(
+  () => props.disabled || Boolean(props.collapsed) || trimmed.value,
+);
 
 const menu = ref<{ toggle: (event: Event) => void } | null>(null);
 const menuFolder = ref<ConnectionFolderNode | null>(null);
@@ -68,7 +84,7 @@ const menuItems = computed(() => [
 // Folders live only at the root level: a folder may never be dropped inside
 // another folder, so the tree stays exactly two deep (folder → connections).
 function onMove(evt: { dragged?: HTMLElement; to?: HTMLElement }): boolean {
-  if (props.disabled || props.collapsed) return false; // never reorder a filtered or rail view
+  if (reorderDisabled.value) return false; // never reorder a filtered, rail or trimmed view
   const draggingFolder = evt.dragged?.hasAttribute("data-folder-id") ?? false;
   const intoFolder = Boolean(evt.to?.closest("[data-folder-id]"));
   return !(draggingFolder && intoFolder);
@@ -118,7 +134,7 @@ function onEnd(event: unknown): void {
       v-model="items"
       group="sidebar-items"
       handle=".connection-sidebar-drag-item"
-      :disabled="disabled || Boolean(collapsed)"
+      :disabled="reorderDisabled"
       :on-move="onMove"
       :animation="150"
       chosen-class="connection-sidebar-sortable-chosen"
@@ -129,7 +145,7 @@ function onEnd(event: unknown): void {
       @end="onEnd"
     >
       <template
-        v-for="item in items"
+        v-for="item in visibleItems"
         :key="item.kind === 'folder' ? item.id : item.connection.id"
       >
         <ConnectionSidebarItem
@@ -231,7 +247,7 @@ function onEnd(event: unknown): void {
           </div>
 
           <ConnectionFolderBranch
-            v-show="!collapsed && isExpanded(item)"
+            v-if="!collapsed && isExpanded(item)"
             v-model="item.children"
             :active-id="activeId"
             :expanded="expanded"
@@ -250,6 +266,13 @@ function onEnd(event: unknown): void {
         </section>
       </template>
     </VueDraggable>
+
+    <p
+      v-if="hiddenCount > 0 && !collapsed"
+      class="px-3 py-1.5 text-xs text-surface-400"
+    >
+      {{ hiddenCount }} more — search to narrow
+    </p>
 
     <Menu
       :id="menuFolder ? `folder-menu-${menuFolder.id}` : 'folder-menu'"

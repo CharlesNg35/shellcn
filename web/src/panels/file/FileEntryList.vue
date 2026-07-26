@@ -1,12 +1,19 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import Checkbox from "primevue/checkbox";
+import VirtualScroller from "primevue/virtualscroller";
 import AppIcon from "@/components/AppIcon.vue";
 import SkeletonList from "@/components/SkeletonList.vue";
 import PanelError from "../shared/PanelError.vue";
 import type { FileEntry } from "@/types/projection";
 import { formatBytes, formatDate, iconFor } from "./fileTypes";
 
-withDefaults(
+const VIRTUAL_THRESHOLD = 100;
+const ROW_HEIGHT = 36;
+// Rows short of the end at which the next page is requested.
+const LOAD_MORE_MARGIN = 10;
+
+const props = withDefaults(
   defineProps<{
     entries: FileEntry[];
     selectedPath?: string;
@@ -15,6 +22,7 @@ withDefaults(
     emptyText?: string;
     selectable?: boolean;
     selectedPaths?: Set<string>;
+    hasMore?: boolean;
   }>(),
   {
     selectedPath: undefined,
@@ -22,6 +30,7 @@ withDefaults(
     emptyText: "This folder is empty.",
     selectable: false,
     selectedPaths: () => new Set<string>(),
+    hasMore: false,
   },
 );
 const emit = defineEmits<{
@@ -29,7 +38,15 @@ const emit = defineEmits<{
   open: [entry: FileEntry];
   retry: [];
   toggle: [entry: FileEntry];
+  "load-more": [];
 }>();
+
+const virtualized = computed(() => props.entries.length > VIRTUAL_THRESHOLD);
+
+function onScrollIndexChange(event: { last: number }): void {
+  if (!props.hasMore) return;
+  if (event.last >= props.entries.length - LOAD_MORE_MARGIN) emit("load-more");
+}
 
 // Roving focus: arrow keys move between rows so the list is keyboard-navigable.
 function moveFocus(event: KeyboardEvent, dir: 1 | -1): void {
@@ -61,89 +78,111 @@ function moveFocus(event: KeyboardEvent, dir: 1 | -1): void {
     >
       {{ emptyText }}
     </p>
-    <ul
+    <VirtualScroller
       v-else
-      role="listbox"
-      aria-label="Files"
-      class="divide-y divide-surface-100 dark:divide-surface-800/70"
+      :items="entries"
+      :item-size="ROW_HEIGHT"
+      :disabled="!virtualized"
+      scroll-height="100%"
+      class="h-full"
+      @scroll-index-change="onScrollIndexChange"
     >
-      <li
-        v-for="entry in entries"
-        :key="entry.path"
-        role="option"
-        :aria-selected="selectedPath === entry.path"
-        class="group flex items-center transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
-        :class="
-          selectedPath === entry.path
-            ? 'bg-primary-50 dark:bg-primary-500/10'
-            : ''
-        "
+      <template
+        #content="{ items: rows, styleClass, contentRef, contentStyle }"
       >
-        <span
-          v-if="selectable"
-          class="flex shrink-0 items-center pl-3"
-          @click.stop
+        <ul
+          :ref="contentRef"
+          :class="[
+            styleClass,
+            'divide-y divide-surface-100 dark:divide-surface-800/70',
+          ]"
+          :style="contentStyle"
+          role="listbox"
+          aria-label="Files"
         >
-          <Checkbox
-            :model-value="selectedPaths.has(entry.path)"
-            binary
-            :aria-label="`Select ${entry.name}`"
-            @update:model-value="emit('toggle', entry)"
-          />
-        </span>
-        <button
-          type="button"
-          class="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-primary-500/35 focus-visible:outline-none focus-visible:ring-inset"
-          :class="
-            selectedPath === entry.path
-              ? 'text-primary-700 dark:text-primary-200'
-              : ''
-          "
-          :aria-label="
-            entry.isDir ? `Open ${entry.name}` : `Select ${entry.name}`
-          "
-          :title="entry.path"
-          @click="entry.isDir ? emit('open', entry) : emit('select', entry)"
-          @dblclick="emit('open', entry)"
-          @keydown.down="moveFocus($event, 1)"
-          @keydown.up="moveFocus($event, -1)"
-        >
-          <AppIcon
-            :icon="{ type: 'lucide', value: iconFor(entry.name, entry.isDir) }"
-            :size="16"
-            class="shrink-0"
+          <li
+            v-for="entry in rows as FileEntry[]"
+            :key="entry.path"
+            role="option"
+            :aria-selected="selectedPath === entry.path"
+            class="group flex items-center transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
             :class="
-              entry.isDir
-                ? 'text-amber-500 dark:text-amber-400'
-                : 'text-surface-400 group-hover:text-surface-600 dark:group-hover:text-surface-300'
+              selectedPath === entry.path
+                ? 'bg-primary-50 dark:bg-primary-500/10'
+                : ''
             "
-          />
-          <span
-            class="min-w-0 flex-1 truncate text-surface-700 dark:text-surface-200"
-            :title="entry.name"
+            :style="virtualized ? { height: `${ROW_HEIGHT}px` } : undefined"
           >
-            {{ entry.name }}
-          </span>
-          <span
-            v-if="entry.modTime"
-            class="shrink-0 text-xs whitespace-nowrap text-surface-400 tabular-nums"
-          >
-            {{ formatDate(entry.modTime) }}
-          </span>
-          <span
-            v-if="!entry.isDir"
-            class="shrink-0 text-xs whitespace-nowrap text-surface-400 tabular-nums"
-          >
-            {{ formatBytes(entry.size) }}
-          </span>
-          <AppIcon
-            v-else
-            :icon="{ type: 'lucide', value: 'chevron-right' }"
-            :size="15"
-            class="shrink-0 text-surface-300 transition-colors group-hover:text-surface-500 dark:text-surface-600 dark:group-hover:text-surface-300"
-          />
-        </button>
-      </li>
-    </ul>
+            <span
+              v-if="selectable"
+              class="flex shrink-0 items-center pl-3"
+              @click.stop
+            >
+              <Checkbox
+                :model-value="selectedPaths.has(entry.path)"
+                binary
+                :aria-label="`Select ${entry.name}`"
+                @update:model-value="emit('toggle', entry)"
+              />
+            </span>
+            <button
+              type="button"
+              class="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-primary-500/35 focus-visible:outline-none focus-visible:ring-inset"
+              :class="
+                selectedPath === entry.path
+                  ? 'text-primary-700 dark:text-primary-200'
+                  : ''
+              "
+              :aria-label="
+                entry.isDir ? `Open ${entry.name}` : `Select ${entry.name}`
+              "
+              :title="entry.path"
+              @click="entry.isDir ? emit('open', entry) : emit('select', entry)"
+              @dblclick="emit('open', entry)"
+              @keydown.down="moveFocus($event, 1)"
+              @keydown.up="moveFocus($event, -1)"
+            >
+              <AppIcon
+                :icon="{
+                  type: 'lucide',
+                  value: iconFor(entry.name, entry.isDir),
+                }"
+                :size="16"
+                class="shrink-0"
+                :class="
+                  entry.isDir
+                    ? 'text-amber-500 dark:text-amber-400'
+                    : 'text-surface-400 group-hover:text-surface-600 dark:group-hover:text-surface-300'
+                "
+              />
+              <span
+                class="min-w-0 flex-1 truncate text-surface-700 dark:text-surface-200"
+                :title="entry.name"
+              >
+                {{ entry.name }}
+              </span>
+              <span
+                v-if="entry.modTime"
+                class="shrink-0 text-xs whitespace-nowrap text-surface-400 tabular-nums"
+              >
+                {{ formatDate(entry.modTime) }}
+              </span>
+              <span
+                v-if="!entry.isDir"
+                class="shrink-0 text-xs whitespace-nowrap text-surface-400 tabular-nums"
+              >
+                {{ formatBytes(entry.size) }}
+              </span>
+              <AppIcon
+                v-else
+                :icon="{ type: 'lucide', value: 'chevron-right' }"
+                :size="15"
+                class="shrink-0 text-surface-300 transition-colors group-hover:text-surface-500 dark:text-surface-600 dark:group-hover:text-surface-300"
+              />
+            </button>
+          </li>
+        </ul>
+      </template>
+    </VirtualScroller>
   </div>
 </template>
