@@ -176,9 +176,9 @@ async function send(): Promise<void> {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col">
+  <div class="@container flex h-full min-h-0 flex-col">
     <div
-      class="grid grid-cols-1 items-end gap-2 border-b border-surface-200 p-3 sm:grid-cols-[7.5rem_minmax(12rem,1fr)_auto] dark:border-surface-800"
+      class="grid grid-cols-1 items-end gap-2 border-b border-surface-200 p-3 @md:grid-cols-[7.5rem_minmax(0,1fr)_auto] dark:border-surface-800"
     >
       <label class="flex min-w-0 flex-col gap-1">
         <span
@@ -219,13 +219,13 @@ async function send(): Promise<void> {
       </Button>
     </div>
 
-    <div class="grid min-h-0 flex-1 grid-cols-2">
+    <div class="grid min-h-0 flex-1 grid-cols-1 @3xl:grid-cols-2">
       <section
-        class="flex min-h-0 flex-col border-r border-surface-200 dark:border-surface-800"
+        class="flex min-h-0 min-w-0 flex-col border-b border-surface-200 @3xl:border-r @3xl:border-b-0 dark:border-surface-800"
         aria-label="Request"
       >
         <div class="border-b border-surface-200 p-3 dark:border-surface-800">
-          <div class="mb-2 flex items-center justify-between">
+          <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h2
               class="text-sm font-medium text-surface-700 dark:text-surface-200"
             >
@@ -244,16 +244,18 @@ async function send(): Promise<void> {
             <div
               v-for="(header, index) in headers"
               :key="index"
-              class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.25rem] gap-2"
+              class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem] gap-2"
             >
               <InputText
                 v-model="header.key"
                 placeholder="Header"
+                class="min-w-0"
                 :aria-label="`Header ${index + 1} name`"
               />
               <InputText
                 v-model="header.value"
                 placeholder="Value"
+                class="min-w-0"
                 :aria-label="`Header ${index + 1} value`"
               />
               <Button
@@ -261,10 +263,13 @@ async function send(): Promise<void> {
                 text
                 rounded
                 severity="secondary"
+                size="small"
                 aria-label="Remove header"
                 @click="removeHeader(index)"
               >
-                <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="14" />
+                <template #icon>
+                  <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="14" />
+                </template>
               </Button>
             </div>
           </div>
@@ -284,7 +289,7 @@ async function send(): Promise<void> {
         </div>
       </section>
 
-      <section class="flex min-h-0 flex-col" aria-label="Response">
+      <section class="flex min-h-0 min-w-0 flex-col" aria-label="Response">
         <div
           class="flex min-h-[2.75rem] items-center gap-2 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
           aria-live="polite"

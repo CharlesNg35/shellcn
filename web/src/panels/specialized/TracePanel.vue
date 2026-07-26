@@ -192,7 +192,12 @@ watch(
       </Button>
     </div>
 
-    <div class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_20rem]">
+    <div
+      class="grid min-h-0 flex-1"
+      :class="
+        selected ? 'grid-cols-[minmax(0,1fr)_minmax(0,20rem)]' : 'grid-cols-1'
+      "
+    >
       <div class="min-h-0 overflow-hidden">
         <SkeletonList v-if="showInitialLoader" />
         <PanelError
@@ -254,47 +259,45 @@ watch(
       </div>
 
       <aside
+        v-if="selected"
         class="min-h-0 overflow-auto border-l border-surface-200 p-4 dark:border-surface-800"
       >
-        <p v-if="!selected" class="text-sm text-surface-400">Select a span.</p>
-        <template v-else>
-          <p class="text-xs text-surface-400 uppercase">
-            {{ spanService(selected) }}
-          </p>
-          <h3 class="mt-1 font-semibold text-surface-900 dark:text-surface-0">
-            {{ selected.name }}
-          </h3>
-          <dl class="mt-4 space-y-2 text-sm">
-            <div>
-              <dt class="text-surface-400">Span ID</dt>
-              <dd class="font-mono text-xs break-all">{{ selected.id }}</dd>
-            </div>
-            <div v-if="selected.parentId">
-              <dt class="text-surface-400">Parent</dt>
-              <dd class="font-mono text-xs break-all">
-                {{ selected.parentId }}
-              </dd>
-            </div>
-            <div>
-              <dt class="text-surface-400">Duration</dt>
-              <dd>{{ selected.durationMs.toFixed(1) }} ms</dd>
-            </div>
-          </dl>
-          <DataTable
-            v-if="tags.length"
-            :value="tags"
-            class="mt-4"
-            scrollable
-            scroll-height="16rem"
-          >
-            <Column field="key" header="Tag" />
-            <Column header="Value">
-              <template #body="{ data }">
-                <span class="break-all">{{ String(data.value) }}</span>
-              </template>
-            </Column>
-          </DataTable>
-        </template>
+        <p class="text-xs text-surface-400 uppercase">
+          {{ spanService(selected) }}
+        </p>
+        <h3 class="mt-1 font-semibold text-surface-900 dark:text-surface-0">
+          {{ selected.name }}
+        </h3>
+        <dl class="mt-4 space-y-2 text-sm">
+          <div>
+            <dt class="text-surface-400">Span ID</dt>
+            <dd class="font-mono text-xs wrap-break-word">{{ selected.id }}</dd>
+          </div>
+          <div v-if="selected.parentId">
+            <dt class="text-surface-400">Parent</dt>
+            <dd class="font-mono text-xs wrap-break-word">
+              {{ selected.parentId }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-surface-400">Duration</dt>
+            <dd>{{ selected.durationMs.toFixed(1) }} ms</dd>
+          </div>
+        </dl>
+        <DataTable
+          v-if="tags.length"
+          :value="tags"
+          class="mt-4"
+          scrollable
+          scroll-height="16rem"
+        >
+          <Column field="key" header="Tag" style="width: 40%" />
+          <Column header="Value">
+            <template #body="{ data }">
+              <span class="wrap-break-word">{{ String(data.value) }}</span>
+            </template>
+          </Column>
+        </DataTable>
       </aside>
     </div>
   </div>

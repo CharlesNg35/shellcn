@@ -181,7 +181,7 @@ describe("primeVuePassthrough", () => {
       "pointer-events-auto",
     );
     expect(primeVuePassthrough.dialog.root).toContain(
-      "max-h-[calc(100vh-2rem)]",
+      "max-h-[calc(100dvh-2rem)]",
     );
     expect(primeVuePassthrough.dialog.root).toContain("flex-col");
     expect(primeVuePassthrough.dialog.header).toContain("shrink-0");

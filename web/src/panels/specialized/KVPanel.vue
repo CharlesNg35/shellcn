@@ -549,7 +549,7 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="grid h-full min-h-0 w-full grid-cols-[minmax(12rem,22rem)_minmax(0,1fr)] overflow-hidden"
+    class="grid h-full min-h-0 w-full grid-cols-[minmax(12rem,min(22rem,40%))_minmax(0,1fr)] overflow-hidden"
   >
     <div
       class="flex min-h-0 min-w-0 flex-col border-r border-surface-200 dark:border-surface-800"

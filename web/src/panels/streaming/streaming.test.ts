@@ -84,7 +84,7 @@ vi.mock("../../codemirror", () => ({
   ) => {
     mockCodeMirror.createdValues.push(options.value ?? "");
     mockCodeMirror.onChange = options.onChange ?? null;
-    return { view: { destroy() {} } };
+    return { view: { destroy() {}, requestMeasure() {} } };
   },
   createCodeMirrorDiffView: (_parent: HTMLElement, options: unknown) => {
     mockCodeMirror.diffOptions = options;

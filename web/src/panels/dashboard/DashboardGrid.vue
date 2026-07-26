@@ -46,7 +46,7 @@ const emit = defineEmits<{
 }>();
 
 function spanClass(cell: DashboardCell): string {
-  return (cell.span ?? 1) >= 2 ? "lg:col-span-2" : "";
+  return (cell.span ?? 1) >= 2 ? "@3xl:col-span-2" : "";
 }
 
 function cellConfig(cell: DashboardCell): Record<string, unknown> {
@@ -73,10 +73,10 @@ function onCardAction(action: Action, result?: Record<string, unknown>): void {
 </script>
 
 <template>
-  <div class="h-full overflow-auto p-4">
+  <div class="@container h-full overflow-auto p-4">
     <div
       v-if="visibleCells.length"
-      class="grid grid-cols-1 gap-4 lg:grid-cols-2"
+      class="grid grid-cols-1 gap-4 @3xl:grid-cols-2"
     >
       <section
         v-for="cell in visibleCells"
@@ -88,7 +88,7 @@ function onCardAction(action: Action, result?: Record<string, unknown>): void {
           class="flex items-center gap-2 border-b border-surface-200 px-3 py-2 text-sm font-medium text-surface-700 dark:border-surface-800 dark:text-surface-200"
         >
           <AppIcon v-if="cell.icon" :icon="cell.icon" :size="15" />
-          <span>{{ cell.label }}</span>
+          <span class="min-w-0 flex-1 truncate">{{ cell.label }}</span>
         </header>
         <div class="min-h-0 flex-1" style="min-height: 20rem">
           <PanelHost

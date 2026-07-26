@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useElementSize } from "@vueuse/core";
 import Button from "primevue/button";
 import Menu from "primevue/menu";
 import type { MenuItem } from "primevue/menuitem";
@@ -38,6 +39,10 @@ const refreshing = ref(false);
 const expanding = ref(false);
 const exporting = ref(false);
 const graphFrame = ref<HTMLElement | null>(null);
+const { width: frameWidth, height: frameHeight } = useElementSize(graphFrame);
+const compactCanvas = computed(
+  () => frameWidth.value < 420 || frameHeight.value < 320,
+);
 const exportMenu = ref<InstanceType<typeof Menu> | null>(null);
 const error = ref<string | null>(null);
 const payload = ref<GraphPayload>({});
@@ -244,17 +249,17 @@ watch(
 <template>
   <div class="flex h-full flex-col">
     <div
-      class="flex items-center justify-between border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+      class="flex shrink-0 items-center justify-between border-b border-surface-200 px-3 py-2 dark:border-surface-800"
     >
-      <div class="flex items-center gap-2 text-sm text-surface-500">
+      <div class="flex min-w-0 items-center gap-2 text-sm text-surface-500">
         <AppIcon :icon="{ type: 'lucide', value: 'workflow' }" :size="16" />
-        <span>{{ graph.nodes.length }} nodes</span>
-        <span>{{ graph.edges.length }} edges</span>
-        <span v-if="canExpand" class="text-xs text-surface-400"
+        <span class="shrink-0">{{ graph.nodes.length }} nodes</span>
+        <span class="shrink-0">{{ graph.edges.length }} edges</span>
+        <span v-if="canExpand" class="truncate text-xs text-surface-400"
           >· double-click a node to expand</span
         >
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex shrink-0 items-center gap-2">
         <Button
           type="button"
           severity="secondary"
@@ -294,7 +299,7 @@ watch(
 
     <div
       v-if="showFilter"
-      class="flex flex-wrap items-center gap-1.5 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+      class="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
     >
       <Button
         v-for="label in edgeLabels"
@@ -354,14 +359,14 @@ watch(
           />
         </template>
         <Background :gap="16" />
-        <Controls />
-        <MiniMap pannable zoomable />
+        <Controls :show-interactive="!compactCanvas" />
+        <MiniMap v-if="!compactCanvas" pannable zoomable />
       </VueFlow>
     </div>
 
     <div
       v-if="selected?.summary || properties.length"
-      class="max-h-40 overflow-auto border-t border-surface-200 p-3 text-sm dark:border-surface-800"
+      class="@container max-h-40 shrink-0 overflow-auto border-t border-surface-200 p-3 text-sm dark:border-surface-800"
     >
       <p class="font-semibold text-surface-900 dark:text-surface-0">
         {{ selected?.label || selected?.id }}
@@ -371,11 +376,13 @@ watch(
       </p>
       <dl
         v-if="properties.length"
-        class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1"
+        class="mt-2 grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)] gap-x-4 gap-y-1 @max-sm:grid-cols-1"
       >
         <template v-for="p in properties" :key="p.key">
-          <dt class="text-surface-400">{{ p.key }}</dt>
-          <dd class="break-all text-surface-600 dark:text-surface-300">
+          <dt class="min-w-0 text-surface-400">{{ p.key }}</dt>
+          <dd
+            class="min-w-0 break-words text-surface-600 dark:text-surface-300"
+          >
             {{ p.value }}
           </dd>
         </template>

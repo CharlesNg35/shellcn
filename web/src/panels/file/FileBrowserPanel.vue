@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useDropZone } from "@vueuse/core";
+import { useDropZone, useElementSize } from "@vueuse/core";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
@@ -258,6 +258,13 @@ const { isOverDropZone } = useDropZone(panelEl, {
 });
 const dropActive = computed(() => isOverDropZone.value && canUpload.value);
 
+// Mirrors the `@max-2xl` container query that collapses the split view's
+// preview pane, so opening a file falls back to the preview dialog.
+const { width: panelWidth } = useElementSize(panelEl);
+const splitPreviewHidden = computed(
+  () => panelWidth.value > 0 && panelWidth.value < 672,
+);
+
 const canSubmitMkdir = computed(
   () => Boolean(newFolderName.value.trim()) && !mutating.value,
 );
@@ -440,7 +447,8 @@ async function openEntry(entry: FileEntry): Promise<void> {
       return;
     }
     await selectEntry(entry);
-    if (viewMode.value === "grid") previewOpen.value = true;
+    if (viewMode.value === "grid" || splitPreviewHidden.value)
+      previewOpen.value = true;
   });
 }
 
@@ -866,7 +874,7 @@ watch(
 
     <div
       v-if="uploadWarning"
-      class="border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+      class="shrink-0 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
     >
       <AppAlert
         tone="warning"
@@ -898,9 +906,9 @@ watch(
       @delete="bulkDeleteOpen = true"
     />
 
-    <div v-if="viewMode === 'split'" class="flex min-h-0 flex-1">
+    <div v-if="viewMode === 'split'" class="@container flex min-h-0 flex-1">
       <div
-        class="w-80 shrink-0 border-r border-surface-200 bg-surface-50/40 dark:border-surface-800 dark:bg-surface-950/30"
+        class="w-80 max-w-[45%] min-w-56 shrink-0 border-r border-surface-200 bg-surface-50/40 @max-2xl:w-full @max-2xl:max-w-none @max-2xl:border-r-0 dark:border-surface-800 dark:bg-surface-950/30"
       >
         <FileEntryList
           :entries="filtered"
@@ -917,7 +925,7 @@ watch(
         />
       </div>
 
-      <div class="min-w-0 flex-1">
+      <div class="min-w-0 flex-1 @max-2xl:hidden">
         <FilePane
           v-model:edit-content="editContent"
           :selected="selected"
@@ -1131,7 +1139,7 @@ watch(
     </Dialog>
 
     <Dialog v-model:visible="bulkDeleteOpen" modal header="Delete selection">
-      <p class="mb-4 w-80 text-sm text-surface-600 dark:text-surface-300">
+      <p class="mb-4 max-w-80 text-sm text-surface-600 dark:text-surface-300">
         Delete {{ selectionCount }}
         {{ selectionCount === 1 ? "item" : "items" }}? This cannot be undone.
       </p>

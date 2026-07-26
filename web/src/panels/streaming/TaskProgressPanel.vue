@@ -158,7 +158,11 @@ async function onReconnect(): Promise<void> {
     <div
       class="min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed text-surface-700 dark:text-surface-200"
     >
-      <div v-for="(line, i) in lines" :key="i" class="whitespace-pre-wrap">
+      <div
+        v-for="(line, i) in lines"
+        :key="i"
+        class="wrap-break-word whitespace-pre-wrap"
+      >
         {{ line }}
       </div>
       <PanelLoader v-if="showInitialLoader" />

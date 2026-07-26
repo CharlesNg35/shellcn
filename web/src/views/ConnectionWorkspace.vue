@@ -258,7 +258,7 @@ async function onActionDone(
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
+  <div class="@container flex h-full flex-col">
     <header
       class="flex items-center gap-3 border-b border-surface-200 px-5 py-3 dark:border-surface-800"
     >
@@ -271,10 +271,14 @@ async function onActionDone(
         <div class="min-w-0">
           <h1
             class="truncate font-semibold text-surface-900 dark:text-surface-0"
+            :title="connection?.name ?? id"
           >
             {{ connection?.name ?? id }}
           </h1>
-          <p class="truncate text-xs text-surface-400">
+          <p
+            class="truncate text-xs text-surface-400"
+            :title="`${projection?.title ?? connection?.protocol} · ${connection?.transport}`"
+          >
             {{ projection?.title ?? connection?.protocol }} ·
             {{ connection?.transport }}
           </p>
@@ -283,7 +287,7 @@ async function onActionDone(
 
       <div
         v-if="connected && (scopeFilters.length || headerActions.length)"
-        class="flex shrink-0 items-center gap-3 rounded-lg border border-surface-200 bg-surface-50 px-2 py-1 shadow-sm dark:border-surface-700 dark:bg-surface-800/60"
+        class="flex min-w-0 items-center gap-3 rounded-lg border border-surface-200 bg-surface-50 px-2 py-1 shadow-sm dark:border-surface-700 dark:bg-surface-800/60"
       >
         <ScopeBar
           v-if="scopeFilters.length"
@@ -302,17 +306,18 @@ async function onActionDone(
         />
       </div>
 
-      <div class="flex flex-1 items-center justify-end gap-1">
+      <div class="flex shrink-0 grow items-center justify-end gap-1">
         <Button
           v-if="connected"
           severity="secondary"
           size="small"
           title="Close the live session"
+          aria-label="Disconnect"
           class="mr-1"
           @click="disconnect"
         >
           <span class="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          Disconnect
+          <span class="@max-[52rem]:hidden">Disconnect</span>
         </Button>
         <AiChatLauncher
           :connection-id="id"

@@ -12,8 +12,8 @@ defineProps<{
 <template>
   <div class="record-node" :class="{ 'record-node-selected': selected }">
     <Handle type="target" :position="Position.Left" class="record-handle" />
-    <div class="record-head">
-      <span class="truncate">{{ data.label }}</span>
+    <div class="record-head truncate" :title="data.label">
+      {{ data.label }}
     </div>
     <ul class="record-fields">
       <li v-for="f in data.fields" :key="f.name" class="record-field">
@@ -98,6 +98,8 @@ defineProps<{
   font-weight: 500;
 }
 .record-field-type {
+  flex: 0 1 auto;
+  max-width: 45%;
   color: var(--p-surface-400);
   font-size: 11px;
 }

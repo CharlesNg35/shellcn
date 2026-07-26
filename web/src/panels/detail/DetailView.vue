@@ -123,22 +123,24 @@ async function onActionDone(
     <header
       class="border-b border-surface-200 px-5 py-3 dark:border-surface-800"
     >
-      <div class="flex items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex min-w-0 flex-1 items-center gap-2">
           <h2
-            class="text-base font-semibold text-surface-900 dark:text-surface-0"
+            class="truncate text-base font-semibold text-surface-900 dark:text-surface-0"
+            :title="title"
           >
             {{ title }}
           </h2>
           <span
             v-if="status !== undefined && status !== ''"
-            class="rounded-full px-2 py-0.5 text-xs"
+            class="shrink-0 rounded-full px-2 py-0.5 text-xs whitespace-nowrap"
             :class="statusClass"
             >{{ status }}</span
           >
         </div>
         <ActionBar
           v-if="headerActions.length"
+          class="shrink-0"
           :connection-id="connectionId"
           :actions="headerActions"
           :resource="resource"

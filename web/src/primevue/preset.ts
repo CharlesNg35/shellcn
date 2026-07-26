@@ -49,7 +49,7 @@ export const searchIconRightClass =
 
 export const dialogRoot = (maxWidth = "max-w-md"): string =>
   cn(
-    "flex max-h-[calc(100vh-2rem)] w-full flex-col overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl ring-1 ring-surface-950/5 dark:border-surface-800 dark:bg-surface-900 dark:ring-surface-0/5",
+    "flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl ring-1 ring-surface-950/5 dark:border-surface-800 dark:bg-surface-900 dark:ring-surface-0/5",
     maxWidth,
   );
 
@@ -68,13 +68,15 @@ export const btnDanger =
 export const btnPrimaryBlock =
   "flex w-full items-center justify-center gap-1.5 rounded-md bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-700 active:bg-primary-800 focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:opacity-50";
 
+// Detail/usage rows live in resizable panes, so they stack on the pane width
+// (`@container` on the surrounding <dl>) rather than on viewport breakpoints.
 export const opsDetailRow =
-  "grid min-w-0 grid-cols-[minmax(8rem,14rem)_1fr_auto] items-start gap-3 px-4 py-2.5 text-sm";
+  "grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-4 py-2.5 text-sm @md:grid-cols-[minmax(8rem,12rem)_minmax(0,1fr)_auto]";
 export const opsUsageRow =
-  "grid min-w-0 grid-cols-1 gap-2 px-4 py-3 text-sm sm:grid-cols-[minmax(8rem,14rem)_minmax(0,1fr)] sm:gap-3";
+  "grid min-w-0 grid-cols-1 gap-2 px-4 py-3 text-sm @md:grid-cols-[minmax(8rem,12rem)_minmax(0,1fr)] @md:gap-3";
 export const opsDetailLabel = "text-surface-500 dark:text-surface-400";
 export const opsDetailValue =
-  "min-w-0 wrap-break-word whitespace-pre-wrap text-surface-900 dark:text-surface-100";
+  "min-w-[8ch] wrap-break-word whitespace-pre-wrap text-surface-900 dark:text-surface-100";
 export const opsUsageValue =
   "text-right text-xs font-medium text-surface-600 tabular-nums dark:text-surface-300";
 export const opsUsageCaption =
@@ -247,9 +249,9 @@ const overlayTransition = {
 const dialogMask =
   "pointer-events-auto fixed inset-0 flex items-center justify-center bg-surface-950/50 p-4 backdrop-blur-sm";
 const dialogHeader =
-  "flex shrink-0 items-center justify-between border-b border-surface-200 px-5 py-3.5 dark:border-surface-800";
+  "flex shrink-0 items-center justify-between gap-3 border-b border-surface-200 px-5 py-3.5 dark:border-surface-800";
 const dialogTitle =
-  "text-base font-semibold tracking-tight text-surface-900 dark:text-surface-0";
+  "min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-surface-900 dark:text-surface-0";
 const dialogContent = {
   class: "min-h-0 overflow-auto p-5",
   tabindex: "-1",
@@ -538,7 +540,7 @@ export const primeVuePassthrough = {
     root: "flex flex-col",
     event: "flex min-h-16",
     eventOpposite:
-      "min-w-36 max-w-48 shrink-0 pr-4 text-right text-xs text-surface-500 dark:text-surface-400",
+      "w-36 min-w-0 max-w-48 shrink pr-4 text-right text-xs text-surface-500 dark:text-surface-400",
     eventSeparator: "flex shrink-0 flex-col items-center",
     eventMarker:
       "z-10 flex h-6 w-6 items-center justify-center rounded-full border border-surface-300 bg-surface-0 text-surface-500 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-300",
@@ -835,8 +837,10 @@ export const primeVuePassthrough = {
     thead:
       "sticky top-0 z-10 bg-surface-50/95 backdrop-blur dark:bg-surface-900/95",
     column: {
+      // The inset rule belongs to the sticky cell; a collapsed `border-b` is
+      // owned by the table and scrolls away from under a sticky thead.
       headerCell:
-        "border-b border-surface-200 px-4 py-2.5 text-left font-medium text-surface-500 dark:border-surface-800",
+        "border-b border-surface-200 px-4 py-2.5 text-left font-medium text-surface-500 shadow-[inset_0_-1px_0_var(--p-surface-200)] dark:border-surface-800 dark:shadow-[inset_0_-1px_0_var(--p-surface-800)]",
       bodyCell:
         "border-b border-surface-100 px-4 py-2 text-surface-700 dark:border-surface-800/60 dark:text-surface-200",
       columnHeaderContent: "flex items-center gap-1",

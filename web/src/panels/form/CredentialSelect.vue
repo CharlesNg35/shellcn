@@ -116,7 +116,7 @@ watch(() => [props.selector, requestProtocol.value], load, { immediate: true });
       :placeholder="loading ? 'Loading credentials…' : 'Select a credential'"
       @update:model-value="emit('update:modelValue', $event)"
     />
-    <div class="mt-1 flex items-center justify-between gap-2">
+    <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
       <span
         v-if="error"
         class="flex min-w-0 items-center gap-2 text-xs text-red-500"
@@ -126,7 +126,7 @@ watch(() => [props.selector, requestProtocol.value], load, { immediate: true });
       </span>
       <p
         v-else-if="!loading && !options.length"
-        class="text-xs text-surface-400"
+        class="min-w-0 text-xs text-surface-400"
       >
         No matching credentials yet.
       </p>

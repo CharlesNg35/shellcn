@@ -82,18 +82,20 @@ onUnmounted(clearCopiedTimer);
 <template>
   <div class="flex h-full flex-col">
     <div
-      class="flex items-center justify-between gap-2 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+      class="flex shrink-0 items-center justify-between gap-2 overflow-x-auto border-b border-surface-200 px-3 py-2 dark:border-surface-800"
     >
-      <div class="flex items-center gap-2">
+      <div class="flex shrink-0 items-center gap-2">
         <Button
           type="button"
           severity="secondary"
+          size="small"
           :label="mode === 'tree' ? 'Raw' : 'Tree'"
           @click="mode = mode === 'tree' ? 'raw' : 'tree'"
         />
         <Button
           type="button"
           severity="secondary"
+          size="small"
           :disabled="refreshing"
           @click="load"
         >
@@ -105,16 +107,18 @@ onUnmounted(clearCopiedTimer);
           Refresh
         </Button>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex shrink-0 items-center gap-2">
         <Button
           type="button"
           severity="secondary"
+          size="small"
           :label="copied ? 'Copied' : 'Copy'"
           @click="copy"
         />
         <Button
           as="a"
           severity="secondary"
+          size="small"
           :href="downloadHref"
           download="document.json"
           label="Download"

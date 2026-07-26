@@ -148,7 +148,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     <label
       v-if="!hideLabel"
       :for="controlId"
-      class="text-sm font-medium text-surface-700 dark:text-surface-200"
+      class="text-sm font-medium wrap-break-word text-surface-700 dark:text-surface-200"
     >
       {{ field.label }}
       <span v-if="field.required" class="text-red-500">*</span>
@@ -321,7 +321,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
 
     <fieldset
       v-else-if="field.type === FieldType.Radio"
-      class="flex flex-col gap-2 pt-1"
+      class="flex min-w-0 flex-col gap-2 pt-1"
       :aria-invalid="ariaInvalid"
       :aria-describedby="describedBy"
     >
@@ -337,7 +337,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
           :input-id="`${field.key}-${opt.value}`"
           @update:model-value="update"
         />
-        <span>{{ opt.label }}</span>
+        <span class="min-w-0 wrap-break-word">{{ opt.label }}</span>
       </label>
     </fieldset>
 
@@ -405,8 +405,15 @@ function updateFiles(event: FileUploadSelectEvent): void {
       @update:model-value="update"
     />
 
-    <p v-if="field.help" class="text-xs text-surface-400">{{ field.help }}</p>
-    <p v-if="error" :id="errorId" role="alert" class="text-xs text-red-500">
+    <p v-if="field.help" class="text-xs wrap-break-word text-surface-400">
+      {{ field.help }}
+    </p>
+    <p
+      v-if="error"
+      :id="errorId"
+      role="alert"
+      class="text-xs wrap-break-word text-red-500"
+    >
       {{ error }}
     </p>
   </div>

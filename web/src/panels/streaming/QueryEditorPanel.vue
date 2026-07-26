@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { useStorage } from "@vueuse/core";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import Menu from "primevue/menu";
@@ -68,6 +69,94 @@ const emptyText = computed(
 );
 const canExport = computed(() => queryConfig.value?.exportable === true);
 const baselineQuery = ref(query.value);
+
+// The editor keeps a compact default (~5 lines) so results own most of the
+// panel; the drag handle below it stores the preferred height per browser.
+const MIN_EDITOR_HEIGHT = 72;
+const MAX_EDITOR_HEIGHT = 640;
+const DEFAULT_EDITOR_HEIGHT = 120;
+const editorHeight = useStorage(
+  "shellcn:query-editor:height",
+  DEFAULT_EDITOR_HEIGHT,
+);
+const resizing = ref(false);
+
+function setEditorHeight(value: number): void {
+  const next = Number.isFinite(value)
+    ? Math.round(value)
+    : DEFAULT_EDITOR_HEIGHT;
+  editorHeight.value = Math.min(
+    MAX_EDITOR_HEIGHT,
+    Math.max(MIN_EDITOR_HEIGHT, next),
+  );
+}
+
+// Sanitize whatever was persisted before the first render.
+setEditorHeight(editorHeight.value);
+
+let resizeStartY = 0;
+let resizeStartHeight = 0;
+let resizeCapture: { el: HTMLElement; pointerId: number } | null = null;
+let cursorBefore = "";
+let userSelectBefore = "";
+
+function onResizeMove(event: PointerEvent): void {
+  setEditorHeight(resizeStartHeight + event.clientY - resizeStartY);
+}
+
+function stopResize(): void {
+  if (resizeCapture?.el.hasPointerCapture?.(resizeCapture.pointerId)) {
+    resizeCapture.el.releasePointerCapture(resizeCapture.pointerId);
+  }
+  resizeCapture = null;
+  if (resizing.value) {
+    document.documentElement.style.cursor = cursorBefore;
+    document.body.style.userSelect = userSelectBefore;
+  }
+  resizing.value = false;
+  window.removeEventListener("pointermove", onResizeMove);
+  window.removeEventListener("pointerup", stopResize);
+}
+
+function startResize(event: PointerEvent): void {
+  const el = event.currentTarget;
+  if (el instanceof HTMLElement && el.setPointerCapture) {
+    el.setPointerCapture(event.pointerId);
+    resizeCapture = { el, pointerId: event.pointerId };
+  }
+  resizeStartY = event.clientY;
+  resizeStartHeight = editorHeight.value;
+  cursorBefore = document.documentElement.style.cursor;
+  userSelectBefore = document.body.style.userSelect;
+  document.documentElement.style.cursor = "row-resize";
+  document.body.style.userSelect = "none";
+  resizing.value = true;
+  window.addEventListener("pointermove", onResizeMove);
+  window.addEventListener("pointerup", stopResize);
+}
+
+function onResizeKeydown(event: KeyboardEvent): void {
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    setEditorHeight(editorHeight.value - 16);
+  } else if (event.key === "ArrowDown") {
+    event.preventDefault();
+    setEditorHeight(editorHeight.value + 16);
+  } else if (event.key === "Home") {
+    event.preventDefault();
+    setEditorHeight(DEFAULT_EDITOR_HEIGHT);
+  }
+}
+
+function resetEditorHeight(): void {
+  setEditorHeight(DEFAULT_EDITOR_HEIGHT);
+}
+
+// CodeMirror caches viewport/gutter geometry, so nudge it after every resize.
+watch(editorHeight, async () => {
+  await nextTick();
+  editor?.view.requestMeasure();
+});
 
 function syncQueryFromEditor(): void {
   if (editor) query.value = codeMirror?.editorValue(editor) ?? query.value;
@@ -243,6 +332,7 @@ onMounted(async () => {
         query.value = value;
       },
     });
+    editor.view.requestMeasure();
   } catch {
     useFallback.value = true;
   } finally {
@@ -281,6 +371,7 @@ watch(
 );
 
 onUnmounted(() => {
+  stopResize();
   try {
     editor?.view.destroy();
   } catch {
@@ -299,15 +390,18 @@ onUnmounted(() => {
       @reconnect="onReconnect"
     />
     <div
-      class="flex items-center justify-between border-b border-surface-200 px-3 py-1.5 dark:border-surface-800"
+      class="flex items-center justify-between gap-2 border-b border-surface-200 px-3 py-1.5 dark:border-surface-800"
     >
-      <span class="text-xs text-surface-400">{{ editorLabel }}</span>
-      <div class="flex items-center gap-2">
+      <span class="min-w-0 truncate text-xs text-surface-400">{{
+        editorLabel
+      }}</span>
+      <div class="flex min-w-0 flex-1 items-center justify-end gap-2">
         <span
           v-if="error"
           role="alert"
           aria-live="assertive"
-          class="text-xs text-red-500"
+          class="min-w-0 flex-1 truncate text-xs text-red-500"
+          :title="error"
           >{{ error }}</span
         >
         <Button
@@ -316,6 +410,7 @@ onUnmounted(() => {
           size="small"
           severity="secondary"
           outlined
+          class="shrink-0"
           @click="cancel"
         >
           {{ cancelLabel }}
@@ -323,6 +418,7 @@ onUnmounted(() => {
         <Button
           type="button"
           size="small"
+          class="shrink-0"
           :label="executeLabel"
           :loading="running"
           :disabled="running || status !== 'open'"
@@ -332,9 +428,11 @@ onUnmounted(() => {
     </div>
 
     <div
-      class="h-40 shrink-0 border-b border-surface-200 dark:border-surface-800"
+      data-test="query-editor-pane"
+      class="max-h-[70%] shrink-0 overflow-hidden"
+      :style="{ height: `${editorHeight}px` }"
     >
-      <SkeletonList v-if="editorLoading" :rows="4" />
+      <SkeletonList v-if="editorLoading" :rows="3" />
       <textarea
         v-else-if="useFallback"
         v-model="query"
@@ -348,8 +446,30 @@ onUnmounted(() => {
     </div>
 
     <div
+      data-test="query-editor-resizer"
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Resize query editor"
+      title="Drag to resize the editor (double-click to reset)"
+      tabindex="0"
+      :aria-valuemin="MIN_EDITOR_HEIGHT"
+      :aria-valuemax="MAX_EDITOR_HEIGHT"
+      :aria-valuenow="editorHeight"
+      class="group relative h-2.5 shrink-0 cursor-row-resize border-y border-surface-200 bg-surface-50 transition-colors hover:bg-primary-500/10 focus-visible:bg-primary-500/15 focus-visible:outline-none dark:border-surface-800 dark:bg-surface-900"
+      :class="{ 'bg-primary-500/10 dark:bg-primary-500/10': resizing }"
+      @pointerdown="startResize"
+      @dblclick="resetEditorHeight"
+      @keydown="onResizeKeydown"
+    >
+      <span
+        class="pointer-events-none absolute top-1/2 left-1/2 h-0.5 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full bg-surface-300 transition-colors group-hover:bg-primary-500/70 group-focus-visible:bg-primary-500/70 dark:bg-surface-700"
+        :class="{ 'bg-primary-500/80 dark:bg-primary-500/80': resizing }"
+      />
+    </div>
+
+    <div
       v-if="history.length"
-      class="border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+      class="max-h-16 overflow-y-auto border-b border-surface-200 px-3 py-2 dark:border-surface-800"
     >
       <div class="flex flex-wrap gap-2">
         <Button
@@ -367,35 +487,36 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <div
+      v-if="results"
+      data-test="query-result-toolbar"
+      class="flex shrink-0 items-center gap-2 border-b border-surface-200 px-3 py-2 text-xs text-surface-500 dark:border-surface-800"
+    >
+      <template v-if="canExport && results.rows.length">
+        <Button
+          type="button"
+          text
+          size="small"
+          label="Export"
+          title="Export results"
+          aria-haspopup="true"
+          data-test="query-export-button"
+          @click="exportMenu?.toggle($event)"
+        />
+        <Menu ref="exportMenu" :model="exportItems" popup />
+      </template>
+      <span>
+        {{
+          results.commandTag ||
+          `${results.rowCount ?? results.rows.length} rows`
+        }}
+        <span v-if="results.elapsedMs != null">
+          · {{ results.elapsedMs }} ms</span
+        >
+      </span>
+    </div>
+
     <div class="min-h-0 flex-1 overflow-auto">
-      <div
-        v-if="results"
-        data-test="query-result-toolbar"
-        class="flex items-center gap-2 border-b border-surface-200 px-3 py-2 text-xs text-surface-500 dark:border-surface-800"
-      >
-        <template v-if="canExport && results.rows.length">
-          <Button
-            type="button"
-            text
-            size="small"
-            label="Export"
-            title="Export results"
-            aria-haspopup="true"
-            data-test="query-export-button"
-            @click="exportMenu?.toggle($event)"
-          />
-          <Menu ref="exportMenu" :model="exportItems" popup />
-        </template>
-        <span>
-          {{
-            results.commandTag ||
-            `${results.rowCount ?? results.rows.length} rows`
-          }}
-          <span v-if="results.elapsedMs != null">
-            · {{ results.elapsedMs }} ms</span
-          >
-        </span>
-      </div>
       <table v-if="results" class="w-full border-collapse text-xs">
         <thead class="sticky top-0 bg-surface-50 dark:bg-surface-900">
           <tr>
@@ -420,7 +541,12 @@ onUnmounted(() => {
               :key="j"
               class="px-3 py-1 text-surface-700 dark:text-surface-200"
             >
-              {{ cell === null || cell === undefined ? "NULL" : cell }}
+              <span
+                class="block max-w-96 truncate"
+                :title="cell == null ? 'NULL' : String(cell)"
+              >
+                {{ cell === null || cell === undefined ? "NULL" : cell }}
+              </span>
             </td>
           </tr>
         </tbody>

@@ -4,16 +4,38 @@ import type {
 } from "@/types/projection";
 import { ColumnEditor, ColumnType } from "@/types/projection";
 
-export function fullCellText(value: unknown): string {
-  if (value === undefined || value === null || value === "") return "—";
-  if (typeof value === "object") {
-    try {
-      return JSON.stringify(value, null, 2);
-    } catch {
-      return String(value);
-    }
+export function stableStringify(value: unknown): string {
+  if (!value || typeof value !== "object")
+    return JSON.stringify(value) ?? "undefined";
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+    .join(",")}}`;
+}
+
+function isBlank(value: unknown): boolean {
+  return value === undefined || value === null || value === "";
+}
+
+function serialize(value: unknown): string {
+  if (typeof value !== "object") return String(value);
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
   }
-  return String(value);
+}
+
+export function fullCellText(value: unknown): string {
+  return isBlank(value) ? "—" : serialize(value);
+}
+
+// NULL must open as an empty document, otherwise the display placeholder is what
+// gets parsed and the caller's "blank means NULL" branch is unreachable.
+export function jsonEditorText(value: unknown): string {
+  return isBlank(value) ? "" : serialize(value);
 }
 
 export function structuredSummary(value: unknown): string {
@@ -87,5 +109,5 @@ export function defaultColumnType(
 export function cellValueEquals(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
   if (!isStructuredValue(a) || !isStructuredValue(b)) return false;
-  return fullCellText(a) === fullCellText(b);
+  return stableStringify(a) === stableStringify(b);
 }

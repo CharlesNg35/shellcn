@@ -46,8 +46,8 @@ const aiModeChoices = [
       to enable the assistant for connections.
     </p>
     <template v-else>
-      <div class="flex items-center justify-between gap-3">
-        <span class="text-sm text-surface-700 dark:text-surface-200"
+      <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <span class="min-w-0 text-sm text-surface-700 dark:text-surface-200"
           >Assistant access</span
         >
         <div class="w-44 shrink-0">

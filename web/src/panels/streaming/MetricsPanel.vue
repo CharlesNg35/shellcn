@@ -17,6 +17,7 @@ import StatCard from "./metrics/StatCard.vue";
 import GaugeChart from "./metrics/GaugeChart.vue";
 import SeriesChart from "./metrics/SeriesChart.vue";
 import UsageRows from "./metrics/UsageRows.vue";
+import { opsStatGrid } from "@/primevue/preset";
 
 const props = defineProps<PanelProps>();
 const cfg = computed(
@@ -134,10 +135,7 @@ async function onReconnect(): Promise<void> {
       <PanelLoader
         v-if="hasMetrics && !receivedSample && !availabilityMessage"
       />
-      <div
-        v-if="stats.length && receivedSample"
-        class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-      >
+      <div v-if="stats.length && receivedSample" :class="opsStatGrid">
         <StatCard
           v-for="s in stats"
           :key="s.key"
@@ -148,7 +146,7 @@ async function onReconnect(): Promise<void> {
       </div>
       <div
         v-if="visibleGauges.length && !availabilityMessage && receivedSample"
-        class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        class="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3"
       >
         <GaugeChart
           v-for="(g, i) in visibleGauges"

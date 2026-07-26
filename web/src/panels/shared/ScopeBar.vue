@@ -250,8 +250,12 @@ onUnmounted(stopWatches);
 </script>
 
 <template>
-  <div class="flex items-center gap-2">
-    <div v-for="f in scope" :key="f.param" class="flex items-center gap-1.5">
+  <div class="flex min-w-0 flex-1 items-center gap-2">
+    <div
+      v-for="f in scope"
+      :key="f.param"
+      class="flex min-w-0 items-center gap-1.5"
+    >
       <AppIcon
         v-if="f.icon"
         :icon="f.icon"
@@ -271,7 +275,7 @@ onUnmounted(stopWatches);
         />
       </label>
 
-      <div v-else class="w-52">
+      <div v-else class="w-52 max-w-full min-w-0 shrink">
         <InputText
           v-if="f.control === ScopeControl.Search"
           :model-value="value(f)"

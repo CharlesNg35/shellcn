@@ -99,7 +99,9 @@ const uploadTitle = computed(() =>
 </script>
 
 <template>
-  <div class="border-b border-surface-200 px-3 py-2 dark:border-surface-800">
+  <div
+    class="@container shrink-0 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+  >
     <div class="flex min-h-8 flex-wrap items-center gap-2">
       <FileUpload
         v-if="canUpload"
@@ -186,7 +188,7 @@ const uploadTitle = computed(() =>
       </Button>
 
       <div class="ml-auto flex flex-wrap items-center gap-2">
-        <IconField :class="[searchFieldClass, 'w-44 sm:w-56']">
+        <IconField :class="[searchFieldClass, 'w-44 @sm:w-56']">
           <InputIcon :class="[searchIconLeftClass, 'left-2.5']">
             <AppIcon :icon="{ type: 'lucide', value: 'search' }" :size="14" />
           </InputIcon>
@@ -216,7 +218,7 @@ const uploadTitle = computed(() =>
         </IconField>
 
         <div class="flex items-center gap-1">
-          <div class="w-32">
+          <div class="w-32 @sm:w-40">
             <Select
               v-model="sortKey"
               size="small"

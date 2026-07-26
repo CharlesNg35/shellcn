@@ -38,7 +38,7 @@ const preview = computed(() => {
         >
           {{ name }}:
         </span>
-        <span class="text-surface-400">{{ preview }}</span>
+        <span class="break-words text-surface-400">{{ preview }}</span>
       </summary>
       <div
         class="ml-4 border-l border-surface-200 pl-3 dark:border-surface-800"
@@ -59,7 +59,7 @@ const preview = computed(() => {
       >
         {{ name }}:
       </span>
-      <span>{{ preview }}</span>
+      <span class="break-words">{{ preview }}</span>
     </div>
   </div>
 </template>

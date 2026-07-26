@@ -30,7 +30,7 @@ defineEmits<{
     @update:visible="$emit('update:visible', $event)"
   >
     <div
-      class="h-[52vh] min-h-80 overflow-hidden rounded-md border border-surface-200 dark:border-surface-800"
+      class="h-[52vh] min-h-48 overflow-hidden rounded-md border border-surface-200 dark:border-surface-800"
     >
       <CodeTextEditor
         :value="text"

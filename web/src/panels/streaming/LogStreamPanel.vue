@@ -125,10 +125,10 @@ onActivated(() => void nextTick(scrollToBottom));
       @reconnect="onReconnect"
     />
     <div
-      class="flex items-center gap-2 border-b border-surface-200 bg-surface-0 px-3 py-2 dark:border-surface-800 dark:bg-surface-950"
+      class="flex flex-wrap items-center gap-2 border-b border-surface-200 bg-surface-0 px-3 py-2 dark:border-surface-800 dark:bg-surface-950"
     >
       <template v-for="ctrl in controls" :key="ctrl.param">
-        <div v-if="controlVisible(ctrl.param)" class="w-36 shrink-0">
+        <div v-if="controlVisible(ctrl.param)" class="w-36 max-w-full min-w-0">
           <Select
             v-model="controlValues[ctrl.param]"
             :options="controlOptions[ctrl.param] ?? []"
@@ -206,7 +206,7 @@ onActivated(() => void nextTick(scrollToBottom));
       <div
         v-for="(line, i) in visibleLines"
         :key="i"
-        :class="wrap ? 'whitespace-pre-wrap' : 'whitespace-pre'"
+        :class="wrap ? 'wrap-anywhere whitespace-pre-wrap' : 'whitespace-pre'"
       >
         {{ line }}
       </div>

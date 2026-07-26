@@ -21,11 +21,13 @@ const props = defineProps<{
   disabled: boolean;
   dragging?: boolean;
   droppedId?: string;
+  collapsed?: boolean;
 }>();
 
 const emit = defineEmits<{
   "update:modelValue": [items: ConnectionTreeItem[]];
   "toggle-folder": [folderId: string];
+  "reveal-folder": [folderId: string];
   "menu-action": [action: ConnectionFolderMenuAction];
   "drag-start": [];
   "drag-end": [droppedId?: string];
@@ -66,7 +68,7 @@ const menuItems = computed(() => [
 // Folders live only at the root level: a folder may never be dropped inside
 // another folder, so the tree stays exactly two deep (folder → connections).
 function onMove(evt: { dragged?: HTMLElement; to?: HTMLElement }): boolean {
-  if (props.disabled) return false; // never reorder a filtered view
+  if (props.disabled || props.collapsed) return false; // never reorder a filtered or rail view
   const draggingFolder = evt.dragged?.hasAttribute("data-folder-id") ?? false;
   const intoFolder = Boolean(evt.to?.closest("[data-folder-id]"));
   return !(draggingFolder && intoFolder);
@@ -116,7 +118,7 @@ function onEnd(event: unknown): void {
       v-model="items"
       group="sidebar-items"
       handle=".connection-sidebar-drag-item"
-      :disabled="disabled"
+      :disabled="disabled || Boolean(collapsed)"
       :on-move="onMove"
       :animation="150"
       chosen-class="connection-sidebar-sortable-chosen"
@@ -136,11 +138,39 @@ function onEnd(event: unknown): void {
           :active="activeId === item.connection.id"
           :dragging="dragging"
           :highlighted="item.connection.id === droppedId"
+          :collapsed="collapsed"
           @open="emit('open', $event)"
         />
 
         <section v-else class="min-w-0" :data-folder-id="item.id">
           <div
+            v-if="collapsed"
+            class="connection-sidebar-drag-item mx-auto flex h-10 w-10 items-center justify-center rounded-md"
+            :data-folder-row-id="item.id"
+          >
+            <button
+              type="button"
+              class="relative flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+              :class="folderIconClass(item)"
+              v-tooltip.right="
+                `${item.name} · ${totalConnections(item)} connections`
+              "
+              :aria-label="`Open folder ${item.name}`"
+              @click="emit('reveal-folder', item.id)"
+            >
+              <AppIcon :icon="{ type: 'lucide', value: 'folder' }" :size="16" />
+              <span
+                v-if="totalConnections(item)"
+                class="absolute -right-0.5 -bottom-0.5 min-w-4 rounded-full bg-surface-200 px-1 text-center text-[10px] leading-4 font-medium text-surface-600 dark:bg-surface-700 dark:text-surface-200"
+                aria-hidden="true"
+              >
+                {{ totalConnections(item) }}
+              </span>
+            </button>
+          </div>
+
+          <div
+            v-else
             class="connection-sidebar-drag-item group mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-sm transition-colors"
             :data-folder-row-id="item.id"
             :class="[
@@ -201,15 +231,17 @@ function onEnd(event: unknown): void {
           </div>
 
           <ConnectionFolderBranch
-            v-show="isExpanded(item)"
+            v-show="!collapsed && isExpanded(item)"
             v-model="item.children"
             :active-id="activeId"
             :expanded="expanded"
             :disabled="disabled"
             :dragging="dragging"
             :dropped-id="droppedId"
+            :collapsed="collapsed"
             class="mt-1 pl-4"
             @toggle-folder="emit('toggle-folder', $event)"
+            @reveal-folder="emit('reveal-folder', $event)"
             @menu-action="emit('menu-action', $event)"
             @drag-start="emit('drag-start')"
             @drag-end="emit('drag-end', $event)"
