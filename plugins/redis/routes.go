@@ -75,6 +75,23 @@ func (e confirmationError) Error() string { return e.message }
 
 const databaseScopeParam = "database"
 
+const (
+	// maxKeysPerPage is the hard ceiling on the per-page key target, independent of
+	// the configured scan count or a client-supplied limit. Because whole SCAN
+	// batches are consumed (see scanKeyPage), a page may return up to one batch
+	// beyond this, never an unbounded slice of the keyspace.
+	maxKeysPerPage = plugin.MaxPageLimit
+	// maxScanBatchesPerPage bounds the SCAN round trips one page may issue. A
+	// selective pattern over a large keyspace can otherwise walk the whole keyspace
+	// inside a single request before it collects a full page; the returned cursor
+	// lets the caller resume instead.
+	maxScanBatchesPerPage = 10
+)
+
+// keyScanner performs one SCAN round trip. listKeys binds it to the scoped client;
+// tests bind it to a fake keyspace.
+type keyScanner func(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error)
+
 func routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "redis.overview", Method: plugin.MethodGet, Path: "/overview", Permission: "redis.read", Risk: plugin.RiskSafe, AuditEvent: "redis.overview", Handle: overview},
@@ -289,45 +306,20 @@ func listKeys(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	pattern := req.Search()
-	if pattern == "" {
-		pattern = sr.session.opts.KeyPattern
-	}
-	if !strings.ContainsAny(pattern, "*?[") {
-		pattern = "*" + pattern + "*"
-	}
+	pattern := keyScanPattern(req.Search(), sr.session.opts.KeyPattern)
 	cursor, err := scanCursor(req.Cursor)
 	if err != nil {
 		return nil, err
 	}
-	limit := req.Limit
-	if limit <= 0 || limit > sr.session.opts.ScanCount {
-		limit = sr.session.opts.ScanCount
-	}
+	limit := keyPageLimit(req.Limit, sr.session.opts.ScanCount)
 	ctx, cancel := commandContext(rc.Ctx, sr.session)
 	defer cancel()
-	keys := make([]string, 0, limit)
-	seen := make(map[string]bool, limit)
-	next := cursor
-	// Consume whole SCAN batches: the returned cursor advances past the entire
-	// batch, so dropping part of one to honor the limit would skip those keys on
-	// the next page. A batch may push the page slightly over the requested limit.
-	for {
-		batch, nextCursor, err := sr.client.Scan(ctx, next, pattern, int64(limit)).Result()
-		if err != nil {
-			return nil, redisErr(err)
-		}
-		next = nextCursor
-		for _, key := range batch {
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			keys = append(keys, key)
-		}
-		if next == 0 || len(keys) >= limit {
-			break
-		}
+	scan := func(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error) {
+		return sr.client.Scan(ctx, cursor, match, count).Result()
+	}
+	keys, next, err := scanKeyPage(ctx, scan, cursor, pattern, limit)
+	if err != nil {
+		return nil, err
 	}
 	items, err := keyEntries(ctx, sr.client, keys)
 	if err != nil {
@@ -341,12 +333,81 @@ func listKeys(rc *plugin.RequestContext) (any, error) {
 	return plugin.Page[keyEntry]{Items: items, NextCursor: nextCursor}, nil
 }
 
+// keyScanPattern resolves the server-side SCAN MATCH pattern. A bare search term
+// becomes a substring glob so filtering stays in Redis instead of the browser.
+func keyScanPattern(search, configured string) string {
+	pattern := strings.TrimSpace(search)
+	if pattern == "" {
+		pattern = strings.TrimSpace(configured)
+	}
+	if pattern == "" {
+		return "*"
+	}
+	if !strings.ContainsAny(pattern, "*?[") {
+		pattern = "*" + pattern + "*"
+	}
+	return pattern
+}
+
+// keyPageLimit clamps the per-page key count to the configured scan count and to
+// maxKeysPerPage, so no request can ask the key browser for an unbounded page.
+func keyPageLimit(requested, scanCount int) int {
+	limit := requested
+	if limit <= 0 {
+		limit = defaultScanCount
+	}
+	if scanCount > 0 && limit > scanCount {
+		limit = scanCount
+	}
+	if limit > maxKeysPerPage {
+		limit = maxKeysPerPage
+	}
+	if limit <= 0 {
+		limit = defaultScanCount
+	}
+	return limit
+}
+
+// scanKeyPage collects one bounded page of keys. It stops at the first of: the
+// cursor completing a full pass, the page reaching limit keys, or
+// maxScanBatchesPerPage SCAN round trips. The last condition is what keeps a
+// selective pattern over a huge keyspace from traversing everything in a single
+// request: the page comes back short (possibly empty) with a non-zero cursor and
+// the caller resumes from there.
+//
+// Whole batches are consumed because the cursor SCAN returns advances past the
+// entire batch, so dropping part of one to honor the limit would lose those keys.
+// A batch may therefore push the page slightly over limit.
+func scanKeyPage(ctx context.Context, scan keyScanner, cursor uint64, pattern string, limit int) ([]string, uint64, error) {
+	keys := make([]string, 0, limit)
+	seen := make(map[string]struct{}, limit)
+	next := cursor
+	for batch := 0; batch < maxScanBatchesPerPage; batch++ {
+		found, nextCursor, err := scan(ctx, next, pattern, int64(limit))
+		if err != nil {
+			return nil, 0, redisErr(err)
+		}
+		next = nextCursor
+		for _, key := range found {
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			keys = append(keys, key)
+		}
+		if next == 0 || len(keys) >= limit {
+			break
+		}
+	}
+	return keys, next, nil
+}
+
 // keyEntries resolves type, TTL, and size for a batch of keys using two pipelined
 // round trips (type+TTL, then size) instead of three sequential calls per key,
 // which keeps large key scans responsive.
 func keyEntries(ctx context.Context, client *redisclient.Client, keys []string) ([]keyEntry, error) {
 	if len(keys) == 0 {
-		return nil, nil
+		return []keyEntry{}, nil
 	}
 	metaPipe := client.Pipeline()
 	typeCmds := make([]*redisclient.StatusCmd, len(keys))

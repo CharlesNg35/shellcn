@@ -526,6 +526,14 @@ export const primeVuePassthrough = {
     nodeChildren: "pl-3",
   },
 
+  // The content element is styled in style.css: VirtualScroller exposes its class
+  // through the content slot rather than the pass-through preset.
+  virtualscroller: {
+    root: "thin-scrollbar relative overflow-auto",
+    spacer:
+      "pointer-events-none absolute top-0 left-0 h-px w-px origin-top-left",
+  },
+
   timeline: {
     root: "flex flex-col",
     event: "flex min-h-16",

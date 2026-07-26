@@ -409,7 +409,7 @@ describe("specialized panels", () => {
     expect(w.find(".shellcn-codemirror-host").exists()).toBe(true);
   });
 
-  it("scans every page and groups keys into a namespace tree", async () => {
+  it("pages on demand and groups keys into a namespace tree", async () => {
     vi.unstubAllGlobals();
     const cursors: string[] = [];
     installFetch((url) => {
@@ -452,11 +452,19 @@ describe("specialized panels", () => {
     });
     await flushPromises();
 
-    // Progressive scan followed the page cursor across both pages.
-    expect(cursors).toContain("");
-    expect(cursors).toContain("c1");
-    // A configured delimiter defaults to the tree view; every scanned key counts.
-    expect(w.findComponent({ name: "Tree" }).exists()).toBe(true);
+    // Only the first page is fetched; the cursor is never followed on its own.
+    expect(cursors).toEqual([""]);
+    expect(w.text()).toContain("Showing 2 keys (+more)");
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Load more"))!
+      .trigger("click");
+    await flushPromises();
+
+    // A configured delimiter defaults to the tree view; every loaded key counts.
+    expect(cursors).toEqual(["", "c1"]);
+    expect(w.findComponent({ name: "VirtualScroller" }).exists()).toBe(true);
     expect(w.text()).toContain("4 keys");
     // Namespaces become folders; unqualified keys stay at the root.
     expect(w.text()).toContain("user");

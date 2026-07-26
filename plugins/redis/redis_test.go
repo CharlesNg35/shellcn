@@ -3,6 +3,8 @@ package redis
 import (
 	"context"
 	"errors"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -313,5 +315,191 @@ func TestValueParsers(t *testing.T) {
 	zs, err := zsetValue(`[{"member":"a","score":1.5},{"member":"b","score":2}]`)
 	if err != nil || len(zs) != 2 || zs[0].Member != "a" || zs[0].Score != 1.5 {
 		t.Fatalf("unexpected zset parse: %#v %v", zs, err)
+	}
+}
+
+type fakeKeyspace struct {
+	keys  []string
+	batch int
+	calls int
+	err   error
+}
+
+func (f *fakeKeyspace) scan(_ context.Context, cursor uint64, match string, _ int64) ([]string, uint64, error) {
+	f.calls++
+	if f.err != nil {
+		return nil, 0, f.err
+	}
+	start := int(cursor)
+	end := min(start+f.batch, len(f.keys))
+	found := make([]string, 0, end-start)
+	for _, key := range f.keys[start:end] {
+		if matchesGlob(match, key) {
+			found = append(found, key)
+		}
+	}
+	if end >= len(f.keys) {
+		return found, 0, nil
+	}
+	return found, uint64(end), nil
+}
+
+// matchesGlob covers the subset of Redis MATCH globs the tests rely on.
+func matchesGlob(pattern, key string) bool {
+	switch {
+	case pattern == "" || pattern == "*":
+		return true
+	case strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") && len(pattern) > 1:
+		return strings.Contains(key, strings.Trim(pattern, "*"))
+	case strings.HasSuffix(pattern, "*"):
+		return strings.HasPrefix(key, strings.TrimSuffix(pattern, "*"))
+	default:
+		return pattern == key
+	}
+}
+
+func generatedKeys(n int, prefix string) []string {
+	keys := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		keys = append(keys, prefix+strconv.Itoa(i))
+	}
+	return keys
+}
+
+func TestScanKeyPageStopsAtBatchCapOnSelectivePattern(t *testing.T) {
+	// A pattern that matches nothing must not walk the whole keyspace in one page.
+	ks := &fakeKeyspace{keys: generatedKeys(100_000, "session:"), batch: 200}
+	keys, next, err := scanKeyPage(context.Background(), ks.scan, 0, "*nomatch*", 200)
+	if err != nil {
+		t.Fatalf("scan page: %v", err)
+	}
+	if len(keys) != 0 {
+		t.Fatalf("expected no matches, got %d", len(keys))
+	}
+	if ks.calls != maxScanBatchesPerPage {
+		t.Fatalf("scan round trips = %d, want the %d batch cap", ks.calls, maxScanBatchesPerPage)
+	}
+	if next == 0 {
+		t.Fatal("a short page must return a resume cursor instead of finishing the keyspace")
+	}
+	if want := uint64(maxScanBatchesPerPage * ks.batch); next != want {
+		t.Fatalf("resume cursor = %d, want %d", next, want)
+	}
+}
+
+func TestScanKeyPageResumesFromCursorAndTerminates(t *testing.T) {
+	total := 100_000
+	ks := &fakeKeyspace{keys: generatedKeys(total, "session:"), batch: 200}
+	pages, seen := 0, 0
+	cursor := uint64(0)
+	for {
+		keys, next, err := scanKeyPage(context.Background(), ks.scan, cursor, "*nomatch*", 200)
+		if err != nil {
+			t.Fatalf("scan page: %v", err)
+		}
+		seen += len(keys)
+		pages++
+		if next == 0 {
+			break
+		}
+		if next <= cursor {
+			t.Fatalf("cursor did not advance: %d -> %d", cursor, next)
+		}
+		cursor = next
+		if pages > total {
+			t.Fatal("paging did not terminate")
+		}
+	}
+	if seen != 0 {
+		t.Fatalf("selective pattern matched %d keys, want 0", seen)
+	}
+	if want := total / (ks.batch * maxScanBatchesPerPage); pages != want {
+		t.Fatalf("pages = %d, want %d", pages, want)
+	}
+}
+
+func TestScanKeyPageStopsAtLimit(t *testing.T) {
+	ks := &fakeKeyspace{keys: generatedKeys(10_000, "user:"), batch: 50}
+	keys, next, err := scanKeyPage(context.Background(), ks.scan, 0, "*", 200)
+	if err != nil {
+		t.Fatalf("scan page: %v", err)
+	}
+	if len(keys) < 200 {
+		t.Fatalf("page returned %d keys, want at least the 200 limit", len(keys))
+	}
+	if len(keys) > 200+ks.batch {
+		t.Fatalf("page returned %d keys, overshoot must stay within one batch of the limit", len(keys))
+	}
+	if ks.calls > maxScanBatchesPerPage {
+		t.Fatalf("scan round trips = %d, want at most %d", ks.calls, maxScanBatchesPerPage)
+	}
+	if next == 0 {
+		t.Fatal("a truncated page must return a resume cursor")
+	}
+}
+
+func TestScanKeyPageFinishesSmallKeyspaceInOneCall(t *testing.T) {
+	ks := &fakeKeyspace{keys: generatedKeys(12, "user:"), batch: 200}
+	keys, next, err := scanKeyPage(context.Background(), ks.scan, 0, "*", 200)
+	if err != nil {
+		t.Fatalf("scan page: %v", err)
+	}
+	if len(keys) != 12 || next != 0 || ks.calls != 1 {
+		t.Fatalf("small keyspace: keys=%d next=%d calls=%d", len(keys), next, ks.calls)
+	}
+}
+
+func TestScanKeyPageDedupesRepeatedKeys(t *testing.T) {
+	ks := &fakeKeyspace{keys: []string{"a", "b", "a", "b", "c"}, batch: 2}
+	keys, next, err := scanKeyPage(context.Background(), ks.scan, 0, "*", 200)
+	if err != nil {
+		t.Fatalf("scan page: %v", err)
+	}
+	if next != 0 {
+		t.Fatalf("next cursor = %d, want 0", next)
+	}
+	if len(keys) != 3 {
+		t.Fatalf("keys = %#v, want deduped a/b/c", keys)
+	}
+}
+
+func TestScanKeyPageWrapsScanErrors(t *testing.T) {
+	ks := &fakeKeyspace{keys: generatedKeys(10, "user:"), batch: 5, err: errors.New("connection reset")}
+	if _, _, err := scanKeyPage(context.Background(), ks.scan, 0, "*", 200); !errors.Is(err, plugin.ErrUnavailable) {
+		t.Fatalf("scan error = %v, want plugin.ErrUnavailable", err)
+	}
+}
+
+func TestKeyPageLimitStaysBounded(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		requested int
+		scanCount int
+		want      int
+	}{
+		{"defaults when unset", 0, 0, defaultScanCount},
+		{"clamps to scan count", 500, 200, 200},
+		{"honors smaller request", 50, 200, 50},
+		{"negative falls back", -10, 200, 200},
+		{"hard ceiling beats scan count", plugin.MaxPageLimit * 4, plugin.MaxPageLimit * 4, maxKeysPerPage},
+	} {
+		if got := keyPageLimit(tc.requested, tc.scanCount); got != tc.want {
+			t.Fatalf("%s: keyPageLimit(%d, %d) = %d, want %d", tc.name, tc.requested, tc.scanCount, got, tc.want)
+		}
+	}
+}
+
+func TestKeyScanPatternFiltersServerSide(t *testing.T) {
+	for _, tc := range []struct{ search, configured, want string }{
+		{"", "", "*"},
+		{"", "app:*", "app:*"},
+		{"user", "app:*", "*user*"},
+		{"user:*", "app:*", "user:*"},
+		{"  session  ", "", "*session*"},
+		{"cache:?", "", "cache:?"},
+	} {
+		if got := keyScanPattern(tc.search, tc.configured); got != tc.want {
+			t.Fatalf("keyScanPattern(%q, %q) = %q, want %q", tc.search, tc.configured, got, tc.want)
+		}
 	}
 }

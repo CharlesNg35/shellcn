@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -84,6 +85,72 @@ func TestRedisPluginIntegration(t *testing.T) {
 	}
 	if n, err := s.client.Exists(ctx, "shellcn:written").Result(); err != nil || n != 0 {
 		t.Fatalf("deleted key still present (n=%d, err=%v)", n, err)
+	}
+
+	assertKeyPagingStaysBounded(ctx, t, s)
+}
+
+// assertKeyPagingStaysBounded seeds a keyspace far larger than one page and checks
+// that a selective filter never makes a single request walk the whole keyspace and
+// that following nextCursor still reaches the matching key.
+func assertKeyPagingStaysBounded(ctx context.Context, t *testing.T, s *Session) {
+	t.Helper()
+	const seeded = 20_000
+	pipe := s.client.Pipeline()
+	for i := 0; i < seeded; i++ {
+		pipe.Set(ctx, "bulk:"+strconv.Itoa(i), "v", 0)
+		if (i+1)%1000 == 0 {
+			if _, err := pipe.Exec(ctx); err != nil {
+				t.Fatalf("seed bulk keys: %v", err)
+			}
+		}
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		t.Fatalf("seed bulk keys: %v", err)
+	}
+	if err := s.client.Set(ctx, "bulk:needle:marker", "v", 0).Err(); err != nil {
+		t.Fatalf("seed needle: %v", err)
+	}
+
+	const limit = 100
+	maxItems := limit + s.opts.ScanCount
+	pages, found := 0, false
+	cursor := ""
+	for {
+		query := url.Values{"filter": {"needle"}, "limit": {strconv.Itoa(limit)}}
+		if cursor != "" {
+			query.Set("cursor", cursor)
+		}
+		start := time.Now()
+		result, err := listKeys(plugin.NewRequestContext(ctx, plugin.User{}, s, nil, query, nil))
+		if err != nil {
+			t.Fatalf("list keys page %d: %v", pages, err)
+		}
+		elapsed := time.Since(start)
+		page := result.(plugin.Page[keyEntry])
+		if len(page.Items) > maxItems {
+			t.Fatalf("page %d returned %d keys, want at most %d", pages, len(page.Items), maxItems)
+		}
+		if elapsed > s.opts.Timeout {
+			t.Fatalf("page %d took %s, a bounded page must stay under the command timeout", pages, elapsed)
+		}
+		if hasKey(page, "bulk:needle:marker") {
+			found = true
+		}
+		pages++
+		if page.NextCursor == "" {
+			break
+		}
+		cursor = page.NextCursor
+		if pages > seeded {
+			t.Fatal("key paging did not terminate")
+		}
+	}
+	if pages < 2 {
+		t.Fatalf("selective filter over %d keys finished in %d page(s); scanning is not incremental", seeded, pages)
+	}
+	if !found {
+		t.Fatal("paging to the end never returned the matching key")
 	}
 }
 
