@@ -61,6 +61,51 @@ func TestManifestConfigRoundTrip(t *testing.T) {
 	}
 }
 
+func TestOpenPanelEffectConfigRoundTrip(t *testing.T) {
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "demo",
+		Actions: []plugin.Action{{
+			ID:      "trace",
+			RouteID: "demo.trace",
+			OnSuccess: &plugin.ActionSuccess{Effects: []plugin.ActionEffect{{
+				Type: plugin.ActionEffectOpenPanel,
+				OpenPanel: &plugin.OpenPanelEffect{
+					Open:   plugin.OpenDialog,
+					Panel:  plugin.PanelTimeline,
+					Source: &plugin.DataSource{RouteID: "demo.trace.events"},
+					Config: plugin.TimelineConfig{TimestampField: "time", TitleField: "activity"},
+				},
+			}}},
+		}},
+	}
+
+	data, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var got plugin.Manifest
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	cfg, ok := got.Actions[0].OnSuccess.Effects[0].OpenPanel.Config.(plugin.TimelineConfig)
+	if !ok {
+		t.Fatalf("openPanel effect config lost its type: %T", got.Actions[0].OnSuccess.Effects[0].OpenPanel.Config)
+	}
+	if cfg.TitleField != "activity" {
+		t.Fatalf("openPanel effect config not decoded: %#v", cfg)
+	}
+
+	again, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("re-marshal: %v", err)
+	}
+	if !bytes.Equal(data, again) {
+		t.Fatalf("round-trip not byte-identical:\n %s\n %s", data, again)
+	}
+}
+
 func TestGraphConfigExportableNullDecodesAsDefault(t *testing.T) {
 	var got plugin.Manifest
 	if err := json.Unmarshal([]byte(`{
