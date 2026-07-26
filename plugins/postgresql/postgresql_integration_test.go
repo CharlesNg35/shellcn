@@ -425,8 +425,10 @@ INSERT INTO public.shellcn_paging_small (id, label)
 
 	// The exact count is still reachable, but only when the caller opts in.
 	exact, err := tableRows(plugin.NewRequestContext(ctx, plugin.User{}, s, bigParams,
-		url.Values{"limit": {strconv.Itoa(limit)}, "sort": {"id"},
-			"filter." + sqldb.CountFilterKey: {sqldb.CountExact}}, nil))
+		url.Values{
+			"limit": {strconv.Itoa(limit)}, "sort": {"id"},
+			"filter." + sqldb.CountFilterKey: {sqldb.CountExact},
+		}, nil))
 	if err != nil {
 		t.Fatalf("table rows with exact count: %v", err)
 	}
