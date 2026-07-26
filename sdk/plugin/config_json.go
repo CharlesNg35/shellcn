@@ -1,6 +1,9 @@
 package plugin
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // panelConfigDecoders rebuilds the concrete PanelConfig for a panel type. The
 // type is the discriminator, so the wire form needs no extra tag.
@@ -13,6 +16,7 @@ var panelConfigDecoders = map[PanelType]func(json.RawMessage) (PanelConfig, erro
 	PanelGraph:         func(r json.RawMessage) (PanelConfig, error) { return decode[GraphConfig](r) },
 	PanelTrace:         func(r json.RawMessage) (PanelConfig, error) { return decode[TraceConfig](r) },
 	PanelKV:            func(r json.RawMessage) (PanelConfig, error) { return decode[KVConfig](r) },
+	PanelLogStream:     func(r json.RawMessage) (PanelConfig, error) { return decode[LogStreamConfig](r) },
 	PanelTerminal:      func(r json.RawMessage) (PanelConfig, error) { return decode[TerminalConfig](r) },
 	PanelTerminalGrid:  func(r json.RawMessage) (PanelConfig, error) { return decode[TerminalGridConfig](r) },
 	PanelCodeEditor:    func(r json.RawMessage) (PanelConfig, error) { return decode[CodeEditorConfig](r) },
@@ -44,7 +48,7 @@ func decodePanelConfig(t PanelType, raw json.RawMessage) (PanelConfig, error) {
 	if dec, ok := panelConfigDecoders[t]; ok {
 		return dec(raw)
 	}
-	return nil, nil
+	return nil, fmt.Errorf("panel type %q accepts no config", t)
 }
 
 func (p *Panel) UnmarshalJSON(data []byte) error {
@@ -130,5 +134,23 @@ func (o *OpenPanelEffect) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	o.Config = cfg
+	return nil
+}
+
+// UnmarshalJSON is explicit because SplitPanel embeds Panel: without it the
+// embedded Panel.UnmarshalJSON is promoted and consumes the whole object, so the
+// outer Size/MinSize fields are never decoded.
+func (s *SplitPanel) UnmarshalJSON(data []byte) error {
+	if err := s.Panel.UnmarshalJSON(data); err != nil {
+		return err
+	}
+	var aux struct {
+		Size    int `json:"size,omitempty"`
+		MinSize int `json:"minSize,omitempty"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	s.Size, s.MinSize = aux.Size, aux.MinSize
 	return nil
 }

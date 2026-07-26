@@ -30,14 +30,10 @@ func roundTrip(t *testing.T, m plugin.Manifest) plugin.Manifest {
 	return got
 }
 
-// FINDING 1 — CURRENT (BUGGY) BEHAVIOUR.
-// PanelLogStream has no entry in panelConfigDecoders (config_json.go:7-30) even
-// though LogStreamConfig implements PanelConfig (ui.go:70) and is validated
-// (validate.go:797). A LogStreamConfig passes ValidatePlugin in-process and then
-// decodes to nil on the gateway: the log panel silently loses its container
-// picker and its "previous logs" toggle, with no error.
-// WANT after fix: got.Tabs[0].Config is a plugin.LogStreamConfig with
-// len(Controls) == 1 and AllowPrevious == true.
+// FINDING 1 — REGRESSION.
+// PanelLogStream must decode its LogStreamConfig on the gateway. Before the fix
+// it was the one PanelConfig implementor missing from panelConfigDecoders, so a
+// log panel silently lost its container picker and "previous logs" toggle.
 func TestLogStreamConfigLostOnRoundTrip(t *testing.T) {
 	m := plugin.Manifest{
 		APIVersion: plugin.CurrentAPIVersion,
@@ -66,19 +62,19 @@ func TestLogStreamConfigLostOnRoundTrip(t *testing.T) {
 	}
 
 	got := roundTrip(t, m)
-	if got.Tabs[0].Config != nil {
-		t.Fatalf("log_stream config now decodes as %T — the bug is fixed; flip this test to assert the preserved LogStreamConfig", got.Tabs[0].Config)
+	cfg, ok := got.Tabs[0].Config.(plugin.LogStreamConfig)
+	if !ok {
+		t.Fatalf("log_stream config lost its type: %T", got.Tabs[0].Config)
 	}
-	t.Logf("DEMONSTRATED LOSS: log_stream config %#v was sent on the wire but decoded to nil", m.Tabs[0].Config)
+	if len(cfg.Controls) != 1 || cfg.Controls[0].Param != "container" || !cfg.AllowPrevious {
+		t.Fatalf("log_stream config not preserved: %#v", cfg)
+	}
 }
 
-// FINDING 2 — CURRENT (BUGGY) BEHAVIOUR.
-// SplitPanel (ui.go:310-314) embeds Panel, so Panel's pointer-receiver
-// UnmarshalJSON (config_json.go:50) is promoted to *SplitPanel and
-// encoding/json never populates the outer Size/MinSize fields. Marshal writes
-// them (they are promoted-flattened on the way out), decode drops them, so split
-// layout sizing silently resets to 0 on the gateway.
-// WANT after fix: Panels[0].Size == 70 && Panels[0].MinSize == 30.
+// FINDING 2 — REGRESSION.
+// SplitPanel embeds Panel, whose promoted UnmarshalJSON would otherwise consume
+// the whole object and drop the outer Size/MinSize. The explicit
+// SplitPanel.UnmarshalJSON must preserve them across the gateway boundary.
 func TestSplitPanelSizeLostOnRoundTrip(t *testing.T) {
 	m := plugin.Manifest{
 		APIVersion: plugin.CurrentAPIVersion,
@@ -113,18 +109,16 @@ func TestSplitPanelSizeLostOnRoundTrip(t *testing.T) {
 	if cfg.Panels[0].Key != "editor" || cfg.Panels[0].Type != plugin.PanelQueryEditor {
 		t.Fatalf("embedded Panel lost: %#v", cfg.Panels[0])
 	}
-	if cfg.Panels[0].Size != 0 || cfg.Panels[0].MinSize != 0 {
-		t.Fatalf("SplitPanel size/minSize now decode (size=%d minSize=%d) — the bug is fixed; flip this test to want 70/30",
-			cfg.Panels[0].Size, cfg.Panels[0].MinSize)
+	if cfg.Panels[0].Size != 70 || cfg.Panels[0].MinSize != 30 {
+		t.Fatalf("SplitPanel size/minSize lost: size=%d minSize=%d, want 70/30", cfg.Panels[0].Size, cfg.Panels[0].MinSize)
 	}
-	t.Logf("DEMONSTRATED LOSS: SplitPanel{Size:70,MinSize:30} decoded as Size:%d MinSize:%d", cfg.Panels[0].Size, cfg.Panels[0].MinSize)
 }
 
-// FINDING 3 — CURRENT (BUGGY) BEHAVIOUR.
-// decodePanelConfig (config_json.go:40-48) returns (nil, nil) for any panel type
-// missing from the decoder table, including a typo'd type. A
-// malformed-but-parseable manifest loads with its config silently erased instead
-// of being rejected, and Validate never sees the dropped config.
+// FINDING 3 — REGRESSION.
+// decodePanelConfig now errors on a config for a panel type it cannot decode
+// (unknown/typo'd type, or a config type added without a decoder row), instead of
+// silently erasing it. This is the systemic guard that keeps Finding 1 from
+// recurring quietly.
 func TestUnknownPanelTypeConfigSilentlyDropped(t *testing.T) {
 	var got plugin.Manifest
 	err := json.Unmarshal([]byte(`{
@@ -132,13 +126,9 @@ func TestUnknownPanelTypeConfigSilentlyDropped(t *testing.T) {
 		"Name": "demo",
 		"Tabs": [{"key":"t","panel":"tabel","config":{"columns":[{"key":"id","label":"ID"}]}}]
 	}`), &got)
-	if err != nil {
-		t.Fatalf("unmarshal rejected the unknown panel type — the bug is fixed: %v", err)
+	if err == nil {
+		t.Fatalf("expected an error for a config on an undecodable panel type, got config %#v", got.Tabs[0].Config)
 	}
-	if got.Tabs[0].Config != nil {
-		t.Fatalf("unexpected config: %#v", got.Tabs[0].Config)
-	}
-	t.Logf("DEMONSTRATED LOSS: panel type %q is unknown; its config was dropped with no error", got.Tabs[0].Type)
 }
 
 // FINDING 4 (informational) — Panel.UnmarshalJSON always allocates Variants
@@ -211,6 +201,7 @@ func TestEveryDecodablePanelTypeSurvives(t *testing.T) {
 		{plugin.PanelGraph, plugin.GraphConfig{Layout: plugin.GraphLayoutGrid}},
 		{plugin.PanelTrace, plugin.TraceConfig{ServiceField: "svc"}},
 		{plugin.PanelKV, plugin.KVConfig{KeyParam: "k"}},
+		{plugin.PanelLogStream, plugin.LogStreamConfig{AllowPrevious: true}},
 		{plugin.PanelTerminal, plugin.TerminalConfig{Zoom: true}},
 		{plugin.PanelTerminalGrid, plugin.TerminalGridConfig{MaxPanes: 4}},
 		{plugin.PanelCodeEditor, plugin.CodeEditorConfig{Language: "go"}},
@@ -277,7 +268,7 @@ func TestNestedManifestTreeSurvives(t *testing.T) {
 			Kind: "thing", Title: "Thing",
 			List:    plugin.DataSource{RouteID: "demo.list"},
 			Watch:   &plugin.DataSource{RouteID: "demo.watch", Method: plugin.MethodWS},
-			Columns: []plugin.Column{{Key: "name", Label: "Name", Precision: intPtr(2)}},
+			Columns: []plugin.Column{{Key: "name", Label: "Name", Precision: new(2)}},
 			Actions: plugin.ResourceActions{Toolbar: []string{"a"}, Row: []string{"a"}, Detail: []string{"a"}, Selectable: true},
 			Detail: plugin.DetailView{
 				Header:     plugin.HeaderSpec{Title: "t", Severities: map[string]plugin.Severity{"ok": plugin.SeveritySuccess}},
@@ -366,15 +357,13 @@ func TestNestedManifestTreeSurvives(t *testing.T) {
 	}
 }
 
-func intPtr(v int) *int { return &v }
-
-// FINDING 6 — CURRENT (BUGGY) BEHAVIOUR.
-// Several "kind"-tagged/enum manifest fields are neither validated in-process
-// nor normalized on decode, so a malformed-but-parseable manifest loads clean on
-// the gateway. Proven here: an unknown Panel.Type (whose config is silently
-// dropped by Finding 3), an unknown Rule.Op in a Condition, an unknown
-// Stream.Kind, an unknown Icon.Type, an unknown Column.Type and an unknown
-// Field.Type all survive json.Unmarshal AND plugin.Validate.
+// FINDING 4 — OPEN GAP (demonstration, not yet fixed).
+// Several "kind"-tagged/enum manifest fields are neither validated in-process nor
+// normalized on decode, so a malformed-but-parseable manifest loads clean on the
+// gateway. Proven here on a valid panel (so decode succeeds): an unknown Rule.Op,
+// an unknown Stream.Kind, an unknown Icon.Type, an unknown Column.Type and an
+// unknown Field.Type all survive json.Unmarshal AND plugin.Validate. Left as-is
+// pending a decision on adding enum validation to plugin.Validate.
 func TestMalformedEnumsDecodeAndValidateClean(t *testing.T) {
 	raw := []byte(`{
 		"APIVersion": 1,
@@ -388,7 +377,7 @@ func TestMalformedEnumsDecodeAndValidateClean(t *testing.T) {
 		]}]},
 		"Tabs": [{
 			"key": "t",
-			"panel": "tabel",
+			"panel": "table",
 			"icon": {"type":"not_an_icon_type","value":"x"},
 			"visibleWhen": {"allOf":[{"field":"phase","op":"is_totally_bogus","value":"Running"}]},
 			"config": {"columns":[{"key":"id","label":"ID","type":"not_a_column_type"}]}
@@ -406,9 +395,9 @@ func TestMalformedEnumsDecodeAndValidateClean(t *testing.T) {
 		Stream: func(*plugin.RequestContext, plugin.ClientStream) error { return nil },
 	}}
 	if err := plugin.Validate(m, routes); err != nil {
-		t.Fatalf("Validate now rejects the malformed enums — the gap is closed: %v", err)
+		t.Fatalf("Validate now rejects the malformed enums — the gap is closed, update this test: %v", err)
 	}
-	t.Logf("DEMONSTRATED: unvalidated enums survived decode+Validate: panel=%q icon.type=%q rule.op=%q column.type=%q field.type=%q stream.kind=%q; the table config was also dropped (%v)",
-		m.Tabs[0].Type, m.Tabs[0].Icon.Type, m.Tabs[0].VisibleWhen.AllOf[0].Op,
-		"not_a_column_type", m.Config.Groups[0].Fields[0].Type, m.Streams[0].Kind, m.Tabs[0].Config)
+	t.Logf("DEMONSTRATED gap: unvalidated enums survived decode+Validate: icon.type=%q rule.op=%q field.type=%q stream.kind=%q",
+		m.Tabs[0].Icon.Type, m.Tabs[0].VisibleWhen.AllOf[0].Op,
+		m.Config.Groups[0].Fields[0].Type, m.Streams[0].Kind)
 }
