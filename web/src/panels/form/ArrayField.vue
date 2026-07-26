@@ -61,7 +61,7 @@ function setScalar(index: number, value: unknown): void {
 </script>
 
 <template>
-  <div class="flex min-w-0 flex-col gap-2">
+  <div class="@container flex min-w-0 flex-col gap-2">
     <p v-if="!items.length" class="text-xs text-surface-400">
       No {{ rowLabel.toLowerCase() }}s yet.
     </p>
@@ -69,9 +69,13 @@ function setScalar(index: number, value: unknown): void {
     <div
       v-for="(row, index) in items"
       :key="index"
-      class="flex min-w-0 items-start gap-2 rounded-md border border-surface-200 p-3 motion-safe:transition-colors dark:border-surface-800"
+      class="flex min-w-0 items-start gap-2 rounded-md border border-surface-200 p-2 motion-safe:transition-colors @md:p-3 dark:border-surface-800"
     >
-      <div class="min-w-0 flex-1">
+      <div
+        class="min-w-0 flex-1"
+        role="group"
+        :aria-label="`${rowLabel} ${index + 1}`"
+      >
         <FieldGroup
           v-if="isObjectItem && item"
           :fields="item.fields ?? []"
@@ -88,6 +92,7 @@ function setScalar(index: number, value: unknown): void {
           :connection-id="connectionId"
           :resource="resource"
           :record="record"
+          hide-label
           @update:model-value="(value) => setScalar(index, value)"
         />
       </div>
@@ -95,6 +100,7 @@ function setScalar(index: number, value: unknown): void {
         type="button"
         severity="danger"
         text
+        class="shrink-0"
         :disabled="atMin"
         :aria-label="`Remove ${rowLabel} ${index + 1}`"
         @click="removeAt(index)"
@@ -108,6 +114,7 @@ function setScalar(index: number, value: unknown): void {
         type="button"
         severity="secondary"
         size="small"
+        class="max-w-full whitespace-normal!"
         :disabled="atMax"
         :aria-label="field.addLabel ?? `Add ${rowLabel}`"
         @click="add"

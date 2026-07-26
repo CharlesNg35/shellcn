@@ -1,23 +1,36 @@
 <script setup lang="ts">
-import { computed, nextTick, onActivated, reactive, ref } from "vue";
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onUnmounted,
+  reactive,
+  ref,
+} from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
+import VirtualScroller from "primevue/virtualscroller";
 import { useStream } from "@/composables/useStream";
 import PanelLoader from "@/components/PanelLoader.vue";
 import type { DataSource, LogStreamConfig } from "@/types/projection";
 import type { PanelProps } from "../core/types";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import { useStreamControls } from "../shared/useStreamControls";
+import { useLogBuffer, type LogLine } from "./useLogBuffer";
 
 const props = defineProps<PanelProps>();
 
 const MAX = 1000;
-const lines = ref<string[]>([]);
+// Wrapped lines have no fixed height, so virtualization past this threshold
+// only applies to the single-line mode.
+const VIRTUAL_THRESHOLD = 200;
+const LINE_HEIGHT = 18;
 const follow = ref(true);
 const wrap = ref(true);
 const filterText = ref("");
 const viewport = ref<HTMLElement | null>(null);
+const scroller = ref<InstanceType<typeof VirtualScroller> | null>(null);
 const reconnecting = ref(false);
 
 const cfg = computed(() => props.config as LogStreamConfig | undefined);
@@ -44,10 +57,21 @@ const liveSource = reactive<DataSource>({
 const streamSource = props.source ? liveSource : undefined;
 
 function scrollToBottom(): void {
-  if (viewport.value && follow.value) {
+  if (!follow.value) return;
+  if (virtualized.value) {
+    scroller.value?.scrollToIndex(visibleLines.value.length - 1);
+    return;
+  }
+  if (viewport.value) {
     viewport.value.scrollTop = viewport.value.scrollHeight;
   }
 }
+
+const {
+  lines,
+  append: appendLine,
+  clear: clearLines,
+} = useLogBuffer(MAX, () => void nextTick(scrollToBottom));
 
 function append(frame: string): void {
   let text = frame;
@@ -57,9 +81,7 @@ function append(frame: string): void {
   } catch {
     /* plain text frame */
   }
-  lines.value.push(text);
-  if (lines.value.length > MAX) lines.value.splice(0, lines.value.length - MAX);
-  void nextTick(scrollToBottom);
+  appendLine(text);
 }
 
 const { status, error, reconnect } = useStream(
@@ -89,15 +111,18 @@ function restream(): void {
       previous: previous.value ? "true" : "false",
     };
   }
-  lines.value = [];
+  clearLines();
   void onReconnect();
 }
 
 const visibleLines = computed(() => {
   const q = filterText.value.trim().toLowerCase();
   if (!q) return lines.value;
-  return lines.value.filter((line) => line.toLowerCase().includes(q));
+  return lines.value.filter((line) => line.text.toLowerCase().includes(q));
 });
+const virtualized = computed(
+  () => !wrap.value && visibleLines.value.length > VIRTUAL_THRESHOLD,
+);
 const hasLines = computed(() => lines.value.length > 0);
 const showInitialLoader = computed(
   () => !hasLines.value && status.value === "connecting",
@@ -106,13 +131,32 @@ const emptyText = computed(() =>
   status.value === "open" ? "No log frames yet." : "No log frames received.",
 );
 
-const downloadHref = computed(
-  () =>
-    `data:text/plain;charset=utf-8,${encodeURIComponent(lines.value.join("\n"))}`,
-);
+// Built on demand: serializing the whole buffer on every append would undo the
+// batching. The object URL is released once the download has been handed off.
+let downloadUrl = "";
+function releaseDownload(): void {
+  if (!downloadUrl) return;
+  URL.revokeObjectURL(downloadUrl);
+  downloadUrl = "";
+}
+
+function download(): void {
+  releaseDownload();
+  const blob = new Blob([lines.value.map((line) => line.text).join("\n")], {
+    type: "text/plain;charset=utf-8",
+  });
+  downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = downloadUrl;
+  link.download = "logs.txt";
+  link.rel = "noopener";
+  link.click();
+  setTimeout(releaseDownload, 0);
+}
 
 void loadControls();
 onActivated(() => void nextTick(scrollToBottom));
+onUnmounted(releaseDownload);
 </script>
 
 <template>
@@ -125,10 +169,10 @@ onActivated(() => void nextTick(scrollToBottom));
       @reconnect="onReconnect"
     />
     <div
-      class="flex items-center gap-2 border-b border-surface-200 bg-surface-0 px-3 py-2 dark:border-surface-800 dark:bg-surface-950"
+      class="flex flex-wrap items-center gap-2 border-b border-surface-200 bg-surface-0 px-3 py-2 dark:border-surface-800 dark:bg-surface-950"
     >
       <template v-for="ctrl in controls" :key="ctrl.param">
-        <div v-if="controlVisible(ctrl.param)" class="w-36 shrink-0">
+        <div v-if="controlVisible(ctrl.param)" class="w-36 max-w-full min-w-0">
           <Select
             v-model="controlValues[ctrl.param]"
             :options="controlOptions[ctrl.param] ?? []"
@@ -184,15 +228,14 @@ onActivated(() => void nextTick(scrollToBottom));
           size="small"
           severity="secondary"
           label="Clear"
-          @click="lines = []"
+          @click="clearLines"
         />
         <Button
-          as="a"
+          type="button"
           size="small"
           severity="secondary"
-          :href="downloadHref"
-          download="logs.txt"
           label="Download"
+          @click="download"
         />
       </div>
     </div>
@@ -201,15 +244,32 @@ onActivated(() => void nextTick(scrollToBottom));
       data-test="log-viewport"
       role="log"
       aria-live="polite"
-      class="min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed text-surface-700 dark:text-surface-200"
+      class="min-h-0 flex-1 p-3 font-mono text-xs leading-relaxed text-surface-700 dark:text-surface-200"
+      :class="virtualized ? 'overflow-hidden' : 'overflow-auto'"
     >
-      <div
-        v-for="(line, i) in visibleLines"
-        :key="i"
-        :class="wrap ? 'whitespace-pre-wrap' : 'whitespace-pre'"
+      <VirtualScroller
+        ref="scroller"
+        :items="visibleLines"
+        :item-size="LINE_HEIGHT"
+        :disabled="!virtualized"
+        scroll-height="100%"
+        class="h-full"
       >
-        {{ line }}
-      </div>
+        <template #content="{ items, styleClass, contentRef, contentStyle }">
+          <div :ref="contentRef" :class="styleClass" :style="contentStyle">
+            <div
+              v-for="line in items as LogLine[]"
+              :key="line.id"
+              :class="
+                wrap ? 'wrap-anywhere whitespace-pre-wrap' : 'whitespace-pre'
+              "
+              :style="virtualized ? { height: `${LINE_HEIGHT}px` } : undefined"
+            >
+              {{ line.text }}
+            </div>
+          </div>
+        </template>
+      </VirtualScroller>
       <PanelLoader v-if="showInitialLoader" />
       <div v-else-if="!hasLines" class="text-surface-500">
         {{ emptyText }}

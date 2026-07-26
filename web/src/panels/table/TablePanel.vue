@@ -69,6 +69,8 @@ import {
   isInlineEditor,
   isJsonEditor,
   isStructuredValue,
+  jsonEditorText,
+  stableStringify,
   structuredSummary,
   writableColumns,
 } from "./cellEditing";
@@ -92,6 +94,9 @@ const emit = defineEmits<{
 const toast = useToast();
 const workspace = useWorkspaceStore();
 
+// Envelope keys the panel owns; never renderable as data.
+const INTERNAL = ["_key", "_links", "_id", "__rid"];
+// Tree/projection vocabulary — only ambiguous when columns are inferred from a row.
 const RESERVED = new Set([
   "key",
   "label",
@@ -99,17 +104,42 @@ const RESERVED = new Set([
   "ref",
   "childrenSource",
   "badge",
-  "_key",
-  "_links",
-  "_id",
-  "__rid",
+  ...INTERNAL,
 ]);
+
+// One formatter for every datetime cell; `toLocaleString()` builds a new
+// Intl.DateTimeFormat on each call and these run per cell per render.
+const DATE_FMT = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "numeric",
+  minute: "numeric",
+  second: "numeric",
+});
 
 const RID = "__rid";
 let ridSeq = 0;
+
+// Row identity must survive a refetch: PrimeVue keys every <tr> (and its editing
+// meta) on it, so a fresh sequence number per fetch would remount the whole grid.
+function rowIdentity(row: Row): string | undefined {
+  if (row.ref?.uid) return row.ref.uid;
+  const id = (row as Record<string, unknown>)._id;
+  if (id != null && id !== "") return String(id);
+  if (row._key && Object.keys(row._key).length)
+    return stableStringify(row._key);
+  const cols = tableConfig.value?.rowKey;
+  if (cols?.length && cols.every((c) => row[c] != null))
+    return stableStringify(Object.fromEntries(cols.map((c) => [c, row[c]])));
+  return undefined;
+}
+
 function assignRid(row: Row): void {
   const r = row as Record<string, unknown>;
-  if (!r[RID]) r[RID] = String(++ridSeq);
+  if (r[RID]) return;
+  const identity = rowIdentity(row);
+  r[RID] = identity ? `k:${identity}` : String(++ridSeq);
 }
 function rid(row: Row): string {
   return ((row as Record<string, unknown>)[RID] as string) ?? "";
@@ -117,7 +147,11 @@ function rid(row: Row): string {
 
 const rows = ref<Row[]>([]);
 const total = ref<number | undefined>();
+const hasMore = ref(false);
 const loading = ref(false);
+const refreshing = ref(false);
+const editingCell = ref(false);
+let loadSeq = 0;
 const error = ref<string | null>(null);
 const filterText = ref("");
 const sortField = ref<string | undefined>();
@@ -142,17 +176,6 @@ const tableConfig = computed(
   () => props.config as TablePanelConfig | undefined,
 );
 const columnsSource = computed(() => tableConfig.value?.columnsSource);
-
-function stableStringify(value: unknown): string {
-  if (!value || typeof value !== "object")
-    return JSON.stringify(value) ?? "undefined";
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
-  const record = value as Record<string, unknown>;
-  return `{${Object.keys(record)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
-    .join(",")}}`;
-}
 
 const stateKey = computed(() =>
   [
@@ -207,14 +230,19 @@ function cursorFor(targetFirst: number): string {
   return cursorsByFirst.get(targetFirst) ?? String(targetFirst);
 }
 
+// The paginator advances by pageSize, so that offset must map to this cursor even
+// when the source returned a short page; keep the item-count offset too for
+// sources that page by however many rows they actually produced.
 function rememberNextCursor(targetFirst: number, page: Page<Row>): void {
   if (!page.nextCursor) return;
+  cursorsByFirst.set(targetFirst + pageSize.value, page.nextCursor);
   cursorsByFirst.set(targetFirst + page.items.length, page.nextCursor);
 }
 
 const watchSource = computed(() => tableConfig.value?.watch);
 const dynamicColumns = ref<ColumnSpec[]>([]);
 const columnsLoading = ref(false);
+const columnsLoaded = ref(false);
 const actionIds = computed(() => tableConfig.value?.actionIds ?? []);
 const rowActionIds = computed(() => tableConfig.value?.rowActionIds ?? []);
 const globalActions = computed(() => resolveActions(actionIds.value));
@@ -246,10 +274,21 @@ function runExport(format: ExportFormat): void {
     format,
   );
 }
-const exportItems = [
-  { label: "Export CSV", icon: "pi", command: () => runExport("csv") },
-  { label: "Export JSON", icon: "pi", command: () => runExport("json") },
-];
+const exportRange = computed(() =>
+  rows.value.length
+    ? `rows ${first.value + 1}–${first.value + rows.value.length}`
+    : "rows",
+);
+const exportItems = computed(() => [
+  {
+    label: `Export ${exportRange.value} as CSV`,
+    command: () => runExport("csv"),
+  },
+  {
+    label: `Export ${exportRange.value} as JSON`,
+    command: () => runExport("json"),
+  },
+]);
 
 const insertSource = computed(() => tableConfig.value?.insert);
 const updateSource = computed(() => tableConfig.value?.update);
@@ -271,11 +310,6 @@ function canJsonEditCell(col: ColumnSpec): boolean {
 }
 const selectable = computed(
   () => rowActions.value.length > 0 || tableConfig.value?.selectable === true,
-);
-const selectedRefs = computed(() =>
-  selection.value
-    .map((r) => r.ref)
-    .filter((r): r is ResourceIdentity => Boolean(r)),
 );
 const addRowLoading = computed(
   () => columnsLoading.value || (loading.value && !columns.value.length),
@@ -367,50 +401,73 @@ function insertValues(row: Row): Record<string, unknown> {
   return values;
 }
 
+const UNKEYED = "This row has no key, so it cannot be saved.";
+
+// Each row commits independently: a mid-run failure must leave the rows that did
+// land un-staged, so pressing Commit again never replays an applied mutation.
 async function commitStaged(): Promise<void> {
   committing.value = true;
+  const pending = pendingCount.value;
+  const failures: Error[] = [];
+  let done = 0;
   try {
     for (const row of rows.value) {
       const id = rid(row);
       if (deletedRows.has(id)) continue;
+      let body: RowMutation | undefined;
+      let src: DataSource | undefined;
       if (insertedRows.has(id)) {
-        if (insertSource.value)
-          await mutate(
-            insertSource.value,
-            insertMutation(insertValues(row)),
-            row,
-          );
+        src = insertSource.value;
+        body = insertMutation(insertValues(row));
       } else if (edits.has(id) && updateSource.value) {
         const key = keyFor(row);
-        if (!key) continue;
+        if (!key) {
+          failures.push(new Error(UNKEYED));
+          continue;
+        }
         const values: Record<string, unknown> = {};
         for (const field of edits.get(id)!.keys()) values[field] = row[field];
-        await mutate(updateSource.value, updateMutation(key, values), row);
+        src = updateSource.value;
+        body = updateMutation(key, values);
+      }
+      if (!src || !body) continue;
+      try {
+        await mutate(src, body, row);
+        insertedRows.delete(id);
+        edits.delete(id);
+        done += 1;
+      } catch (err) {
+        failures.push(err as Error);
       }
     }
     for (const row of rows.value) {
       const id = rid(row);
       if (!deletedRows.has(id) || insertedRows.has(id)) continue;
+      if (!deleteSource.value) continue;
       const key = keyFor(row);
-      if (key && deleteSource.value)
+      if (!key) {
+        failures.push(new Error(UNKEYED));
+        continue;
+      }
+      try {
         await mutate(deleteSource.value, deleteMutation(key), row);
+        deletedRows.delete(id);
+        edits.delete(id);
+        done += 1;
+      } catch (err) {
+        failures.push(err as Error);
+      }
     }
-    clearStaging();
+    if (!failures.length) clearStaging();
     toast.add({
-      severity: "success",
-      summary: "Changes committed",
-      life: 3000,
-    });
-    await load(first.value);
-  } catch (err) {
-    toast.add({
-      severity: "error",
-      summary: "Commit failed",
-      detail: (err as Error).message,
-      life: 6000,
+      severity: failures.length ? "warn" : "success",
+      summary: `${done} of ${pending} changes committed`,
+      detail: failures[0]?.message,
+      life: failures.length ? 6000 : 3000,
     });
   } finally {
     committing.value = false;
+    if (!pendingCount.value) await load(first.value);
   }
 }
 
@@ -425,15 +482,24 @@ function discardStaged(): void {
   clearStaging();
 }
 
+// An incomplete key must be null, not a partially-filled object: JSON drops the
+// undefined members and the server would see an unfiltered predicate.
 function keyFor(row: Row): Record<string, unknown> | null {
   const explicit = row._key;
-  if (explicit && typeof explicit === "object") {
+  if (
+    explicit &&
+    typeof explicit === "object" &&
+    Object.keys(explicit).length
+  ) {
     return explicit as Record<string, unknown>;
   }
   const cols = tableConfig.value?.rowKey;
   if (cols?.length) {
     const key: Record<string, unknown> = {};
-    for (const c of cols) key[c] = row[c];
+    for (const c of cols) {
+      if (row[c] === undefined || row[c] === null) return null;
+      key[c] = row[c];
+    }
     return key;
   }
   return null;
@@ -457,14 +523,18 @@ async function mutate(
 async function onCellEditComplete(
   e: DataTableCellEditCompleteEvent,
 ): Promise<void> {
-  const src = updateSource.value;
-  if (!src) return;
-  const data = e.data as Row;
-  const field = e.field;
-  const col = columns.value.find((c) => c.key === field);
-  if (!col || !canInlineEditCell(col)) return;
-  const value = coerceCellValue(col, e.value, e.newValue);
-  await commitCellValue(data, col, e.value, value);
+  try {
+    const src = updateSource.value;
+    if (!src) return;
+    const data = e.data as Row;
+    const field = e.field;
+    const col = columns.value.find((c) => c.key === field);
+    if (!col || !canInlineEditCell(col)) return;
+    const value = coerceCellValue(col, e.value, e.newValue);
+    await commitCellValue(data, col, e.value, value);
+  } finally {
+    editingCell.value = false;
+  }
 }
 
 async function commitCellValue(
@@ -476,6 +546,11 @@ async function commitCellValue(
   const src = updateSource.value;
   if (!src) return false;
   const field = col.key;
+  if (staged.value && insertedRows.has(rid(data))) {
+    // Not persisted yet — the value ships with the insert at commit time.
+    if (!cellValueEquals(value, prev)) data[field] = value;
+    return true;
+  }
   const key = keyFor(data);
   if (!key) {
     data[field] = prev;
@@ -505,7 +580,6 @@ async function commitCellValue(
     });
     return false;
   }
-  await load(first.value);
   return true;
 }
 
@@ -592,10 +666,7 @@ function openInsert(): void {
 async function submitInsert(): Promise<void> {
   const src = insertSource.value;
   if (!src) return;
-  const values: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(insertDraft.value)) {
-    if (v !== "" && v !== undefined && v !== null) values[k] = v;
-  }
+  const values = insertValues(insertDraft.value as Row);
   if (staged.value) {
     const row = { ...values } as Row;
     assignRid(row);
@@ -628,6 +699,14 @@ const hidden = computed(() => {
   return set;
 });
 
+// Declared columns name real data, so only the envelope keys and the manifest's
+// own hiddenColumns may suppress them.
+const userHidden = computed(() => {
+  const set = new Set(INTERNAL);
+  for (const key of tableConfig.value?.hiddenColumns ?? []) set.add(key);
+  return set;
+});
+
 const columns = computed<ColumnSpec[]>(() => {
   if (declaredColumns.value?.length) return declaredColumns.value;
   if (dynamicColumns.value.length) return dynamicColumns.value;
@@ -648,7 +727,7 @@ function dynamicColumnLabel(row: Row, key: string): string {
 
 function dynamicColumn(row: Row): ColumnSpec | null {
   const key = dynamicColumnKey(row);
-  if (!key || hidden.value.has(key)) return null;
+  if (!key || userHidden.value.has(key)) return null;
   const record = row as Record<string, unknown>;
   const rawType = record.columnType ?? record.type;
   const rawEditor = (row as Record<string, unknown>).editor;
@@ -667,9 +746,11 @@ function dynamicColumn(row: Row): ColumnSpec | null {
   };
 }
 
+// The column set belongs to the resource, not to the page: fetch it once per
+// stateKey so paging/sorting/refreshing never blanks or re-requests it.
 async function loadDynamicColumns(): Promise<void> {
-  dynamicColumns.value = [];
   if (declaredColumns.value?.length || !columnsSource.value) return;
+  if (columnsLoading.value || columnsLoaded.value) return;
   columnsLoading.value = true;
   try {
     const page = await fetchPage<Row>(
@@ -681,6 +762,7 @@ async function loadDynamicColumns(): Promise<void> {
     dynamicColumns.value = page.items
       .map(dynamicColumn)
       .filter((col): col is ColumnSpec => Boolean(col));
+    columnsLoaded.value = true;
   } finally {
     columnsLoading.value = false;
   }
@@ -706,7 +788,7 @@ function openJsonEdit(row: Row, col: ColumnSpec): void {
   jsonEdit.value = {
     row,
     col,
-    text: fullCellText(row[col.key] ?? null),
+    text: jsonEditorText(row[col.key]),
     error: null,
     saving: false,
   };
@@ -784,8 +866,10 @@ function display(row: Row, col: ColumnSpec): string {
     return formatNumber(v, col);
   if (col.type === ColumnType.RelativeTime && typeof v === "string")
     return formatRelativeTime(v);
-  if (col.type === ColumnType.DateTime && typeof v === "string")
-    return new Date(v).toLocaleString();
+  if (col.type === ColumnType.DateTime && typeof v === "string") {
+    const at = new Date(v);
+    return Number.isNaN(at.getTime()) ? v : DATE_FMT.format(at);
+  }
   if (isStructuredValue(v)) return structuredSummary(v);
   return String(v);
 }
@@ -827,11 +911,9 @@ function columnWidth(col: ColumnSpec): string {
 function columnStyle(col: ColumnSpec): Record<string, string> {
   const width = columnWidth(col);
   const fixedMinimum = Boolean(col.width) || col.type === ColumnType.Icon;
-  return {
-    minWidth: fixedMinimum ? width : "7.5rem",
-    width,
-    maxWidth: width,
-  };
+  // No maxWidth: it is undefined on table cells and ignored under table-layout:auto.
+  // The cap lives on the cell/header content instead.
+  return { minWidth: fixedMinimum ? width : "7.5rem", width };
 }
 
 function cellClass(row: Row, col: ColumnSpec): string {
@@ -877,7 +959,9 @@ async function load(targetFirst = first.value): Promise<void> {
   error.value = null;
   selection.value = [];
   clearStaging();
+  const seq = ++loadSeq;
   try {
+    await loadDynamicColumns();
     const page = await fetchPage<Row>(
       props.connectionId,
       props.source,
@@ -891,16 +975,17 @@ async function load(targetFirst = first.value): Promise<void> {
           : undefined,
       },
     );
+    if (seq !== loadSeq) return;
     page.items.forEach(assignRid);
     rememberNextCursor(targetFirst, page);
     rows.value = page.items;
-    await loadDynamicColumns();
+    hasMore.value = Boolean(page.nextCursor);
     total.value = page.total;
     first.value = targetFirst;
   } catch (e) {
-    error.value = (e as Error).message;
+    if (seq === loadSeq) error.value = (e as Error).message;
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 }
 
@@ -958,13 +1043,12 @@ function toggleSelection(row: Row): void {
       : [row];
 }
 
-const dataKeyField = computed(() => {
-  if (editable.value || selectable.value) return "__rid";
-  const r = rows.value[0] as (Row & { _id?: unknown }) | undefined;
-  if (r?.ref?.uid) return "ref.uid";
-  if (r?._id != null) return "_id";
-  return "__rid";
-});
+function toggleInSelection(row: Row): void {
+  const id = rid(row);
+  selection.value = selection.value.some((r) => rid(r) === id)
+    ? selection.value.filter((r) => rid(r) !== id)
+    : [...selection.value, row];
+}
 
 function onRowClick(e: DataTableRowClickEvent): void {
   const row = e.data as Row;
@@ -975,10 +1059,10 @@ function onRowClick(e: DataTableRowClickEvent): void {
     target instanceof Element &&
     target.closest('[data-p-selection-column="true"]')
   ) {
-    toggleSelection(row);
+    toggleInSelection(row);
     return;
   }
-  if (editable.value) return; // body reserved for cell editing
+  if (editableCells.value) return; // body reserved for cell editing
   activateRow(row);
 }
 
@@ -1009,19 +1093,24 @@ function onRowKeydown(e: KeyboardEvent, row: Row): void {
   activateRow(row);
 }
 
+const rowPT = new WeakMap<Row, Record<string, unknown>>();
 function bodyRowPT(options: {
   context?: { index?: number };
 }): Record<string, unknown> {
   const row = rows.value[options?.context?.index ?? -1];
-  if (!row || editable.value || !rowClickable(row)) return {};
-  return {
+  if (!row || editableCells.value || !rowClickable(row)) return {};
+  const cached = rowPT.get(row);
+  if (cached) return cached;
+  const pt = {
     tabindex: 0,
     onKeydown: (e: KeyboardEvent) => onRowKeydown(e, row),
   };
+  rowPT.set(row, pt);
+  return pt;
 }
 
 function rowClickable(row: Row): boolean {
-  if (editable.value) return false;
+  if (editableCells.value) return false;
   const mode = rowClickMode.value;
   if (mode) return mode !== RowClickAction.None;
   return navigates(row) || Boolean(row.ref) || selectable.value;
@@ -1120,8 +1209,17 @@ function scheduleWatchRefresh(): void {
   }, 100);
 }
 
+const MAX_PENDING_EVENTS = 500;
+
 function applyEvent(ev: ResourceEvent): void {
   if (pendingCount.value > 0) return; // don't clobber buffered staged edits
+  // rAF is throttled while the document is occluded; fall back to a refetch
+  // rather than letting the socket grow the buffer without bound.
+  if (pendingEvents.length > MAX_PENDING_EVENTS) {
+    pendingEvents = [];
+    scheduleWatchRefresh();
+    return;
+  }
   pendingEvents.push(ev);
   if (flushHandle === undefined)
     flushHandle = requestAnimationFrame(flushEvents);
@@ -1155,14 +1253,21 @@ function flushEvents(): void {
       removed.delete(idx);
       if (ev.resource) next[idx] = { ...next[idx], ...(ev.resource as Row) };
     } else if (additions.has(uid)) {
-      if (ev.resource)
-        additions.set(uid, { ...additions.get(uid)!, ...(ev.resource as Row) });
+      if (ev.resource) {
+        const merged = { ...additions.get(uid)!, ...(ev.resource as Row) };
+        assignRid(merged);
+        additions.set(uid, merged);
+      }
     } else if (type === "added" && ev.resource) {
       // A brand-new row. In a plain view, append it so existing rows keep their
       // place; under a server-side view its page/sort position is unknown, so fall
       // back to a single debounced refetch rather than guessing.
       if (serverView) refetch = true;
-      else additions.set(uid, { ...(ev.resource as Row), ref: ev.ref });
+      else {
+        const added = { ...(ev.resource as Row), ref: ev.ref };
+        assignRid(added);
+        additions.set(uid, added);
+      }
     }
     // A "modified" event for a row not on the current page is ignored — applying it
     // would invent a row that doesn't belong to this view.
@@ -1213,6 +1318,7 @@ onDeactivated(() => {
 
 function canAutoRefresh(): boolean {
   if (!props.source || loading.value || committing.value) return false;
+  if (refreshing.value || editingCell.value) return false;
   if (pendingCount.value > 0) return false;
   if (
     showInsert.value ||
@@ -1236,6 +1342,8 @@ async function refresh(): Promise<void> {
   if (!canAutoRefresh()) return;
   const source = props.source;
   if (!source) return;
+  const seq = ++loadSeq;
+  refreshing.value = true;
   try {
     const page = await fetchPage<Row>(
       props.connectionId,
@@ -1250,17 +1358,21 @@ async function refresh(): Promise<void> {
           : undefined,
       },
     );
+    if (seq !== loadSeq) return;
     page.items.forEach(assignRid);
     rememberNextCursor(first.value, page);
-    const keep = new Set(selectedRefs.value.map((r) => r.uid));
+    const keep = new Set(selection.value.map(rid));
     rows.value = page.items;
-    if (keep.size)
-      selection.value = page.items.filter(
-        (r) => r.ref?.uid && keep.has(r.ref.uid),
-      );
+    selection.value = keep.size
+      ? page.items.filter((r) => keep.has(rid(r)))
+      : [];
+    hasMore.value = Boolean(page.nextCursor);
     total.value = page.total;
+    error.value = null;
   } catch {
     return;
+  } finally {
+    refreshing.value = false;
   }
 }
 
@@ -1312,6 +1424,13 @@ vueWatch(
   () => {
     resetCursors();
     restoreTableState();
+    rows.value = [];
+    total.value = undefined;
+    hasMore.value = false;
+    error.value = null;
+    selection.value = [];
+    dynamicColumns.value = [];
+    columnsLoaded.value = false;
     load(first.value);
     startWatch();
   },
@@ -1352,6 +1471,7 @@ function onFilter(): void {
 
 onUnmounted(() => {
   stopResourceWatch();
+  pendingEvents = [];
   if (debounce) clearTimeout(debounce);
   if (watchRefreshHandle) clearTimeout(watchRefreshHandle);
   if (flushHandle !== undefined) cancelAnimationFrame(flushHandle);
@@ -1361,9 +1481,9 @@ onUnmounted(() => {
 <template>
   <div class="flex h-full flex-col">
     <div
-      class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-surface-200 px-4 py-2 dark:border-surface-800"
+      class="@container flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-surface-200 px-4 py-2 dark:border-surface-800"
     >
-      <div class="min-w-44 flex-1 sm:w-56 sm:flex-none">
+      <div class="min-w-0 flex-1 basis-44 sm:w-56 sm:flex-none">
         <InputText
           v-model="filterText"
           type="search"
@@ -1400,26 +1520,7 @@ onUnmounted(() => {
         :scope="source?.params"
         @done="onActionDone"
       />
-      <div
-        v-if="rowActions.length && selection.length"
-        class="flex min-w-0 flex-wrap items-center gap-2"
-      >
-        <span class="text-xs text-surface-400"
-          >{{ selection.length }} selected</span
-        >
-        <ActionBar
-          :connection-id="connectionId"
-          :actions="rowActions"
-          :resource="
-            selection.length === 1 ? (selection[0]?.ref ?? null) : null
-          "
-          :record="selection.length === 1 ? selection[0] : null"
-          :records="selection"
-          :max-inline="2"
-          @done="onActionDone"
-        />
-      </div>
-      <div class="ml-auto flex shrink-0 items-center gap-2">
+      <div class="ml-auto flex min-w-0 shrink items-center gap-2">
         <Button
           v-if="canExport"
           type="button"
@@ -1431,7 +1532,7 @@ onUnmounted(() => {
           @click="exportMenu?.toggle($event)"
         >
           <AppIcon :icon="{ type: 'lucide', value: 'download' }" :size="14" />
-          Export
+          <span class="@max-md:hidden">Export</span>
         </Button>
         <Menu v-if="canExport" ref="exportMenu" :model="exportItems" popup />
         <Button
@@ -1439,6 +1540,7 @@ onUnmounted(() => {
           size="small"
           :disabled="loading"
           severity="secondary"
+          title="Refresh"
           @click="guardedLoad(first)"
         >
           <AppIcon
@@ -1446,24 +1548,42 @@ onUnmounted(() => {
             :size="14"
             :loading="loading"
           />
-          Refresh
+          <span class="@max-md:hidden">Refresh</span>
         </Button>
       </div>
     </div>
 
     <div
+      v-if="rowActions.length && selection.length"
+      class="flex flex-wrap items-center gap-2 border-b border-surface-200 px-4 py-2 dark:border-surface-800"
+    >
+      <span class="text-xs text-surface-400"
+        >{{ selection.length }} selected</span
+      >
+      <ActionBar
+        :connection-id="connectionId"
+        :actions="rowActions"
+        :resource="selection.length === 1 ? (selection[0]?.ref ?? null) : null"
+        :record="selection.length === 1 ? selection[0] : null"
+        :records="selection"
+        :max-inline="2"
+        @done="onActionDone"
+      />
+    </div>
+
+    <div
       v-if="staged && pendingCount"
-      class="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200"
+      class="flex flex-wrap items-center gap-2 gap-y-1 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200"
     >
       <AppIcon
         :icon="{ type: 'lucide', value: 'git-commit-horizontal' }"
         :size="14"
       />
-      <span
+      <span class="min-w-0"
         >{{ pendingCount }} unsaved
         {{ pendingCount === 1 ? "change" : "changes" }}</span
       >
-      <div class="ml-auto flex gap-2">
+      <div class="ml-auto flex shrink-0 gap-2">
         <Button
           type="button"
           size="small"
@@ -1502,15 +1622,19 @@ onUnmounted(() => {
         v-if="rows.length || (!loading && !error)"
         v-model:selection="selection"
         :value="rows"
-        :data-key="dataKeyField"
+        data-key="__rid"
         :edit-mode="editableCells ? 'cell' : undefined"
         lazy
         paginator
         :first="first"
         :rows="pageSize"
-        :total-records="total ?? rows.length"
+        :total-records="total ?? first + rows.length + (hasMore ? 1 : 0)"
         :rows-per-page-options="[25, 50, 100, 250]"
-        paginator-template="RowsPerPageDropdown FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink"
+        :paginator-template="
+          total == null
+            ? 'RowsPerPageDropdown PrevPageLink CurrentPageReport NextPageLink'
+            : 'RowsPerPageDropdown FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink'
+        "
         current-page-report-template="{first} to {last} of {totalRecords}"
         removable-sort
         :sort-field="sortField"
@@ -1523,6 +1647,8 @@ onUnmounted(() => {
         @sort="onSort"
         @page="onPage"
         @row-click="onRowClick"
+        @cell-edit-init="editingCell = true"
+        @cell-edit-cancel="editingCell = false"
         @cell-edit-complete="onCellEditComplete"
       >
         <Column
@@ -1535,12 +1661,19 @@ onUnmounted(() => {
           v-for="col in columns"
           :key="col.key"
           :field="col.key"
-          :header="col.label"
           :sortable="col.sortable"
           :style="columnStyle(col)"
           :header-style="columnStyle(col)"
           :body-style="columnStyle(col)"
         >
+          <template #header>
+            <span
+              class="block min-w-0 truncate"
+              :style="{ maxWidth: columnWidth(col) }"
+              :title="col.label"
+              >{{ col.label }}</span
+            >
+          </template>
           <template #body="{ data }">
             <span
               data-test="table-cell-value"
@@ -1554,7 +1687,6 @@ onUnmounted(() => {
                 size="small"
                 text
                 severity="secondary"
-                :title="displayTitle(data as Row, col)"
                 :pt="{
                   root: 'inline-flex min-w-0 max-w-full items-center gap-1 p-0 text-primary-600 hover:underline dark:text-primary-400',
                 }"
@@ -1616,11 +1748,12 @@ onUnmounted(() => {
               option-value="value"
               class="w-full"
             />
-            <ToggleSwitch
+            <div
               v-else-if="col.editor === ColumnEditor.Toggle"
-              v-model="data[field]"
-              class="w-full"
-            />
+              class="flex w-full items-center"
+            >
+              <ToggleSwitch v-model="data[field]" />
+            </div>
             <InputNumber
               v-else-if="col.editor === ColumnEditor.Number"
               v-model="data[field]"
@@ -1677,7 +1810,7 @@ onUnmounted(() => {
           </template>
         </Column>
         <Column
-          v-if="detailEnabled && !editable"
+          v-if="detailEnabled && !editableCells"
           :header-style="{ width: '3rem' }"
           :pt="{ bodyCell: 'w-12 text-right' }"
         >

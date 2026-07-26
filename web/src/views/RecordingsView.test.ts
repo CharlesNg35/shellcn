@@ -8,6 +8,7 @@ const list = vi.fn<(...a: unknown[]) => Promise<RecordingSummary[]>>(
   async () => [],
 );
 vi.mock("../api/recordings", () => ({
+  RECORDINGS_PAGE_SIZE: 200,
   recordingsApi: {
     list: (...args: unknown[]) => list(...args),
     contentUrl: (id: string) => `/api/recordings/${id}/content`,

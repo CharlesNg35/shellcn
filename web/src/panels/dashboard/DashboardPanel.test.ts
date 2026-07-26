@@ -35,8 +35,8 @@ describe("DashboardPanel", () => {
     expect(cards).toHaveLength(2);
     expect(wrapper.text()).toContain("Server");
     expect(wrapper.text()).toContain("Clients");
-    expect(cards[0].classes()).toContain("lg:col-span-2");
-    expect(cards[1].classes()).not.toContain("lg:col-span-2");
+    expect(cards[0].classes()).toContain("@3xl:col-span-2");
+    expect(cards[1].classes()).not.toContain("@3xl:col-span-2");
   });
 
   it("propagates a row select from a cell panel so the host can navigate", async () => {

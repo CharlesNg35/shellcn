@@ -148,7 +148,7 @@ func treeCollections(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := collectionRows(rc.Ctx, s, strings.TrimSpace(rc.Query().Get("p.database")))
+	rows, err := collectionCatalogRows(rc.Ctx, s, strings.TrimSpace(rc.Query().Get("p.database")))
 	if err != nil {
 		return nil, err
 	}
@@ -222,16 +222,60 @@ func listCollections(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := collectionRows(rc.Ctx, s, strings.TrimSpace(rc.Query().Get("p.database")))
+	req, err := rc.Page()
 	if err != nil {
 		return nil, err
 	}
-	return pageRows(rc, rows)
+	database := strings.TrimSpace(rc.Query().Get("p.database"))
+	// Ordering by a storage counter is the one case that needs every row's
+	// stats; everything else reads them for the page that is actually returned.
+	if sortsByStats(req.Sort) {
+		rows, err := collectionRows(rc.Ctx, s, database)
+		if err != nil {
+			return nil, err
+		}
+		return pageRows(rc, rows)
+	}
+	rows, err := collectionCatalogRows(rc.Ctx, s, database)
+	if err != nil {
+		return nil, err
+	}
+	page, err := pageRows(rc, rows)
+	if err != nil {
+		return nil, err
+	}
+	attachCollectionPageStats(rc.Ctx, s, page.Items)
+	return page, nil
 }
+
+func sortsByStats(keys []plugin.SortKey) bool {
+	return len(keys) > 0 && (keys[0].Field == "count" || keys[0].Field == "size")
+}
+
+// maxCatalogRows caps how many collections an unscoped listing enumerates so a
+// cluster with a runaway catalog cannot be materialized in one request.
+const maxCatalogRows = 20000
 
 func collectionRows(ctx context.Context, s *Session, database string) ([]plugin.TableRow, error) {
 	ctx, cancel := commandContext(ctx, s)
 	defer cancel()
+	rows, err := catalogRows(ctx, s, database)
+	if err != nil {
+		return nil, err
+	}
+	attachCollectionStats(ctx, s, rows)
+	return rows, nil
+}
+
+// collectionCatalogRows lists collections without their per-collection storage
+// stats, so callers pay one round trip per database instead of one per collection.
+func collectionCatalogRows(ctx context.Context, s *Session, database string) ([]plugin.TableRow, error) {
+	ctx, cancel := commandContext(ctx, s)
+	defer cancel()
+	return catalogRows(ctx, s, database)
+}
+
+func catalogRows(ctx context.Context, s *Session, database string) ([]plugin.TableRow, error) {
 	databases := []string{database}
 	if database == "" {
 		list, err := s.client.ListDatabaseNames(ctx, bson.D{})
@@ -248,8 +292,7 @@ func collectionRows(ctx context.Context, s *Session, database string) ([]plugin.
 		if _, err := safeName(dbName, "database"); err != nil {
 			return nil, err
 		}
-		db := s.client.Database(dbName)
-		cur, err := db.ListCollections(ctx, bson.D{})
+		cur, err := s.client.Database(dbName).ListCollections(ctx, bson.D{}, options.ListCollections().SetNameOnly(true))
 		if err != nil {
 			return nil, mongoErr(err)
 		}
@@ -262,21 +305,55 @@ func collectionRows(ctx context.Context, s *Session, database string) ([]plugin.
 			if name == "" || strings.HasPrefix(name, "system.") {
 				continue
 			}
-			count, _ := db.Collection(name).EstimatedDocumentCount(ctx)
-			var stats bson.M
-			_ = db.RunCommand(ctx, bson.D{{Key: "collStats", Value: name}}).Decode(&stats)
 			rows = append(rows, plugin.TableRow{
 				"name":     name,
 				"database": dbName,
 				"type":     fmt.Sprint(coll["type"]),
 				"status":   "ready",
-				"count":    count,
-				"size":     numberValue(stats["size"]),
 				"ref":      plugin.ResourceIdentity{Kind: "collection", Namespace: dbName, Name: name, UID: dbName + "." + name},
 			})
 		}
+		if len(rows) >= maxCatalogRows {
+			return rows[:maxCatalogRows], nil
+		}
 	}
 	return rows, nil
+}
+
+func attachCollectionPageStats(ctx context.Context, s *Session, rows []plugin.TableRow) {
+	if len(rows) == 0 {
+		return
+	}
+	ctx, cancel := commandContext(ctx, s)
+	defer cancel()
+	attachCollectionStats(ctx, s, rows)
+}
+
+func attachCollectionStats(ctx context.Context, s *Session, rows []plugin.TableRow) {
+	for _, row := range rows {
+		database, name := fmt.Sprint(row["database"]), fmt.Sprint(row["name"])
+		count, size := collectionStorageStats(ctx, s.client.Database(database), name)
+		row["count"], row["size"] = count, size
+	}
+}
+
+// collectionStorageStats reads the cached WiredTiger counters in one round trip;
+// $collStats is a metadata read, unlike a counting aggregation.
+func collectionStorageStats(ctx context.Context, db *mongo.Database, collection string) (int64, int64) {
+	cur, err := db.Collection(collection).Aggregate(ctx, mongo.Pipeline{{{Key: "$collStats", Value: bson.M{"storageStats": bson.M{}}}}})
+	if err != nil {
+		return 0, 0
+	}
+	defer func() { _ = cur.Close(ctx) }()
+	if !cur.Next(ctx) {
+		return 0, 0
+	}
+	var doc bson.M
+	if err := cur.Decode(&doc); err != nil {
+		return 0, 0
+	}
+	stats, _ := doc["storageStats"].(bson.M)
+	return numberValue(stats["count"]), numberValue(stats["size"])
 }
 
 func collectionStats(rc *plugin.RequestContext) (any, error) {
@@ -561,32 +638,47 @@ func listDocuments(rc *plugin.RequestContext) (any, error) {
 	if limit > s.opts.DocumentLimit {
 		limit = s.opts.DocumentLimit
 	}
-	offset, err := offsetCursor(req.Cursor)
-	if err != nil {
-		return nil, err
-	}
-	findOpts := options.Find().SetLimit(int64(limit)).SetSkip(int64(offset))
-	if len(req.Sort) > 0 {
+	// Without an explicit sort the page walks _id ascending, so following
+	// "load more" is a keyset range instead of an O(offset) skip. A paginator
+	// jump lands on a plain offset and still falls back to a bounded skip.
+	keyset := len(req.Sort) == 0
+	query, offset := filter, 0
+	findOpts := options.Find().SetLimit(int64(limit) + 1)
+	if keyset {
+		findOpts.SetSort(bson.D{{Key: "_id", Value: 1}})
+	} else {
 		dir := int32(1)
 		if req.Sort[0].Desc {
 			dir = -1
 		}
 		findOpts.SetSort(bson.D{{Key: req.Sort[0].Field, Value: dir}})
 	}
+	if keyset && strings.HasPrefix(req.Cursor, documentCursorPrefix) {
+		after, err := decodeDocumentCursor(req.Cursor)
+		if err != nil {
+			return nil, err
+		}
+		query = afterIDFilter(filter, after)
+	} else {
+		if offset, err = offsetCursor(req.Cursor); err != nil {
+			return nil, err
+		}
+		findOpts.SetSkip(int64(offset))
+	}
 	ctx, cancel := commandContext(rc.Ctx, s)
 	defer cancel()
 	coll := s.client.Database(database).Collection(collection)
-	total64, err := coll.CountDocuments(ctx, filter)
-	if err != nil {
-		return nil, mongoErr(err)
-	}
-	cur, err := coll.Find(ctx, filter, findOpts)
+	cur, err := coll.Find(ctx, query, findOpts)
 	if err != nil {
 		return nil, mongoErr(err)
 	}
 	var docs []bson.M
 	if err := cur.All(ctx, &docs); err != nil {
 		return nil, mongoErr(err)
+	}
+	more := len(docs) > limit
+	if more {
+		docs = docs[:limit]
 	}
 	rows := make([]plugin.TableRow, 0, len(docs))
 	for _, doc := range docs {
@@ -596,12 +688,83 @@ func listDocuments(rc *plugin.RequestContext) (any, error) {
 		}
 		rows = append(rows, item)
 	}
-	total := int(total64)
 	next := ""
-	if offset+len(rows) < total {
-		next = strconv.Itoa(offset + len(rows))
+	if more {
+		if keyset {
+			if next, err = encodeDocumentCursor(docs[len(docs)-1]["_id"]); err != nil {
+				return nil, err
+			}
+		} else {
+			next = strconv.Itoa(offset + len(rows))
+		}
 	}
-	return plugin.Page[plugin.TableRow]{Items: rows, NextCursor: next, Total: &total}, nil
+	total, err := documentTotal(ctx, coll, filter, exactCount(rc))
+	if err != nil {
+		return nil, err
+	}
+	return plugin.Page[plugin.TableRow]{Items: rows, NextCursor: next, Total: total}, nil
+}
+
+// documentTotal keeps the grid poller off full-collection scans: an unfiltered
+// listing reads the O(1) metadata estimate, a filtered one reports no total and
+// lets the client fall back to the row count unless an exact count is asked for.
+func documentTotal(ctx context.Context, coll *mongo.Collection, filter bson.M, exact bool) (*int, error) {
+	if exact {
+		counted, err := coll.CountDocuments(ctx, filter)
+		if err != nil {
+			return nil, mongoErr(err)
+		}
+		total := int(counted)
+		return &total, nil
+	}
+	if len(filter) > 0 {
+		return nil, nil
+	}
+	estimated, err := coll.EstimatedDocumentCount(ctx)
+	if err != nil {
+		return nil, mongoErr(err)
+	}
+	total := int(estimated)
+	return &total, nil
+}
+
+func exactCount(rc *plugin.RequestContext) bool {
+	return strings.EqualFold(strings.TrimSpace(rc.Query().Get("count")), "exact")
+}
+
+func afterIDFilter(filter bson.M, after any) bson.M {
+	page := bson.M{"_id": bson.M{"$gt": after}}
+	if len(filter) == 0 {
+		return page
+	}
+	return bson.M{"$and": []any{filter, page}}
+}
+
+const documentCursorPrefix = "id:"
+
+func encodeDocumentCursor(id any) (string, error) {
+	raw, err := bson.MarshalExtJSON(bson.M{"_id": id}, true, false)
+	if err != nil {
+		return "", err
+	}
+	return documentCursorPrefix + base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+func decodeDocumentCursor(raw string) (any, error) {
+	invalid := fmt.Errorf("%w: cursor is invalid", plugin.ErrInvalidInput)
+	data, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(raw, documentCursorPrefix))
+	if err != nil {
+		return nil, invalid
+	}
+	doc, err := parseExtJSON(string(data))
+	if err != nil {
+		return nil, invalid
+	}
+	id, ok := doc["_id"]
+	if !ok {
+		return nil, invalid
+	}
+	return id, nil
 }
 
 func readDocument(rc *plugin.RequestContext) (any, error) {

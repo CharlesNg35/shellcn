@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, onUnmounted, ref, shallowRef, triggerRef, watch } from "vue";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Button from "primevue/button";
@@ -7,8 +7,7 @@ import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
-import Tree from "primevue/tree";
-import type { TreeNode as PVNode } from "primevue/treenode";
+import VirtualScroller from "primevue/virtualscroller";
 import Badge from "primevue/badge";
 import { useToast } from "primevue/usetoast";
 import { fetchDoc, fetchPage, runFormAction } from "@/api/dataSource";
@@ -38,22 +37,44 @@ interface RowSelectEvent {
   data: KVEntry;
 }
 
-interface KVNodeData {
-  kind: "folder" | "key";
-  entry?: KVEntry;
-  count?: number;
-  prefix?: string;
+interface KVLeaf {
+  label: string;
+  entry: KVEntry;
 }
-type KVNode = PVNode & { data: KVNodeData; children?: KVNode[] };
 
-// Keys are pulled in bounded cursor batches so a large key set never blocks the
-// UI; each "Scan more" pulls up to this many additional keys.
-const SCAN_BUDGET = 2000;
+interface KVFolder {
+  id: string;
+  label: string;
+  prefix: string;
+  count: number;
+  folders: KVFolder[];
+  leaves: KVLeaf[];
+}
+
+interface KVRow {
+  id: string;
+  label: string;
+  depth: number;
+  folder?: KVFolder;
+  entry?: KVEntry;
+}
+
+// A keyspace can be unbounded, so the panel never follows the scan cursor on its
+// own: one page lands on open and every further page needs a "Load more" click,
+// up to a hard in-memory cap past which the filter is the only way on. Match
+// semantics belong to the plugin, so the panel only forwards the term as `q`.
+const PAGE_SIZE = 200;
+const MAX_KEYS = 5000;
+// Below this many rows the list renders in full (identical to a plain list and
+// cheaper); above it PrimeVue's VirtualScroller keeps the mounted rows bounded.
+const VIRTUAL_THRESHOLD = 200;
+const ROW_HEIGHT = 32;
+const TABLE_ROW_HEIGHT = 37;
 
 const props = defineProps<PanelProps>();
 const toast = useToast();
 
-const entries = ref<KVEntry[]>([]);
+const entries = shallowRef<KVEntry[]>([]);
 const selected = ref<KVEntry | null>(null);
 const tableSelection = ref<KVEntry | null>(null);
 const detail = ref<KVDetail | null>(null);
@@ -61,7 +82,7 @@ const editor = ref("");
 const type = ref("string");
 const filterText = ref("");
 const loading = ref(false);
-const scanning = ref(false);
+const loadingMore = ref(false);
 const loadingDetail = ref(false);
 const saving = ref(false);
 const error = ref<string | null>(null);
@@ -71,16 +92,28 @@ const createType = ref("string");
 const createValue = ref("");
 const view = ref<"list" | "tree">("list");
 const expandedKeys = ref<Record<string, boolean>>({});
-const scanCursor = ref<string | undefined>(undefined);
+const cursor = ref<string | undefined>(undefined);
 const seenKeys = new Set<string>();
 let detailRequest = 0;
+let loadGen = 0;
 let filterLoadHandle: ReturnType<typeof setTimeout> | undefined;
 const config = computed(() => props.config as KVPanelConfig | undefined);
 const keyParam = computed(() => config.value?.keyParam ?? "key");
 const writable = computed(() => config.value?.writable === true);
 const delimiter = computed(() => config.value?.delimiter ?? "");
 const hasTree = computed(() => delimiter.value !== "");
-const hasMore = computed(() => scanCursor.value !== undefined);
+const hasMore = computed(() => cursor.value !== undefined);
+const capped = computed(() => entries.value.length >= MAX_KEYS);
+const canLoadMore = computed(() => hasMore.value && !capped.value);
+const filterActive = computed(() => filterText.value.trim() !== "");
+const countLabel = computed(() => {
+  const count = entries.value.length;
+  const noun = count === 1 ? "key" : "keys";
+  if (capped.value) return `${count}+ ${noun}`;
+  return hasMore.value
+    ? `Showing ${count} ${noun} (+more)`
+    : `${count} ${noun}`;
+});
 const viewOptions = [
   { value: "list", icon: { type: "lucide" as const, value: "list" } },
   { value: "tree", icon: { type: "lucide" as const, value: "folder-tree" } },
@@ -111,103 +144,107 @@ const { confirmBeforeDiscard } = useDirtyGuard({
   message: "This key has unsaved changes. Discard them and continue?",
 });
 
-const visibleEntries = computed(() => {
-  const q = filterText.value.trim().toLowerCase();
-  if (!q) return entries.value;
-  return entries.value.filter((entry) =>
-    [entry.key, entry.type].some((value) =>
-      String(value ?? "")
-        .toLowerCase()
-        .includes(q),
-    ),
-  );
-});
-
-const treeNodes = computed<KVNode[]>(() =>
-  buildKeyTree(visibleEntries.value, delimiter.value),
-);
-const treeSelectionKeys = computed(() =>
-  selected.value ? { [`key:${selected.value.key}`]: true } : {},
-);
-
-function leafNode(entry: KVEntry, label: string): KVNode {
+function newFolder(prefix: string, label: string): KVFolder {
   return {
-    key: `key:${entry.key}`,
+    id: `folder:${prefix}`,
     label,
-    leaf: true,
-    data: { kind: "key", entry },
-  };
-}
-
-// buildKeyTree groups keys into a namespace tree by splitting on the delimiter.
-// A key that is also a prefix of others (e.g. "a" alongside "a:b") stays a leaf
-// beside the folder; the two never collide because folder and key nodes are keyed
-// distinctly. Folder counts are the number of leaf keys anywhere beneath them.
-function buildKeyTree(list: KVEntry[], delim: string): KVNode[] {
-  if (!delim) return list.map((entry) => leafNode(entry, entry.key));
-
-  interface Folder {
-    node: KVNode;
-    folders: Map<string, Folder>;
-    leaves: KVNode[];
-  }
-  const makeFolder = (prefix: string, label: string): Folder => ({
-    node: {
-      key: `folder:${prefix}`,
-      label,
-      leaf: false,
-      children: [],
-      data: { kind: "folder", count: 0, prefix },
-    },
-    folders: new Map(),
+    prefix,
+    count: 0,
+    folders: [],
     leaves: [],
-  });
-  const rootFolders = new Map<string, Folder>();
-  const rootLeaves: KVNode[] = [];
-
-  for (const entry of list) {
-    let segments = entry.key.split(delim);
-    // A leading delimiter (e.g. "/a/b") is the root, not an empty folder.
-    if (segments.length > 1 && segments[0] === "") segments = segments.slice(1);
-    if (segments.length === 1) {
-      rootLeaves.push(leafNode(entry, segments[0]));
-      continue;
-    }
-    let level = rootFolders;
-    let prefix = "";
-    const chain: Folder[] = [];
-    for (let i = 0; i < segments.length - 1; i++) {
-      prefix = i === 0 ? segments[i] : `${prefix}${delim}${segments[i]}`;
-      let folder = level.get(segments[i]);
-      if (!folder) {
-        folder = makeFolder(prefix, segments[i]);
-        level.set(segments[i], folder);
-      }
-      chain.push(folder);
-      level = folder.folders;
-    }
-    chain[chain.length - 1].leaves.push(
-      leafNode(entry, segments[segments.length - 1]),
-    );
-    for (const folder of chain) folder.node.data.count!++;
-  }
-
-  const byLabel = (a: KVNode, b: KVNode): number =>
-    (a.label ?? "").localeCompare(b.label ?? "");
-  const assemble = (
-    folders: Map<string, Folder>,
-    leaves: KVNode[],
-  ): KVNode[] => {
-    const folderNodes = [...folders.values()]
-      .map((folder) => {
-        folder.node.children = assemble(folder.folders, folder.leaves);
-        return folder.node;
-      })
-      .sort(byLabel);
-    return [...folderNodes, ...[...leaves].sort(byLabel)];
   };
-  return assemble(rootFolders, rootLeaves);
 }
+
+const treeRoot = shallowRef(newFolder("", ""));
+
+function sortedIndex(list: { label: string }[], label: string): number {
+  let low = 0;
+  let high = list.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (list[mid].label.localeCompare(label) < 0) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+}
+
+function childFolder(
+  parent: KVFolder,
+  label: string,
+  prefix: string,
+): KVFolder {
+  const at = sortedIndex(parent.folders, label);
+  const existing = parent.folders[at];
+  if (existing?.label === label) return existing;
+  const folder = newFolder(prefix, label);
+  parent.folders.splice(at, 0, folder);
+  return folder;
+}
+
+// insertKey splices one entry into the namespace tree in place so an appended
+// page costs O(depth · log n) instead of rebuilding the tree from every key. A
+// key that is also a prefix of others ("a" alongside "a:b") stays a leaf beside
+// the folder; folder and key rows are keyed distinctly so they never collide.
+// Folder counts are the number of leaf keys anywhere beneath them.
+function insertKey(entry: KVEntry): void {
+  const delim = delimiter.value;
+  let segments = entry.key.split(delim);
+  // A leading delimiter (e.g. "/a/b") is the root, not an empty folder.
+  if (segments.length > 1 && segments[0] === "") segments = segments.slice(1);
+  let folder = treeRoot.value;
+  let prefix = "";
+  for (let i = 0; i < segments.length - 1; i++) {
+    prefix = i === 0 ? segments[i] : `${prefix}${delim}${segments[i]}`;
+    folder = childFolder(folder, segments[i], prefix);
+    folder.count++;
+  }
+  const label = segments[segments.length - 1];
+  folder.leaves.splice(sortedIndex(folder.leaves, label), 0, { label, entry });
+}
+
+function isExpanded(row: KVRow): boolean {
+  return filterActive.value || expandedKeys.value[row.id] === true;
+}
+
+function isSelected(row: KVRow): boolean {
+  return row.entry !== undefined && row.entry.key === selected.value?.key;
+}
+
+// Only expanded branches are flattened, so a collapsed keyspace stays a handful
+// of rows no matter how many keys are in memory.
+const treeRows = computed<KVRow[]>(() => {
+  const rows: KVRow[] = [];
+  const walk = (folder: KVFolder, depth: number): void => {
+    for (const child of folder.folders) {
+      const row: KVRow = {
+        id: child.id,
+        label: child.label,
+        depth,
+        folder: child,
+      };
+      rows.push(row);
+      if (isExpanded(row)) walk(child, depth + 1);
+    }
+    for (const leaf of folder.leaves) {
+      rows.push({
+        id: `key:${leaf.entry.key}`,
+        label: leaf.label,
+        depth,
+        entry: leaf.entry,
+      });
+    }
+  };
+  walk(treeRoot.value, 0);
+  return rows;
+});
+const treeVirtualized = computed(
+  () => treeRows.value.length > VIRTUAL_THRESHOLD,
+);
+const tableVirtualScroller = computed(() =>
+  entries.value.length > VIRTUAL_THRESHOLD
+    ? { itemSize: TABLE_ROW_HEIGHT }
+    : undefined,
+);
 
 function normalizeList(
   value: Page<KVEntry> | KVEntry[] | { items?: KVEntry[] },
@@ -227,51 +264,41 @@ function activateEntry(entry: KVEntry | null): void {
   tableSelection.value = entry;
 }
 
-// The tree is built from a background scan that follows the page cursor: load()
-// paints after the first page, then fills up to SCAN_BUDGET more keys without
-// blocking the panel; "Scan more" resumes past the cap. A generation token lets a
-// reload or a new filter cancel an in-flight background fill.
-let scanGen = 0;
-
-async function scanNextPage(): Promise<number> {
-  if (!props.source) return 0;
-  const search = filterText.value.trim();
-  const page = await fetchPage<KVEntry>(
-    props.connectionId,
-    props.source,
-    { resource: props.resource, record: props.record },
-    { filter: search ? { q: search } : undefined, cursor: scanCursor.value },
-  );
-  let added = 0;
-  for (const entry of normalizeList(page)) {
-    if (seenKeys.has(entry.key)) continue;
-    seenKeys.add(entry.key);
-    entries.value.push(entry);
-    added++;
-  }
-  scanCursor.value = page.nextCursor || undefined;
-  return added;
+function resetKeys(): void {
+  entries.value = [];
+  seenKeys.clear();
+  cursor.value = undefined;
+  treeRoot.value = newFolder("", "");
 }
 
-async function fillToBudget(gen: number): Promise<void> {
-  if (gen !== scanGen) return;
-  scanning.value = true;
-  try {
-    let added = 0;
-    while (scanCursor.value && added < SCAN_BUDGET && gen === scanGen) {
-      added += await scanNextPage();
-    }
-  } catch (e) {
-    if (gen === scanGen) {
-      toast.add({
-        severity: "error",
-        summary: "Could not scan more keys",
-        detail: (e as Error).message,
-        life: 4000,
-      });
-    }
-  } finally {
-    if (gen === scanGen) scanning.value = false;
+function fetchKeyPage(from: string | undefined): Promise<Page<KVEntry>> {
+  const search = filterText.value.trim();
+  return fetchPage<KVEntry>(
+    props.connectionId,
+    props.source!,
+    { resource: props.resource, record: props.record },
+    {
+      filter: search ? { q: search } : undefined,
+      cursor: from,
+      limit: PAGE_SIZE,
+    },
+  );
+}
+
+function appendPage(page: Page<KVEntry>): void {
+  const added: KVEntry[] = [];
+  for (const entry of normalizeList(page)) {
+    if (seenKeys.size >= MAX_KEYS) break;
+    if (seenKeys.has(entry.key)) continue;
+    seenKeys.add(entry.key);
+    added.push(entry);
+  }
+  cursor.value = page.nextCursor || undefined;
+  if (!added.length) return;
+  entries.value = entries.value.concat(added);
+  if (hasTree.value) {
+    for (const entry of added) insertKey(entry);
+    triggerRef(treeRoot);
   }
 }
 
@@ -280,16 +307,15 @@ async function load(): Promise<void> {
     loading.value = false;
     return;
   }
-  const gen = ++scanGen;
+  const gen = ++loadGen;
   loading.value = true;
   error.value = null;
   const selectedKey = selected.value?.key;
-  entries.value = [];
-  seenKeys.clear();
-  scanCursor.value = undefined;
   try {
-    await scanNextPage();
-    if (gen !== scanGen) return;
+    const page = await fetchKeyPage(undefined);
+    if (gen !== loadGen) return;
+    resetKeys();
+    appendPage(page);
     const next =
       entries.value.find((entry) => entry.key === selectedKey) ??
       entries.value[0] ??
@@ -297,16 +323,38 @@ async function load(): Promise<void> {
     activateEntry(next);
     if (selected.value) await loadDetail(selected.value);
   } catch (e) {
+    if (gen !== loadGen) return;
     error.value = (e as Error).message;
-    loading.value = false;
-    return;
+  } finally {
+    if (gen === loadGen) loading.value = false;
   }
-  loading.value = false;
-  if (scanCursor.value) void fillToBudget(gen);
 }
 
-async function scanMore(): Promise<void> {
-  await fillToBudget(scanGen);
+// Exactly one further page per invocation: the cursor is never followed to
+// exhaustion, and the in-memory cap stops paging even if the user keeps clicking.
+// A reload in flight blocks paging outright — its cursor belongs to the scan that
+// is about to be discarded, so appending its page would splice keys from the old
+// scan into the new one and leave the cursor pointing down the abandoned chain.
+async function loadMore(): Promise<void> {
+  if (!canLoadMore.value || loadingMore.value || loading.value || !props.source)
+    return;
+  const gen = loadGen;
+  loadingMore.value = true;
+  try {
+    const page = await fetchKeyPage(cursor.value);
+    if (gen !== loadGen) return;
+    appendPage(page);
+  } catch (e) {
+    if (gen !== loadGen) return;
+    toast.add({
+      severity: "error",
+      summary: "Could not load more keys",
+      detail: (e as Error).message,
+      life: 4000,
+    });
+  } finally {
+    loadingMore.value = false;
+  }
 }
 
 useConnectionInvalidationRefresh({
@@ -358,6 +406,8 @@ async function guardedLoad(): Promise<void> {
   await confirmBeforeDiscard(load);
 }
 
+// A new filter is a new scan: paging restarts from the server with the pattern
+// pushed down, instead of narrowing what happens to be in memory.
 function queueFilterLoad(): void {
   if (filterLoadHandle) clearTimeout(filterLoadHandle);
   filterLoadHandle = setTimeout(() => {
@@ -381,15 +431,14 @@ async function selectRow(event: RowSelectEvent): Promise<void> {
   }
 }
 
-async function onTreeSelect(node: PVNode): Promise<void> {
-  const data = node.data as KVNodeData;
-  if (data.kind === "key" && data.entry) {
-    await guardedLoadDetail(data.entry);
+async function activateRow(row: KVRow): Promise<void> {
+  if (row.entry) {
+    await guardedLoadDetail(row.entry);
     return;
   }
   expandedKeys.value = {
     ...expandedKeys.value,
-    [String(node.key)]: !expandedKeys.value[String(node.key)],
+    [row.id]: !expandedKeys.value[row.id],
   };
 }
 
@@ -487,25 +536,6 @@ watch(hasTree, (has) => (view.value = has ? "tree" : "list"), {
   immediate: true,
 });
 
-// Reveal matches while filtering; collapse back to the roots once cleared.
-watch([filterText, treeNodes], () => {
-  if (view.value !== "tree") return;
-  if (!filterText.value.trim()) {
-    expandedKeys.value = {};
-    return;
-  }
-  const keys: Record<string, boolean> = {};
-  const walk = (nodes: KVNode[]): void => {
-    for (const node of nodes) {
-      if (node.leaf) continue;
-      keys[String(node.key)] = true;
-      if (node.children) walk(node.children);
-    }
-  };
-  walk(treeNodes.value);
-  expandedKeys.value = keys;
-});
-
 watch(() => [props.connectionId, props.resource?.uid], load, {
   immediate: true,
 });
@@ -518,22 +548,38 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="grid h-full min-h-0 grid-cols-[22rem_minmax(0,1fr)]">
+  <div
+    class="grid h-full min-h-0 w-full grid-cols-[minmax(12rem,min(22rem,40%))_minmax(0,1fr)] overflow-hidden"
+  >
     <div
-      class="flex min-h-0 flex-col border-r border-surface-200 dark:border-surface-800"
+      class="flex min-h-0 min-w-0 flex-col border-r border-surface-200 dark:border-surface-800"
     >
       <div
-        class="flex items-center gap-2 border-b border-surface-200 p-3 dark:border-surface-800"
+        class="flex flex-wrap items-center gap-2 border-b border-surface-200 p-3 dark:border-surface-800"
       >
         <InputText
           v-model="filterText"
-          placeholder="Filter keys"
+          placeholder="Filter keys…"
           aria-label="Filter keys"
-          class="min-w-0 flex-1"
+          class="min-w-0 flex-1 basis-40"
         />
+        <SelectButton
+          v-if="hasTree"
+          v-model="view"
+          :options="viewOptions"
+          option-value="value"
+          :allow-empty="false"
+          aria-label="Key view"
+          class="shrink-0"
+        >
+          <template #option="{ option }">
+            <AppIcon :icon="option.icon" :size="14" />
+          </template>
+        </SelectButton>
         <Button
           type="button"
           severity="secondary"
+          class="shrink-0"
           :disabled="loading"
           @click="guardedLoad"
         >
@@ -548,48 +594,10 @@ onUnmounted(() => {
           v-if="writable && config?.createRouteId"
           type="button"
           label="New"
+          class="shrink-0"
           :disabled="saving"
           @click="createOpen = true"
         />
-      </div>
-
-      <div
-        v-if="hasTree || hasMore || scanning"
-        class="flex items-center gap-2 border-b border-surface-200 px-3 py-1.5 dark:border-surface-800"
-      >
-        <SelectButton
-          v-if="hasTree"
-          v-model="view"
-          :options="viewOptions"
-          option-value="value"
-          :allow-empty="false"
-          aria-label="Key view"
-        >
-          <template #option="{ option }">
-            <AppIcon :icon="option.icon" :size="14" />
-          </template>
-        </SelectButton>
-        <div
-          class="ml-auto flex items-center gap-2 text-xs text-surface-400 tabular-nums"
-        >
-          <span v-if="scanning" class="flex items-center gap-1">
-            <AppIcon
-              :icon="{ type: 'lucide', value: 'loader-circle' }"
-              :size="12"
-              class="animate-spin"
-            />
-            Scanning…
-          </span>
-          <span v-else>{{ entries.length }} keys{{ hasMore ? "+" : "" }}</span>
-          <button
-            v-if="hasMore && !scanning"
-            type="button"
-            class="rounded px-1.5 py-0.5 font-medium text-primary-600 transition-colors hover:bg-primary-50 dark:text-primary-300 dark:hover:bg-primary-500/10"
-            @click="scanMore"
-          >
-            Scan more
-          </button>
-        </div>
       </div>
 
       <PanelError
@@ -599,73 +607,115 @@ onUnmounted(() => {
         @retry="guardedLoad"
       />
       <SkeletonList v-else-if="loading && !entries.length" :rows="8" />
-      <PanelError
-        v-else-if="error"
-        class="border-b border-surface-200 dark:border-surface-800"
-        :message="error"
-        retryable
-        @retry="guardedLoad"
-      />
-      <template v-else-if="entries.length || (!loading && !error)">
-        <Tree
-          v-if="view === 'tree'"
-          v-model:expanded-keys="expandedKeys"
-          :value="treeNodes"
-          :selection-keys="treeSelectionKeys"
-          selection-mode="single"
-          class="min-h-0 flex-1"
-          @node-select="onTreeSelect"
+      <template v-else>
+        <PanelError
+          v-if="error"
+          class="border-b border-surface-200 dark:border-surface-800"
+          :message="error"
+          retryable
+          @retry="guardedLoad"
+        />
+        <div
+          v-if="!entries.length"
+          class="min-h-0 flex-1 px-4 py-8 text-center text-sm text-surface-400"
         >
-          <template #default="{ node }">
-            <span
-              class="flex w-full items-center gap-1.5"
-              :title="
-                node.data.kind === 'key'
-                  ? node.data.entry?.key
-                  : node.data.prefix
-              "
+          <p>No keys.</p>
+          <p v-if="!filterActive" class="mt-1 text-xs">
+            Large keyspaces load one page at a time — filter to narrow the scan.
+          </p>
+        </div>
+        <div
+          v-else-if="view === 'tree'"
+          class="min-h-0 flex-1 overflow-y-auto p-2 text-sm"
+          data-test="kv-tree"
+        >
+          <VirtualScroller
+            :items="treeRows"
+            :item-size="ROW_HEIGHT"
+            :disabled="!treeVirtualized"
+            scroll-height="100%"
+            class="h-full"
+          >
+            <template
+              #content="{ items: rows, styleClass, contentRef, contentStyle }"
             >
-              <template v-if="node.data.kind === 'folder'">
-                <AppIcon
-                  :icon="{ type: 'lucide', value: 'folder' }"
-                  :size="14"
-                  class="shrink-0 text-amber-500"
-                />
-                <span class="min-w-0 flex-1 truncate">{{ node.label }}</span>
-                <span class="shrink-0 text-xs text-surface-400 tabular-nums">{{
-                  node.data.count
-                }}</span>
-              </template>
-              <template v-else>
-                <AppIcon
-                  :icon="{ type: 'lucide', value: 'key-round' }"
-                  :size="13"
-                  class="shrink-0 text-surface-400"
-                />
-                <span class="min-w-0 flex-1 truncate">{{ node.label }}</span>
-                <span
-                  v-if="node.data.entry?.type"
-                  class="shrink-0 rounded bg-surface-100 px-1 py-0.5 text-[10px] font-medium tracking-wide text-surface-500 uppercase dark:bg-surface-800 dark:text-surface-400"
-                  >{{ node.data.entry.type }}</span
+              <div
+                :ref="contentRef"
+                :class="styleClass"
+                :style="contentStyle"
+                role="tree"
+                aria-label="Keys"
+              >
+                <button
+                  v-for="row in rows as KVRow[]"
+                  :key="row.id"
+                  type="button"
+                  role="treeitem"
+                  data-test="kv-row"
+                  :aria-level="row.depth + 1"
+                  :aria-expanded="row.folder ? isExpanded(row) : undefined"
+                  :aria-selected="row.entry ? isSelected(row) : undefined"
+                  :title="row.folder ? row.folder.prefix : row.entry?.key"
+                  class="flex w-full cursor-pointer items-center gap-1.5 rounded-md pr-2 text-left transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+                  :class="
+                    isSelected(row)
+                      ? 'bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-200'
+                      : 'text-surface-700 dark:text-surface-200'
+                  "
+                  :style="{
+                    height: `${ROW_HEIGHT}px`,
+                    paddingLeft: `${row.depth * 12 + 4}px`,
+                  }"
+                  @click="activateRow(row)"
                 >
-              </template>
-            </span>
-          </template>
-          <template #empty>
-            <p class="px-2 py-6 text-center text-sm text-surface-400">
-              No keys.
-            </p>
-          </template>
-        </Tree>
+                  <AppIcon
+                    :icon="{
+                      type: 'lucide',
+                      value: isExpanded(row) ? 'chevron-down' : 'chevron-right',
+                    }"
+                    :size="14"
+                    class="shrink-0 text-surface-400"
+                    :class="{ invisible: !row.folder }"
+                  />
+                  <AppIcon
+                    v-if="row.folder"
+                    :icon="{ type: 'lucide', value: 'folder' }"
+                    :size="14"
+                    class="shrink-0 text-amber-500"
+                  />
+                  <AppIcon
+                    v-else
+                    :icon="{ type: 'lucide', value: 'key-round' }"
+                    :size="13"
+                    class="shrink-0 text-surface-400"
+                  />
+                  <span class="min-w-0 flex-1 truncate">{{ row.label }}</span>
+                  <span
+                    v-if="row.folder"
+                    class="shrink-0 text-xs text-surface-400 tabular-nums"
+                    >{{ row.folder.count }}</span
+                  >
+                  <span
+                    v-else-if="row.entry?.type"
+                    class="shrink-0 rounded bg-surface-100 px-1 py-0.5 text-[10px] font-medium tracking-wide text-surface-500 uppercase dark:bg-surface-800 dark:text-surface-400"
+                    >{{ row.entry.type }}</span
+                  >
+                </button>
+              </div>
+            </template>
+          </VirtualScroller>
+        </div>
 
         <DataTable
           v-else
           v-model:selection="tableSelection"
-          :value="visibleEntries"
+          :value="entries"
           data-key="key"
           scrollable
           scroll-height="flex"
           selection-mode="single"
+          class="min-h-0 flex-1"
+          :virtual-scroller-options="tableVirtualScroller"
           @row-select="selectRow"
           @row-unselect="restoreSelection"
         >
@@ -673,14 +723,33 @@ onUnmounted(() => {
           <Column field="type" header="Type" style="width: 6rem" />
           <template #empty>No keys.</template>
         </DataTable>
+
+        <div
+          v-if="entries.length || hasMore"
+          class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-surface-200 px-3 py-1.5 text-xs text-surface-400 dark:border-surface-800"
+        >
+          <span class="tabular-nums">{{ countLabel }}</span>
+          <span v-if="capped && hasMore" class="min-w-0 truncate"
+            >scanning paused — filter to narrow</span
+          >
+          <button
+            v-else-if="canLoadMore"
+            type="button"
+            class="ml-auto rounded px-1.5 py-0.5 font-medium text-primary-600 transition-colors hover:bg-primary-50 disabled:opacity-60 dark:text-primary-300 dark:hover:bg-primary-500/10"
+            :disabled="loadingMore || loading"
+            @click="loadMore"
+          >
+            {{ loadingMore ? "Loading…" : "Load more" }}
+          </button>
+        </div>
       </template>
     </div>
 
-    <div class="flex min-h-0 flex-col">
+    <div class="flex min-h-0 min-w-0 flex-col">
       <div
-        class="flex items-center justify-between gap-3 border-b border-surface-200 px-4 py-3 dark:border-surface-800"
+        class="flex flex-wrap items-center justify-between gap-3 border-b border-surface-200 px-4 py-3 dark:border-surface-800"
       >
-        <div class="min-w-0">
+        <div class="min-w-0 flex-1">
           <p class="truncate font-medium text-surface-900 dark:text-surface-0">
             {{ selected?.key ?? "No key selected" }}
           </p>
@@ -689,7 +758,10 @@ onUnmounted(() => {
             <span v-if="detail.ttl != null"> · TTL {{ detail.ttl }}</span>
           </p>
         </div>
-        <div v-if="writable && selected" class="flex items-center gap-2">
+        <div
+          v-if="writable && selected"
+          class="flex shrink-0 items-center gap-2"
+        >
           <Badge
             v-if="dirty"
             value="Unsaved"

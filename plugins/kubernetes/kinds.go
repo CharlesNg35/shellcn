@@ -39,8 +39,28 @@ type kind struct {
 	actionIDs   []string       // row + detail actions (Edit/Create added generically)
 	detailTabs  []plugin.Panel // extra detail tabs beyond Overview/YAML/Events
 	subgroup    string         // optional nested sub-group within the category
-	listLimit   int64          // cap per list call (0 = unbounded), for high-churn kinds
+	listCap     int64          // ceiling per list call (0 = defaultListCap)
 	recentFirst bool           // sort the fetched rows newest-first
+}
+
+// defaultListCap is the most objects one list call may pull when a kind declares
+// no tighter ceiling, so no list ever drains a whole collection into this process.
+const defaultListCap = plugin.MaxPageLimit
+
+func listCap(k kind) int64 {
+	if k.listCap > 0 && k.listCap < defaultListCap {
+		return k.listCap
+	}
+	return defaultListCap
+}
+
+// listPageSize is the page size the client asked for, clamped to the kind's ceiling.
+func listPageSize(k kind, want int) int64 {
+	ceiling := listCap(k)
+	if want <= 0 || int64(want) > ceiling {
+		return ceiling
+	}
+	return int64(want)
 }
 
 // subgroupLabels names the nested sub-groups a category can expand into.
@@ -349,7 +369,7 @@ var kinds = []kind{
 		extra:       eventRow,
 		noCreate:    true,
 		noDelete:    true,
-		listLimit:   500,
+		listCap:     500,
 		recentFirst: true,
 	},
 	{

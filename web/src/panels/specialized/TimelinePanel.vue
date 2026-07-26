@@ -221,7 +221,7 @@ vueWatch(
                 </h3>
                 <span
                   v-if="text(item as Row, severityField)"
-                  class="rounded-full px-2 py-0.5 text-xs"
+                  class="shrink-0 rounded-full px-2 py-0.5 text-xs"
                   :class="
                     badgeClassFor(undefined, text(item as Row, severityField))
                   "
@@ -230,7 +230,7 @@ vueWatch(
               </div>
               <p
                 v-if="text(item as Row, bodyField)"
-                class="mt-1 text-sm leading-relaxed whitespace-pre-wrap text-surface-600 dark:text-surface-300"
+                class="mt-1 text-sm leading-relaxed wrap-break-word whitespace-pre-wrap text-surface-600 dark:text-surface-300"
               >
                 {{ text(item as Row, bodyField) }}
               </p>

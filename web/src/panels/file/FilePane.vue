@@ -36,10 +36,10 @@ const emit = defineEmits<{ save: []; retry: [] }>();
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col">
+  <div class="@container flex h-full min-h-0 flex-col">
     <header
       v-if="selected && !selected.isDir"
-      class="flex items-center gap-3 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+      class="flex shrink-0 items-center gap-3 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
     >
       <AppIcon
         :icon="{ type: 'lucide', value: 'file' }"
@@ -68,17 +68,19 @@ const emit = defineEmits<{ save: []; retry: [] }>();
         as="a"
         severity="secondary"
         size="small"
+        class="shrink-0"
         :href="downloadHref"
         :download="selected.name"
         title="Download file"
       >
         <AppIcon :icon="{ type: 'lucide', value: 'download' }" :size="14" />
-        Download
+        <span class="@max-md:hidden">Download</span>
       </Button>
       <Button
         v-if="canEdit"
         type="button"
         size="small"
+        class="shrink-0"
         label="Save"
         :loading="saving"
         :disabled="!dirty || mutating"

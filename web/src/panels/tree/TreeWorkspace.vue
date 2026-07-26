@@ -386,7 +386,7 @@ onBeforeUnmount(() => {
   <div class="flex h-full min-h-0">
     <div
       data-test="resource-sidebar-shell"
-      class="relative h-full min-h-0 shrink-0"
+      class="relative h-full min-h-0 max-w-[60%] shrink-0"
       :style="{ width: `${layout.treeSidebarWidth}px` }"
     >
       <div

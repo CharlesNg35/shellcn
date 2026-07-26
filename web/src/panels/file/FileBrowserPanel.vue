@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useDropZone } from "@vueuse/core";
+import { useDropZone, useElementSize } from "@vueuse/core";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
@@ -82,12 +82,20 @@ const uploadFieldName = computed(
   () => uploadConfig.value?.fieldName ?? "files",
 );
 
+// A directory can hold far more entries than a tab can render: the panel takes
+// one page on open and every further page needs an explicit "Load more" (or a
+// scroll to the end), up to a cap past which the filter is the only way on.
+const PAGE_SIZE = 500;
+const MAX_LOADED_ENTRIES = 20000;
+
 const startPath = computed(
   () => props.source?.params?.[pathParam.value] ?? ".",
 );
 const cwd = ref(startPath.value);
 const entries = ref<FileEntry[]>([]);
 const loadingList = ref(false);
+const loadingMore = ref(false);
+const listCursor = ref<string | undefined>(undefined);
 const listError = ref<string | null>(null);
 
 const selected = ref<FileEntry | null>(null);
@@ -160,6 +168,22 @@ const listEmptyText = computed(() =>
     ? "No items match your filter."
     : "This folder is empty.",
 );
+
+const hasMoreEntries = computed(() => listCursor.value !== undefined);
+const entriesCapped = computed(
+  () => entries.value.length >= MAX_LOADED_ENTRIES,
+);
+const canLoadMoreEntries = computed(
+  () => hasMoreEntries.value && !entriesCapped.value,
+);
+const entryCountLabel = computed(() => {
+  const count = entries.value.length;
+  const noun = count === 1 ? "item" : "items";
+  if (entriesCapped.value) return `${count}+ ${noun}`;
+  return hasMoreEntries.value
+    ? `Showing ${count} ${noun} (+more)`
+    : `${count} ${noun}`;
+});
 
 const operationCtx = computed(() => ({
   resource: props.resource,
@@ -258,6 +282,13 @@ const { isOverDropZone } = useDropZone(panelEl, {
 });
 const dropActive = computed(() => isOverDropZone.value && canUpload.value);
 
+// Mirrors the `@max-2xl` container query that collapses the split view's
+// preview pane, so opening a file falls back to the preview dialog.
+const { width: panelWidth } = useElementSize(panelEl);
+const splitPreviewHidden = computed(
+  () => panelWidth.value > 0 && panelWidth.value < 672,
+);
+
 const canSubmitMkdir = computed(
   () => Boolean(newFolderName.value.trim()) && !mutating.value,
 );
@@ -304,6 +335,18 @@ function resolvedListPath(requested: string, page: FileListPage): string {
   return first?.startsWith("/") ? parentPath(first) : requested;
 }
 
+function fetchEntryPage(path: string, cursor?: string): Promise<FileListPage> {
+  return fetchPage<FileEntry>(
+    props.connectionId,
+    {
+      routeId: props.source!.routeId,
+      params: operationParams(path),
+    },
+    operationCtx.value,
+    { cursor, limit: PAGE_SIZE },
+  ) as Promise<FileListPage>;
+}
+
 async function loadList(path: string): Promise<void> {
   if (!props.source) return;
   const request = ++listRequest;
@@ -317,23 +360,42 @@ async function loadList(path: string): Promise<void> {
   content.value = null;
   contentError.value = null;
   fileFilter.value = "";
+  listCursor.value = undefined;
   try {
-    const page = (await fetchPage<FileEntry>(
-      props.connectionId,
-      {
-        routeId: props.source.routeId,
-        params: operationParams(path),
-      },
-      operationCtx.value,
-    )) as FileListPage;
+    const page = await fetchEntryPage(path);
     if (request !== listRequest) return;
     entries.value = page.items;
+    listCursor.value = page.nextCursor || undefined;
     cwd.value = resolvedListPath(path, page);
   } catch (e) {
     if (request !== listRequest) return;
     listError.value = (e as Error).message;
   } finally {
     if (request === listRequest) loadingList.value = false;
+  }
+}
+
+async function loadMoreEntries(): Promise<void> {
+  if (!canLoadMoreEntries.value || loadingMore.value || loadingList.value)
+    return;
+  if (!props.source) return;
+  const request = listRequest;
+  const cursor = listCursor.value;
+  loadingMore.value = true;
+  try {
+    const page = await fetchEntryPage(cwd.value, cursor);
+    if (request !== listRequest) return;
+    const seen = new Set(entries.value.map((e) => e.path));
+    const added = page.items.filter((e) => !seen.has(e.path));
+    listCursor.value = page.nextCursor || undefined;
+    if (added.length)
+      entries.value = entries.value.concat(
+        added.slice(0, MAX_LOADED_ENTRIES - entries.value.length),
+      );
+  } catch (e) {
+    if (request === listRequest) notifyError(e);
+  } finally {
+    loadingMore.value = false;
   }
 }
 
@@ -440,7 +502,8 @@ async function openEntry(entry: FileEntry): Promise<void> {
       return;
     }
     await selectEntry(entry);
-    if (viewMode.value === "grid") previewOpen.value = true;
+    if (viewMode.value === "grid" || splitPreviewHidden.value)
+      previewOpen.value = true;
   });
 }
 
@@ -866,7 +929,7 @@ watch(
 
     <div
       v-if="uploadWarning"
-      class="border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+      class="shrink-0 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
     >
       <AppAlert
         tone="warning"
@@ -898,9 +961,9 @@ watch(
       @delete="bulkDeleteOpen = true"
     />
 
-    <div v-if="viewMode === 'split'" class="flex min-h-0 flex-1">
+    <div v-if="viewMode === 'split'" class="@container flex min-h-0 flex-1">
       <div
-        class="w-80 shrink-0 border-r border-surface-200 bg-surface-50/40 dark:border-surface-800 dark:bg-surface-950/30"
+        class="w-80 max-w-[45%] min-w-56 shrink-0 border-r border-surface-200 bg-surface-50/40 @max-2xl:w-full @max-2xl:max-w-none @max-2xl:border-r-0 dark:border-surface-800 dark:bg-surface-950/30"
       >
         <FileEntryList
           :entries="filtered"
@@ -910,14 +973,16 @@ watch(
           :empty-text="listEmptyText"
           :selectable="selectable"
           :selected-paths="selectedPaths"
+          :has-more="canLoadMoreEntries"
           @select="guardedSelectEntry"
           @open="openEntry"
           @retry="guardedLoadList(cwd)"
           @toggle="toggleSelect"
+          @load-more="loadMoreEntries"
         />
       </div>
 
-      <div class="min-w-0 flex-1">
+      <div class="min-w-0 flex-1 @max-2xl:hidden">
         <FilePane
           v-model:edit-content="editContent"
           :selected="selected"
@@ -947,11 +1012,33 @@ watch(
       :empty-text="listEmptyText"
       :selectable="selectable"
       :selected-paths="selectedPaths"
+      :has-more="canLoadMoreEntries"
       @select="guardedSelectEntry"
       @open="openEntry"
       @retry="guardedLoadList(cwd)"
       @toggle="toggleSelect"
+      @load-more="loadMoreEntries"
     />
+
+    <div
+      v-if="!loadingList && (entries.length || hasMoreEntries)"
+      class="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-surface-200 px-3 py-1.5 text-xs text-surface-400 dark:border-surface-800"
+    >
+      <span class="tabular-nums">{{ entryCountLabel }}</span>
+      <span v-if="entriesCapped && hasMoreEntries" class="min-w-0 truncate">
+        listing paused — refine your filter
+      </span>
+      <Button
+        v-else-if="canLoadMoreEntries"
+        type="button"
+        text
+        size="small"
+        class="ml-auto"
+        :label="loadingMore ? 'Loading…' : 'Load more'"
+        :disabled="loadingMore"
+        @click="loadMoreEntries"
+      />
+    </div>
 
     <Dialog
       v-model:visible="previewOpen"
@@ -1131,7 +1218,7 @@ watch(
     </Dialog>
 
     <Dialog v-model:visible="bulkDeleteOpen" modal header="Delete selection">
-      <p class="mb-4 w-80 text-sm text-surface-600 dark:text-surface-300">
+      <p class="mb-4 max-w-80 text-sm text-surface-600 dark:text-surface-300">
         Delete {{ selectionCount }}
         {{ selectionCount === 1 ? "item" : "items" }}? This cannot be undone.
       </p>

@@ -35,6 +35,12 @@ const FIELDS_WIDTH = 220;
 const PLAIN_WIDTH = 170;
 const PLAIN_HEIGHT = 42;
 
+// Every node and edge is a live DOM element, so expansion stops at a ceiling
+// instead of growing for the life of the panel; a wide record shows a prefix of
+// its fields and counts the rest.
+export const MAX_GRAPH_NODES = 1500;
+export const MAX_NODE_FIELDS = 20;
+
 const EDGE_PALETTE = [
   "#6366f1",
   "#10b981",
@@ -58,35 +64,42 @@ export function edgeColor(label?: string): string {
 export function mergeGraph(
   base: GraphPayload,
   incoming: GraphPayload,
-): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  maxNodes: number = MAX_GRAPH_NODES,
+): { nodes: GraphNode[]; edges: GraphEdge[]; truncated: boolean } {
   const edgeKey = (e: GraphEdge) =>
     e.id ?? `${e.source}->${e.target}:${e.label ?? ""}`;
   const nodes = [...(base.nodes ?? [])];
   const nodeIds = new Set(nodes.map((n) => n.id));
+  let truncated = false;
   for (const node of incoming.nodes ?? []) {
-    if (!nodeIds.has(node.id)) {
-      nodes.push(node);
-      nodeIds.add(node.id);
+    if (nodeIds.has(node.id)) continue;
+    if (nodes.length >= maxNodes) {
+      truncated = true;
+      break;
     }
+    nodes.push(node);
+    nodeIds.add(node.id);
   }
   const edges = [...(base.edges ?? [])];
   const edgeKeys = new Set(edges.map(edgeKey));
   for (const edge of incoming.edges ?? []) {
     const key = edgeKey(edge);
-    if (!edgeKeys.has(key)) {
-      edges.push(edge);
-      edgeKeys.add(key);
+    if (edgeKeys.has(key)) continue;
+    // Once nodes were dropped, an incoming edge can point at one of them.
+    if (truncated && !(nodeIds.has(edge.source) && nodeIds.has(edge.target))) {
+      continue;
     }
+    edges.push(edge);
+    edgeKeys.add(key);
   }
-  return { nodes, edges };
+  return { nodes, edges, truncated };
 }
 
 function nodeSize(node: GraphNode): { width: number; height: number } {
-  if (node.fields?.length) {
-    return {
-      width: FIELDS_WIDTH,
-      height: HEADER_H + node.fields.length * ROW_H,
-    };
+  const fields = node.fields?.length ?? 0;
+  if (fields) {
+    const rows = fields > MAX_NODE_FIELDS ? MAX_NODE_FIELDS + 1 : fields;
+    return { width: FIELDS_WIDTH, height: HEADER_H + rows * ROW_H };
   }
   return { width: PLAIN_WIDTH, height: PLAIN_HEIGHT };
 }

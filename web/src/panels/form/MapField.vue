@@ -90,21 +90,22 @@ function removeAt(index: number): void {
 </script>
 
 <template>
-  <div class="flex min-w-0 flex-col gap-2">
+  <div class="@container flex min-w-0 flex-col gap-2">
     <p v-if="!rows.length" class="text-xs text-surface-400">No entries yet.</p>
 
     <div
       v-for="(row, index) in rows"
       :key="index"
-      class="flex min-w-0 items-start gap-2"
+      class="flex min-w-0 flex-col gap-2 @sm:flex-row @sm:items-start"
     >
-      <InputText
-        :model-value="row.key"
-        :placeholder="field.keyPlaceholder ?? field.keyLabel ?? 'Key'"
-        :aria-label="`${field.keyLabel ?? 'Key'} ${index + 1}`"
-        class="w-1/3 shrink-0"
-        @update:model-value="setKey(index, $event ?? '')"
-      />
+      <div class="min-w-0 @sm:basis-1/3">
+        <InputText
+          :model-value="row.key"
+          :placeholder="field.keyPlaceholder ?? field.keyLabel ?? 'Key'"
+          :aria-label="`${field.keyLabel ?? 'Key'} ${index + 1}`"
+          @update:model-value="setKey(index, $event ?? '')"
+        />
+      </div>
       <div
         class="min-w-0 flex-1"
         role="group"
@@ -125,6 +126,7 @@ function removeAt(index: number): void {
         type="button"
         severity="danger"
         text
+        class="shrink-0 self-end @sm:self-auto"
         :aria-label="`Remove entry ${index + 1}`"
         @click="removeAt(index)"
       >
@@ -137,6 +139,7 @@ function removeAt(index: number): void {
         type="button"
         severity="secondary"
         size="small"
+        class="max-w-full whitespace-normal!"
         :aria-label="field.addLabel ?? 'Add entry'"
         @click="add"
       >

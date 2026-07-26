@@ -79,6 +79,7 @@ const activeId = computed(() =>
 
 const showCreate = ref(false);
 const sidebarMenuOpen = useStorage("shellcn:sidebar-menu:open", true);
+const sidebarCollapsed = useStorage("shellcn:sidebar:collapsed", false);
 
 // Accordion the utility menu over its real content height so the motion tracks
 // the panel instead of animating toward a guessed max-height.
@@ -120,20 +121,52 @@ async function onConnectionSaved(payload: {
     class="flex h-full bg-surface-0 text-surface-700 dark:bg-surface-950 dark:text-surface-200"
   >
     <aside
-      class="flex w-64 shrink-0 flex-col border-r border-surface-200 bg-surface-50 dark:border-surface-800 dark:bg-surface-900"
+      class="flex shrink-0 flex-col border-r border-surface-200 bg-surface-50 transition-[width] duration-200 motion-reduce:transition-none dark:border-surface-800 dark:bg-surface-900"
+      :class="sidebarCollapsed ? 'w-14' : 'w-64'"
     >
-      <div class="flex items-center justify-between px-4 py-3.5">
+      <div
+        class="flex items-center gap-1 py-3.5"
+        :class="sidebarCollapsed ? 'flex-col px-2' : 'justify-between px-4'"
+      >
         <RouterLink
           :to="{ name: 'home' }"
-          class="flex items-center gap-2 font-semibold text-surface-900 dark:text-surface-0"
+          title="ShellCN"
+          class="flex min-w-0 items-center gap-2 font-semibold text-surface-900 dark:text-surface-0"
         >
           <AppLogo :size="28" class="shrink-0 text-primary-600" />
-          ShellCN
+          <span v-show="!sidebarCollapsed" class="truncate">ShellCN</span>
         </RouterLink>
-        <ThemeToggle size="small" :icon-size="16" />
+        <div
+          class="flex items-center gap-1"
+          :class="sidebarCollapsed ? 'flex-col' : ''"
+        >
+          <ThemeToggle size="small" :icon-size="16" />
+          <Button
+            text
+            rounded
+            severity="secondary"
+            size="small"
+            :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+            :aria-label="
+              sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'
+            "
+            :aria-expanded="!sidebarCollapsed"
+            @click="sidebarCollapsed = !sidebarCollapsed"
+          >
+            <AppIcon
+              :icon="{
+                type: 'lucide',
+                value: sidebarCollapsed
+                  ? 'panel-left-open'
+                  : 'panel-left-close',
+              }"
+              :size="16"
+            />
+          </Button>
+        </div>
       </div>
 
-      <div class="px-3 pb-2">
+      <div v-show="!sidebarCollapsed" class="px-3 pb-2">
         <IconField :class="searchFieldClass">
           <InputIcon :class="searchIconLeftClass">
             <AppIcon :icon="{ type: 'lucide', value: 'search' }" :size="15" />
@@ -148,9 +181,18 @@ async function onConnectionSaved(payload: {
         </IconField>
       </div>
 
-      <nav class="flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-3">
+      <nav
+        class="flex min-h-0 flex-1 flex-col overflow-hidden pb-3"
+        :class="sidebarCollapsed ? 'px-0' : 'px-2'"
+      >
         <p v-if="error" class="px-2 py-4 text-sm text-red-500">{{ error }}</p>
-        <ConnectionSidebar v-else :active-id="activeId" :query="query">
+        <ConnectionSidebar
+          v-else
+          :active-id="activeId"
+          :query="query"
+          :collapsed="sidebarCollapsed"
+          @expand="sidebarCollapsed = false"
+        >
           <template #create>
             <Button
               v-if="auth.canCreate"
@@ -212,7 +254,7 @@ async function onConnectionSaved(payload: {
               "
             >
               <AppIcon :icon="{ type: 'lucide', value: 'key' }" :size="16" />
-              Credentials
+              <span v-show="!sidebarCollapsed">Credentials</span>
             </RouterLink>
             <RouterLink
               :to="{ name: 'recordings' }"
@@ -224,7 +266,7 @@ async function onConnectionSaved(payload: {
               "
             >
               <AppIcon :icon="{ type: 'lucide', value: 'video' }" :size="16" />
-              Recordings
+              <span v-show="!sidebarCollapsed">Recordings</span>
             </RouterLink>
             <RouterLink
               :to="{ name: 'settings' }"
@@ -239,13 +281,14 @@ async function onConnectionSaved(payload: {
                 :icon="{ type: 'lucide', value: 'settings' }"
                 :size="16"
               />
-              Settings
+              <span v-show="!sidebarCollapsed">Settings</span>
             </RouterLink>
           </div>
         </Transition>
 
         <div
           class="flex items-center gap-1 border-t border-surface-200 px-2 py-2 dark:border-surface-800"
+          :class="sidebarCollapsed ? 'flex-col' : ''"
         >
           <RouterLink
             :to="{ name: 'profile' }"
@@ -263,6 +306,7 @@ async function onConnectionSaved(payload: {
               <AppIcon :icon="{ type: 'lucide', value: 'user' }" :size="15" />
             </span>
             <span
+              v-show="!sidebarCollapsed"
               class="min-w-0 flex-1 truncate text-sm text-surface-700 dark:text-surface-200"
             >
               {{ userLabel }}

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"sync"
 	"testing"
 
 	"github.com/moby/moby/api/types/events"
@@ -501,6 +502,94 @@ func TestObjectEventKeepsComposeProjectOnMemberDestroy(t *testing.T) {
 	})
 	if ev == nil || ev.Type != "deleted" {
 		t.Fatalf("vanished compose project event = %+v, want deleted", ev)
+	}
+}
+
+// TestOverviewAndVolumeListShareDaemonEnumerations pins the cost of two hot paths:
+// the overview tick reads counts from /info rather than listing every container
+// and image, and repeated volume pages reuse one container walk and one disk-usage
+// call.
+func TestOverviewAndVolumeListShareDaemonEnumerations(t *testing.T) {
+	var mu sync.Mutex
+	counts := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := dockerAPIPath(r.URL.Path)
+		mu.Lock()
+		counts[p]++
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		switch p {
+		case "/_ping":
+			w.Header().Set("Api-Version", "1.54")
+			_, _ = w.Write([]byte("OK"))
+		case "/info":
+			_ = json.NewEncoder(w).Encode(map[string]any{"Containers": 12, "ContainersRunning": 5, "Images": 40})
+		case "/volumes":
+			_ = json.NewEncoder(w).Encode(map[string]any{"Volumes": []map[string]any{
+				{"Name": "data", "Driver": "local", "Scope": "local"},
+			}})
+		case "/networks":
+			_ = json.NewEncoder(w).Encode([]map[string]any{{"Id": "net1", "Name": "bridge"}})
+		case "/containers/json":
+			_ = json.NewEncoder(w).Encode([]map[string]any{{
+				"Id":     "abc123",
+				"Names":  []string{"/web"},
+				"Mounts": []map[string]any{{"Type": "volume", "Name": "data"}},
+			}})
+		case "/system/df":
+			_ = json.NewEncoder(w).Encode(map[string]any{"VolumeUsage": map[string]any{"Items": []map[string]any{
+				{"Name": "data", "UsageData": map[string]any{"Size": 2048, "RefCount": 1}},
+			}}})
+		default:
+			t.Errorf("unexpected docker request %s %s", r.Method, p)
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	u, _ := url.Parse(srv.URL)
+	host, port, _ := net.SplitHostPort(u.Host)
+	sess, err := Connect(context.Background(), plugin.ConnectConfig{
+		Transport: plugin.TransportAgent,
+		Config:    map[string]any{"endpoint_type": "tcp", "host": host, "port": mustPort(t, port)},
+		Net:       directNet{},
+	}, "/var/run/docker.sock")
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+	s, err := Unwrap(sess)
+	if err != nil {
+		t.Fatalf("Unwrap: %v", err)
+	}
+
+	frame := engineFrame(context.Background(), s)
+	if frame["containers"] != 12 || frame["running"] != 5 || frame["stopped"] != 7 || frame["images"] != 40 {
+		t.Fatalf("overview frame = %+v, want counts sourced from /info", frame)
+	}
+	if frame["volumes"] != 1 || frame["networks"] != 1 {
+		t.Fatalf("overview frame = %+v, want one volume and one network", frame)
+	}
+
+	rc := plugin.NewRequestContext(context.Background(), plugin.User{ID: "u"}, sess, nil, url.Values{}, nil)
+	for i := 0; i < 3; i++ {
+		page, err := ListVolumes(rc)
+		if err != nil {
+			t.Fatalf("list volumes: %v", err)
+		}
+		rows := page.(plugin.Page[Row]).Items
+		if len(rows) != 1 || rows[0]["size"] != int64(2048) || rows[0]["refs"] != int64(1) {
+			t.Fatalf("volume rows = %+v, want one row sized from disk usage", rows)
+		}
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if counts["/images/json"] != 0 {
+		t.Fatalf("image list called %d times, want none", counts["/images/json"])
+	}
+	if counts["/containers/json"] != 1 || counts["/system/df"] != 1 {
+		t.Fatalf("container list called %d times and disk usage %d times, want one each", counts["/containers/json"], counts["/system/df"])
 	}
 }
 

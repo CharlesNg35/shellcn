@@ -3,13 +3,16 @@ package kubernetes
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/remotecommand"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -177,6 +180,36 @@ func TestWorkloadLogsStreamAggregatesSelectedPods(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("workload logs = %q, missing %q", got, want)
 		}
+	}
+}
+
+func TestLogTargetsCapsFanOut(t *testing.T) {
+	pods := make([]corev1.Pod, 0, maxLogPods*3)
+	for i := range cap(pods) {
+		pods = append(pods, corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              fmt.Sprintf("web-%d", i),
+				CreationTimestamp: metav1.NewTime(time.Unix(int64(i), 0)),
+			},
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}, {Name: "sidecar"}}},
+		})
+	}
+
+	targets, streamed, truncated := logTargets(pods, "")
+	if !truncated || streamed != maxLogPods {
+		t.Fatalf("streamed %d pods (truncated=%v), want %d", streamed, truncated, maxLogPods)
+	}
+	if len(targets) > maxLogStreams {
+		t.Fatalf("opened %d streams, want at most %d", len(targets), maxLogStreams)
+	}
+	// Newest pods first: a scaled-up workload should show its current replicas.
+	if targets[0].pod != "web-29" {
+		t.Fatalf("first target = %+v, want the newest pod", targets[0])
+	}
+
+	targets, streamed, truncated = logTargets(pods[:2], "app")
+	if truncated || streamed != 2 || len(targets) != 2 {
+		t.Fatalf("a small workload must stream whole: %d targets, %d pods, truncated=%v", len(targets), streamed, truncated)
 	}
 }
 

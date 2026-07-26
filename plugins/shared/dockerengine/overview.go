@@ -70,23 +70,16 @@ func OverviewMetrics(rc *plugin.RequestContext, stream plugin.ClientStream) erro
 	})
 }
 
+// engineFrame builds the count tiles. Container and image tallies come from the
+// daemon's own /info counters rather than from listing every object, so the tick
+// stays cheap on hosts with a large inventory.
 func engineFrame(ctx context.Context, s *Session) map[string]any {
 	frame := map[string]any{}
-	if res, err := s.cli.ContainerList(ctx, dockerclient.ContainerListOptions{All: true}); err == nil {
-		var running, stopped int
-		for _, c := range res.Items {
-			if c.State == "running" {
-				running++
-			} else {
-				stopped++
-			}
-		}
-		frame["containers"] = len(res.Items)
-		frame["running"] = running
-		frame["stopped"] = stopped
-	}
-	if res, err := s.cli.ImageList(ctx, dockerclient.ImageListOptions{All: true}); err == nil {
-		frame["images"] = len(res.Items)
+	if res, err := s.cli.Info(ctx, dockerclient.InfoOptions{}); err == nil {
+		frame["containers"] = res.Info.Containers
+		frame["running"] = res.Info.ContainersRunning
+		frame["stopped"] = res.Info.Containers - res.Info.ContainersRunning
+		frame["images"] = res.Info.Images
 	}
 	if res, err := s.cli.VolumeList(ctx, dockerclient.VolumeListOptions{}); err == nil {
 		frame["volumes"] = len(res.Items)

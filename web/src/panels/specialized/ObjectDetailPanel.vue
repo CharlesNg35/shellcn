@@ -137,7 +137,7 @@ onUnmounted(clearCopiedTimer);
 <template>
   <div class="flex h-full flex-col">
     <div
-      class="flex items-center justify-between gap-2 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+      class="flex flex-wrap items-center justify-between gap-2 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
     >
       <Button
         type="button"
@@ -197,7 +197,9 @@ onUnmounted(clearCopiedTimer);
             :key="section.title ?? index"
             :header="section.title"
           >
-            <dl class="divide-y divide-surface-100 dark:divide-surface-800">
+            <dl
+              class="@container divide-y divide-surface-100 dark:divide-surface-800"
+            >
               <ObjectDetailFieldRow
                 v-for="field in section.fields ?? []"
                 :key="field.key"

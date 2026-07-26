@@ -1,22 +1,28 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { Handle, Position } from "@vue-flow/core";
 import AppIcon from "@/components/AppIcon.vue";
-import type { GraphField } from "./graphLayout";
+import { MAX_NODE_FIELDS, type GraphField } from "./graphLayout";
 
-defineProps<{
+const props = defineProps<{
   data: { label: string; group?: string; fields: GraphField[] };
   selected?: boolean;
 }>();
+
+const fields = computed(() => props.data.fields.slice(0, MAX_NODE_FIELDS));
+const hiddenFields = computed(
+  () => props.data.fields.length - fields.value.length,
+);
 </script>
 
 <template>
   <div class="record-node" :class="{ 'record-node-selected': selected }">
     <Handle type="target" :position="Position.Left" class="record-handle" />
-    <div class="record-head">
-      <span class="truncate">{{ data.label }}</span>
+    <div class="record-head truncate" :title="data.label">
+      {{ data.label }}
     </div>
     <ul class="record-fields">
-      <li v-for="f in data.fields" :key="f.name" class="record-field">
+      <li v-for="f in fields" :key="f.name" class="record-field">
         <span class="record-field-name" :class="{ 'record-field-key': f.key }">
           <AppIcon
             v-if="f.key"
@@ -27,6 +33,9 @@ defineProps<{
           <span class="truncate">{{ f.name }}</span>
         </span>
         <span class="record-field-type truncate">{{ f.type }}</span>
+      </li>
+      <li v-if="hiddenFields > 0" class="record-field record-field-more">
+        +{{ hiddenFields }} more
       </li>
     </ul>
     <Handle type="source" :position="Position.Right" class="record-handle" />
@@ -83,6 +92,10 @@ defineProps<{
 .record-field:last-child {
   border-bottom: none;
 }
+.record-field-more {
+  color: var(--p-surface-400);
+  font-size: 11px;
+}
 .record-field-name {
   display: flex;
   align-items: center;
@@ -98,6 +111,8 @@ defineProps<{
   font-weight: 500;
 }
 .record-field-type {
+  flex: 0 1 auto;
+  max-width: 45%;
   color: var(--p-surface-400);
   font-size: 11px;
 }

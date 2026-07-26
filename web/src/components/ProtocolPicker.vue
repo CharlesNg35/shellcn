@@ -79,7 +79,7 @@ const groups = computed<PluginGroup[]>(() => {
     <div
       role="radiogroup"
       aria-label="Protocol"
-      class="max-h-72 overflow-auto pr-2 pb-2"
+      class="max-h-[min(28rem,50vh)] overflow-auto pr-2 pb-2"
     >
       <section
         v-for="group in groups"
@@ -95,7 +95,7 @@ const groups = computed<PluginGroup[]>(() => {
           }}</span>
         </header>
 
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-2">
           <button
             v-for="p in group.plugins"
             :key="p.name"
@@ -137,7 +137,7 @@ const groups = computed<PluginGroup[]>(() => {
 
       <p
         v-if="!groups.length"
-        class="col-span-2 py-6 text-center text-sm text-surface-400"
+        class="py-6 text-center text-sm text-surface-400"
       >
         No protocols match “{{ query }}”.
       </p>

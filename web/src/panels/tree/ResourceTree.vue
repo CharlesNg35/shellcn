@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from "vue";
+import {
+  onActivated,
+  onDeactivated,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 import Tree from "primevue/tree";
 import type { TreeNode as PVNode } from "primevue/treenode";
 import { fetchDoc, fetchPage } from "@/api/dataSource";
@@ -13,8 +20,19 @@ import type {
 } from "@/types/projection";
 import AppIcon from "@/components/AppIcon.vue";
 
+// A branch can hold an unbounded number of children: a node takes one page on
+// expand and every further page needs an explicit "Load more…" click, up to a
+// cap past which the branch stops growing.
+const CHILD_PAGE_SIZE = 200;
+const MAX_CHILDREN = 2000;
+// A refresh tick fans out over the expanded branches, so it is capped at the
+// most recently expanded ones and run a few requests at a time.
+const MAX_REFRESH_NODES = 25;
+const REFRESH_CONCURRENCY = 4;
+
 interface NodeData {
   isGroup?: boolean;
+  isMore?: boolean;
   icon?: Icon;
   ref?: ResourceIdentity;
   row?: Row;
@@ -23,6 +41,7 @@ interface NodeData {
   listParams?: Record<string, string>;
   groupLabel?: string;
   parentPath?: string[];
+  nextCursor?: string;
 }
 
 interface LoadChildrenOptions {
@@ -53,6 +72,12 @@ const nodes = ref<PVNode[]>([]);
 const badges = reactive<Record<string, string | number>>({});
 const expandedKeys = ref<Record<string, boolean>>({});
 const selectionKeys = ref<Record<string, boolean>>({});
+const active = ref(true);
+// Sentinel key -> owning node, so a "Load more…" click finds its branch without
+// putting a parent back-reference into the reactive node graph.
+const moreParents = new Map<string, PVNode>();
+const expandSeq = new Map<string, number>();
+let expandCounter = 0;
 
 function toNode(
   n: TreeNode,
@@ -100,21 +125,62 @@ function updateNode(
   return target;
 }
 
+function loadedChildren(node: PVNode): PVNode[] {
+  return (node.children ?? []).filter(
+    (child) => !(child.data as NodeData).isMore,
+  );
+}
+
 function reconcileChildren(
   node: PVNode,
   items: TreeNode[],
   parentPath: string[],
   groupLabel: string,
-): void {
+  keep: PVNode[] = [],
+): PVNode[] {
   const existing = new Map(
-    (node.children ?? []).map((child) => [pvNodeIdentity(child), child]),
+    loadedChildren(node).map((child) => [pvNodeIdentity(child), child]),
   );
-  node.children = items.map((item) => {
-    const child = existing.get(treeNodeIdentity(item));
-    return child
-      ? updateNode(child, item, parentPath, groupLabel)
-      : toNode(item, parentPath, groupLabel);
-  });
+  const seen = new Set(keep.map((child) => pvNodeIdentity(child)));
+  const added = items
+    .filter((item) => !seen.has(treeNodeIdentity(item)))
+    .map((item) => {
+      const child = existing.get(treeNodeIdentity(item));
+      return child
+        ? updateNode(child, item, parentPath, groupLabel)
+        : toNode(item, parentPath, groupLabel);
+    });
+  return [...keep, ...added];
+}
+
+// The sentinel is a leaf row appended after the loaded children; selecting it
+// pulls exactly one more page.
+function moreNode(node: PVNode): PVNode {
+  const key = `${String(node.key)}::more`;
+  moreParents.set(key, node);
+  return { key, label: "Load more…", leaf: true, data: { isMore: true } };
+}
+
+function setChildren(node: PVNode, children: PVNode[], cursor: string): void {
+  const data = node.data as NodeData;
+  const capped = children.length >= MAX_CHILDREN;
+  data.nextCursor = cursor && !capped ? cursor : undefined;
+  node.children = data.nextCursor ? [...children, moreNode(node)] : children;
+}
+
+function childContext(node: PVNode): {
+  parentPath: string[];
+  groupLabel: string;
+} {
+  const data = node.data as NodeData;
+  return {
+    groupLabel: data.isGroup
+      ? String(node.label ?? "")
+      : (data.groupLabel ?? ""),
+    parentPath: data.isGroup
+      ? []
+      : [...(data.parentPath ?? []), String(node.label ?? "")],
+  };
 }
 
 function selectedNodeKey(uid: string): string {
@@ -133,6 +199,7 @@ function findNodeByUid(items: PVNode[], uid: string): PVNode | undefined {
 }
 
 function resetRootNodes(): void {
+  moreParents.clear();
   nodes.value = props.groups.map((g) => ({
     key: g.key,
     label: g.label,
@@ -156,31 +223,104 @@ async function loadChildren(
   if ((node.children && !options.force) || !data.source?.routeId) return;
   if (showLoading) node.loading = true;
   try {
-    const page = await fetchPage<TreeNode>(props.connectionId, data.source);
-    const groupLabel = data.isGroup
-      ? String(node.label ?? "")
-      : (data.groupLabel ?? "");
-    const childPath = data.isGroup
-      ? []
-      : [...(data.parentPath ?? []), String(node.label ?? "")];
-    reconcileChildren(node, page.items, childPath, groupLabel);
+    const page = await fetchPage<TreeNode>(
+      props.connectionId,
+      data.source,
+      {},
+      {
+        limit: CHILD_PAGE_SIZE,
+      },
+    );
+    const { parentPath, groupLabel } = childContext(node);
+    setChildren(
+      node,
+      reconcileChildren(node, page.items, parentPath, groupLabel),
+      page.nextCursor,
+    );
   } finally {
     if (showLoading) node.loading = false;
   }
+}
+
+async function loadMoreChildren(node: PVNode): Promise<void> {
+  const data = node.data as NodeData;
+  const cursor = data.nextCursor;
+  if (!cursor || !data.source?.routeId || node.loading) return;
+  node.loading = true;
+  try {
+    const page = await fetchPage<TreeNode>(
+      props.connectionId,
+      data.source,
+      {},
+      {
+        cursor,
+        limit: CHILD_PAGE_SIZE,
+      },
+    );
+    const { parentPath, groupLabel } = childContext(node);
+    setChildren(
+      node,
+      reconcileChildren(
+        node,
+        page.items,
+        parentPath,
+        groupLabel,
+        loadedChildren(node),
+      ),
+      page.nextCursor,
+    );
+  } finally {
+    node.loading = false;
+  }
+}
+
+function collectExpanded(items: PVNode[], out: PVNode[]): void {
+  for (const node of items) {
+    if ((node.data as NodeData).isMore) continue;
+    if (!expandedKeys.value[String(node.key)]) continue;
+    out.push(node);
+    if (node.children?.length) collectExpanded(node.children, out);
+  }
+}
+
+// Expanded branches in tree order, trimmed to the most recently expanded so a
+// deeply explored tree cannot turn one tick into an unbounded fan-out.
+function refreshTargets(items: PVNode[]): PVNode[] {
+  const expanded: PVNode[] = [];
+  collectExpanded(items, expanded);
+  if (expanded.length <= MAX_REFRESH_NODES) return expanded;
+  const recent = new Set(
+    [...expanded]
+      .sort(
+        (a, b) =>
+          (expandSeq.get(String(b.key)) ?? 0) -
+          (expandSeq.get(String(a.key)) ?? 0),
+      )
+      .slice(0, MAX_REFRESH_NODES),
+  );
+  return expanded.filter((node) => recent.has(node));
 }
 
 async function reloadExpanded(
   nodesToReload: PVNode[],
   options: LoadChildrenOptions = {},
 ): Promise<void> {
-  for (const node of nodesToReload) {
-    if (!expandedKeys.value[String(node.key)]) continue;
-    await loadChildren(node, options);
-    if (node.children?.length) await reloadExpanded(node.children, options);
-  }
+  const targets = refreshTargets(nodesToReload);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < targets.length) {
+      await loadChildren(targets[next++]!, options);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(REFRESH_CONCURRENCY, targets.length) }, () =>
+      worker(),
+    ),
+  );
 }
 
 function expandNode(node: PVNode): void {
+  expandSeq.set(String(node.key), ++expandCounter);
   expandedKeys.value = { ...expandedKeys.value, [String(node.key)]: true };
 }
 
@@ -197,6 +337,11 @@ function onNodeCollapse(node: PVNode): void {
 
 async function onNodeSelect(node: PVNode): Promise<void> {
   const data = node.data as NodeData;
+  if (data.isMore) {
+    const parent = moreParents.get(String(node.key));
+    if (parent) await loadMoreChildren(parent);
+    return;
+  }
   selectionKeys.value = { [String(node.key)]: true };
   if (data.isGroup) {
     if (data.ref && data.row)
@@ -232,12 +377,20 @@ watch(
 watch(
   () => props.refreshKey,
   async () => {
+    if (!active.value) return;
     await Promise.all([
       reloadExpanded(nodes.value, { force: true, loading: false }),
       loadBadges(),
     ]);
   },
 );
+
+onActivated(() => {
+  active.value = true;
+});
+onDeactivated(() => {
+  active.value = false;
+});
 
 async function loadBadges(): Promise<void> {
   for (const g of props.groups) {
@@ -272,6 +425,13 @@ onMounted(loadBadges);
   >
     <template #default="{ node }">
       <span
+        v-if="(node as PVNode).data?.isMore"
+        class="flex w-full cursor-pointer items-center gap-1.5 text-sm font-medium text-primary-600 dark:text-primary-300"
+      >
+        {{ node.label }}
+      </span>
+      <span
+        v-else
         class="flex w-full cursor-pointer items-center gap-1.5"
         :title="String(node.label ?? '')"
       >

@@ -17,6 +17,9 @@ export type TerminalGridLayoutNode =
 </script>
 
 <script setup lang="ts">
+import { computed, ref } from "vue";
+import type { ComponentPublicInstance } from "vue";
+import { useElementSize } from "@vueuse/core";
 import Splitter from "primevue/splitter";
 import type { SplitterResizeEndEvent } from "primevue/splitter";
 import SplitterPanel from "primevue/splitterpanel";
@@ -67,6 +70,22 @@ function resizeSizes(event: SplitterResizeEndEvent, count: number): number[] {
   return event.sizes.length === count ? event.sizes : evenSizes(count);
 }
 
+const splitter = ref<ComponentPublicInstance | null>(null);
+const { width, height } = useElementSize(splitter);
+
+// `min-size` is a percentage, so a fixed floor (20rem across, 10rem down) has to be
+// re-expressed against the measured splitter; without it panes shrink to a few
+// unusable terminal columns. The per-pane cap keeps every child satisfiable.
+const minPaneSize = computed(() => {
+  if (props.node.type !== "split") return 12;
+  const vertical = props.node.direction === "vertical";
+  const extent = vertical ? height.value : width.value;
+  if (extent <= 0) return 12;
+  const floorPx = vertical ? 160 : 320;
+  const cap = Math.floor(80 / props.node.children.length);
+  return Math.max(12, Math.min(cap, Math.round((floorPx / extent) * 100)));
+});
+
 function structureKey(node: TerminalGridLayoutNode): string {
   if (node.type === "leaf") return node.id;
   return `${node.id}:${node.children.map((child) => structureKey(child)).join("|")}`;
@@ -77,6 +96,7 @@ function structureKey(node: TerminalGridLayoutNode): string {
   <Splitter
     v-if="node.type === 'split'"
     :key="structureKey(node)"
+    ref="splitter"
     class="h-full min-h-0 min-w-0"
     :data-terminal-grid-split="node.direction"
     :layout="node.direction === 'vertical' ? 'vertical' : 'horizontal'"
@@ -88,7 +108,7 @@ function structureKey(node: TerminalGridLayoutNode): string {
       v-for="(child, index) in node.children"
       :key="child.id"
       :size="panelSize(node.id, index, node.children.length)"
-      :min-size="12"
+      :min-size="minPaneSize"
       class="min-h-0 min-w-0"
       :data-terminal-grid-panel-size="
         panelSize(node.id, index, node.children.length)

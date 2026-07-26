@@ -354,6 +354,23 @@ textarea:focus-visible,
   height: 1rem;
 }
 
+/* VirtualScroller hands its content class to the consuming slot instead of the
+   pass-through preset, so unstyled mode has to supply the positioning the theme
+   would: the rendered window floats above the absolutely sized spacer that gives
+   the viewport its scroll height.
+
+   DataTable hands the same class to its <tbody>, where `position: absolute`
+   blockifies the row group: the rows detach from the header's column widths and
+   paint on top of the sticky thead. A virtualized table keeps its content in
+   flow and sizes a spacer row instead, so table row groups opt out. */
+.p-virtualscroller-content:not(tbody) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  min-width: 100%;
+  min-height: 100%;
+}
+
 .shellcn-codemirror-host {
   position: relative;
   overflow: hidden;

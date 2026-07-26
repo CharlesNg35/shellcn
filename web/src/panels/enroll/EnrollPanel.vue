@@ -235,6 +235,11 @@ onUnmounted(clearCopiedTimer);
       </div>
       <pre
         class="m-0 overflow-auto p-3 font-mono text-xs text-surface-700 dark:text-surface-200"
+        :class="
+          artifact.content
+            ? 'whitespace-pre'
+            : 'wrap-break-word whitespace-pre-wrap'
+        "
         >{{ artifact.content || artifact.command }}</pre
       >
     </div>

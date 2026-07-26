@@ -22,6 +22,10 @@ import type {
 const auth = useAuthStore();
 const notify = useNotify();
 
+// The endpoint returns the caller's whole credential set, so pagination is what
+// bounds the mounted rows.
+const PAGE_SIZE = 50;
+
 const items = ref<CredentialSummary[]>([]);
 const kinds = ref<CredentialKindInfo[]>([]);
 const loading = ref(false);
@@ -152,7 +156,15 @@ const hasItems = computed(() => items.value.length > 0);
       </Button>
     </div>
 
-    <DataTable v-else :value="items" scrollable scroll-height="flex">
+    <DataTable
+      v-else
+      :value="items"
+      paginator
+      :rows="PAGE_SIZE"
+      :rows-per-page-options="[25, 50, 100]"
+      scrollable
+      scroll-height="flex"
+    >
       <Column field="name" header="Name" />
       <Column header="Kind">
         <template #body="{ data }">

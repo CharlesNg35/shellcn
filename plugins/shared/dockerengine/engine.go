@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -65,6 +66,74 @@ type CreateContainerRequest struct {
 
 func sess(rc *plugin.RequestContext) (*Session, error) {
 	return Unwrap(rc.Session)
+}
+
+// sessionCacheIdle drops a session's entry once nothing has asked for it for
+// this long, so closed connections don't accumulate.
+const sessionCacheIdle = 10 * time.Minute
+
+// SessionCache memoizes one expensive daemon lookup per session behind a TTL and
+// a single-flight lock, so the panels open on a connection share one round trip
+// instead of each issuing their own.
+type SessionCache[T any] struct {
+	TTL     time.Duration
+	mu      sync.Mutex
+	entries map[*Session]*sessionCacheEntry[T]
+}
+
+type sessionCacheEntry[T any] struct {
+	mu    sync.Mutex
+	value T
+	at    time.Time
+	used  time.Time
+}
+
+// Get returns the cached value, loading it when older than the TTL.
+func (c *SessionCache[T]) Get(s *Session, load func() (T, error)) (T, error) {
+	return c.load(s, time.Now().Add(-c.TTL), load)
+}
+
+// Refresh reloads the value regardless of its age, unless another caller has
+// already refreshed it while this one waited.
+func (c *SessionCache[T]) Refresh(s *Session, load func() (T, error)) (T, error) {
+	return c.load(s, time.Now(), load)
+}
+
+func (c *SessionCache[T]) load(s *Session, freshAfter time.Time, load func() (T, error)) (T, error) {
+	e := c.entry(s)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.at.After(freshAfter) {
+		return e.value, nil
+	}
+	value, err := load()
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	e.value, e.at = value, time.Now()
+	return value, nil
+}
+
+func (c *SessionCache[T]) entry(s *Session) *sessionCacheEntry[T] {
+	now := time.Now()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.entries == nil {
+		c.entries = map[*Session]*sessionCacheEntry[T]{}
+	}
+	for key, entry := range c.entries {
+		if key != s && now.Sub(entry.used) > sessionCacheIdle {
+			delete(c.entries, key)
+		}
+	}
+	e := c.entries[s]
+	if e == nil {
+		e = &sessionCacheEntry[T]{}
+		c.entries[s] = e
+	}
+	e.used = now
+	return e
 }
 
 func ListContainers(rc *plugin.RequestContext) (any, error) {
@@ -1028,49 +1097,7 @@ func composeRows(rc *plugin.RequestContext) ([]Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := s.cli.ContainerList(rc.Ctx, dockerclient.ContainerListOptions{All: true})
-	if err != nil {
-		return nil, DockerErr(err)
-	}
-	projects := map[string]Row{}
-	services := map[string]map[string]bool{}
-	for _, c := range res.Items {
-		project := c.Labels[ComposeProjectLabel]
-		if project == "" {
-			continue
-		}
-		r, ok := projects[project]
-		if !ok {
-			r = Row{
-				"name":       project,
-				"workingDir": c.Labels["com.docker.compose.project.working_dir"],
-				"config":     c.Labels["com.docker.compose.project.config_files"],
-				"containers": 0,
-				"running":    0,
-				"services":   0,
-				"status":     "Stopped",
-				"ref":        plugin.ResourceIdentity{Kind: "compose", Name: project, UID: project},
-			}
-			projects[project] = r
-		}
-		if services[project] == nil {
-			services[project] = map[string]bool{}
-		}
-		if service := c.Labels["com.docker.compose.service"]; service != "" {
-			services[project][service] = true
-			r["services"] = len(services[project])
-		}
-		r["containers"] = r["containers"].(int) + 1
-		if c.State == "running" {
-			r["running"] = r["running"].(int) + 1
-		}
-		r["status"] = composeStatus(r["running"].(int), r["containers"].(int))
-	}
-	rows := make([]Row, 0, len(projects))
-	for _, r := range projects {
-		rows = append(rows, r)
-	}
-	return rows, nil
+	return composeRowsForSession(rc.Ctx, s)
 }
 
 func imageUsageStatus(containers int64) string {
@@ -1095,37 +1122,55 @@ func volumeUsageStatus(refs int64) string {
 	}
 }
 
+// volumeRefCache holds one container-mount tally per session: every volume row
+// and volume event needs it, so the full container walk is shared.
+var volumeRefCache = SessionCache[map[string]int64]{TTL: 5 * time.Second}
+
+// volumeSizeCache holds the `docker system df` volume sizes per session. That
+// call walks the whole volume store on disk, so it is refreshed sparingly.
+var volumeSizeCache = SessionCache[map[string]int64]{TTL: time.Minute}
+
 func volumeRefCounts(ctx context.Context, s *Session) (map[string]int64, error) {
-	res, err := s.cli.ContainerList(ctx, dockerclient.ContainerListOptions{All: true})
-	if err != nil {
-		return nil, err
-	}
-	counts := make(map[string]int64)
-	for _, c := range res.Items {
-		seen := map[string]struct{}{}
-		for _, m := range c.Mounts {
-			if m.Type != mount.TypeVolume || m.Name == "" {
-				continue
+	return volumeRefCache.Get(s, func() (map[string]int64, error) {
+		res, err := s.cli.ContainerList(ctx, dockerclient.ContainerListOptions{All: true})
+		if err != nil {
+			return nil, err
+		}
+		counts := make(map[string]int64)
+		for _, c := range res.Items {
+			seen := map[string]struct{}{}
+			for _, m := range c.Mounts {
+				if m.Type != mount.TypeVolume || m.Name == "" {
+					continue
+				}
+				seen[m.Name] = struct{}{}
 			}
-			seen[m.Name] = struct{}{}
+			for name := range seen {
+				counts[name]++
+			}
 		}
-		for name := range seen {
-			counts[name]++
-		}
-	}
-	return counts, nil
+		return counts, nil
+	})
 }
 
 func volumeSizes(ctx context.Context, s *Session) map[string]int64 {
-	res, err := s.cli.DiskUsage(ctx, dockerclient.DiskUsageOptions{Volumes: true})
+	sizes, err := volumeSizeCache.Get(s, func() (map[string]int64, error) {
+		// Verbose is what carries the per-volume items; without it the daemon still
+		// walks the volume store and the response arrives with only totals.
+		res, err := s.cli.DiskUsage(ctx, dockerclient.DiskUsageOptions{Volumes: true, Verbose: true})
+		if err != nil {
+			return nil, err
+		}
+		sizes := make(map[string]int64, len(res.Volumes.Items))
+		for _, v := range res.Volumes.Items {
+			if v.UsageData != nil && v.UsageData.Size >= 0 {
+				sizes[v.Name] = v.UsageData.Size
+			}
+		}
+		return sizes, nil
+	})
 	if err != nil {
 		return nil
-	}
-	sizes := make(map[string]int64, len(res.Volumes.Items))
-	for _, v := range res.Volumes.Items {
-		if v.UsageData != nil && v.UsageData.Size >= 0 {
-			sizes[v.Name] = v.UsageData.Size
-		}
 	}
 	return sizes
 }

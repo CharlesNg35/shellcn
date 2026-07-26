@@ -30,12 +30,14 @@ defineEmits<{ "update:visible": [value: boolean] }>();
     @update:visible="$emit('update:visible', $event)"
   >
     <dl
-      class="grid max-h-[60vh] grid-cols-[minmax(7rem,auto)_1fr] gap-x-4 gap-y-2 overflow-auto p-1 text-sm"
+      class="grid max-h-[60vh] grid-cols-1 gap-y-1 overflow-auto p-1 text-sm sm:grid-cols-[minmax(7rem,14rem)_minmax(0,1fr)] sm:gap-x-4 sm:gap-y-2"
     >
       <template v-for="item in items" :key="item.key">
-        <dt class="text-surface-400">{{ item.label }}</dt>
+        <dt class="min-w-0 wrap-break-word text-surface-400">
+          {{ item.label }}
+        </dt>
         <dd
-          class="min-w-0 wrap-break-word text-surface-700 dark:text-surface-200"
+          class="min-w-0 wrap-break-word whitespace-pre-wrap text-surface-700 dark:text-surface-200"
         >
           <span
             v-if="item.badge"

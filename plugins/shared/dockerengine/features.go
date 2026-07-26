@@ -16,6 +16,7 @@ import (
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/events"
+	"github.com/moby/moby/api/types/image"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/network"
 	dockerclient "github.com/moby/moby/client"
@@ -800,19 +801,52 @@ func imageResourceEvent(ctx context.Context, s *Session, msg events.Message) *pl
 		return &plugin.ResourceEvent{Type: "deleted", Ref: ref}
 	}
 	// Source rows from the image list so live updates carry the same usage and
-	// container count as the list (an inspect can't derive them).
-	res, err := s.cli.ImageList(ctx, dockerclient.ImageListOptions{All: true})
+	// container count as the list (an inspect can't derive them). A burst of
+	// events (a pull or a build) reuses one cached listing; only an id the
+	// snapshot doesn't know about pays for a refresh.
+	items, err := imageSummaries(ctx, s, false)
 	if err != nil {
 		return nil
 	}
-	for _, img := range res.Items {
-		// Pull/push events set Actor.ID to a reference (e.g. "nginx:latest"), not the digest.
-		if img.ID == id || slices.Contains(img.RepoTags, id) || slices.Contains(img.RepoDigests, id) {
-			row := imageRow(img)
-			return &plugin.ResourceEvent{Type: "updated", Ref: row["ref"].(plugin.ResourceIdentity), Resource: row}
+	img, ok := findImageSummary(items, id)
+	if !ok {
+		if items, err = imageSummaries(ctx, s, true); err != nil {
+			return nil
+		}
+		if img, ok = findImageSummary(items, id); !ok {
+			return nil
 		}
 	}
-	return nil
+	row := imageRow(img)
+	return &plugin.ResourceEvent{Type: "updated", Ref: row["ref"].(plugin.ResourceIdentity), Resource: row}
+}
+
+// imageListCache holds the engine's image listing per session for long enough
+// to absorb the event burst a single pull or build emits.
+var imageListCache = SessionCache[[]image.Summary]{TTL: 3 * time.Second}
+
+func imageSummaries(ctx context.Context, s *Session, refresh bool) ([]image.Summary, error) {
+	load := func() ([]image.Summary, error) {
+		res, err := s.cli.ImageList(ctx, dockerclient.ImageListOptions{All: true})
+		if err != nil {
+			return nil, err
+		}
+		return res.Items, nil
+	}
+	if refresh {
+		return imageListCache.Refresh(s, load)
+	}
+	return imageListCache.Get(s, load)
+}
+
+func findImageSummary(items []image.Summary, id string) (image.Summary, bool) {
+	for _, img := range items {
+		// Pull/push events set Actor.ID to a reference (e.g. "nginx:latest"), not the digest.
+		if img.ID == id || slices.Contains(img.RepoTags, id) || slices.Contains(img.RepoDigests, id) {
+			return img, true
+		}
+	}
+	return image.Summary{}, false
 }
 
 func volumeResourceEvent(ctx context.Context, s *Session, msg events.Message) *plugin.ResourceEvent {
@@ -859,17 +893,15 @@ func composeResourceEvent(ctx context.Context, s *Session, msg events.Message) *
 	if project == "" {
 		return nil
 	}
-	rows, err := composeRowsForSession(ctx, s)
-	if err != nil {
+	ref := plugin.ResourceIdentity{Kind: "compose", Name: project, UID: project}
+	row, err := composeRowForProject(ctx, s, project)
+	switch {
+	case errors.Is(err, plugin.ErrNotFound):
+		return &plugin.ResourceEvent{Type: "deleted", Ref: ref}
+	case err != nil:
 		return nil
 	}
-	ref := plugin.ResourceIdentity{Kind: "compose", Name: project, UID: project}
-	for _, row := range rows {
-		if row["name"] == project {
-			return &plugin.ResourceEvent{Type: "updated", Ref: ref, Resource: row}
-		}
-	}
-	return &plugin.ResourceEvent{Type: "deleted", Ref: ref}
+	return &plugin.ResourceEvent{Type: "updated", Ref: ref, Resource: row}
 }
 
 func objectEventForDocker(rc *plugin.RequestContext, s *Session, kind, id string, msg events.Message) *plugin.ResourceEvent {
@@ -1205,11 +1237,23 @@ func networkOverviewForID(ctx context.Context, s *Session, id string) (Row, erro
 }
 
 func composeOverviewForProject(ctx context.Context, s *Session, project string) (Row, error) {
-	rows, err := composeRowsForSession(ctx, s)
-	if err != nil {
-		return nil, err
+	return composeRowForProject(ctx, s, project)
+}
+
+// composeRowForProject resolves one project's row from a label-filtered container
+// list, so a per-container Compose event costs only that project's members.
+func composeRowForProject(ctx context.Context, s *Session, project string) (Row, error) {
+	if project == "" {
+		return nil, plugin.ErrNotFound
 	}
-	for _, r := range rows {
+	res, err := s.cli.ContainerList(ctx, dockerclient.ContainerListOptions{
+		All:     true,
+		Filters: make(dockerclient.Filters).Add("label", ComposeProjectLabel+"="+project),
+	})
+	if err != nil {
+		return nil, DockerErr(err)
+	}
+	for _, r := range composeRowsFromContainers(res.Items) {
 		if r["name"] == project {
 			return r, nil
 		}
@@ -1222,9 +1266,13 @@ func composeRowsForSession(ctx context.Context, s *Session) ([]Row, error) {
 	if err != nil {
 		return nil, DockerErr(err)
 	}
+	return composeRowsFromContainers(res.Items), nil
+}
+
+func composeRowsFromContainers(items []container.Summary) []Row {
 	projects := map[string]Row{}
 	services := map[string]map[string]bool{}
-	for _, c := range res.Items {
+	for _, c := range items {
 		project := c.Labels[ComposeProjectLabel]
 		if project == "" {
 			continue
@@ -1260,5 +1308,5 @@ func composeRowsForSession(ctx context.Context, s *Session) ([]Row, error) {
 	for _, r := range projects {
 		rows = append(rows, r)
 	}
-	return rows, nil
+	return rows
 }

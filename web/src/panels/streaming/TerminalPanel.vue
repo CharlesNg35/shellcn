@@ -469,7 +469,7 @@ onUnmounted(() => {
 
       <div
         v-if="hasControls"
-        class="absolute top-2 right-2 z-10 flex items-center gap-0.5 rounded-md border border-surface-200 bg-surface-0/90 p-0.5 opacity-60 shadow-sm backdrop-blur transition-opacity focus-within:opacity-100 hover:opacity-100 dark:border-surface-700 dark:bg-surface-900/90"
+        class="absolute top-2 right-2 z-10 flex max-w-[calc(100%-1rem)] flex-wrap items-center justify-end gap-0.5 rounded-md border border-surface-200 bg-surface-0/90 p-0.5 opacity-60 shadow-sm backdrop-blur transition-opacity focus-within:opacity-100 hover:opacity-100 dark:border-surface-700 dark:bg-surface-900/90"
       >
         <Transition
           enter-active-class="motion-safe:transition motion-safe:duration-150"
@@ -482,7 +482,7 @@ onUnmounted(() => {
               <template v-for="ctrl in streamControls" :key="ctrl.param">
                 <div
                   v-if="controlVisible(ctrl.param)"
-                  class="h-7 w-36 shrink-0"
+                  class="h-7 w-36 max-w-full min-w-0"
                 >
                   <Select
                     v-model="controlValues[ctrl.param]"
@@ -571,7 +571,7 @@ onUnmounted(() => {
                 v-model="searchTerm"
                 placeholder="Find"
                 aria-label="Find in terminal"
-                :pt="{ root: 'h-7 w-40 text-xs' }"
+                :pt="{ root: 'h-7 w-40 max-w-full min-w-0 text-xs' }"
                 @keydown.enter.exact.prevent="runFind(true)"
                 @keydown.shift.enter.prevent="runFind(false)"
                 @keydown.esc.prevent="closeSearch"

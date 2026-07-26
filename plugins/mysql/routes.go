@@ -514,10 +514,7 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	limit := req.Limit
-	if limit > s.opts.RowLimit {
-		limit = s.opts.RowLimit
-	}
+	limit := sqldb.PageLimit(req.Limit, s.opts.RowLimit)
 	offset, err := cursorOffset(req.Cursor)
 	if err != nil {
 		return nil, err
@@ -535,9 +532,15 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if searchClause != "" {
 		where = " WHERE " + searchClause
 	}
-	var total int
-	if err := s.db.QueryRowContext(rc.Ctx, "SELECT COUNT(*) FROM "+qualified(database, table)+where, searchArgs...).Scan(&total); err != nil {
-		return nil, mysqlErr(err)
+	// COUNT(*) is a full index scan on InnoDB — and casts every column of every row
+	// when the search clause is set — so the total is only computed on request.
+	var total *int
+	if sqldb.ExactCountRequested(req) {
+		var n int
+		if err := s.db.QueryRowContext(rc.Ctx, "SELECT COUNT(*) FROM "+qualified(database, table)+where, searchArgs...).Scan(&n); err != nil {
+			return nil, mysqlErr(err)
+		}
+		total = &n
 	}
 	orderBy := ""
 	if len(req.Sort) > 0 {
@@ -551,11 +554,12 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 		}
 		orderBy = " ORDER BY " + quoteIdent(col) + " " + dir
 	}
-	dataArgs := append(append([]any{}, searchArgs...), limit, offset)
-	rows, err := queryRows(rc.Ctx, s, fmt.Sprintf("SELECT * FROM %s%s%s LIMIT ? OFFSET ?", qualified(database, table), where, orderBy), dataArgs)
+	dataArgs := append(append([]any{}, searchArgs...), sqldb.OverFetch(limit), offset)
+	fetched, err := queryRows(rc.Ctx, s, fmt.Sprintf("SELECT * FROM %s%s%s LIMIT ? OFFSET ?", qualified(database, table), where, orderBy), dataArgs)
 	if err != nil {
 		return nil, err
 	}
+	rows, more := sqldb.TrimOverFetch(fetched, limit)
 	pk, err := primaryKeyColumns(rc.Ctx, s, database, table)
 	if err != nil {
 		return nil, err
@@ -567,11 +571,7 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	}
 	attachForeignKeys(rows, fks)
 	redactRows(rows, s.opts.RedactPatterns)
-	next := ""
-	if offset+len(rows) < total {
-		next = strconv.Itoa(offset + len(rows))
-	}
-	return plugin.Page[plugin.TableRow]{Items: rows, NextCursor: next, Total: &total}, nil
+	return sqldb.OffsetPage(rows, offset, more, total), nil
 }
 
 // foreignKeys maps each FK column to the referenced table's ref, attached under

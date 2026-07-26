@@ -37,6 +37,12 @@ type SpanRow = TraceSpan & {
 
 const props = defineProps<PanelProps>();
 
+// A distributed trace has no natural bound, so the panel renders a prefix of the
+// waterfall and says how much it dropped.
+const MAX_SPANS = 2000;
+const VIRTUAL_THRESHOLD = 100;
+const ROW_HEIGHT = 42;
+
 const filterText = ref("");
 const selected = ref<SpanRow | null>(null);
 const traceConfig = computed(
@@ -74,12 +80,14 @@ function spanStart(span: TraceSpan): number {
   return 0;
 }
 
-const rows = computed<SpanRow[]>(() => {
+const allRows = computed<SpanRow[]>(() => {
   const spans = payload.value.spans ?? [];
   const byParent = new Map<string, TraceSpan[]>();
   for (const span of spans) {
     const key = span.parentId ?? "";
-    byParent.set(key, [...(byParent.get(key) ?? []), span]);
+    const group = byParent.get(key);
+    if (group) group.push(span);
+    else byParent.set(key, [span]);
   }
   for (const group of byParent.values()) {
     group.sort((a, b) => spanStart(a) - spanStart(b));
@@ -107,6 +115,11 @@ const rows = computed<SpanRow[]>(() => {
   return out;
 });
 
+const truncated = computed(() => allRows.value.length > MAX_SPANS);
+const rows = computed(() =>
+  truncated.value ? allRows.value.slice(0, MAX_SPANS) : allRows.value,
+);
+
 const visibleRows = computed(() => {
   const q = filterText.value.trim().toLowerCase();
   if (!q) return rows.value;
@@ -118,6 +131,11 @@ const visibleRows = computed(() => {
     ),
   );
 });
+const rowVirtualScroller = computed(() =>
+  visibleRows.value.length > VIRTUAL_THRESHOLD
+    ? { itemSize: ROW_HEIGHT }
+    : undefined,
+);
 
 const tags = computed(() =>
   selected.value?.tags
@@ -176,6 +194,14 @@ watch(
         class="w-56"
       />
       <span class="text-xs text-surface-400">{{ rows.length }} spans</span>
+      <span
+        v-if="truncated"
+        data-test="trace-truncated"
+        class="text-xs text-amber-600 dark:text-amber-400"
+      >
+        Showing the first {{ MAX_SPANS }} of {{ allRows.length }} — filter to
+        narrow the trace.
+      </span>
       <Button
         type="button"
         severity="secondary"
@@ -192,7 +218,12 @@ watch(
       </Button>
     </div>
 
-    <div class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_20rem]">
+    <div
+      class="grid min-h-0 flex-1"
+      :class="
+        selected ? 'grid-cols-[minmax(0,1fr)_minmax(0,20rem)]' : 'grid-cols-1'
+      "
+    >
       <div class="min-h-0 overflow-hidden">
         <SkeletonList v-if="showInitialLoader" />
         <PanelError
@@ -208,6 +239,7 @@ watch(
           scrollable
           scroll-height="flex"
           selection-mode="single"
+          :virtual-scroller-options="rowVirtualScroller"
           @row-click="selectRow"
         >
           <template v-if="error" #header>
@@ -254,47 +286,45 @@ watch(
       </div>
 
       <aside
+        v-if="selected"
         class="min-h-0 overflow-auto border-l border-surface-200 p-4 dark:border-surface-800"
       >
-        <p v-if="!selected" class="text-sm text-surface-400">Select a span.</p>
-        <template v-else>
-          <p class="text-xs text-surface-400 uppercase">
-            {{ spanService(selected) }}
-          </p>
-          <h3 class="mt-1 font-semibold text-surface-900 dark:text-surface-0">
-            {{ selected.name }}
-          </h3>
-          <dl class="mt-4 space-y-2 text-sm">
-            <div>
-              <dt class="text-surface-400">Span ID</dt>
-              <dd class="font-mono text-xs break-all">{{ selected.id }}</dd>
-            </div>
-            <div v-if="selected.parentId">
-              <dt class="text-surface-400">Parent</dt>
-              <dd class="font-mono text-xs break-all">
-                {{ selected.parentId }}
-              </dd>
-            </div>
-            <div>
-              <dt class="text-surface-400">Duration</dt>
-              <dd>{{ selected.durationMs.toFixed(1) }} ms</dd>
-            </div>
-          </dl>
-          <DataTable
-            v-if="tags.length"
-            :value="tags"
-            class="mt-4"
-            scrollable
-            scroll-height="16rem"
-          >
-            <Column field="key" header="Tag" />
-            <Column header="Value">
-              <template #body="{ data }">
-                <span class="break-all">{{ String(data.value) }}</span>
-              </template>
-            </Column>
-          </DataTable>
-        </template>
+        <p class="text-xs text-surface-400 uppercase">
+          {{ spanService(selected) }}
+        </p>
+        <h3 class="mt-1 font-semibold text-surface-900 dark:text-surface-0">
+          {{ selected.name }}
+        </h3>
+        <dl class="mt-4 space-y-2 text-sm">
+          <div>
+            <dt class="text-surface-400">Span ID</dt>
+            <dd class="font-mono text-xs wrap-break-word">{{ selected.id }}</dd>
+          </div>
+          <div v-if="selected.parentId">
+            <dt class="text-surface-400">Parent</dt>
+            <dd class="font-mono text-xs wrap-break-word">
+              {{ selected.parentId }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-surface-400">Duration</dt>
+            <dd>{{ selected.durationMs.toFixed(1) }} ms</dd>
+          </div>
+        </dl>
+        <DataTable
+          v-if="tags.length"
+          :value="tags"
+          class="mt-4"
+          scrollable
+          scroll-height="16rem"
+        >
+          <Column field="key" header="Tag" style="width: 40%" />
+          <Column header="Value">
+            <template #body="{ data }">
+              <span class="wrap-break-word">{{ String(data.value) }}</span>
+            </template>
+          </Column>
+        </DataTable>
       </aside>
     </div>
   </div>

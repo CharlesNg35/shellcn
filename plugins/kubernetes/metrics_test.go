@@ -45,6 +45,29 @@ func TestClusterFrameWithMetrics(t *testing.T) {
 	}
 }
 
+func TestClusterFrameCountsPodsWithoutListingThem(t *testing.T) {
+	var gotLimit string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/nodes", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, nodeList()) })
+	mux.HandleFunc("/api/v1/pods", func(w http.ResponseWriter, r *http.Request) {
+		gotLimit = r.URL.Query().Get("limit")
+		writeJSON(w, obj{
+			"apiVersion": "v1", "kind": "PodList",
+			"metadata": obj{"continue": "tok", "remainingItemCount": int64(9999)},
+			"items":    []any{obj{"metadata": obj{"name": "p1"}}},
+		})
+	})
+	sess := connectTo(t, mux).(*Session)
+
+	frame := sess.clusterFrame(context.Background())
+	if gotLimit != "1" {
+		t.Fatalf("pod count asked for limit=%q, want a single item", gotLimit)
+	}
+	if frame["pods"] != 10000 {
+		t.Fatalf("pods = %v, want the apiserver's remaining-item estimate", frame["pods"])
+	}
+}
+
 func TestPodMetricsReturnsSessionError(t *testing.T) {
 	err := PodMetrics(rc(nil, map[string]string{"namespace": "default", "name": "web"}), &captureClient{ctx: context.Background()})
 	if !errors.Is(err, plugin.ErrUnavailable) {

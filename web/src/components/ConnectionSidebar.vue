@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, toRef, watch } from "vue";
 import { useRouter } from "vue-router";
-import { useEventListener, useStorage, useTimeoutFn } from "@vueuse/core";
+import {
+  refDebounced,
+  useEventListener,
+  useStorage,
+  useTimeoutFn,
+} from "@vueuse/core";
 import Button from "primevue/button";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
@@ -22,6 +27,11 @@ import type { ConnectionFolder, ConnectionSummary } from "../types/projection";
 const props = defineProps<{
   activeId: string | null;
   query: string;
+  collapsed?: boolean;
+}>();
+
+const emit = defineEmits<{
+  expand: [];
 }>();
 
 const conns = useConnectionsStore();
@@ -64,6 +74,8 @@ const expanded = useStorage<Record<string, boolean>>(
   { mergeDefaults: true },
 );
 const activeOnly = ref(false);
+// Every keystroke would otherwise rebuild and re-filter the whole tree.
+const searchQuery = refDebounced(toRef(props, "query"), 150);
 
 const filtering = computed(
   () => Boolean(props.query.trim()) || activeOnly.value,
@@ -90,7 +102,7 @@ watch(
     [
       conns.connections,
       conns.folders,
-      props.query,
+      searchQuery.value,
       activeOnly.value,
       ws.connected,
     ] as const,
@@ -139,7 +151,7 @@ watch(
 );
 
 function rebuildLists(): void {
-  const q = props.query.trim().toLowerCase();
+  const q = searchQuery.value.trim().toLowerCase();
   const sortItems = (a: ConnectionTreeItem, b: ConnectionTreeItem) =>
     itemSortOrder(a) - itemSortOrder(b) ||
     itemLabel(a).localeCompare(itemLabel(b));
@@ -310,6 +322,13 @@ function toggleFolder(id: string): void {
   expanded.value = { ...expanded.value, [id]: !expanded.value[id] };
 }
 
+// A 56px rail cannot show a nested tree, so a folder tap widens the sidebar
+// and opens that folder in the full list.
+function revealFolder(id: string): void {
+  expanded.value = { ...expanded.value, [id]: true };
+  emit("expand");
+}
+
 function remountTree(): void {
   treeRenderKey.value += 1;
 }
@@ -440,7 +459,10 @@ function go(connection: ConnectionSummary): void {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
-    <div class="flex items-center justify-between px-2 pt-3 pb-1">
+    <div
+      v-if="!collapsed"
+      class="flex items-center justify-between px-2 pt-3 pb-1"
+    >
       <p class="text-xs font-medium tracking-wide text-surface-400 uppercase">
         Connections
       </p>
@@ -495,7 +517,10 @@ function go(connection: ConnectionSummary): void {
         ref="scrollEl"
         data-sidebar-scroll-region
         class="connection-sidebar-list h-full overflow-y-auto py-1"
-        :class="{ 'connection-sidebar-list--dragging': hoverSuppressed }"
+        :class="{
+          'connection-sidebar-list--dragging': hoverSuppressed,
+          'overflow-x-hidden': collapsed,
+        }"
         @scroll="updateScrollShadow"
       >
         <ConnectionFolderBranch
@@ -506,22 +531,31 @@ function go(connection: ConnectionSummary): void {
           :disabled="filtering"
           :dragging="hoverSuppressed"
           :dropped-id="droppedId"
+          :collapsed="collapsed"
           @toggle-folder="toggleFolder"
+          @reveal-folder="revealFolder"
           @menu-action="handleFolderMenu"
           @drag-start="onDragStart"
           @drag-end="onDragEnd"
           @open="go"
         />
 
-        <div v-if="!conns.loaded" class="space-y-1.5 px-1 pt-1">
+        <div
+          v-if="!conns.loaded"
+          class="space-y-1.5 pt-1"
+          :class="collapsed ? 'px-0' : 'px-1'"
+        >
           <div
             v-for="n in 5"
             :key="n"
-            class="h-9 animate-pulse rounded-md bg-surface-200/60 dark:bg-surface-800/60"
+            class="animate-pulse bg-surface-200/60 dark:bg-surface-800/60"
+            :class="
+              collapsed ? 'mx-auto h-9 w-9 rounded-full' : 'h-9 rounded-md'
+            "
           />
         </div>
         <p
-          v-else-if="emptyFiltered"
+          v-else-if="emptyFiltered && !collapsed"
           class="px-2 py-6 text-center text-sm text-surface-400"
         >
           {{
@@ -531,7 +565,7 @@ function go(connection: ConnectionSummary): void {
           }}
         </p>
         <div
-          v-else-if="conns.loaded && !conns.connections.length"
+          v-else-if="conns.loaded && !conns.connections.length && !collapsed"
           class="flex flex-col items-center gap-1.5 px-4 py-10 text-center"
         >
           <span

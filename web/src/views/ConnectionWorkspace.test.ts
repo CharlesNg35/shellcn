@@ -790,7 +790,7 @@ describe("ConnectionWorkspace", () => {
     expect(wrapper.text()).toContain("Overview");
     expect(wrapper.text()).toContain("Logs");
     // The span=2 panel fills the row.
-    expect(cards[1].classes()).toContain("lg:col-span-2");
+    expect(cards[1].classes()).toContain("@3xl:col-span-2");
   });
 
   it("restores the active tab from ?v= and syncs tab switches back to the URL", async () => {

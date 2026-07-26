@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/charlesng35/shellcn/sdk/plugin"
@@ -71,11 +72,23 @@ func crdNode(o obj) (plugin.TreeNode, bool) {
 	}, true
 }
 
-// crdNodes lists CRDs as tree nodes, optionally filtered by API group.
-func (s *Session) crdNodes(rc *plugin.RequestContext, groupMatch func(string) bool) ([]plugin.TreeNode, error) {
-	list, err := s.Dynamic().Resource(crdGVR).List(rc.Ctx, metav1.ListOptions{})
+// crdWindow bounds one CRD listing: a CRD carries its whole OpenAPI validation
+// schema, so an operator-heavy cluster must never be pulled in one call.
+const crdWindow = plugin.MaxPageLimit
+
+func (s *Session) crdList(rc *plugin.RequestContext) (*unstructured.UnstructuredList, error) {
+	list, err := s.Dynamic().Resource(crdGVR).List(rc.Ctx, metav1.ListOptions{Limit: crdWindow})
 	if err != nil {
 		return nil, apiErr(err)
+	}
+	return list, nil
+}
+
+// crdNodes lists CRDs as tree nodes, optionally filtered by API group.
+func (s *Session) crdNodes(rc *plugin.RequestContext, groupMatch func(string) bool) ([]plugin.TreeNode, error) {
+	list, err := s.crdList(rc)
+	if err != nil {
+		return nil, err
 	}
 	nodes := make([]plugin.TreeNode, 0, len(list.Items))
 	for i := range list.Items {
@@ -93,9 +106,9 @@ func (s *Session) crdNodes(rc *plugin.RequestContext, groupMatch func(string) bo
 // crdGroups returns the distinct API groups of installed CRDs that have a
 // servable resource, sorted — each becomes an expandable folder.
 func (s *Session) crdGroups(rc *plugin.RequestContext) ([]string, error) {
-	list, err := s.Dynamic().Resource(crdGVR).List(rc.Ctx, metav1.ListOptions{})
+	list, err := s.crdList(rc)
 	if err != nil {
-		return nil, apiErr(err)
+		return nil, err
 	}
 	seen := map[string]bool{}
 	groups := make([]string, 0)

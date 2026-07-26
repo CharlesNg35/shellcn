@@ -35,13 +35,13 @@ const emit = defineEmits<{
 
 <template>
   <div :class="field.usage ? opsUsageRow : opsDetailRow">
-    <dt :class="opsDetailLabel">
+    <dt :class="[opsDetailLabel, 'col-start-1 @md:col-auto']">
       {{ field.label ?? humanize(field.key) }}
     </dt>
 
-    <dd v-if="field.usage" class="min-w-0">
+    <dd v-if="field.usage" class="col-start-1 min-w-0 @md:col-auto">
       <div
-        class="flex min-w-0 flex-col gap-2 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] sm:items-center"
+        class="flex min-w-0 flex-col gap-2 @md:grid @md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] @md:items-center"
       >
         <span
           class="min-w-0 truncate font-medium text-surface-900 dark:text-surface-100"
@@ -64,7 +64,7 @@ const emit = defineEmits<{
       </div>
     </dd>
 
-    <dd v-else :class="[opsDetailValue]">
+    <dd v-else :class="[opsDetailValue, 'col-start-1 @md:col-auto']">
       <span v-if="field.redacted" class="font-mono text-surface-400"
         >********</span
       >
@@ -72,6 +72,7 @@ const emit = defineEmits<{
         v-else-if="field.type === 'badge'"
         class="inline-block max-w-full truncate rounded-full px-2 py-0.5 align-bottom text-xs"
         :class="badgeClassFor(field.severities, valueFor(record, field))"
+        :title="formatValue(valueFor(record, field), field.type)"
         >{{ formatValue(valueFor(record, field), field.type) }}</span
       >
       <span v-else>{{ formatValue(valueFor(record, field), field.type) }}</span>
@@ -79,6 +80,7 @@ const emit = defineEmits<{
 
     <Button
       v-if="field.copy && !field.redacted && !field.usage"
+      class="col-start-2 row-start-1 @md:col-auto @md:row-auto"
       type="button"
       text
       rounded

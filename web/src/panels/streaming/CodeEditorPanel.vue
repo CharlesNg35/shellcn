@@ -375,22 +375,30 @@ onUnmounted(() => {
   <div class="flex h-full flex-col">
     <div
       v-if="editable"
-      class="flex items-center justify-between border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+      class="flex items-center justify-between gap-2 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
     >
-      <span class="text-xs text-surface-400">{{ language }}</span>
-      <div class="flex items-center gap-2">
-        <span v-if="saveError" class="text-xs text-red-500">{{
-          saveError
-        }}</span>
-        <span v-else-if="saved && !changed" class="text-xs text-emerald-500">{{
-          editorConfig?.saveToast?.summary ?? "Saved"
-        }}</span>
+      <span class="min-w-0 truncate text-xs text-surface-400">{{
+        language
+      }}</span>
+      <div class="flex min-w-0 flex-1 items-center justify-end gap-2">
+        <span
+          v-if="saveError"
+          class="min-w-0 flex-1 truncate text-xs text-red-500"
+          :title="saveError"
+          >{{ saveError }}</span
+        >
+        <span
+          v-else-if="saved && !changed"
+          class="min-w-0 truncate text-xs text-emerald-500"
+          >{{ editorConfig?.saveToast?.summary ?? "Saved" }}</span
+        >
         <Button
           v-if="changed"
           type="button"
           severity="secondary"
           variant="outlined"
           size="small"
+          class="shrink-0"
           :loading="previewing"
           aria-label="Review changes"
           @click="review"
@@ -404,6 +412,7 @@ onUnmounted(() => {
         <Button
           type="button"
           label="Save"
+          class="shrink-0"
           :loading="saving"
           :disabled="saving || (requiresChange && !changed)"
           @click="save"
@@ -412,12 +421,12 @@ onUnmounted(() => {
     </div>
     <div
       v-if="externalChanged"
-      class="flex items-center justify-between gap-2 border-b border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+      class="flex flex-wrap items-center justify-between gap-2 border-b border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
     >
-      <span
+      <span class="min-w-0"
         >This object changed on the server while you have unsaved edits.</span
       >
-      <div class="flex items-center gap-2">
+      <div class="flex shrink-0 items-center gap-2">
         <Button
           type="button"
           severity="secondary"

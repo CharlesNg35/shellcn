@@ -12,17 +12,22 @@ import {
 } from "@/types/projection";
 import AppIcon from "@/components/AppIcon.vue";
 
+// A directory can hold far more subfolders than the picker can render: each
+// level takes one page and a "Load more folders…" row pulls the next.
+const FOLDER_PAGE_SIZE = 250;
+const MAX_FOLDER_CHILDREN = 2000;
+
 interface FolderNode {
   key: string;
   label: string;
-  data: { path: string };
+  data: { path: string; more?: string; cursor?: string };
   leaf: boolean;
   loading?: boolean;
   children?: FolderNode[];
 }
 
 interface FolderTreeNode {
-  data?: { path?: string };
+  data?: { path?: string; more?: string; cursor?: string };
   children?: unknown;
 }
 
@@ -174,7 +179,19 @@ function replaceFolderNode(
   });
 }
 
-async function loadFolderChildren(path: string): Promise<void> {
+function moreFolderNode(path: string, cursor: string): FolderNode {
+  return {
+    key: `${path}::more`,
+    label: "Load more folders…",
+    data: { path: "", more: path, cursor },
+    leaf: true,
+  };
+}
+
+async function loadFolderChildren(
+  path: string,
+  cursor?: string,
+): Promise<void> {
   const source = withFolderParam(path);
   if (!source) return;
   folderError.value = "";
@@ -187,18 +204,33 @@ async function loadFolderChildren(path: string): Promise<void> {
       props.connectionId,
       source,
       props.ctx,
-      { limit: 250 },
+      { cursor, limit: FOLDER_PAGE_SIZE },
     );
-    const children = page.items
+    const loaded = page.items
       .filter((entry) => entry.isDir)
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((entry) => makeFolderNode(entry.path, entry.name));
-    folderNodes.value = replaceFolderNode(folderNodes.value, path, (node) => ({
-      ...node,
-      children,
-      leaf: children.length === 0,
-      loading: false,
-    }));
+    folderNodes.value = replaceFolderNode(folderNodes.value, path, (node) => {
+      const kept = cursor
+        ? (node.children ?? []).filter((child) => !child.data.more)
+        : [];
+      const seen = new Set(kept.map((child) => child.key));
+      const merged = [
+        ...kept,
+        ...loaded.filter((child) => !seen.has(child.key)),
+      ];
+      const capped = merged.length >= MAX_FOLDER_CHILDREN;
+      const children =
+        page.nextCursor && !capped
+          ? [...merged, moreFolderNode(path, page.nextCursor)]
+          : merged;
+      return {
+        ...node,
+        children,
+        leaf: children.length === 0,
+        loading: false,
+      };
+    });
   } catch (e) {
     folderError.value =
       e instanceof Error ? e.message : "Could not load folders.";
@@ -232,6 +264,12 @@ function selectFolder(path: string): void {
 }
 
 function onFolderSelect(node: FolderTreeNode): void {
+  const more = node.data?.more;
+  if (more) {
+    selectedFolderKeys.value = { [destination.value]: true };
+    void loadFolderChildren(more, node.data?.cursor);
+    return;
+  }
   const path = node.data?.path;
   if (path) selectFolder(path);
 }

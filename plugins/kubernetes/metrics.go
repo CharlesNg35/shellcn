@@ -71,7 +71,10 @@ func metricsLoop(rc *plugin.RequestContext, client plugin.ClientStream, frame fu
 func (s *Session) clusterFrame(ctx context.Context) map[string]any {
 	frame := map[string]any{"metricsAvailable": false, "message": s.metricsMessage()}
 
-	nodes, err := s.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	// ResourceVersion "0" lets the apiserver answer from its watch cache. Node
+	// objects are heavy (status.images) and this runs on every tick of every open
+	// panel; capacity a second or two stale is fine for a usage gauge.
+	nodes, err := s.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
 		return frame
 	}
@@ -88,8 +91,8 @@ func (s *Session) clusterFrame(ctx context.Context) map[string]any {
 	frame["memCapacity"] = memCap
 	frame["podCapacity"] = podCap
 
-	if pods, err := s.clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{}); err == nil {
-		frame["pods"] = len(pods.Items)
+	if count, ok := s.podCount(ctx); ok {
+		frame["pods"] = count
 	}
 
 	// Capacity is read from the API above; usage comes from the configured source.
@@ -103,6 +106,22 @@ func (s *Session) clusterFrame(ctx context.Context) map[string]any {
 	frame["cpuPct"] = ratio(cpuCores, cpuCapCores)
 	frame["memPct"] = ratio(memBytes, float64(memCap))
 	return frame
+}
+
+// podCount sizes the cluster's pod collection without downloading it: asking for
+// a single item makes the apiserver report how many more it is holding back.
+// remainingItemCount is an estimate by contract, and older servers leave it
+// unset, in which case what came back is all there is.
+func (s *Session) podCount(ctx context.Context) (int, bool) {
+	list, err := s.clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{Limit: 1})
+	if err != nil {
+		return 0, false
+	}
+	count := len(list.Items)
+	if remaining := list.GetRemainingItemCount(); remaining != nil {
+		count += int(*remaining)
+	}
+	return count, true
 }
 
 // clusterUsage returns cluster CPU (cores) and memory (bytes) usage from the

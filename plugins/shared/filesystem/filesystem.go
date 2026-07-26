@@ -51,6 +51,15 @@ type RangeOpener interface {
 	OpenRange(ctx context.Context, p string, offset, length int64) (io.ReadCloser, error)
 }
 
+// DirPager is an optional Client capability for backends whose listings are
+// natively cursor-paged and potentially unbounded (object stores). Implementing
+// it makes the browser fetch one bounded page at a time instead of draining a
+// directory through ReadDir. The returned cursor is opaque and empty when the
+// listing is exhausted; entries are ordered within a page only.
+type DirPager interface {
+	ReadDirPage(ctx context.Context, p string, cursor string, limit int) ([]os.FileInfo, string, error)
+}
+
 type Session interface {
 	Filesystem() (Client, error)
 }
@@ -75,11 +84,15 @@ type FileContent struct {
 	Truncated bool   `json:"truncated,omitempty"`
 }
 
+// FilePage is one slice of a directory listing. Total is omitted for backends
+// paged by DirPager, where the directory size is unknown without draining it;
+// Truncated then tells the browser more entries remain behind NextCursor.
 type FilePage struct {
 	Items      []FileEntry `json:"items"`
 	NextCursor string      `json:"nextCursor"`
 	Total      *int        `json:"total,omitempty"`
 	Path       string      `json:"path"`
+	Truncated  bool        `json:"truncated,omitempty"`
 }
 
 func Routes(prefix, protocol string) []plugin.Route {
@@ -200,13 +213,35 @@ func list(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	req, err := rc.Page()
+	if err != nil {
+		return nil, err
+	}
+	if pager, ok := fs.(DirPager); ok {
+		return listPage(rc.Ctx, fs, pager, p, req)
+	}
 	infos, err := fs.ReadDir(rc.Ctx, p)
 	if err != nil {
 		return nil, mapClientError(fs, err)
 	}
+	entries := dirEntries(p, infos)
+	return pageEntries(p, entries, req), nil
+}
+
+// listPage asks a cursor-native backend for a single bounded page. Entries are
+// sorted within the page only: a global sort would mean draining the directory.
+func listPage(ctx context.Context, fs Client, pager DirPager, p string, req plugin.PageRequest) (any, error) {
+	infos, next, err := pager.ReadDirPage(ctx, p, req.Cursor, pageLimit(req.Limit))
+	if err != nil {
+		return nil, mapClientError(fs, err)
+	}
+	return FilePage{Items: dirEntries(p, infos), NextCursor: next, Path: p, Truncated: next != ""}, nil
+}
+
+func dirEntries(dir string, infos []os.FileInfo) []FileEntry {
 	entries := make([]FileEntry, 0, len(infos))
 	for _, info := range infos {
-		entries = append(entries, fileEntry(joinRemote(p, info.Name()), info))
+		entries = append(entries, fileEntry(joinRemote(dir, info.Name()), info))
 	}
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].IsDir != entries[j].IsDir {
@@ -214,11 +249,17 @@ func list(rc *plugin.RequestContext) (any, error) {
 		}
 		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
 	})
-	req, err := rc.Page()
-	if err != nil {
-		return nil, err
+	return entries
+}
+
+func pageLimit(limit int) int {
+	if limit <= 0 {
+		return plugin.DefaultPageLimit
 	}
-	return pageEntries(p, entries, req), nil
+	if limit > plugin.MaxPageLimit {
+		return plugin.MaxPageLimit
+	}
+	return limit
 }
 
 func stat(rc *plugin.RequestContext) (any, error) {
@@ -526,11 +567,7 @@ func pageEntries(currentPath string, entries []FileEntry, req plugin.PageRequest
 	if offset < 0 || offset > len(entries) {
 		offset = 0
 	}
-	limit := req.Limit
-	if limit <= 0 {
-		limit = plugin.DefaultPageLimit
-	}
-	end := offset + limit
+	end := offset + pageLimit(req.Limit)
 	if end > len(entries) {
 		end = len(entries)
 	}
@@ -539,7 +576,7 @@ func pageEntries(currentPath string, entries []FileEntry, req plugin.PageRequest
 		next = base64.RawURLEncoding.EncodeToString([]byte(strconv.Itoa(end)))
 	}
 	total := len(entries)
-	return FilePage{Items: entries[offset:end], NextCursor: next, Total: &total, Path: currentPath}
+	return FilePage{Items: entries[offset:end], NextCursor: next, Total: &total, Path: currentPath, Truncated: next != ""}
 }
 
 func cursorOffset(cursor string) int {

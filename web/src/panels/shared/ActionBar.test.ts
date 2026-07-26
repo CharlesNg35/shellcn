@@ -87,7 +87,7 @@ describe("ActionBar", () => {
     });
     const pt = w.findComponent(Dialog).props("pt") as { root: string };
     expect(pt.root).toContain("max-w-2xl");
-    expect(pt.root).toContain("max-h-[calc(100vh-2rem)]");
+    expect(pt.root).toContain("max-h-[calc(100dvh-2rem)]");
     expect(pt.root).toContain("flex-col");
     w.unmount();
   });

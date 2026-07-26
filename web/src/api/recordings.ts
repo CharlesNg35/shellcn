@@ -5,11 +5,15 @@ import type {
   RecordingSummary,
 } from "../types/projection";
 
-function query(f: RecordingFilters): string {
+// Recordings only ever accumulate, so every listing carries a bounded window
+// that callers widen one page at a time.
+export const RECORDINGS_PAGE_SIZE = 200;
+
+function query(f: RecordingFilters, limit: number): string {
   const sp = new URLSearchParams();
   for (const [k, v] of Object.entries(f)) if (v) sp.set(k, String(v));
-  const s = sp.toString();
-  return s ? `?${s}` : "";
+  sp.set("limit", String(limit));
+  return `?${sp.toString()}`;
 }
 
 export interface StreamRef {
@@ -55,10 +59,16 @@ async function postJSON<T>(
 }
 
 export const recordingsApi = {
-  list: (f: RecordingFilters = {}) =>
-    api.get<RecordingSummary[]>(`/recordings${query(f)}`),
-  forConnection: (id: string, f: RecordingFilters = {}) =>
-    api.get<RecordingSummary[]>(`/connections/${id}/recordings${query(f)}`),
+  list: (f: RecordingFilters = {}, limit = RECORDINGS_PAGE_SIZE) =>
+    api.get<RecordingSummary[]>(`/recordings${query(f, limit)}`),
+  forConnection: (
+    id: string,
+    f: RecordingFilters = {},
+    limit = RECORDINGS_PAGE_SIZE,
+  ) =>
+    api.get<RecordingSummary[]>(
+      `/connections/${id}/recordings${query(f, limit)}`,
+    ),
   get: (id: string) => api.get<RecordingSummary>(`/recordings/${id}`),
   remove: (id: string) => api.del(`/recordings/${id}`),
   contentUrl: (id: string, options: { download?: boolean } = {}) => {
