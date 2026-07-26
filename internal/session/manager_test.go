@@ -349,8 +349,16 @@ func TestIdleReclaim(t *testing.T) {
 		case <-time.After(5 * time.Millisecond):
 		}
 	}
-	if !fs.isClosed() {
-		t.Error("reclaimed session was not Closed")
+	// The session is dropped from the manager's accounting under the lock, then
+	// its upstream Close runs after the lock is released, so Sessions==0 can be
+	// observed a moment before Close lands. Wait for it rather than racing it.
+	closeDeadline := time.After(2 * time.Second)
+	for !fs.isClosed() {
+		select {
+		case <-closeDeadline:
+			t.Fatal("reclaimed session was not Closed")
+		case <-time.After(5 * time.Millisecond):
+		}
 	}
 }
 
