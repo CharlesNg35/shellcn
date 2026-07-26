@@ -190,7 +190,7 @@ type logTarget struct{ pod, container string }
 // first, capped at maxLogPods and maxLogStreams.
 func logTargets(pods []corev1.Pod, filter string) (targets []logTarget, streamed int, truncated bool) {
 	ordered := slices.SortedStableFunc(slices.Values(pods), func(a, b corev1.Pod) int {
-		return b.CreationTimestamp.Time.Compare(a.CreationTimestamp.Time)
+		return b.CreationTimestamp.Compare(a.CreationTimestamp.Time)
 	})
 	for i := range ordered {
 		if i >= maxLogPods || len(targets) >= maxLogStreams {
