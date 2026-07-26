@@ -2,6 +2,7 @@ package grpcplugin
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -46,60 +47,95 @@ func newStreamConn(stream chunkStream, onClose func()) *streamConn {
 func (c *streamConn) Read(p []byte) (int, error) {
 	c.rmu.Lock()
 	defer c.rmu.Unlock()
-	if len(c.buf) == 0 {
-		if c.readErr != nil {
-			return 0, c.readErr
-		}
-		c.readOnce.Do(func() {
-			go c.recvLoop()
-		})
-		for len(c.buf) == 0 {
-			deadline, wake := c.readDeadline()
-			if timeout := deadlineTimeout(deadline); timeout <= 0 && !deadline.IsZero() {
-				return 0, timeoutError{}
-			} else if deadline.IsZero() {
-				select {
-				case got := <-c.readCh:
-					if got.err != nil {
-						c.readErr = got.err
-						return 0, got.err
-					}
-					c.buf = got.data
-				case <-wake:
-					continue
-				}
-			} else {
-				timer := time.NewTimer(timeout)
-				select {
-				case got := <-c.readCh:
-					if !timer.Stop() {
-						select {
-						case <-timer.C:
-						default:
-						}
-					}
-					if got.err != nil {
-						c.readErr = got.err
-						return 0, got.err
-					}
-					c.buf = got.data
-				case <-timer.C:
-					return 0, timeoutError{}
-				case <-wake:
-					if !timer.Stop() {
-						select {
-						case <-timer.C:
-						default:
-						}
-					}
-					continue
-				}
-			}
-		}
+	if err := c.fill(); err != nil {
+		return 0, err
 	}
 	n := copy(p, c.buf)
 	c.buf = c.buf[n:]
 	return n, nil
+}
+
+// WriteTo hands each chunk the peer sent to w in a single Write, so streams
+// whose framing is one-message-per-write (canvas frames, NDJSON panels) keep
+// their boundaries across a Bridge instead of being re-cut by io.Copy's buffer.
+func (c *streamConn) WriteTo(w io.Writer) (int64, error) {
+	c.rmu.Lock()
+	defer c.rmu.Unlock()
+	var total int64
+	for {
+		if err := c.fill(); err != nil {
+			if errors.Is(err, io.EOF) {
+				return total, nil
+			}
+			return total, err
+		}
+		n, err := w.Write(c.buf)
+		c.buf = c.buf[n:]
+		total += int64(n)
+		if err != nil {
+			return total, err
+		}
+		if len(c.buf) > 0 {
+			return total, io.ErrShortWrite
+		}
+	}
+}
+
+// fill blocks until buf holds unread bytes, honouring the read deadline.
+func (c *streamConn) fill() error {
+	if len(c.buf) > 0 {
+		return nil
+	}
+	if c.readErr != nil {
+		return c.readErr
+	}
+	c.readOnce.Do(func() {
+		go c.recvLoop()
+	})
+	for len(c.buf) == 0 {
+		deadline, wake := c.readDeadline()
+		if timeout := deadlineTimeout(deadline); timeout <= 0 && !deadline.IsZero() {
+			return timeoutError{}
+		} else if deadline.IsZero() {
+			select {
+			case got := <-c.readCh:
+				if got.err != nil {
+					c.readErr = got.err
+					return got.err
+				}
+				c.buf = got.data
+			case <-wake:
+				continue
+			}
+		} else {
+			timer := time.NewTimer(timeout)
+			select {
+			case got := <-c.readCh:
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				if got.err != nil {
+					c.readErr = got.err
+					return got.err
+				}
+				c.buf = got.data
+			case <-timer.C:
+				return timeoutError{}
+			case <-wake:
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				continue
+			}
+		}
+	}
+	return nil
 }
 
 func (c *streamConn) Write(p []byte) (int, error) {
