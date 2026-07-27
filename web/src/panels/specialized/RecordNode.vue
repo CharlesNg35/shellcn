@@ -30,9 +30,11 @@ const hiddenFields = computed(
             :size="11"
             :title="f.key"
           />
-          <span class="truncate">{{ f.name }}</span>
+          <span class="truncate" :title="f.name">{{ f.name }}</span>
         </span>
-        <span class="record-field-type truncate">{{ f.type }}</span>
+        <span class="record-field-type truncate" :title="f.type">{{
+          f.type
+        }}</span>
       </li>
       <li v-if="hiddenFields > 0" class="record-field record-field-more">
         +{{ hiddenFields }} more

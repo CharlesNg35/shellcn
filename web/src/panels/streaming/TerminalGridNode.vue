@@ -83,7 +83,7 @@ const minPaneSize = computed(() => {
   if (extent <= 0) return 12;
   const floorPx = vertical ? 160 : 320;
   const cap = Math.floor(80 / props.node.children.length);
-  return Math.max(12, Math.min(cap, Math.round((floorPx / extent) * 100)));
+  return Math.min(cap, Math.max(12, Math.round((floorPx / extent) * 100)));
 });
 
 function structureKey(node: TerminalGridLayoutNode): string {

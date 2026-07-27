@@ -11,6 +11,7 @@ import {
 import { useDocumentVisibility, useIntervalFn } from "@vueuse/core";
 import DataTable, {
   type DataTableCellEditCompleteEvent,
+  type DataTableCellEditInitEvent,
   type DataTablePageEvent,
   type DataTableSortEvent,
   type DataTableRowClickEvent,
@@ -150,7 +151,7 @@ const total = ref<number | undefined>();
 const hasMore = ref(false);
 const loading = ref(false);
 const refreshing = ref(false);
-const editingCell = ref(false);
+const editingRid = ref<string | null>(null);
 let loadSeq = 0;
 const error = ref<string | null>(null);
 const filterText = ref("");
@@ -236,7 +237,8 @@ function cursorFor(targetFirst: number): string {
 function rememberNextCursor(targetFirst: number, page: Page<Row>): void {
   if (!page.nextCursor) return;
   cursorsByFirst.set(targetFirst + pageSize.value, page.nextCursor);
-  cursorsByFirst.set(targetFirst + page.items.length, page.nextCursor);
+  if (page.items.length)
+    cursorsByFirst.set(targetFirst + page.items.length, page.nextCursor);
 }
 
 const watchSource = computed(() => tableConfig.value?.watch);
@@ -392,11 +394,18 @@ function canDelete(row: Row): boolean {
   );
 }
 
-function insertValues(row: Row): Record<string, unknown> {
+// A field left blank in the insert dialog must be omitted so the column default
+// applies; only a materialised row the user explicitly set to NULL ships one.
+function insertValues(
+  row: Row,
+  opts: { keepNull?: boolean } = {},
+): Record<string, unknown> {
   const values: Record<string, unknown> = {};
   for (const col of writableColumns(columns.value)) {
     const v = row[col.key];
-    if (v !== "" && v !== undefined) values[col.key] = v;
+    if (v === "" || v === undefined) continue;
+    if (v === null && !opts.keepNull) continue;
+    values[col.key] = v;
   }
   return values;
 }
@@ -409,6 +418,7 @@ async function commitStaged(): Promise<void> {
   committing.value = true;
   const pending = pendingCount.value;
   const failures: Error[] = [];
+  const removedIds = new Set<string>();
   let done = 0;
   try {
     for (const row of rows.value) {
@@ -418,7 +428,7 @@ async function commitStaged(): Promise<void> {
       let src: DataSource | undefined;
       if (insertedRows.has(id)) {
         src = insertSource.value;
-        body = insertMutation(insertValues(row));
+        body = insertMutation(insertValues(row, { keepNull: true }));
       } else if (edits.has(id) && updateSource.value) {
         const key = keyFor(row);
         if (!key) {
@@ -453,11 +463,16 @@ async function commitStaged(): Promise<void> {
         await mutate(deleteSource.value, deleteMutation(key), row);
         deletedRows.delete(id);
         edits.delete(id);
+        removedIds.add(id);
         done += 1;
       } catch (err) {
         failures.push(err as Error);
       }
     }
+    // Deletes that landed are un-staged, so the grid has to drop them here: the
+    // reconciling reload only runs when nothing is left pending.
+    if (removedIds.size)
+      rows.value = rows.value.filter((r) => !removedIds.has(rid(r)));
     if (!failures.length) clearStaging();
     toast.add({
       severity: failures.length ? "warn" : "success",
@@ -533,8 +548,12 @@ async function onCellEditComplete(
     const value = coerceCellValue(col, e.value, e.newValue);
     await commitCellValue(data, col, e.value, value);
   } finally {
-    editingCell.value = false;
+    editingRid.value = null;
   }
+}
+
+function onCellEditInit(e: DataTableCellEditInitEvent): void {
+  editingRid.value = rid(e.data as Row) || null;
 }
 
 async function commitCellValue(
@@ -580,6 +599,9 @@ async function commitCellValue(
     });
     return false;
   }
+  // Editing a key column invalidates the row's key envelope: refetch so the next
+  // edit on that row does not target the old key.
+  if (field in key) await load(first.value);
   return true;
 }
 
@@ -989,8 +1011,12 @@ async function load(targetFirst = first.value): Promise<void> {
   }
 }
 
+// An explicit refresh re-reads the schema; paging and sorting keep the cache.
 async function guardedLoad(targetFirst = first.value): Promise<void> {
-  await confirmRowReplacement(() => load(targetFirst));
+  await confirmRowReplacement(async () => {
+    columnsLoaded.value = false;
+    await load(targetFirst);
+  });
 }
 
 function onSort(e: DataTableSortEvent): void {
@@ -1318,7 +1344,11 @@ onDeactivated(() => {
 
 function canAutoRefresh(): boolean {
   if (!props.source || loading.value || committing.value) return false;
-  if (refreshing.value || editingCell.value) return false;
+  if (refreshing.value) return false;
+  // The edited cell can unmount without a complete/cancel event, so the flag is
+  // only meaningful while its row is still on screen.
+  if (editingRid.value && rows.value.some((r) => rid(r) === editingRid.value))
+    return false;
   if (pendingCount.value > 0) return false;
   if (
     showInsert.value ||
@@ -1628,7 +1658,7 @@ onUnmounted(() => {
         paginator
         :first="first"
         :rows="pageSize"
-        :total-records="total ?? first + rows.length + (hasMore ? 1 : 0)"
+        :total-records="total ?? first + rows.length + (hasMore ? pageSize : 0)"
         :rows-per-page-options="[25, 50, 100, 250]"
         :paginator-template="
           total == null
@@ -1647,8 +1677,8 @@ onUnmounted(() => {
         @sort="onSort"
         @page="onPage"
         @row-click="onRowClick"
-        @cell-edit-init="editingCell = true"
-        @cell-edit-cancel="editingCell = false"
+        @cell-edit-init="onCellEditInit"
+        @cell-edit-cancel="editingRid = null"
         @cell-edit-complete="onCellEditComplete"
       >
         <Column

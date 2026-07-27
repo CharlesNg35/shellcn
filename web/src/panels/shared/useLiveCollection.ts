@@ -36,7 +36,12 @@ export function useLiveCollection(opts: LiveCollectionOptions): {
     if (opts.prepend) rows.unshift(row);
     else rows.push(row);
     const max = opts.max ?? DEFAULT_MAX;
-    if (rows.length > max) rows.splice(max);
+    // Trim the end the newest entries are furthest from, so the cap drops the
+    // oldest rows in both orders.
+    if (rows.length > max) {
+      if (opts.prepend) rows.splice(max);
+      else rows.splice(0, rows.length - max);
+    }
   }
   return { apply };
 }

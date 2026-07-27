@@ -27,6 +27,7 @@ const notify = useNotify();
 const PAGE_SIZE = 50;
 
 const items = ref<CredentialSummary[]>([]);
+const paginated = computed(() => items.value.length > PAGE_SIZE);
 const kinds = ref<CredentialKindInfo[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
@@ -159,7 +160,7 @@ const hasItems = computed(() => items.value.length > 0);
     <DataTable
       v-else
       :value="items"
-      paginator
+      :paginator="paginated"
       :rows="PAGE_SIZE"
       :rows-per-page-options="[25, 50, 100]"
       scrollable

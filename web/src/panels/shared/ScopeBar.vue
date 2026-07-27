@@ -29,6 +29,9 @@ const MAX_OPTIONS = 500;
 const SEARCH_DEBOUNCE_MS = 250;
 const VIRTUAL_THRESHOLD = 100;
 const OPTION_HEIGHT = 32;
+// A server search may match on the value field, so the local filter has to look
+// there too or it drops the rows the server just returned.
+const OPTION_FILTER_FIELDS = ["label", "value"];
 
 const store = useScopeStore();
 const options = reactive<Record<string, FilterOption[]>>({});
@@ -270,7 +273,9 @@ function setAutoCompleteValue(f: ScopeFilter, raw: unknown): void {
 }
 
 function complete(f: ScopeFilter, event: { query?: string }): void {
-  const query = (event.query ?? "").trim().toLowerCase();
+  const typed = (event.query ?? "").trim();
+  if (typed) searchOptions(f, typed);
+  const query = typed.toLowerCase();
   const source = choicesForControl(f);
   suggestions[f.param] = query
     ? source.filter((option) =>
@@ -360,6 +365,7 @@ onUnmounted(stopWatches);
           option-label="label"
           option-value="value"
           :filter="showSearch(f)"
+          :filter-fields="OPTION_FILTER_FIELDS"
           :placeholder="f.allLabel ?? f.label"
           :loading="loading"
           :overlay-style="scopeControlOverlayStyle"
@@ -386,10 +392,17 @@ onUnmounted(stopWatches);
           :force-selection="!f.allowCustom"
           :placeholder="f.allLabel ?? f.label"
           :loading="loading"
+          :virtual-scroller-options="optionScroller(f)"
           :aria-label="f.label"
           @complete="complete(f, $event)"
           @update:model-value="setAutoCompleteValue(f, $event)"
-        />
+        >
+          <template v-if="truncated[f.param]" #footer>
+            <p class="px-3 py-2 text-xs text-surface-400">
+              Showing first {{ MAX_OPTIONS }} — type to search
+            </p>
+          </template>
+        </AutoComplete>
 
         <Select
           v-else
@@ -398,6 +411,7 @@ onUnmounted(stopWatches);
           option-label="label"
           option-value="value"
           :filter="showSearch(f)"
+          :filter-fields="OPTION_FILTER_FIELDS"
           :placeholder="f.allLabel ?? f.label"
           :loading="loading"
           :overlay-style="scopeControlOverlayStyle"

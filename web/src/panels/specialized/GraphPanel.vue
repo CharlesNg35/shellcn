@@ -39,9 +39,14 @@ const refreshing = ref(false);
 const expanding = ref(false);
 const exporting = ref(false);
 const graphFrame = ref<HTMLElement | null>(null);
-const { width: frameWidth, height: frameHeight } = useElementSize(graphFrame);
+// Measured on the panel root, not the graph frame: the node detail drawer is a
+// sibling of the frame, so measuring the frame would couple canvas compactness
+// to node selection.
+const panelRoot = ref<HTMLElement | null>(null);
+const { width: panelWidth, height: panelHeight } = useElementSize(panelRoot);
 const compactCanvas = computed(
-  () => frameWidth.value < 420 || frameHeight.value < 320,
+  () =>
+    panelWidth.value > 0 && (panelWidth.value < 420 || panelHeight.value < 320),
 );
 const exportMenu = ref<InstanceType<typeof Menu> | null>(null);
 const error = ref<string | null>(null);
@@ -158,7 +163,7 @@ async function expand(nodeId: string): Promise<void> {
     if (merged.truncated) {
       notify.info(
         "Graph is at its display limit",
-        "Collapse or refresh the graph before expanding further.",
+        "Refresh the graph to start over from the root.",
       );
     }
   } catch {
@@ -254,7 +259,7 @@ watch(
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
+  <div ref="panelRoot" class="flex h-full flex-col">
     <div
       class="flex shrink-0 items-center justify-between border-b border-surface-200 px-3 py-2 dark:border-surface-800"
     >
@@ -384,10 +389,10 @@ watch(
       </p>
       <dl
         v-if="properties.length"
-        class="mt-2 grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)] gap-x-4 gap-y-1 @max-sm:grid-cols-1"
+        class="mt-2 grid grid-cols-[minmax(min-content,max-content)_minmax(0,1fr)] gap-x-4 gap-y-1 @max-sm:grid-cols-1"
       >
         <template v-for="p in properties" :key="p.key">
-          <dt class="min-w-0 text-surface-400">{{ p.key }}</dt>
+          <dt class="text-surface-400">{{ p.key }}</dt>
           <dd
             class="min-w-0 break-words text-surface-600 dark:text-surface-300"
           >

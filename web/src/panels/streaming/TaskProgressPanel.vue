@@ -15,8 +15,11 @@ import { useLogBuffer, type LogLine } from "./useLogBuffer";
 const props = defineProps<PanelProps>();
 
 const MAX = 1000;
+// Wrapped lines have no fixed height, so virtualization past this threshold
+// only applies to the single-line mode.
 const VIRTUAL_THRESHOLD = 200;
 const LINE_HEIGHT = 18;
+const wrap = ref(true);
 
 const cfg = computed(
   () => (props.config as TaskProgressPanelConfig | undefined) ?? {},
@@ -64,7 +67,9 @@ const progressValue = computed(() =>
 const showInitialLoader = computed(
   () => !lines.value.length && status.value === "connecting",
 );
-const virtualized = computed(() => lines.value.length > VIRTUAL_THRESHOLD);
+const virtualized = computed(
+  () => !wrap.value && lines.value.length > VIRTUAL_THRESHOLD,
+);
 const emptyText = computed(() =>
   status.value === "open" ? "No task output yet." : "No task output received.",
 );
@@ -144,6 +149,13 @@ async function onReconnect(): Promise<void> {
             <AppIcon :icon="{ type: 'lucide', value: 'square' }" :size="14" />
             Cancel
           </Button>
+          <Button
+            type="button"
+            severity="secondary"
+            :label="wrap ? 'Wrap' : 'No wrap'"
+            :aria-pressed="wrap"
+            @click="wrap = !wrap"
+          />
         </div>
       </div>
       <ProgressBar
@@ -164,6 +176,7 @@ async function onReconnect(): Promise<void> {
       :class="virtualized ? 'overflow-hidden' : 'overflow-auto'"
     >
       <VirtualScroller
+        :key="virtualized ? 'virtual' : 'plain'"
         :items="lines"
         :item-size="LINE_HEIGHT"
         :disabled="!virtualized"
@@ -176,9 +189,7 @@ async function onReconnect(): Promise<void> {
               v-for="line in items as LogLine[]"
               :key="line.id"
               :class="
-                virtualized
-                  ? 'whitespace-pre'
-                  : 'wrap-break-word whitespace-pre-wrap'
+                wrap ? 'wrap-break-word whitespace-pre-wrap' : 'whitespace-pre'
               "
               :style="virtualized ? { height: `${LINE_HEIGHT}px` } : undefined"
             >

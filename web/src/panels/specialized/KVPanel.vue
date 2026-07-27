@@ -59,12 +59,18 @@ interface KVRow {
   entry?: KVEntry;
 }
 
-// A keyspace can be unbounded, so the panel never follows the scan cursor on its
-// own: one page lands on open and every further page needs a "Load more" click,
-// up to a hard in-memory cap past which the filter is the only way on. Match
-// semantics belong to the plugin, so the panel only forwards the term as `q`.
+// A keyspace can be unbounded, so the panel never follows the scan cursor to
+// exhaustion: one bounded fill lands on open and every further page needs a
+// "Load more" click, up to a hard in-memory cap past which the filter is the
+// only way on. Match semantics belong to the plugin, so the panel only forwards
+// the term as `q`.
 const PAGE_SIZE = 200;
 const MAX_KEYS = 5000;
+// A plugin page is a bounded number of scan round trips, not a bounded number of
+// matches, so a selective filter over a large keyspace routinely comes back
+// empty with a live cursor. Empty pages stay free: one gesture keeps pulling
+// until it yields a key, for at most this many pages.
+const FILL_ATTEMPTS = 10;
 // Below this many rows the list renders in full (identical to a plain list and
 // cheaper); above it PrimeVue's VirtualScroller keeps the mounted rows bounded.
 const VIRTUAL_THRESHOLD = 200;
@@ -97,6 +103,7 @@ const seenKeys = new Set<string>();
 let detailRequest = 0;
 let loadGen = 0;
 let filterLoadHandle: ReturnType<typeof setTimeout> | undefined;
+let filterPending = false;
 const config = computed(() => props.config as KVPanelConfig | undefined);
 const keyParam = computed(() => config.value?.keyParam ?? "key");
 const writable = computed(() => config.value?.writable === true);
@@ -109,7 +116,7 @@ const filterActive = computed(() => filterText.value.trim() !== "");
 const countLabel = computed(() => {
   const count = entries.value.length;
   const noun = count === 1 ? "key" : "keys";
-  if (capped.value) return `${count}+ ${noun}`;
+  if (capped.value && hasMore.value) return `${count}+ ${noun}`;
   return hasMore.value
     ? `Showing ${count} ${noun} (+more)`
     : `${count} ${noun}`;
@@ -202,8 +209,10 @@ function insertKey(entry: KVEntry): void {
   folder.leaves.splice(sortedIndex(folder.leaves, label), 0, { label, entry });
 }
 
+// A filter reveals its matches by expanding every folder by default, but an
+// explicit toggle still wins so branches stay collapsible while filtering.
 function isExpanded(row: KVRow): boolean {
-  return filterActive.value || expandedKeys.value[row.id] === true;
+  return expandedKeys.value[row.id] ?? filterActive.value;
 }
 
 function isSelected(row: KVRow): boolean {
@@ -285,7 +294,7 @@ function fetchKeyPage(from: string | undefined): Promise<Page<KVEntry>> {
   );
 }
 
-function appendPage(page: Page<KVEntry>): void {
+function appendPage(page: Page<KVEntry>): number {
   const added: KVEntry[] = [];
   for (const entry of normalizeList(page)) {
     if (seenKeys.size >= MAX_KEYS) break;
@@ -294,11 +303,24 @@ function appendPage(page: Page<KVEntry>): void {
     added.push(entry);
   }
   cursor.value = page.nextCursor || undefined;
-  if (!added.length) return;
+  if (!added.length) return 0;
   entries.value = entries.value.concat(added);
   if (hasTree.value) {
     for (const entry of added) insertKey(entry);
     triggerRef(treeRoot);
+  }
+  return added.length;
+}
+
+// Keeps following the cursor while the current gesture has produced nothing at
+// all, so a key that only appears deep in the keyspace is still reachable
+// without the user clicking "Load more" through a run of empty pages.
+async function fillEmptyPages(gen: number): Promise<void> {
+  for (let attempt = 0; attempt < FILL_ATTEMPTS; attempt++) {
+    if (!canLoadMore.value || gen !== loadGen) return;
+    const page = await fetchKeyPage(cursor.value);
+    if (gen !== loadGen) return;
+    if (appendPage(page) > 0) return;
   }
 }
 
@@ -308,6 +330,7 @@ async function load(): Promise<void> {
     return;
   }
   const gen = ++loadGen;
+  filterPending = false;
   loading.value = true;
   error.value = null;
   const selectedKey = selected.value?.key;
@@ -315,7 +338,7 @@ async function load(): Promise<void> {
     const page = await fetchKeyPage(undefined);
     if (gen !== loadGen) return;
     resetKeys();
-    appendPage(page);
+    if (appendPage(page) === 0) await fillEmptyPages(gen);
     const next =
       entries.value.find((entry) => entry.key === selectedKey) ??
       entries.value[0] ??
@@ -325,13 +348,17 @@ async function load(): Promise<void> {
   } catch (e) {
     if (gen !== loadGen) return;
     error.value = (e as Error).message;
+    // The rows on screen belong to the scan this reload was replacing, so the
+    // cursor no longer has an owner: drop it rather than let "Load more" resume
+    // an abandoned scan into a list it does not match.
+    cursor.value = undefined;
   } finally {
     if (gen === loadGen) loading.value = false;
   }
 }
 
-// Exactly one further page per invocation: the cursor is never followed to
-// exhaustion, and the in-memory cap stops paging even if the user keeps clicking.
+// One bounded fill per invocation: the cursor is never followed to exhaustion,
+// and the in-memory cap stops paging even if the user keeps clicking.
 // A reload in flight blocks paging outright — its cursor belongs to the scan that
 // is about to be discarded, so appending its page would splice keys from the old
 // scan into the new one and leave the cursor pointing down the abandoned chain.
@@ -343,7 +370,7 @@ async function loadMore(): Promise<void> {
   try {
     const page = await fetchKeyPage(cursor.value);
     if (gen !== loadGen) return;
-    appendPage(page);
+    if (appendPage(page) === 0) await fillEmptyPages(gen);
   } catch (e) {
     if (gen !== loadGen) return;
     toast.add({
@@ -407,12 +434,15 @@ async function guardedLoad(): Promise<void> {
 }
 
 // A new filter is a new scan: paging restarts from the server with the pattern
-// pushed down, instead of narrowing what happens to be in memory.
+// pushed down, instead of narrowing what happens to be in memory. Unsaved edits
+// hold the reload back rather than cancel it, so the filter is honoured as soon
+// as the editor is clean again.
 function queueFilterLoad(): void {
   if (filterLoadHandle) clearTimeout(filterLoadHandle);
   filterLoadHandle = setTimeout(() => {
     filterLoadHandle = undefined;
-    if (!dirty.value) void load();
+    filterPending = dirty.value;
+    if (!filterPending) void load();
   }, 250);
 }
 
@@ -438,7 +468,7 @@ async function activateRow(row: KVRow): Promise<void> {
   }
   expandedKeys.value = {
     ...expandedKeys.value,
-    [row.id]: !expandedKeys.value[row.id],
+    [row.id]: !isExpanded(row),
   };
 }
 
@@ -536,11 +566,32 @@ watch(hasTree, (has) => (view.value = has ? "tree" : "list"), {
   immediate: true,
 });
 
+// The tree is spliced together as pages land, so a delimiter that arrives (or
+// changes) after the fact has to rebuild it from the keys already in memory.
+watch(delimiter, () => {
+  treeRoot.value = newFolder("", "");
+  if (hasTree.value) {
+    for (const entry of entries.value) insertKey(entry);
+  }
+  triggerRef(treeRoot);
+});
+
 watch(() => [props.connectionId, props.resource?.uid], load, {
   immediate: true,
 });
 
 watch(filterText, queueFilterLoad);
+
+// Toggles made under one filter state say nothing about the next one, so
+// turning the filter on or off collapses back to the default.
+watch(filterActive, () => (expandedKeys.value = {}));
+
+// A filter reload skipped because of unsaved edits runs as soon as they resolve.
+watch(dirty, (isDirty) => {
+  if (isDirty || !filterPending) return;
+  filterPending = false;
+  void load();
+});
 
 onUnmounted(() => {
   if (filterLoadHandle) clearTimeout(filterLoadHandle);

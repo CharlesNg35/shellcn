@@ -34,9 +34,17 @@ let diff: CodeMirrorDiffView | null = null;
 
 // Two side-by-side editors below ~640px leave each pane too narrow to align
 // changes, so the view falls back to unified until there is room again.
+// A hidden or not-yet-measured pane reports 0, so the last real measurement is
+// latched: the mode must not flip back and rebuild the editor on hide/show.
 const { width } = useElementSize(root);
+const measuredWidth = ref(0);
+watch(width, (w) => {
+  if (w > 0) measuredWidth.value = w;
+});
 const effectiveMode = computed<CodeMirrorDiffMode>(() =>
-  width.value > 0 && width.value < 640 ? DiffMode.Unified : props.mode,
+  measuredWidth.value > 0 && measuredWidth.value < 640
+    ? DiffMode.Unified
+    : props.mode,
 );
 
 async function mountDiff(): Promise<void> {

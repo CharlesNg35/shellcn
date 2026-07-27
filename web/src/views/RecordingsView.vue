@@ -16,8 +16,10 @@ const route = useRoute();
 
 const items = ref<RecordingSummary[]>([]);
 const windowSize = ref(RECORDINGS_PAGE_SIZE);
+const truncated = ref(false);
 const loading = ref(false);
 const error = ref<string | null>(null);
+let requestId = 0;
 
 // Recordings are private to their creator; the list is always the viewer's own.
 const filters = computed<RecordingFilters>(() => {
@@ -28,7 +30,6 @@ const filters = computed<RecordingFilters>(() => {
 });
 
 const hasItems = computed(() => items.value.length > 0);
-const truncated = computed(() => items.value.length >= windowSize.value);
 const canLoadMore = computed(
   () => truncated.value && windowSize.value < MAX_LOADED,
 );
@@ -39,17 +40,20 @@ const countLabel = computed(() => {
 });
 
 async function load(): Promise<void> {
+  const request = ++requestId;
   loading.value = true;
   error.value = null;
   try {
-    items.value =
-      windowSize.value === RECORDINGS_PAGE_SIZE
-        ? await recordingsApi.list(filters.value)
-        : await recordingsApi.list(filters.value, windowSize.value);
+    // One row past the window tells a full page apart from a wider listing.
+    const page = await recordingsApi.list(filters.value, windowSize.value + 1);
+    if (request !== requestId) return;
+    truncated.value = page.length > windowSize.value;
+    items.value = truncated.value ? page.slice(0, windowSize.value) : page;
   } catch (e) {
+    if (request !== requestId) return;
     error.value = (e as Error).message;
   } finally {
-    loading.value = false;
+    if (request === requestId) loading.value = false;
   }
 }
 

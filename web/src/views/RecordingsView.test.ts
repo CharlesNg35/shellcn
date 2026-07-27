@@ -70,7 +70,7 @@ describe("RecordingsView", () => {
     await flushPromises();
 
     // ?user= is ignored: recordings are private to their creator.
-    expect(list).toHaveBeenCalledWith({});
+    expect(list).toHaveBeenCalledWith({}, 201);
     const text = wrapper.text();
     expect(text).toContain("prod-ssh");
     expect(text).toContain("kiosk-vnc");
@@ -89,7 +89,7 @@ describe("RecordingsView", () => {
     const wrapper = mount(RecordingsView);
     await flushPromises();
 
-    expect(list).toHaveBeenCalledWith({});
+    expect(list).toHaveBeenCalledWith({}, 201);
     expect(wrapper.text()).toContain("My Recordings");
   });
 });

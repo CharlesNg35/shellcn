@@ -25,6 +25,9 @@ import AppIcon from "@/components/AppIcon.vue";
 // cap past which the branch stops growing.
 const CHILD_PAGE_SIZE = 200;
 const MAX_CHILDREN = 2000;
+// A forced reload replays the pages a branch already holds, up to the server
+// page limit, so a refresh does not throw away "Load more…" clicks.
+const MAX_REFRESH_PAGE_SIZE = 500;
 // A refresh tick fans out over the expanded branches, so it is capped at the
 // most recently expanded ones and run a few requests at a time.
 const MAX_REFRESH_NODES = 25;
@@ -78,6 +81,9 @@ const active = ref(true);
 const moreParents = new Map<string, PVNode>();
 const expandSeq = new Map<string, number>();
 let expandCounter = 0;
+// A refresh tick that lands while the tab is KeepAlive-deactivated is replayed
+// on activation instead of being dropped.
+let staleRefresh = false;
 
 function toNode(
   n: TreeNode,
@@ -117,10 +123,13 @@ function updateNode(
   groupLabel: string,
 ): PVNode {
   const next = toNode(source, parentPath, groupLabel);
+  const cursor = (target.data as NodeData | undefined)?.nextCursor;
   target.key = next.key;
   target.label = next.label;
   target.leaf = next.leaf;
-  target.data = next.data;
+  // Children (and their "Load more…" sentinel) survive the update, so the
+  // cursor that pages them has to survive with them.
+  target.data = next.leaf ? next.data : { ...next.data, nextCursor: cursor };
   if (next.leaf) target.children = undefined;
   return target;
 }
@@ -228,7 +237,10 @@ async function loadChildren(
       data.source,
       {},
       {
-        limit: CHILD_PAGE_SIZE,
+        limit: Math.min(
+          Math.max(loadedChildren(node).length, CHILD_PAGE_SIZE),
+          MAX_REFRESH_PAGE_SIZE,
+        ),
       },
     );
     const { parentPath, groupLabel } = childContext(node);
@@ -305,18 +317,24 @@ async function reloadExpanded(
   nodesToReload: PVNode[],
   options: LoadChildrenOptions = {},
 ): Promise<void> {
-  const targets = refreshTargets(nodesToReload);
-  let next = 0;
-  const worker = async (): Promise<void> => {
-    while (next < targets.length) {
-      await loadChildren(targets[next++]!, options);
-    }
-  };
-  await Promise.all(
-    Array.from({ length: Math.min(REFRESH_CONCURRENCY, targets.length) }, () =>
-      worker(),
-    ),
-  );
+  // One wave per depth: children materialised by a wave can themselves be
+  // expanded, and they only become visible to refreshTargets once loaded.
+  const loaded = new Set<string>();
+  while (loaded.size < MAX_REFRESH_NODES) {
+    const targets = refreshTargets(nodesToReload).filter(
+      (node) => !loaded.has(String(node.key)),
+    );
+    if (!targets.length) return;
+    for (const node of targets) loaded.add(String(node.key));
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      while (next < targets.length) {
+        await loadChildren(targets[next++]!, options);
+      }
+    };
+    const workers = Math.min(REFRESH_CONCURRENCY, targets.length);
+    await Promise.all(Array.from({ length: workers }, () => worker()));
+  }
 }
 
 function expandNode(node: PVNode): void {
@@ -374,19 +392,28 @@ watch(
   { immediate: true },
 );
 
+async function runRefresh(): Promise<void> {
+  staleRefresh = false;
+  await Promise.all([
+    reloadExpanded(nodes.value, { force: true, loading: false }),
+    loadBadges(),
+  ]);
+}
+
 watch(
   () => props.refreshKey,
   async () => {
-    if (!active.value) return;
-    await Promise.all([
-      reloadExpanded(nodes.value, { force: true, loading: false }),
-      loadBadges(),
-    ]);
+    if (!active.value) {
+      staleRefresh = true;
+      return;
+    }
+    await runRefresh();
   },
 );
 
 onActivated(() => {
   active.value = true;
+  if (staleRefresh) void runRefresh();
 });
 onDeactivated(() => {
   active.value = false;
