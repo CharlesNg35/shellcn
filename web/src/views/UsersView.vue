@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
@@ -51,13 +51,22 @@ const showInvite = ref(false);
 async function loadUsers(): Promise<void> {
   users.value = await adminUsersApi.list();
 }
+let invitationsLoaded = false;
 async function loadInvitations(): Promise<void> {
   invitations.value = await invitationsApi.list();
+  invitationsLoaded = true;
 }
 onMounted(() => {
   void loadUsers();
-  void loadInvitations();
 });
+// Invitations load the first time their tab is opened, not on every visit.
+watch(
+  tab,
+  (value) => {
+    if (value === "invitations" && !invitationsLoaded) void loadInvitations();
+  },
+  { immediate: true },
+);
 
 // You manage your own account from your profile, and the root admin is immutable
 // here (it also uses its profile). Root edits any other user; a regular admin edits

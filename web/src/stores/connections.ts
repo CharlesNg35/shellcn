@@ -18,25 +18,42 @@ export const useConnectionsStore = defineStore("connections", () => {
   const plugins = ref<PluginSummary[]>([]);
   const projections = ref<Record<string, PluginProjection>>({});
   const loaded = ref(false);
+  let loadInflight: Promise<void> | null = null;
 
   async function load(): Promise<void> {
-    const [c, f, p] = await Promise.all([
-      connectionsApi.list(),
-      connectionFoldersApi.list(),
-      pluginsApi.list(),
-    ]);
-    connections.value = c;
-    folders.value = f;
-    plugins.value = p;
-    loaded.value = true;
+    if (loadInflight) return loadInflight;
+    loadInflight = (async () => {
+      const [c, f, p] = await Promise.all([
+        connectionsApi.list(),
+        connectionFoldersApi.list(),
+        pluginsApi.list(),
+      ]);
+      connections.value = c;
+      folders.value = f;
+      plugins.value = p;
+      loaded.value = true;
+    })().finally(() => {
+      loadInflight = null;
+    });
+    return loadInflight;
   }
 
-  // Projections are fetched on demand and cached — the catalog is never bulk-loaded.
+  // Projections are fetched on demand and cached — the catalog is never
+  // bulk-loaded. Concurrent callers for the same plugin share one request.
+  const projectionInflight = new Map<string, Promise<void>>();
   async function projection(name: string): Promise<PluginProjection> {
-    if (!projections.value[name]) {
-      const fetched = await pluginsApi.get(name);
-      projections.value = { ...projections.value, [name]: fetched };
+    if (projections.value[name]) return projections.value[name];
+    let pending = projectionInflight.get(name);
+    if (!pending) {
+      pending = pluginsApi
+        .get(name)
+        .then((fetched) => {
+          projections.value = { ...projections.value, [name]: fetched };
+        })
+        .finally(() => projectionInflight.delete(name));
+      projectionInflight.set(name, pending);
     }
+    await pending;
     return projections.value[name];
   }
 
