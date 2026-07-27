@@ -37,14 +37,21 @@ vi.mock("../composables/useProtocolsAdmin", () => ({
   }),
 }));
 
-vi.mock("../composables/useMarketAdmin", () => ({
-  useMarketAdmin: () => ({
+vi.mock("pinia", async (orig) => ({
+  ...(await orig<typeof import("pinia")>()),
+  storeToRefs: <T>(store: T) => store,
+}));
+
+vi.mock("../stores/market", () => ({
+  useMarketStore: () => ({
     enabled: ref(true),
     entries: ref([]),
     loading: ref(false),
     installing: ref({}),
     uninstalling: ref({}),
     load: vi.fn(),
+    ensureLoaded: vi.fn(),
+    updateFor: () => null,
     install: vi.fn(),
     uninstall: vi.fn(),
   }),

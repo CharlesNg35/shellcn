@@ -16,6 +16,8 @@ import { KEEP_ALIVE_TOP_LEVEL_PANELS_MAX } from "../stores/sessionLimits";
 import { useNotify } from "../composables/useNotify";
 import { useWorkspaceUrlSync } from "../composables/useWorkspaceUrlSync";
 import AppIcon from "../components/AppIcon.vue";
+import RoleGate from "../components/RoleGate.vue";
+import PluginUpdateBadge from "../components/PluginUpdateBadge.vue";
 import PanelHost from "../panels/core/PanelHost.vue";
 import ActionBar from "../panels/shared/ActionBar.vue";
 import ScopeBar from "../panels/shared/ScopeBar.vue";
@@ -287,6 +289,10 @@ async function onActionDone(
             {{ connection?.transport }}
           </p>
         </div>
+
+        <RoleGate admin>
+          <PluginUpdateBadge :protocol="connection?.protocol" />
+        </RoleGate>
       </div>
 
       <div

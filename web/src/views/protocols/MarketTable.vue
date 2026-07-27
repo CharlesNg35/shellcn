@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import IconField from "primevue/iconfield";
 import InputIcon from "primevue/inputicon";
 import InputText from "primevue/inputtext";
@@ -18,6 +18,7 @@ const props = defineProps<{
   loading: boolean;
   installing: Record<string, boolean>;
   uninstalling: Record<string, boolean>;
+  initialQuery?: string;
 }>();
 
 const emit = defineEmits<{
@@ -25,7 +26,13 @@ const emit = defineEmits<{
   (e: "uninstall", entry: MarketEntry): void;
 }>();
 
-const query = ref("");
+const query = ref(props.initialQuery ?? "");
+watch(
+  () => props.initialQuery,
+  (value) => {
+    if (value !== undefined) query.value = value;
+  },
+);
 
 const filteredEntries = computed(() => {
   const q = query.value.trim().toLowerCase();
