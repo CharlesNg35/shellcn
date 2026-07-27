@@ -124,7 +124,7 @@ onMounted(() => {
       <AppBreadcrumb :items="crumbs" />
 
       <div class="flex flex-col gap-1">
-        <h1 class="text-xl font-semibold text-surface-900 dark:text-surface-0">
+        <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
           Protocols
         </h1>
         <p class="text-sm text-surface-500 dark:text-surface-400">
