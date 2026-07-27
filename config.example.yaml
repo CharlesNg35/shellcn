@@ -82,9 +82,13 @@ recordings:
   max_chunk_bytes: 8388608
 
 # Out-of-tree plugin directory and marketplace indexes.
-# Values below are the built-in defaults.
+# plugins:
 #   dir: plugins.d # directory scanned for external plugin binaries ("" disables)
 #   market:
 #     enabled: true # allow installing plugins from the registry indexes
 #     indexes:
 #       - https://raw.githubusercontent.com/CharlesNg35/shellcn-plugin-registry/main/index.json
+
+# Checks GitHub for a newer release
+# updates:
+#   enabled: true

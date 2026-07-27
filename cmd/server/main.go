@@ -41,13 +41,15 @@ import (
 	"github.com/charlesng35/shellcn/internal/store"
 	"github.com/charlesng35/shellcn/internal/telemetry"
 	"github.com/charlesng35/shellcn/internal/transport"
+	versionpkg "github.com/charlesng35/shellcn/internal/version"
 	"github.com/charlesng35/shellcn/plugins"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 	"github.com/charlesng35/shellcn/web"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
-var version = "dev"
+// A "-dev" (or any non-release) value disables the update check.
+var version = "v0.1.0-dev"
 
 func main() {
 	var (
@@ -347,6 +349,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		ExtPlugins:        extPlugins,
 		Market:            market,
 		PluginsDir:        cfg.Plugins.Dir,
+		Version:           versionpkg.NewChecker(version, cfg.Updates.Enabled),
 		Users:             users,
 		TwoFactor:         twoFactor,
 		Invitations:       invitations,

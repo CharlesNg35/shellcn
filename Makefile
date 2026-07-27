@@ -7,7 +7,8 @@ SDK_DIR := sdk
 WEB_DIR := web
 WEB_DIST := $(WEB_DIR)/dist
 SITE_DIR := site
-GO_LDFLAGS ?= -s -w
+VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || echo v0.1.0-dev)
+GO_LDFLAGS ?= -s -w -X main.version=$(VERSION)
 GO_SOURCE_DIRS := cmd internal plugins sdk
 
 help:

@@ -8,7 +8,9 @@ COPY go.mod go.sum ./
 COPY sdk/go.mod sdk/go.sum ./sdk/
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /out/shellcn-agent ./cmd/agent
+ARG VERSION=v0.1.0-dev
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
+    -ldflags "-s -w -X main.version=${VERSION}" -o /out/shellcn-agent ./cmd/agent
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=go-build /out/shellcn-agent /shellcn-agent

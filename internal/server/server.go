@@ -28,6 +28,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/store"
 	"github.com/charlesng35/shellcn/internal/telemetry"
 	"github.com/charlesng35/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/internal/version"
 )
 
 // Deps are the server's injected dependencies (wired once in cmd/server).
@@ -71,6 +72,8 @@ type Deps struct {
 	Metrics       *telemetry.Metrics
 	Health        *telemetry.Health
 	Logger        *slog.Logger
+	// Version reports the running build and checks for a newer release.
+	Version *version.Checker
 
 	// StaticFS is the embedded web/dist; nil in dev mode.
 	StaticFS fs.FS
@@ -163,6 +166,7 @@ func (s *Server) routes() chi.Router {
 			pr.Use(s.requireAuth)
 			pr.Post("/auth/logout", s.handleLogout)
 			pr.Get("/auth/me", s.handleMe)
+			pr.Get("/version", s.handleVersion)
 			// Self-service account management (any authenticated user).
 			pr.Put("/auth/me", s.handleUpdateProfile)
 			pr.Post("/auth/me/password", s.handleChangePassword)

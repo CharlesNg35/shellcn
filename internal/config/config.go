@@ -31,6 +31,12 @@ type Config struct {
 	Recordings RecordingsConfig `mapstructure:"recordings"`
 	Plugins    PluginsConfig    `mapstructure:"plugins"`
 	AI         AIConfig         `mapstructure:"ai"`
+	Updates    UpdatesConfig    `mapstructure:"updates"`
+}
+
+// UpdatesConfig controls the outbound check for a newer gateway release.
+type UpdatesConfig struct {
+	Enabled bool `mapstructure:"enabled"`
 }
 
 type ServerConfig struct {
@@ -239,6 +245,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("plugins.market.indexes", []string{
 		"https://raw.githubusercontent.com/CharlesNg35/shellcn-plugin-registry/main/index.json",
 	})
+	v.SetDefault("updates.enabled", true)
 }
 
 func (c *Config) SlogLevel() slog.Level {

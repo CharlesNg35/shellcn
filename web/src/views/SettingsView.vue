@@ -7,6 +7,7 @@ import { adminSettingsApi } from "../api/admin";
 import RoleGate from "../components/RoleGate.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppPage from "../components/AppPage.vue";
+import VersionCard from "../components/VersionCard.vue";
 
 const { isDark, toggle } = useTheme();
 const auth = useAuthStore();
@@ -167,5 +168,7 @@ const linkClass =
         </span>
       </div>
     </RoleGate>
+
+    <VersionCard />
   </AppPage>
 </template>
