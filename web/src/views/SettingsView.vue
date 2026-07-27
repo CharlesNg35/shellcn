@@ -28,7 +28,7 @@ const linkClass =
 </script>
 
 <template>
-  <AppPage :fill="false">
+  <AppPage scroll>
     <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
       Settings
     </h1>

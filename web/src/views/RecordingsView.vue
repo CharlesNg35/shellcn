@@ -74,9 +74,14 @@ watch(filters, reload);
 
 <template>
   <AppPage>
-    <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
-      My Recordings
-    </h1>
+    <div class="flex items-baseline gap-3">
+      <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
+        My Recordings
+      </h1>
+      <span v-if="hasItems" class="text-sm text-surface-400 tabular-nums">
+        {{ countLabel }}
+      </span>
+    </div>
 
     <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
     <SkeletonList v-else-if="loading && !hasItems" :rows="6" />
@@ -95,8 +100,10 @@ watch(filters, reload);
 
     <template v-else>
       <RecordingsTable :items="items" @changed="load" />
-      <div class="flex items-center gap-3 text-xs text-surface-400">
-        <span class="tabular-nums">{{ countLabel }}</span>
+      <div
+        v-if="canLoadMore || truncated"
+        class="flex items-center gap-3 text-xs text-surface-400"
+      >
         <Button
           v-if="canLoadMore"
           type="button"
