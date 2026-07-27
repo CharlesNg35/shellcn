@@ -106,6 +106,7 @@ type FramebufferServer struct {
 	full       bool
 	closed     bool
 	useZlib    bool
+	useZRLE    bool
 	zlibLevel  int
 	wantCursor bool // client advertised the Cursor pseudo-encoding
 	cursorSent bool
@@ -251,11 +252,14 @@ func (s *FramebufferServer) readSetEncodings() error {
 	}
 	s.mu.Lock()
 	s.useZlib = false
+	s.useZRLE = false
 	for i := 0; i < n; i++ {
 		enc := int32(binary.BigEndian.Uint32(body[i*4:]))
 		switch {
 		case enc == encCursor:
 			s.wantCursor = true
+		case enc == encZRLE:
+			s.useZRLE = true
 		case enc == encZlib:
 			s.useZlib = true
 		case enc >= pseudoEncodingCompressLevel0 && enc <= pseudoEncodingCompressLevel9:
@@ -345,12 +349,13 @@ func (s *FramebufferServer) writePump(done chan<- struct{}) {
 		s.requested = false
 		pf := s.clientPF
 		useZlib := s.useZlib
+		useZRLE := s.useZRLE
 		zlibLevel := s.zlibLevel
 		cursor := s.takeCursorLocked(pf)
 		update := s.snapshotUpdateLocked(rects)
 		s.mu.Unlock()
 
-		payload := enc.encode(update, pf, cursor, useZlib, zlibLevel)
+		payload := enc.encode(update, pf, cursor, useZlib, useZRLE, zlibLevel)
 		if _, err := s.rw.Write(payload); err != nil {
 			s.close()
 			return
@@ -395,6 +400,8 @@ type updateEncoder struct {
 	zlibBuf    bytes.Buffer
 	zlibWriter *zlib.Writer
 	zlibLevel  int
+	zrleBuf    bytes.Buffer
+	zrleWriter *zlib.Writer
 }
 
 func newUpdateEncoder() *updateEncoder {
@@ -403,10 +410,10 @@ func newUpdateEncoder() *updateEncoder {
 
 // encodeUpdate builds a FramebufferUpdate of Raw rectangles.
 func encodeUpdate(rects []rectSnapshot, pf PixelFormat, cursor []byte) []byte {
-	return newUpdateEncoder().encode(rects, pf, cursor, false, zlib.BestSpeed)
+	return newUpdateEncoder().encode(rects, pf, cursor, false, false, zlib.BestSpeed)
 }
 
-func (e *updateEncoder) encode(rects []rectSnapshot, pf PixelFormat, cursor []byte, useZlib bool, zlibLevel int) []byte {
+func (e *updateEncoder) encode(rects []rectSnapshot, pf PixelFormat, cursor []byte, useZlib, useZRLE bool, zlibLevel int) []byte {
 	bpp := int(pf.BitsPerPixel) / 8
 	if bpp == 0 {
 		bpp = 4
@@ -422,6 +429,16 @@ func (e *updateEncoder) encode(rects []rectSnapshot, pf PixelFormat, cursor []by
 	out = append(out, count[:]...)
 	out = append(out, cursor...)
 	for _, rc := range rects {
+		if useZRLE && isNativePixelFormat(pf) && len(rc.Pixels) >= 1024 {
+			if compressed, ok := e.encodeZRLERect(rc, zlibLevel); ok {
+				out = appendRectHeader(out, rc.Rect, encZRLE)
+				var length [4]byte
+				binary.BigEndian.PutUint32(length[:], uint32(len(compressed)))
+				out = append(out, length[:]...)
+				out = append(out, compressed...)
+				continue
+			}
+		}
 		if useZlib && isNativePixelFormat(pf) && len(rc.Pixels) >= 1024 {
 			if compressed, ok := e.compress(rc.Pixels, zlibLevel); ok {
 				out = appendRectHeader(out, rc.Rect, encZlib)

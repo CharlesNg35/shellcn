@@ -180,7 +180,7 @@ func TestEncodeUpdateUsesZlibForNativeLargeRect(t *testing.T) {
 		Rect:   Rect{X: 2, Y: 3, W: 32, H: 32},
 		Pixels: pixels,
 	}}
-	got := newUpdateEncoder().encode(rects, nativePixelFormat(), nil, true, zlib.BestSpeed)
+	got := newUpdateEncoder().encode(rects, nativePixelFormat(), nil, true, false, zlib.BestSpeed)
 
 	if got[0] != 0 || binary.BigEndian.Uint16(got[2:]) != 1 {
 		t.Fatalf("bad update header: %v", got[:4])
