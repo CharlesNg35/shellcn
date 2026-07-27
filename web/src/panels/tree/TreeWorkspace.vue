@@ -49,6 +49,8 @@ const view = computed(() => ws.view(props.connectionId));
 const activeView = computed(() => ws.activeView(props.connectionId));
 const layout = computed(() => ws.layout(props.connectionId));
 const tabStrip = ref<HTMLElement | null>(null);
+const workspaceRow = ref<HTMLElement | null>(null);
+const sidebarShell = ref<HTMLElement | null>(null);
 const scopeKey = computed(() => scope.key(props.connectionId));
 const treeRefreshNonce = ref(0);
 const isSidebarResizing = ref(false);
@@ -305,6 +307,8 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
   });
 }
 
+const SIDEBAR_MAX_RATIO = 0.6;
+
 let sidebarStartX = 0;
 let sidebarStartWidth = 0;
 let resizeCursorBefore = "";
@@ -318,11 +322,20 @@ function stopSidebarResize(): void {
   window.removeEventListener("pointerup", stopSidebarResize);
 }
 
+function maxSidebarWidth(): number {
+  const row = workspaceRow.value?.clientWidth ?? 0;
+  return row
+    ? Math.min(MAX_TREE_SIDEBAR_WIDTH, Math.round(row * SIDEBAR_MAX_RATIO))
+    : MAX_TREE_SIDEBAR_WIDTH;
+}
+
+function setSidebarWidth(width: number): void {
+  const next = Math.min(maxSidebarWidth(), width);
+  ws.setTreeSidebarWidth(props.connectionId, next);
+}
+
 function onSidebarResizeMove(event: PointerEvent): void {
-  ws.setTreeSidebarWidth(
-    props.connectionId,
-    sidebarStartWidth + event.clientX - sidebarStartX,
-  );
+  setSidebarWidth(sidebarStartWidth + event.clientX - sidebarStartX);
 }
 
 function startSidebarResize(event: PointerEvent): void {
@@ -339,7 +352,8 @@ function startSidebarResize(event: PointerEvent): void {
   document.documentElement.style.cursor = "col-resize";
   document.body.style.userSelect = "none";
   sidebarStartX = event.clientX;
-  sidebarStartWidth = layout.value.treeSidebarWidth;
+  sidebarStartWidth =
+    sidebarShell.value?.clientWidth || layout.value.treeSidebarWidth;
   window.addEventListener("pointermove", onSidebarResizeMove);
   window.addEventListener("pointerup", stopSidebarResize);
 }
@@ -347,21 +361,15 @@ function startSidebarResize(event: PointerEvent): void {
 function onSidebarResizeKeydown(event: KeyboardEvent): void {
   if (event.key === "ArrowLeft") {
     event.preventDefault();
-    ws.setTreeSidebarWidth(
-      props.connectionId,
-      layout.value.treeSidebarWidth - 24,
-    );
+    setSidebarWidth(layout.value.treeSidebarWidth - 24);
     return;
   }
   if (event.key === "ArrowRight") {
     event.preventDefault();
     if (layout.value.treeSidebarWidth === 0) {
-      ws.setTreeSidebarWidth(props.connectionId, MIN_TREE_SIDEBAR_WIDTH);
+      setSidebarWidth(MIN_TREE_SIDEBAR_WIDTH);
     } else {
-      ws.setTreeSidebarWidth(
-        props.connectionId,
-        layout.value.treeSidebarWidth + 24,
-      );
+      setSidebarWidth(layout.value.treeSidebarWidth + 24);
     }
     return;
   }
@@ -372,7 +380,7 @@ function onSidebarResizeKeydown(event: KeyboardEvent): void {
   }
   if (event.key === "End") {
     event.preventDefault();
-    ws.setTreeSidebarWidth(props.connectionId, MAX_TREE_SIDEBAR_WIDTH);
+    setSidebarWidth(MAX_TREE_SIDEBAR_WIDTH);
   }
 }
 
@@ -383,8 +391,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0">
+  <div ref="workspaceRow" class="flex h-full min-h-0">
     <div
+      ref="sidebarShell"
       data-test="resource-sidebar-shell"
       class="relative h-full min-h-0 max-w-[60%] shrink-0"
       :style="{ width: `${layout.treeSidebarWidth}px` }"

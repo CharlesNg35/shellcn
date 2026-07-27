@@ -77,7 +77,8 @@ const baselineQuery = ref(query.value);
 // the full result set.
 const MAX_RESULT_ROWS = 5000;
 const VIRTUAL_THRESHOLD = 100;
-const ROW_HEIGHT = 30;
+// Matches the passthrough preset's body cell: py-2 + text-sm line height + border.
+const ROW_HEIGHT = 37;
 
 const resultRows = computed(() => results.value?.rows ?? []);
 const truncated = computed(() => resultRows.value.length > MAX_RESULT_ROWS);
@@ -138,6 +139,7 @@ function stopResize(): void {
   resizing.value = false;
   window.removeEventListener("pointermove", onResizeMove);
   window.removeEventListener("pointerup", stopResize);
+  window.removeEventListener("pointercancel", stopResize);
 }
 
 function startResize(event: PointerEvent): void {
@@ -155,6 +157,7 @@ function startResize(event: PointerEvent): void {
   resizing.value = true;
   window.addEventListener("pointermove", onResizeMove);
   window.addEventListener("pointerup", stopResize);
+  window.addEventListener("pointercancel", stopResize);
 }
 
 function onResizeKeydown(event: KeyboardEvent): void {
@@ -477,7 +480,7 @@ onUnmounted(() => {
       :aria-valuemin="MIN_EDITOR_HEIGHT"
       :aria-valuemax="MAX_EDITOR_HEIGHT"
       :aria-valuenow="editorHeight"
-      class="group relative h-2.5 shrink-0 cursor-row-resize border-y border-surface-200 bg-surface-50 transition-colors hover:bg-primary-500/10 focus-visible:bg-primary-500/15 focus-visible:outline-none dark:border-surface-800 dark:bg-surface-900"
+      class="group relative h-2.5 shrink-0 cursor-row-resize touch-none border-y border-surface-200 bg-surface-50 transition-colors hover:bg-primary-500/10 focus-visible:bg-primary-500/15 focus-visible:outline-none dark:border-surface-800 dark:bg-surface-900"
       :class="{ 'bg-primary-500/10 dark:bg-primary-500/10': resizing }"
       @pointerdown="startResize"
       @dblclick="resetEditorHeight"

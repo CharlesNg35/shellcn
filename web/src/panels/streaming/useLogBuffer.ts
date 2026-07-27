@@ -28,10 +28,11 @@ export function useLogBuffer(
     const batch = pending;
     pending = [];
     if (batch.length > max) batch.splice(0, batch.length - max);
-    lines.value.push(...batch);
-    if (lines.value.length > max) {
-      lines.value.splice(0, lines.value.length - max);
-    }
+    // Publish a new array reference: PrimeVue's VirtualScroller only recomputes
+    // its scroll extent when the items length changes between watcher runs, and
+    // an in-place mutation hands it the same array as both old and new value.
+    const next = lines.value.concat(batch);
+    lines.value = next.length > max ? next.slice(next.length - max) : next;
     onFlush?.();
   }
 

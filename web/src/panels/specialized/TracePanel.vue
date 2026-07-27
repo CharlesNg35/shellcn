@@ -41,7 +41,9 @@ const props = defineProps<PanelProps>();
 // waterfall and says how much it dropped.
 const MAX_SPANS = 2000;
 const VIRTUAL_THRESHOLD = 100;
-const ROW_HEIGHT = 42;
+// Two stacked lines (text-sm 20px + text-xs 16px) inside the preset `bodyCell`
+// (py-2 = 16px) plus its 1px bottom border.
+const ROW_HEIGHT = 53;
 
 const filterText = ref("");
 const selected = ref<SpanRow | null>(null);
@@ -115,15 +117,10 @@ const allRows = computed<SpanRow[]>(() => {
   return out;
 });
 
-const truncated = computed(() => allRows.value.length > MAX_SPANS);
-const rows = computed(() =>
-  truncated.value ? allRows.value.slice(0, MAX_SPANS) : allRows.value,
-);
-
-const visibleRows = computed(() => {
+const filteredRows = computed(() => {
   const q = filterText.value.trim().toLowerCase();
-  if (!q) return rows.value;
-  return rows.value.filter((span) =>
+  if (!q) return allRows.value;
+  return allRows.value.filter((span) =>
     [span.name, span.service, span.status].some((value) =>
       String(value ?? "")
         .toLowerCase()
@@ -131,6 +128,11 @@ const visibleRows = computed(() => {
     ),
   );
 });
+
+const truncated = computed(() => filteredRows.value.length > MAX_SPANS);
+const visibleRows = computed(() =>
+  truncated.value ? filteredRows.value.slice(0, MAX_SPANS) : filteredRows.value,
+);
 const rowVirtualScroller = computed(() =>
   visibleRows.value.length > VIRTUAL_THRESHOLD
     ? { itemSize: ROW_HEIGHT }
@@ -160,7 +162,8 @@ async function refreshTrace(): Promise<void> {
 }
 
 function selectRow(event: { data: unknown }): void {
-  selected.value = event.data as SpanRow;
+  const row = event.data as SpanRow;
+  selected.value = selected.value?.id === row.id ? null : row;
 }
 
 watch(
@@ -193,14 +196,14 @@ watch(
         aria-label="Filter spans"
         class="w-56"
       />
-      <span class="text-xs text-surface-400">{{ rows.length }} spans</span>
+      <span class="text-xs text-surface-400">{{ allRows.length }} spans</span>
       <span
         v-if="truncated"
         data-test="trace-truncated"
         class="text-xs text-amber-600 dark:text-amber-400"
       >
-        Showing the first {{ MAX_SPANS }} of {{ allRows.length }} — filter to
-        narrow the trace.
+        Showing the first {{ MAX_SPANS }} of {{ filteredRows.length }} — filter
+        to narrow the trace.
       </span>
       <Button
         type="button"
@@ -289,9 +292,21 @@ watch(
         v-if="selected"
         class="min-h-0 overflow-auto border-l border-surface-200 p-4 dark:border-surface-800"
       >
-        <p class="text-xs text-surface-400 uppercase">
-          {{ spanService(selected) }}
-        </p>
+        <div class="flex items-start justify-between gap-2">
+          <p class="text-xs text-surface-400 uppercase">
+            {{ spanService(selected) }}
+          </p>
+          <Button
+            type="button"
+            severity="secondary"
+            variant="text"
+            size="small"
+            aria-label="Close span details"
+            @click="selected = null"
+          >
+            <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="14" />
+          </Button>
+        </div>
         <h3 class="mt-1 font-semibold text-surface-900 dark:text-surface-0">
           {{ selected.name }}
         </h3>

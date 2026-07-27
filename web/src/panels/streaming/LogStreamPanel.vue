@@ -145,13 +145,20 @@ function download(): void {
   const blob = new Blob([lines.value.map((line) => line.text).join("\n")], {
     type: "text/plain;charset=utf-8",
   });
-  downloadUrl = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
+  downloadUrl = url;
   const link = document.createElement("a");
-  link.href = downloadUrl;
+  link.href = url;
   link.download = "logs.txt";
   link.rel = "noopener";
+  // Some engines abort the transfer for a detached anchor or a URL revoked in
+  // the same tick, so connect the link and keep the blob alive for a moment.
+  document.body.appendChild(link);
   link.click();
-  setTimeout(releaseDownload, 0);
+  link.remove();
+  setTimeout(() => {
+    if (downloadUrl === url) releaseDownload();
+  }, 1000);
 }
 
 void loadControls();
@@ -248,6 +255,7 @@ onUnmounted(releaseDownload);
       :class="virtualized ? 'overflow-hidden' : 'overflow-auto'"
     >
       <VirtualScroller
+        :key="virtualized ? 'virtual' : 'plain'"
         ref="scroller"
         :items="visibleLines"
         :item-size="LINE_HEIGHT"

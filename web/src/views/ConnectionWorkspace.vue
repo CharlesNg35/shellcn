@@ -94,6 +94,10 @@ const connection = computed(() => conns.byId(props.id));
 const connectionConfig = computed<Record<string, unknown>>(
   () => connection.value?.config ?? {},
 );
+const connectionSubtitle = computed(() => {
+  const title = projection.value?.title ?? connection.value?.protocol;
+  return [title, connection.value?.transport].filter(Boolean).join(" · ");
+});
 providePanelConfigSchemas(
   computed(() => projection.value?.panelConfigSchemas ?? {}),
 );
@@ -277,7 +281,7 @@ async function onActionDone(
           </h1>
           <p
             class="truncate text-xs text-surface-400"
-            :title="`${projection?.title ?? connection?.protocol} · ${connection?.transport}`"
+            :title="connectionSubtitle"
           >
             {{ projection?.title ?? connection?.protocol }} ·
             {{ connection?.transport }}

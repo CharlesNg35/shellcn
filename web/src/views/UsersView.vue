@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
@@ -39,6 +39,10 @@ const PAGE_SIZE = 50;
 const tab = ref("users");
 const users = ref<AdminUser[]>([]);
 const invitations = ref<InvitationSummary[]>([]);
+const usersPaginated = computed(() => users.value.length > PAGE_SIZE);
+const invitationsPaginated = computed(
+  () => invitations.value.length > PAGE_SIZE,
+);
 
 const showUserForm = ref(false);
 const editingUser = ref<AdminUser | null>(null);
@@ -155,7 +159,7 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
           <div class="min-h-0 flex-1">
             <DataTable
               :value="users"
-              paginator
+              :paginator="usersPaginated"
               :rows="PAGE_SIZE"
               :rows-per-page-options="[25, 50, 100]"
               scrollable
@@ -284,7 +288,7 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
           <div class="min-h-0 flex-1">
             <DataTable
               :value="invitations"
-              paginator
+              :paginator="invitationsPaginated"
               :rows="PAGE_SIZE"
               :rows-per-page-options="[25, 50, 100]"
               scrollable
