@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import Dialog from "primevue/dialog";
 import Select from "primevue/select";
 import InputText from "primevue/inputtext";
@@ -9,7 +9,7 @@ import Tooltip from "primevue/tooltip";
 import { useRouter } from "vue-router";
 import { ApiError } from "../api/client";
 import { connectionsApi } from "../api/connections";
-import { aiApi } from "../api/ai";
+import { useAiProvidersStore } from "../stores/aiProviders";
 import { useConnectionsStore } from "../stores/connections";
 import { useNotify } from "../composables/useNotify";
 import SchemaForm from "../panels/form/SchemaForm.vue";
@@ -54,19 +54,13 @@ const recordingModel = ref<Record<string, string>>({});
 const aiMode = ref("");
 const aiAllowDestructive = ref(false);
 const aiAutoApprove = ref(false);
-const aiConfigured = ref(false);
 const loading = ref(false);
 const busy = ref(false);
 
-onMounted(async () => {
-  try {
-    const [global, list] = await Promise.all([aiApi.global(), aiApi.list()]);
-    aiConfigured.value =
-      (global.configured && (global.usable ?? true)) || list.length > 0;
-  } catch {
-    aiConfigured.value = false;
-  }
-});
+// AI availability comes from the shared, cached provider store (loaded lazily
+// when the dialog opens) instead of a per-instance fetch on every mount.
+const aiProviders = useAiProvidersStore();
+const aiConfigured = computed(() => aiProviders.available);
 const formRef = ref<{ submit: () => void } | null>(null);
 
 const transportChoices = computed(() =>
@@ -175,6 +169,7 @@ watch(
   (open) => {
     if (!open) return;
     reset();
+    void aiProviders.load().catch(() => {});
     if (props.connectionId) void loadForEdit(props.connectionId);
   },
   { immediate: true },

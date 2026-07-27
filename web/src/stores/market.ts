@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { adminMarketApi } from "../api/admin";
 import { useNotify } from "../composables/useNotify";
+import { registerSessionCleanup } from "./session";
 import type { MarketEntry } from "../types/projection/market";
 
 // market owns the plugin marketplace: the shared catalog (fetched once and
@@ -105,6 +106,19 @@ export const useMarketStore = defineStore("market", () => {
     }
   }
 
+  // The catalog is admin-only, so drop it on logout to avoid leaking one user's
+  // marketplace state (and update badges) into the next session.
+  function reset(): void {
+    enabled.value = false;
+    entries.value = [];
+    loading.value = false;
+    loaded.value = false;
+    installing.value = {};
+    uninstalling.value = {};
+    inflight = null;
+  }
+  registerSessionCleanup("market", reset);
+
   return {
     enabled,
     entries,
@@ -116,5 +130,6 @@ export const useMarketStore = defineStore("market", () => {
     updateFor,
     install,
     uninstall,
+    reset,
   };
 });
