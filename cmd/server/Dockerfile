@@ -17,7 +17,9 @@ COPY sdk/go.mod sdk/go.sum ./sdk/
 RUN go mod download
 COPY . .
 COPY --from=web-build /src/web/dist ./web/dist
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /out/shellcn ./cmd/server
+ARG VERSION=v0.1.0-dev
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
+    -ldflags "-s -w -X main.version=${VERSION}" -o /out/shellcn ./cmd/server
 RUN mkdir -p /out/data
 
 FROM gcr.io/distroless/static-debian12:nonroot

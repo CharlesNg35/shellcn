@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
@@ -11,10 +11,11 @@ import AppBreadcrumb from "../components/AppBreadcrumb.vue";
 import AppPage from "../components/AppPage.vue";
 import ProtocolTable from "./protocols/ProtocolTable.vue";
 import MarketTable from "./protocols/MarketTable.vue";
+import { storeToRefs } from "pinia";
 import { useProtocolsAdmin } from "../composables/useProtocolsAdmin";
-import { useMarketAdmin } from "../composables/useMarketAdmin";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { useConnectionsStore } from "../stores/connections";
+import { useMarketStore } from "../stores/market";
 import type {
   MarketEntry,
   ProtocolAdminItem,
@@ -39,6 +40,11 @@ function normalizeTab(value: unknown): ProtocolsTab {
 }
 
 const tab = ref<ProtocolsTab>(normalizeTab(route.query.tab));
+
+// The workspace update indicator deep-links here with ?tab=market&q=<plugin>.
+const marketQuery = computed(() =>
+  typeof route.query.q === "string" ? route.query.q : "",
+);
 const conns = useConnectionsStore();
 const { confirmDanger } = useConfirmAction();
 
@@ -65,23 +71,25 @@ async function setProtocolAvailability(
   if (next !== previous) await conns.refreshPlugins();
 }
 
+const market = useMarketStore();
 const {
   enabled: marketEnabled,
   entries: marketEntries,
   loading: marketLoading,
   installing,
   uninstalling,
-  load: loadMarket,
-  install,
-  uninstall,
-} = useMarketAdmin(refreshAfterMarketChange);
+} = storeToRefs(market);
+
+function install(entry: MarketEntry): Promise<void> {
+  return market.install(entry, refreshAfterMarketChange);
+}
 
 function confirmUninstall(entry: MarketEntry): void {
   confirmDanger({
     header: "Uninstall plugin",
     message: `Uninstall ${entry.displayName}? Existing connections that use this protocol will stop working until it is installed again.`,
     acceptLabel: "Uninstall",
-    accept: () => uninstall(entry),
+    accept: () => market.uninstall(entry, refreshAfterMarketChange),
   });
 }
 
@@ -106,7 +114,7 @@ watch(
 
 onMounted(() => {
   void load();
-  void loadMarket();
+  void market.load();
 });
 </script>
 
@@ -240,6 +248,7 @@ onMounted(() => {
                 :loading="marketLoading"
                 :installing="installing"
                 :uninstalling="uninstalling"
+                :initial-query="marketQuery"
                 @install="install"
                 @uninstall="confirmUninstall"
               />
